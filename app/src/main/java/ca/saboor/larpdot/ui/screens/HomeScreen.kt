@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
@@ -31,6 +32,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -58,6 +60,11 @@ fun HomeScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
+    val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+
+    LaunchedEffect(Unit) {
+        OverlayPreferences.isShowMinimizedTitleEnabled(context)
+    }
 
     val hardwareCutout = remember(configuration) { CutoutDetector.detectHardwareCutout(context) }
     val defaultDiameterDp = with(density) { (hardwareCutout.radiusPx * 2f).toDp() }.value.roundToInt()
@@ -83,6 +90,50 @@ fun HomeScreen(
                     OverlayPreferences.setCutoutConfig(context, newConfig)
                 },
             )
+        }
+
+        // Island Customization & Display Options
+        item {
+            SectionHeader(title = "Island Customization")
+            LarpCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Show Song Title",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Display track title above minimized island",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = showTitle,
+                        onCheckedChange = { isChecked ->
+                            OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
+                        },
+                    )
+                }
+            }
         }
     }
 }

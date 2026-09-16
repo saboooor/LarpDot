@@ -3,6 +3,7 @@ package ca.saboor.larpdot.ui.overlay
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,7 +17,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,10 +60,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,15 +97,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
+import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Authentic cubic-bezier spring and ease curves extracted directly from com.pryshedko.mtisland
@@ -211,17 +222,93 @@ fun CompactIslandOverlay(
             label = "compact_alpha",
         )
 
+        val coroutineScope = rememberCoroutineScope()
+        val dragOffsetAnim = remember { Animatable(0f) }
+        val maxDragOffsetPx = with(density) { 8.dp.toPx() }
+
+        val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+        val showTitleText = showMinimizedTitle && !isPaused && mediaInfo.hasMedia && mediaInfo.title.isNotBlank() && !isExpanded
+
+        val compactHPx = with(density) { 36.dp.toPx() }
+        val topPaddingPx = with(density) { (if (showTitleText) 20.dp else 14.dp).toPx() }
+        val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(with(density) { 8.dp.toPx() })
+        val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
+        val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }
+
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .pointerInput(isPaused, isExpanded) {
+                .pointerInput(isPaused, isExpanded, mediaInfo.hasMedia) {
                     if (!isPaused && !isExpanded) {
-                        detectVerticalDragGestures { change, dragAmount ->
-                            if (dragAmount > 15f) {
-                                change.consume()
-                                ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
+                        var totalDragX = 0f
+                        var totalDragY = 0f
+                        var hasTriggered = false
+                        val swipeThresholdPx = with(density) { 28.dp.toPx() }
+
+                        detectDragGestures(
+                            onDragStart = {
+                                totalDragX = 0f
+                                totalDragY = 0f
+                                hasTriggered = false
+                            },
+                            onDragEnd = {
+                                totalDragX = 0f
+                                totalDragY = 0f
+                                hasTriggered = false
+                                coroutineScope.launch {
+                                    dragOffsetAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                                    )
+                                }
+                            },
+                            onDragCancel = {
+                                totalDragX = 0f
+                                totalDragY = 0f
+                                hasTriggered = false
+                                coroutineScope.launch {
+                                    dragOffsetAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                                    )
+                                }
+                            },
+                            onDrag = { change, dragAmount ->
+                                totalDragX += dragAmount.x
+                                totalDragY += dragAmount.y
+
+                                // Live interactive translation: rubber-band dampened displacement with finger
+                                if (mediaInfo.hasMedia && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY)) {
+                                    val damped = (totalDragX * 0.10f).coerceIn(-maxDragOffsetPx, maxDragOffsetPx)
+                                    coroutineScope.launch {
+                                        dragOffsetAnim.snapTo(damped)
+                                    }
+                                }
+
+                                if (!hasTriggered) {
+                                    // Swipe down to open notification shade
+                                    if (totalDragY > 20f && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.3f) {
+                                        hasTriggered = true
+                                        change.consume()
+                                        ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
+                                    }
+                                    // Swipe right on music to skip to next track
+                                    else if (mediaInfo.hasMedia && totalDragX > swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                                        hasTriggered = true
+                                        change.consume()
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        MediaPlaybackState.skipNext()
+                                    }
+                                    // Swipe left on music to go to previous track
+                                    else if (mediaInfo.hasMedia && totalDragX < -swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                                        hasTriggered = true
+                                        change.consume()
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        MediaPlaybackState.skipPrevious()
+                                    }
+                                }
                             }
-                        }
+                        )
                     }
                 }
                 .pointerInput(isPaused, isExpanded) {
@@ -245,14 +332,70 @@ fun CompactIslandOverlay(
                 },
             contentAlignment = if (isLandscape) Alignment.Center else Alignment.TopCenter,
         ) {
+            if (!isLandscape && showTitleText) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(pillTopOffsetDp)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.2.sp,
+                        ),
+                        color = Color.White.copy(alpha = 0.9f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .graphicsLayer { alpha = compactAlpha },
+                    )
+                }
+            }
+
+            if (isLandscape && showTitleText) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = 60.dp)
+                        .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                        .graphicsLayer { alpha = compactAlpha },
+                ) {
+                    Text(
+                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = Color.White.copy(alpha = 0.9f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
+                    )
+                }
+            }
+
             Surface(
                 modifier = Modifier
-                    .then(if (isLandscape) Modifier else Modifier.padding(top = 14.dp))
+                    .then(if (isLandscape) Modifier else Modifier.padding(top = pillTopOffsetDp))
                     .width(currentWidth)
                     .height(currentHeight)
                     .scale(islandScale)
                     .graphicsLayer {
                         alpha = compactAlpha
+                        // Stretch the side being swiped toward instead of translating
+                        val stretchMag = dragOffsetAnim.value / maxDragOffsetPx // -1..1
+                        val maxStretch = 0.06f // 6% max stretch
+                        scaleX = 1f + kotlin.math.abs(stretchMag) * maxStretch
+                        transformOrigin = if (stretchMag >= 0f) {
+                            TransformOrigin(0f, 0.5f) // swiping right → pivot left, stretch right
+                        } else {
+                            TransformOrigin(1f, 0.5f) // swiping left → pivot right, stretch left
+                        }
                     }
                     .clip(RoundedCornerShape(currentCornerRadius))
                     .then(
@@ -854,6 +997,8 @@ internal fun ExpandedIslandContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val hapticFeedback = LocalHapticFeedback.current
 
     val progressFraction = if (mediaInfo.durationMs > 0) {
         (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
@@ -865,9 +1010,24 @@ internal fun ExpandedIslandContent(
 
     val activeFraction = if (isDragging) dragFraction else progressFraction
 
+    val cardDragOffsetAnim = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val maxCardDragOffsetPx = with(density) { 8.dp.toPx() }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .graphicsLayer {
+                // Stretch the side being swiped toward instead of translating
+                val stretchMag = cardDragOffsetAnim.value / maxCardDragOffsetPx // -1..1
+                val maxStretch = 0.04f // 4% max stretch on expanded card
+                scaleX = 1f + kotlin.math.abs(stretchMag) * maxStretch
+                transformOrigin = if (stretchMag >= 0f) {
+                    TransformOrigin(0f, 0.5f) // swiping right → pivot left, stretch right
+                } else {
+                    TransformOrigin(1f, 0.5f) // swiping left → pivot right, stretch left
+                }
+            }
             .background(Color.Black)
             .drawWithCache {
                 val dominantTint = mediaInfo.dominantColor.copy(alpha = 0.25f)
@@ -890,13 +1050,76 @@ internal fun ExpandedIslandContent(
                     drawRect(bottomGradient)
                 }
             }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    if (dragAmount < -15f) {
-                        change.consume()
-                        onCollapse()
+            .pointerInput(mediaInfo.hasMedia) {
+                var totalDragX = 0f
+                var totalDragY = 0f
+                var hasTriggered = false
+                val swipeThresholdPx = with(density) { 32.dp.toPx() }
+
+                detectDragGestures(
+                    onDragStart = {
+                        totalDragX = 0f
+                        totalDragY = 0f
+                        hasTriggered = false
+                    },
+                    onDragEnd = {
+                        totalDragX = 0f
+                        totalDragY = 0f
+                        hasTriggered = false
+                        coroutineScope.launch {
+                            cardDragOffsetAnim.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                            )
+                        }
+                    },
+                    onDragCancel = {
+                        totalDragX = 0f
+                        totalDragY = 0f
+                        hasTriggered = false
+                        coroutineScope.launch {
+                            cardDragOffsetAnim.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                            )
+                        }
+                    },
+                    onDrag = { change, dragAmount ->
+                        totalDragX += dragAmount.x
+                        totalDragY += dragAmount.y
+
+                        // Live interactive translation: move card slightly with the finger
+                        if (mediaInfo.hasMedia && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY)) {
+                            val damped = (totalDragX * 0.10f).coerceIn(-maxCardDragOffsetPx, maxCardDragOffsetPx)
+                            coroutineScope.launch {
+                                cardDragOffsetAnim.snapTo(damped)
+                            }
+                        }
+
+                        if (!hasTriggered) {
+                            // Drag up to collapse
+                            if (totalDragY < -20f && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.3f) {
+                                hasTriggered = true
+                                change.consume()
+                                onCollapse()
+                            }
+                            // Swipe right on music to skip next
+                            else if (mediaInfo.hasMedia && totalDragX > swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                                hasTriggered = true
+                                change.consume()
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                MediaPlaybackState.skipNext()
+                            }
+                            // Swipe left on music to go to previous track
+                            else if (mediaInfo.hasMedia && totalDragX < -swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                                hasTriggered = true
+                                change.consume()
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                MediaPlaybackState.skipPrevious()
+                            }
+                        }
                     }
-                }
+                )
             }
             .pointerInput(Unit) {
                 detectTapGestures(

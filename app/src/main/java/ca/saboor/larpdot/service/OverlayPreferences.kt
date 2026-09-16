@@ -13,9 +13,13 @@ object OverlayPreferences {
     private const val KEY_CUTOUT_OFFSET_X = "cutout_offset_x"
     private const val KEY_CUTOUT_OFFSET_Y = "cutout_offset_y"
     private const val KEY_CUTOUT_DIAMETER = "cutout_diameter"
+    private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
 
     private val _isEnabledFlow = MutableStateFlow(false)
     val isEnabledFlow: StateFlow<Boolean> = _isEnabledFlow.asStateFlow()
+
+    private val _showMinimizedTitleFlow = MutableStateFlow(true)
+    val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -77,5 +81,22 @@ object OverlayPreferences {
             .apply()
         _cutoutConfigFlow.value = config
         isCutoutInitialized = true
+    }
+
+    private var isTitlePrefInitialized = false
+
+    fun isShowMinimizedTitleEnabled(context: Context): Boolean {
+        if (!isTitlePrefInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_TITLE, true)
+            _showMinimizedTitleFlow.value = enabled
+            isTitlePrefInitialized = true
+        }
+        return _showMinimizedTitleFlow.value
+    }
+
+    fun setShowMinimizedTitleEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_TITLE, enabled).apply()
+        _showMinimizedTitleFlow.value = enabled
+        isTitlePrefInitialized = true
     }
 }

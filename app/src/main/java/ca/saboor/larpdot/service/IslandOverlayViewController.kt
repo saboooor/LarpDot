@@ -131,6 +131,7 @@ class IslandOverlayViewController(
             isOverlayAdded = true
             observeMediaState()
             observeCutoutConfig()
+            observeTitlePreference()
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -251,6 +252,9 @@ class IslandOverlayViewController(
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
                 context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
+        val currentTrack = MediaPlaybackState.currentTrack.value
+        val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context)
+        val showTitleAbove = showTitlePref && hasMedia && currentTrack.title.isNotBlank()
 
         val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
         val shouldShowDotOnly = !hasMedia
@@ -271,8 +275,12 @@ class IslandOverlayViewController(
             val pillWPx = (36f * density).toInt()
             val pillHPx = (cutoutDiameterPx + (72f * density)).toInt()
             val paddingPx = (14f * density).toInt()
-            targetWidth = pillWPx + (paddingPx * 2)
-            targetHeight = pillHPx + (paddingPx * 2)
+            val topExtraPx = if (showTitleAbove) (20f * density).toInt() else 0
+            val minTitleWPx = (140f * density).toInt()
+            val minLandscapeWPx = (90f * density).toInt()
+
+            targetWidth = if (showTitleAbove) maxOf(pillWPx + (paddingPx * 2), minTitleWPx) else maxOf(pillWPx + (paddingPx * 2), minLandscapeWPx)
+            targetHeight = pillHPx + (paddingPx * 2) + topExtraPx
             val orientedCenterX = if (rotation == Surface.ROTATION_270) {
                 maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             } else {
@@ -282,8 +290,8 @@ class IslandOverlayViewController(
             posY = (cutout.centerY - targetHeight / 2f).toInt()
         } else {
             // Minimized Dynamic Island in portrait: horizontal capsule
-            val paddingHorizontalPx = (14f * density).toInt()
-            val topPaddingPx = (14f * density).toInt()
+            val paddingHorizontalPx = (24f * density).toInt()
+            val topPaddingPx = if (showTitleAbove) (20f * density).toInt() else (14f * density).toInt()
             val bottomPaddingPx = (28f * density).toInt()
             val compactWPx = (cutoutDiameterPx + (72f * density)).toInt()
             val compactHPx = (36f * density).toInt()
@@ -292,7 +300,9 @@ class IslandOverlayViewController(
             val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
 
             // Sized consistently with generous padding so the window never resizes and touch area remains stable
-            targetWidth = compactWPx + (paddingHorizontalPx * 2)
+            val minCompactWPx = (170f * density).toInt()
+            val minTitleWPx = (200f * density).toInt()
+            targetWidth = if (showTitleAbove) maxOf(compactWPx + (paddingHorizontalPx * 2), minTitleWPx) else maxOf(compactWPx + (paddingHorizontalPx * 2), minCompactWPx)
             targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
             val pillCenterX = cutout.centerX
             posX = (pillCenterX - targetWidth / 2f).toInt()
@@ -461,6 +471,14 @@ class IslandOverlayViewController(
         controllerScope.launch {
             OverlayPreferences.cutoutConfigFlow.collectLatest {
                 currentCutoutInfo = CutoutDetector.detect(context)
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeTitlePreference() {
+        controllerScope.launch {
+            OverlayPreferences.showMinimizedTitleFlow.collectLatest {
                 updateOverlayLayout()
             }
         }
