@@ -207,6 +207,7 @@ class IslandOverlayViewController(
         val dm = context.resources.displayMetrics
         val density = dm.density
         val screenWidth = dm.widthPixels
+        val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
         val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
 
@@ -227,7 +228,7 @@ class IslandOverlayViewController(
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
 
         // Expanded card measurements — width is ALWAYS this value for media states
-        val outerMarginPx = topAnchor
+        val outerMarginPx = if (isLandscape) paddingPx else topAnchor
         val cardWPx = screenWidth - (outerMarginPx * 2)
         val cardHPx = (190f * density).toInt()
 
@@ -258,7 +259,8 @@ class IslandOverlayViewController(
         } else {
             val windowWidth = targetWidth
             val compactWPx = (cutoutDiameterPx + (74f * density)).toInt()
-            val pillLeft = (windowWidth - compactWPx) / 2
+            val pillCenterX = if (isLandscape) cutout.centerX else windowWidth / 2f
+            val pillLeft = (pillCenterX - compactWPx / 2f).toInt()
             val pillTop = paddingPx
             android.graphics.Rect(pillLeft, pillTop, pillLeft + compactWPx, pillTop + compactHPx)
         }

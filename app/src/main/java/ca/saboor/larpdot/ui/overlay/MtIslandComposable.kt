@@ -2,6 +2,7 @@ package ca.saboor.larpdot.ui.overlay
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -157,6 +158,7 @@ fun MtIslandOverlay(
         val screenWidthDp = configuration.screenWidthDp.dp
         val density = LocalDensity.current
         val context = LocalContext.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
         val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(24.dp, 36.dp)
         val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
@@ -171,7 +173,8 @@ fun MtIslandOverlay(
         val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
 
         // Spans the entire width, leaving identical outer padding on left and right as above the island
-        val cardWidth = screenWidthDp - (topMarginDp * 2)
+        val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp
+        val cardWidth = screenWidthDp - (horizontalMarginDp * 2)
         val cardHeight = 190.dp
 
         // Concentric corner radius: device's rounded corner radius MINUS the outer padding
@@ -211,6 +214,19 @@ fun MtIslandOverlay(
             label = "morph_corner",
         )
         val animatedCornerRadiusPx = with(density) { animatedCornerRadius.toPx() }
+        val compactHorizontalOffset = if (isLandscape) {
+            with(density) { cutoutInfo.centerX.toDp() } - (screenWidthDp / 2f)
+        } else {
+            0.dp
+        }
+        val animatedHorizontalOffset by animateDpAsState(
+            targetValue = if (isExpanded) 0.dp else compactHorizontalOffset,
+            animationSpec = tween(
+                durationMillis = if (isExpanded) 360 else 280,
+                easing = if (isExpanded) MtIslandEnterEasing else MtIslandExitEasing,
+            ),
+            label = "morph_horizontal_offset",
+        )
         val containerShape = if (isPaused) {
             CircleShape
         } else if (isExpanded) {
@@ -307,6 +323,7 @@ fun MtIslandOverlay(
                 modifier = Modifier
                     .width(animatedWidth)
                     .height(animatedHeight)
+                    .offset(x = animatedHorizontalOffset)
                     .scale(islandScale)
                     .then(
                         if (showPerimeterProgress) {
