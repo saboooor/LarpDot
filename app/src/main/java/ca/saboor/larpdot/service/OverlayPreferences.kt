@@ -14,12 +14,16 @@ object OverlayPreferences {
     private const val KEY_CUTOUT_OFFSET_Y = "cutout_offset_y"
     private const val KEY_CUTOUT_DIAMETER = "cutout_diameter"
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
+    private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
 
     private val _isEnabledFlow = MutableStateFlow(false)
     val isEnabledFlow: StateFlow<Boolean> = _isEnabledFlow.asStateFlow()
 
     private val _showMinimizedTitleFlow = MutableStateFlow(true)
     val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
+
+    private val _tapToExpandFlow = MutableStateFlow(false)
+    val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -98,5 +102,22 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_TITLE, enabled).apply()
         _showMinimizedTitleFlow.value = enabled
         isTitlePrefInitialized = true
+    }
+
+    private var isTapToExpandInitialized = false
+
+    fun isTapToExpandEnabled(context: Context): Boolean {
+        if (!isTapToExpandInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_TAP_TO_EXPAND, false)
+            _tapToExpandFlow.value = enabled
+            isTapToExpandInitialized = true
+        }
+        return _tapToExpandFlow.value
+    }
+
+    fun setTapToExpandEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_TAP_TO_EXPAND, enabled).apply()
+        _tapToExpandFlow.value = enabled
+        isTapToExpandInitialized = true
     }
 }

@@ -313,19 +313,37 @@ fun CompactIslandOverlay(
                 }
                 .pointerInput(isPaused, isExpanded) {
                     if (!isPaused && !isExpanded) {
+                        val tapToExpand = OverlayPreferences.tapToExpandFlow.value
                         detectTapGestures(
-                            onPress = {
+                            onPress = { offset ->
                                 isIslandPressed = true
                                 try {
+                                    // Shorter long-press: check after 300ms instead of system default ~500ms
+                                    val longPressJob = coroutineScope.launch {
+                                        kotlinx.coroutines.delay(300L)
+                                        if (isIslandPressed) {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (tapToExpand) {
+                                                openPlayerApp(context, mediaInfo)
+                                            } else {
+                                                onExpand()
+                                            }
+                                            tryAwaitRelease()
+                                        }
+                                    }
                                     tryAwaitRelease()
+                                    longPressJob.cancel()
                                 } finally {
                                     isIslandPressed = false
                                 }
                             },
-                            onTap = { openPlayerApp(context, mediaInfo) },
-                            onLongPress = {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onExpand()
+                            onTap = {
+                                if (tapToExpand) {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onExpand()
+                                } else {
+                                    openPlayerApp(context, mediaInfo)
+                                }
                             },
                         )
                     }

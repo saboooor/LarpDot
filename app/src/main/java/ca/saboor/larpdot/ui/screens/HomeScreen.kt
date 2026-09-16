@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,9 +62,11 @@ fun HomeScreen(
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
+        OverlayPreferences.isTapToExpandEnabled(context)
     }
 
     val hardwareCutout = remember(configuration) { CutoutDetector.detectHardwareCutout(context) }
@@ -130,6 +133,47 @@ fun HomeScreen(
                         checked = showTitle,
                         onCheckedChange = { isChecked ->
                             OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
+                        },
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Tap to Expand toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TouchApp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Tap to Expand",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Tap expands island, hold-tap opens player",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = tapToExpand,
+                        onCheckedChange = { isChecked ->
+                            OverlayPreferences.setTapToExpandEnabled(context, isChecked)
                         },
                     )
                 }
