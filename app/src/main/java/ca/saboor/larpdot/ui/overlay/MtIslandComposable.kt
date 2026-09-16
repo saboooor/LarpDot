@@ -157,9 +157,12 @@ fun CompactIslandOverlay(
             }
         }
     } else {
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
         val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
-        val compactWidth = cutoutDiameterDp + 72.dp
-        val compactHeight = 36.dp
+        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 72.dp)
+        val compactHeight = if (isLandscape) (cutoutDiameterDp + 72.dp) else 36.dp
 
         val currentWidth by animateDpAsState(
             targetValue = if (isPaused) cutoutDiameterDp else compactWidth,
@@ -240,11 +243,11 @@ fun CompactIslandOverlay(
                         )
                     }
                 },
-            contentAlignment = Alignment.TopCenter,
+            contentAlignment = if (isLandscape) Alignment.Center else Alignment.TopCenter,
         ) {
             Surface(
                 modifier = Modifier
-                    .padding(top = 14.dp)
+                    .then(if (isLandscape) Modifier else Modifier.padding(top = 14.dp))
                     .width(currentWidth)
                     .height(currentHeight)
                     .scale(islandScale)
@@ -298,8 +301,8 @@ fun ExpandedIslandOverlay(
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
-    val compactWidth = cutoutDiameterDp + 72.dp
-    val compactHeight = 36.dp
+    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 72.dp)
+    val compactHeight = if (isLandscape) (cutoutDiameterDp + 72.dp) else 36.dp
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
     val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
@@ -558,7 +561,7 @@ fun Modifier.islandFluidProgressBorder(
     val halfStroke = strokePx / 2f
     val w = size.width
     val h = size.height
-    val rPx = (cornerRadius.toPx() - halfStroke).coerceIn(0f, (h / 2f) - halfStroke)
+    val rPx = (cornerRadius.toPx() - halfStroke).coerceIn(0f, (minOf(w, h) / 2f) - halfStroke)
 
     val left = halfStroke
     val top = halfStroke
@@ -687,72 +690,149 @@ private fun CompactIslandContent(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.horizontalGradient(
-                    colorStops = arrayOf(
-                        0.00f to Color.Black,
-                        0.66f to Color.Black,
-                        1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        // Landscape Mode: Vertical Dynamic Island Pill
+        // Top: Full width album art fading downwards
+        // Center: Camera hole punch clearance cushion
+        // Bottom: 4-bar equalizer dancing organically to playback
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Black,
+                            0.66f to Color.Black,
+                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
+                        )
                     )
-                )
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Left Wing: Album art fills the full pill height, left-aligned, fades to black on the right.
-        // The pill's Surface(shape = RoundedCornerShape(...)) already clips the left edge to the
-        // pill's curvature — no vertical padding above or below.
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.CenterStart,
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (mediaInfo.albumArt != null) {
-                Image(
-                    bitmap = mediaInfo.albumArt.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                        .graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colorStops = arrayOf(
-                                        0.00f to Color.White,
-                                        0.80f to Color.White.copy(alpha = 0.5f),
-                                        1.00f to Color.Transparent,
-                                    )
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
-                    contentScale = ContentScale.Crop,
+            // Top Wing: Album art fills the full pill width, top-aligned, fades to black at the bottom.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                if (mediaInfo.albumArt != null) {
+                    Image(
+                        bitmap = mediaInfo.albumArt.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f, matchHeightConstraintsFirst = false)
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.00f to Color.White,
+                                            0.80f to Color.White.copy(alpha = 0.5f),
+                                            1.00f to Color.Transparent,
+                                        )
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+
+            // Center: Symmetrical clearance spacer hugging the hole punch camera
+            Spacer(modifier = Modifier.height(cutoutDiameterDp))
+
+            // Bottom Wing: 4-Bar Equalizer
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                EqualizerWaveform(
+                    isPlaying = mediaInfo.isPlaying,
+                    maxHeightDp = 13.5f,
+                    accentColor = mediaInfo.dominantColor,
                 )
             }
         }
-
-        // Center: Symmetrical clearance spacer hugging the hole punch camera
-        Spacer(modifier = Modifier.width(cutoutDiameterDp))
-
-        // Right Wing: 4-Bar Equalizer (no image, no circle)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.Center,
+    } else {
+        // Portrait Mode: Horizontal Dynamic Island Pill
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Black,
+                            0.66f to Color.Black,
+                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
+                        )
+                    )
+                ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            EqualizerWaveform(
-                isPlaying = mediaInfo.isPlaying,
-                maxHeightDp = 13.5f,
-                accentColor = mediaInfo.dominantColor,
-            )
+            // Left Wing: Album art fills the full pill height, left-aligned, fades to black on the right.
+            // The pill's Surface(shape = RoundedCornerShape(...)) already clips the left edge to the
+            // pill's curvature — no vertical padding above or below.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (mediaInfo.albumArt != null) {
+                    Image(
+                        bitmap = mediaInfo.albumArt.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colorStops = arrayOf(
+                                            0.00f to Color.White,
+                                            0.80f to Color.White.copy(alpha = 0.5f),
+                                            1.00f to Color.Transparent,
+                                        )
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+
+            // Center: Symmetrical clearance spacer hugging the hole punch camera
+            Spacer(modifier = Modifier.width(cutoutDiameterDp))
+
+            // Right Wing: 4-Bar Equalizer (no image, no circle)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
+                EqualizerWaveform(
+                    isPlaying = mediaInfo.isPlaying,
+                    maxHeightDp = 13.5f,
+                    accentColor = mediaInfo.dominantColor,
+                )
+            }
         }
     }
 }

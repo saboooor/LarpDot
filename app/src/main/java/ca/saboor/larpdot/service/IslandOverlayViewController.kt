@@ -4,9 +4,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.os.Build
+import android.util.DisplayMetrics
+import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
@@ -233,30 +237,28 @@ class IslandOverlayViewController(
         updateOverlayLayout()
     }
 
+    @Suppress("DEPRECATION")
     private fun createCompactLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+        val realMetrics = DisplayMetrics()
+        display?.getRealMetrics(realMetrics)
+
         val dm = context.resources.displayMetrics
         val density = dm.density
-        val screenWidth = dm.widthPixels
-        val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
+        val rotation = display?.rotation ?: Surface.ROTATION_0
+        val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
+                context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
 
-        val paddingHorizontalPx = (14f * density).toInt()
-        val topPaddingPx = (14f * density).toInt()
-        val bottomPaddingPx = (28f * density).toInt()
-
         val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
-        val compactWPx = (cutoutDiameterPx + (72f * density)).toInt()
-        val compactHPx = (36f * density).toInt()
-
-        val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
-        val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
+        val shouldShowDotOnly = !hasMedia
 
         val targetWidth: Int
         val targetHeight: Int
         val posX: Int
         val posY: Int
-
-        val shouldShowDotOnly = !hasMedia
 
         if (shouldShowDotOnly) {
             val diameter = ((cutout.radiusPx * 2) + (10f * density)).toInt()
@@ -264,7 +266,31 @@ class IslandOverlayViewController(
             targetHeight = diameter
             posX = (cutout.centerX - diameter / 2f).toInt()
             posY = (cutout.centerY - diameter / 2f).toInt()
+        } else if (isLandscape) {
+            // Minimized Dynamic Island in landscape: vertical capsule over the camera hole punch
+            val pillWPx = (36f * density).toInt()
+            val pillHPx = (cutoutDiameterPx + (72f * density)).toInt()
+            val paddingPx = (14f * density).toInt()
+            targetWidth = pillWPx + (paddingPx * 2)
+            targetHeight = pillHPx + (paddingPx * 2)
+            val orientedCenterX = if (rotation == Surface.ROTATION_270) {
+                maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
+            } else {
+                minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
+            }
+            posX = (orientedCenterX - targetWidth / 2f).toInt()
+            posY = (cutout.centerY - targetHeight / 2f).toInt()
         } else {
+            // Minimized Dynamic Island in portrait: horizontal capsule
+            val paddingHorizontalPx = (14f * density).toInt()
+            val topPaddingPx = (14f * density).toInt()
+            val bottomPaddingPx = (28f * density).toInt()
+            val compactWPx = (cutoutDiameterPx + (72f * density)).toInt()
+            val compactHPx = (36f * density).toInt()
+
+            val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+            val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
+
             // Sized consistently with generous padding so the window never resizes and touch area remains stable
             targetWidth = compactWPx + (paddingHorizontalPx * 2)
             targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
@@ -299,14 +325,30 @@ class IslandOverlayViewController(
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun createExpandedLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+        val realMetrics = DisplayMetrics()
+        display?.getRealMetrics(realMetrics)
+
         val dm = context.resources.displayMetrics
         val density = dm.density
-        val screenWidth = dm.widthPixels
+        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
+        val rotation = display?.rotation ?: Surface.ROTATION_0
+        val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
+                context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val orientedCenterX = if (rotation == Surface.ROTATION_270) {
+            maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
+        } else {
+            minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
+        }
+        val effectiveCutout = if (isLandscape) cutout.copy(centerX = orientedCenterX) else cutout
 
         val paddingPx = (14f * density).toInt()
-        val compactHPx = (36f * density).toInt()
-        val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+        val cutoutDiameterPx = (effectiveCutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
+        val compactHPx = if (isLandscape) (cutoutDiameterPx + (72f * density)).toInt() else (36f * density).toInt()
+        val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
         val cardHPx = (190f * density).toInt()
 
@@ -356,7 +398,28 @@ class IslandOverlayViewController(
         val compView = compactView ?: return
         if (!isOverlayAdded) return
 
-        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
+        val rawCutout = currentCutoutInfo ?: CutoutDetector.detect(context)
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+        val realMetrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display?.getRealMetrics(realMetrics)
+        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels.toFloat() else context.resources.displayMetrics.widthPixels.toFloat()
+        val rotation = display?.rotation ?: Surface.ROTATION_0
+        val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
+                context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val orientedX = if (rotation == Surface.ROTATION_270) {
+            maxOf(rawCutout.centerX, screenWidth - rawCutout.centerX)
+        } else if (isLandscape) {
+            minOf(rawCutout.centerX, screenWidth - rawCutout.centerX)
+        } else {
+            rawCutout.centerX
+        }
+        val cutout = if (isLandscape) rawCutout.copy(centerX = orientedX) else rawCutout
+        if (currentCutoutInfo != cutout) {
+            currentCutoutInfo = cutout
+        }
+
         val newParams = createCompactLayoutParams(cutout)
         compactWindowParams = newParams
 
