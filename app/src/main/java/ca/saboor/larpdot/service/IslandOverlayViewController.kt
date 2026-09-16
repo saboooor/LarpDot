@@ -5,9 +5,9 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
-import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,7 +18,8 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
-import ca.saboor.larpdot.ui.overlay.MtIslandOverlay
+import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
+import ca.saboor.larpdot.ui.overlay.ExpandedIslandOverlay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,20 +28,38 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * Encapsulates the WindowManager lifecycle and Jetpack Compose overlay view for the Dynamic Island.
- * Coordinates with Compose's fluid morphing physics so that WindowManager provides an unclipped
- * canvas during expansion, and restores tight touch passthrough after collapse completes.
+ * Two-window Dynamic Island overlay controller:
+ *
+ * 1. Compact Island Window: Sized strictly to the compact pill (~138dp wide), centered over
+ *    the camera cutout. Because it never spans the full screen, the entire status bar area
+ *    to the left and right of the island remains completely uncovered, allowing 100% native
+ *    Android Notification Center pull-down gestures to work with zero interference.
+ *
+ * 2. Dedicated Expanded Island Window: Sized to full screen width (width = screenWidth, posX = 0).
+ *    Appears only when the compact pill is expanded, morphing smoothly outward from the compact
+ *    pill dimensions to the full card, and collapses back down before detaching. Because posX is
+ *    always 0 and width is always screenWidth, WindowManager never resizes or shifts during morphing,
+ *    eliminating all SurfaceFlinger buffer reallocation jumps and snaps.
  */
 class IslandOverlayViewController(
     private val context: Context,
     private val windowType: Int,
 ) {
     private var windowManager: WindowManager? = null
-    private var composeView: PassthroughComposeView? = null
-    private var lifecycleOwner: OverlayLifecycleOwner? = null
+
+    // Compact Island Window
+    private var compactView: ComposeView? = null
+    private var compactLifecycleOwner: OverlayLifecycleOwner? = null
+    private var compactWindowParams: WindowManager.LayoutParams? = null
+
+    // Dedicated Expanded Island Window
+    private var expandedView: ComposeView? = null
+    private var expandedLifecycleOwner: OverlayLifecycleOwner? = null
+    private var expandedWindowParams: WindowManager.LayoutParams? = null
+    private var isExpandedWindowAdded = false
+
     var isOverlayAdded = false
         private set
-    private var windowParams: WindowManager.LayoutParams? = null
 
     private var currentCutoutInfo by mutableStateOf<CutoutInfo?>(null)
     private var isIslandExpanded by mutableStateOf(false)
@@ -60,18 +79,11 @@ class IslandOverlayViewController(
         val cutout = CutoutDetector.detect(context)
         currentCutoutInfo = cutout
 
-        val owner = OverlayLifecycleOwner()
-        lifecycleOwner = owner
+        // 1. Setup Compact View & Lifecycle (Added first so it sits behind expanded view in Z-order)
+        val compOwner = OverlayLifecycleOwner()
+        compactLifecycleOwner = compOwner
 
-        val view = PassthroughComposeView(context)
-
-        // Attach lifecycle/viewmodel/savedstate to the outer root view — ViewTree lookup traverses
-        // up from the ComposeView to the window root, so the root must have these set.
-        owner.attach(view)
-        owner.onCreate()
-
-        // Compose APIs go on the inner ComposeView
-        view.composeView.apply {
+        val compView = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
 
             // Live hardware rounded corners listener directly from view's WindowInsets (Android 12+)
@@ -91,72 +103,69 @@ class IslandOverlayViewController(
                 val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
                 val activeCutout = currentCutoutInfo ?: cutout
 
-                MtIslandOverlay(
+                CompactIslandOverlay(
                     cutoutInfo = activeCutout,
                     mediaInfo = mediaTrack,
                     isExpanded = isIslandExpanded,
-                    onExpandChange = { expanded ->
-                        if (expanded) {
-                            expandOverlay()
-                        } else {
-                            collapseOverlay()
-                        }
-                    },
+                    onExpand = { expandOverlay() },
                 )
             }
         }
+        compOwner.attach(compView)
+        compOwner.onCreate()
+        compactView = compView
 
-        // Outside-touch detector on the outer FrameLayout (receives ACTION_OUTSIDE events)
-        view.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                if (isIslandExpanded) {
-                    collapseOverlay()
-                }
-                return@setOnTouchListener true
-            }
-            false
-        }
-
-        val dm = context.resources.displayMetrics
-        val density = dm.density
-        val diameter = ((cutout.radiusPx * 2) + (10f * density)).toInt()
-
-        @Suppress("DEPRECATION")
-        val params = WindowManager.LayoutParams(
-            diameter,
-            diameter,
-            windowType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = (cutout.centerX - diameter / 2f).toInt()
-            y = (cutout.centerY - diameter / 2f).toInt()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                try {
-                    layoutInDisplayCutoutMode =
-                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                } catch (_: Exception) {}
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    layoutInDisplayCutoutMode =
-                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                } catch (_: Exception) {}
-            }
-        }
+        val compParams = createCompactLayoutParams(cutout)
+        compactWindowParams = compParams
 
         try {
-            wm.addView(view, params)
-            composeView = view
-            windowParams = params
+            wm.addView(compView, compParams)
             isOverlayAdded = true
             observeMediaState()
             updateOverlayLayout()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Setup Dedicated Expanded View & Lifecycle (Added second so it sits directly above compact view)
+        val expOwner = OverlayLifecycleOwner()
+        expandedLifecycleOwner = expOwner
+
+        val expView = ComposeView(context).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+
+            setContent {
+                val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                val activeCutout = currentCutoutInfo ?: cutout
+
+                ExpandedIslandOverlay(
+                    cutoutInfo = activeCutout,
+                    mediaInfo = mediaTrack,
+                    isExpanded = isIslandExpanded,
+                    onCollapse = { collapseOverlay() },
+                )
+            }
+
+            setOnTouchListener { _, event ->
+                if (event.action == MotionEvent.ACTION_OUTSIDE) {
+                    if (isIslandExpanded) {
+                        collapseOverlay()
+                    }
+                    return@setOnTouchListener false
+                }
+                false
+            }
+        }
+        expOwner.attach(expView)
+        expOwner.onCreate()
+        expandedView = expView
+
+        expView.visibility = View.GONE
+        val expParams = createExpandedLayoutParams(cutout)
+        expandedWindowParams = expParams
+        try {
+            wm.addView(expView, expParams)
+            isExpandedWindowAdded = true
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -164,11 +173,10 @@ class IslandOverlayViewController(
 
     fun expandOverlay() {
         collapseJob?.cancel()
+        collapseJob = null
         if (!isIslandExpanded) {
             isIslandExpanded = true
-            // Expand the window height to the full card size immediately so Compose has canvas room.
-            // posX and width never change, so there is no horizontal jump.
-            updateOverlayLayout()
+            showExpandedWindow()
         }
     }
 
@@ -176,101 +184,89 @@ class IslandOverlayViewController(
         if (isIslandExpanded) {
             isIslandExpanded = false
             collapseJob?.cancel()
-            // Wait for Compose's collapse animation before shrinking the window height back.
             collapseJob = controllerScope.launch {
-                delay(320)
+                delay(440)
+                collapseJob = null
                 if (!isIslandExpanded) {
-                    updateOverlayLayout()
+                    hideExpandedWindow()
                 }
             }
         }
     }
 
-    /**
-     * Updates overlay layout bounds and flags.
-     *
-     * Key invariant: posX and width are ALWAYS equal to the expanded card values while media is
-     * present, so the window never moves horizontally. Only the HEIGHT changes between compact
-     * and expanded states. Since the compact pill sits at the TOP of both windows, a height change
-     * is invisible — it just clips or extends the canvas below the pill.
-     *
-     * Touch passthrough for the area below the compact pill is handled by FLAG_NOT_TOUCH_MODAL:
-     * touches outside the window's bounding rect pass through to windows behind automatically.
-     * When compact, the window is only ~64dp tall, so the "expanded island area" is outside the
-     * window frame and clicks there reach underlying apps.
-     */
-    fun updateOverlayLayout() {
+    private fun showExpandedWindow() {
         val wm = windowManager ?: return
-        val view = composeView ?: return
-        if (!isOverlayAdded) return
+        val expView = expandedView ?: return
+        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
 
+        val expParams = createExpandedLayoutParams(cutout)
+        expandedWindowParams = expParams
+        try {
+            wm.updateViewLayout(expView, expParams)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        expView.visibility = View.VISIBLE
+
+        updateOverlayLayout()
+    }
+
+    private fun hideExpandedWindow() {
+        val wm = windowManager ?: return
+        val expView = expandedView ?: return
+        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
+
+        expView.visibility = View.GONE
+        val expParams = createExpandedLayoutParams(cutout)
+        expandedWindowParams = expParams
+        try {
+            wm.updateViewLayout(expView, expParams)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        updateOverlayLayout()
+    }
+
+    private fun createCompactLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
         val dm = context.resources.displayMetrics
         val density = dm.density
         val screenWidth = dm.widthPixels
         val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
         val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
+
+        val paddingHorizontalPx = (28f * density).toInt()
+        val topPaddingPx = (14f * density).toInt()
+        val bottomPaddingPx = (28f * density).toInt()
+
+        val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(24f * density, 36f * density)
+        val compactWPx = (cutoutDiameterPx + (74f * density)).toInt()
+        val compactHPx = (36f * density).toInt()
+
+        val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+        val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
 
         val targetWidth: Int
         val targetHeight: Int
         val posX: Int
         val posY: Int
 
-        // 14dp padding around the dynamic island canvas
-        val paddingPx = (14f * density).toInt()
+        val shouldShowDotOnly = !hasMedia
 
-        // Compact pill measurements
-        val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(24f * density, 36f * density)
-        val compactHPx = (36f * density).toInt()
-
-        // Fixed vertical anchor: camera cutout center minus half compact height
-        val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
-        val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
-
-        // Expanded card measurements — width is ALWAYS this value for media states
-        val outerMarginPx = if (isLandscape) paddingPx else topAnchor
-        val cardWPx = screenWidth - (outerMarginPx * 2)
-        val cardHPx = (190f * density).toInt()
-
-        if (!hasMedia) {
-            // Idle Mode: tiny circle over the camera hole, fully touch-transparent
+        if (shouldShowDotOnly) {
             val diameter = ((cutout.radiusPx * 2) + (10f * density)).toInt()
             targetWidth = diameter
             targetHeight = diameter
             posX = (cutout.centerX - diameter / 2f).toInt()
             posY = (cutout.centerY - diameter / 2f).toInt()
         } else {
-            // Width is always the expanded card width (centered on screen).
-            // Height is compact when collapsed, full card height when expanded.
-            // posX never changes between compact and expanded → no horizontal jump.
-            targetWidth = cardWPx + (paddingPx * 2)
-            targetHeight = if (isIslandExpanded) {
-                cardHPx + (paddingPx * 2)           // full expanded canvas
-            } else {
-                compactHPx + (paddingPx * 2)         // compact strip only
-            }
-            posX = ((screenWidth - targetWidth) / 2).coerceAtLeast(0)
+            // Sized consistently with generous padding so the window never resizes and touch area remains stable
+            targetWidth = compactWPx + (paddingHorizontalPx * 2)
+            targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
+            val pillCenterX = if (isLandscape) cutout.centerX else screenWidth / 2f
+            posX = (pillCenterX - targetWidth / 2f).toInt()
             posY = windowPosY
         }
-
-        // Also update the PassthroughComposeView's pill rect for left/right touch passthrough
-        view.compactPillRect = if (!hasMedia || isIslandExpanded) {
-            null // no restriction when expanded or no media
-        } else {
-            val windowWidth = targetWidth
-            val compactWPx = (cutoutDiameterPx + (74f * density)).toInt()
-            val pillCenterX = if (isLandscape) cutout.centerX else windowWidth / 2f
-            val pillLeft = (pillCenterX - compactWPx / 2f).toInt()
-            val pillTop = paddingPx
-            android.graphics.Rect(pillLeft, pillTop, pillLeft + compactWPx, pillTop + compactHPx)
-        }
-
-        val params = windowParams ?: (view.layoutParams as? WindowManager.LayoutParams) ?: return
-        params.width = targetWidth
-        params.height = targetHeight
-        params.x = posX
-        params.y = posY
-        params.gravity = Gravity.TOP or Gravity.START
 
         @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -278,16 +274,65 @@ class IslandOverlayViewController(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
 
-        params.flags = if (!hasMedia) {
+        val flags = if (shouldShowDotOnly || isIslandExpanded) {
             baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        } else if (isIslandExpanded) {
-            baseFlags or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         } else {
             baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         }
 
+        return WindowManager.LayoutParams(
+            targetWidth,
+            targetHeight,
+            windowType,
+            flags,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = posX
+            y = posY
+            applyCutoutMode(this)
+        }
+    }
+
+    private fun createExpandedLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
+        val dm = context.resources.displayMetrics
+        val density = dm.density
+        val screenWidth = dm.widthPixels
+
+        val paddingPx = (14f * density).toInt()
+        val compactHPx = (36f * density).toInt()
+        val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+        val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
+        val cardHPx = (190f * density).toInt()
+
+        @Suppress("DEPRECATION")
+        val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+
+        val touchFlags = if (isIslandExpanded) {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        } else {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+
+        return WindowManager.LayoutParams(
+            screenWidth,
+            cardHPx + (paddingPx * 2),
+            windowType,
+            baseFlags or touchFlags,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = windowPosY
+            applyCutoutMode(this)
+        }
+    }
+
+    private fun applyCutoutMode(params: WindowManager.LayoutParams) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 params.layoutInDisplayCutoutMode =
@@ -299,11 +344,32 @@ class IslandOverlayViewController(
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             } catch (_: Exception) {}
         }
+    }
+
+    fun updateOverlayLayout() {
+        val wm = windowManager ?: return
+        val compView = compactView ?: return
+        if (!isOverlayAdded) return
+
+        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
+        val newParams = createCompactLayoutParams(cutout)
+        compactWindowParams = newParams
 
         try {
-            wm.updateViewLayout(view, params)
+            wm.updateViewLayout(compView, newParams)
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        if (isExpandedWindowAdded) {
+            val expView = expandedView ?: return
+            val expParams = createExpandedLayoutParams(cutout)
+            expandedWindowParams = expParams
+            try {
+                wm.updateViewLayout(expView, expParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -311,13 +377,14 @@ class IslandOverlayViewController(
         controllerScope.launch {
             MediaPlaybackState.currentTrack.collectLatest { track ->
                 val hasMedia = track.hasMedia
+
                 if (hasMedia != lastObservedHasMedia) {
                     lastObservedHasMedia = hasMedia
                     if (!hasMedia && isIslandExpanded) {
-                        isIslandExpanded = false
+                        collapseOverlay()
                     }
-                    updateOverlayLayout()
                 }
+                updateOverlayLayout()
             }
         }
     }
@@ -330,25 +397,42 @@ class IslandOverlayViewController(
     fun hide() {
         if (!isOverlayAdded) return
         val wm = windowManager
-        val view = composeView
 
         collapseJob?.cancel()
+        collapseJob = null
+        isIslandExpanded = false
+
         controllerJob.cancel()
         controllerJob = Job()
-        lifecycleOwner?.onDestroy()
-        lifecycleOwner = null
 
-        if (wm != null && view != null) {
+        if (isExpandedWindowAdded && expandedView != null && wm != null) {
             try {
-                wm.removeView(view)
+                wm.removeView(expandedView)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            isExpandedWindowAdded = false
+        }
+
+        if (wm != null && compactView != null) {
+            try {
+                wm.removeView(compactView)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
 
-        composeView = null
+        compactLifecycleOwner?.onDestroy()
+        compactLifecycleOwner = null
+        compactView = null
+
+        expandedLifecycleOwner?.onDestroy()
+        expandedLifecycleOwner = null
+        expandedView = null
+
         isOverlayAdded = false
-        windowParams = null
+        compactWindowParams = null
+        expandedWindowParams = null
         lastObservedHasMedia = null
     }
 

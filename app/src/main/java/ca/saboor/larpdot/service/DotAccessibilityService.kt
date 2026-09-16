@@ -38,6 +38,7 @@ class DotAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         _isServiceConnected.value = true
 
         val info = serviceInfo ?: AccessibilityServiceInfo()
@@ -77,6 +78,7 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        if (instance == this) instance = null
         _isServiceConnected.value = false
         overlayController?.destroy()
         overlayController = null
@@ -84,6 +86,7 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        if (instance == this) instance = null
         _isServiceConnected.value = false
         serviceJob.cancel()
         overlayController?.destroy()
@@ -92,8 +95,31 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        var instance: DotAccessibilityService? = null
+            private set
+
         private val _isServiceConnected = MutableStateFlow(false)
         val isServiceConnected: StateFlow<Boolean> = _isServiceConnected.asStateFlow()
+
+        /**
+         * Triggers opening the Android Notification Shade using Accessibility action,
+         * or fallback via StatusBarManager reflection.
+         */
+        fun openNotificationShade(context: Context): Boolean {
+            val service = instance
+            if (service != null && service.performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)) {
+                return true
+            }
+            try {
+                @android.annotation.SuppressLint("WrongConstant")
+                val statusBarService = context.getSystemService("statusbar")
+                val statusBarManager = Class.forName("android.app.StatusBarManager")
+                val expandMethod = statusBarManager.getMethod("expandNotificationsPanel")
+                expandMethod.invoke(statusBarService)
+                return true
+            } catch (_: Exception) {}
+            return false
+        }
 
         /**
          * Checks if DotAccessibilityService is currently enabled in Android Accessibility Settings.

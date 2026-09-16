@@ -112,30 +112,33 @@ val MtIslandStandard = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MtIslandOverlay(
+fun CompactIslandOverlay(
     cutoutInfo: CutoutInfo,
     mediaInfo: MediaTrackInfo,
-    isExpanded: Boolean,
-    onExpandChange: (Boolean) -> Unit,
+    isExpanded: Boolean = false,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var pauseHideReady by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val hapticFeedback = LocalHapticFeedback.current
 
-    LaunchedEffect(mediaInfo.hasMedia, mediaInfo.isPlaying, isExpanded) {
+    var pauseHideReady by remember { mutableStateOf(false) }
+    LaunchedEffect(mediaInfo.hasMedia, mediaInfo.isPlaying) {
         pauseHideReady = false
-        if (mediaInfo.hasMedia && !mediaInfo.isPlaying && !isExpanded) {
+        if (mediaInfo.hasMedia && !mediaInfo.isPlaying) {
             delay(5_000)
             pauseHideReady = true
         }
     }
 
-    val isPaused = mediaInfo.hasMedia && !mediaInfo.isPlaying && !isExpanded && pauseHideReady
+    val isPaused = mediaInfo.hasMedia && !mediaInfo.isPlaying && pauseHideReady
 
     if (!mediaInfo.hasMedia) {
         // Idle Dot Mode: Subtle glowing ring strictly covering the hole punch camera
         Box(
             modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter,
+            contentAlignment = Alignment.Center,
         ) {
             val dotDiameter = (cutoutInfo.radiusPx * 2f).dp.coerceAtLeast(18.dp)
             Box(
@@ -154,125 +157,37 @@ fun MtIslandOverlay(
             }
         }
     } else {
-        val configuration = LocalConfiguration.current
-        val screenWidthDp = configuration.screenWidthDp.dp
-        val density = LocalDensity.current
-        val context = LocalContext.current
-        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
         val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(24.dp, 36.dp)
-        val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
-
-        // Display curvature detected using WindowInsets.getRoundedCorner / mtisland ca7.F
-        val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
-
         val compactWidth = cutoutDiameterDp + 74.dp
         val compactHeight = 36.dp
 
-        // Outer margin matching the padding outside above the dynamic island
-        val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
+        val currentWidth by animateDpAsState(
+            targetValue = if (isPaused) cutoutDiameterDp else compactWidth,
+            animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
+            label = "compact_width",
+        )
+        val currentHeight by animateDpAsState(
+            targetValue = if (isPaused) cutoutDiameterDp else compactHeight,
+            animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
+            label = "compact_height",
+        )
+        val currentCornerRadius by animateDpAsState(
+            targetValue = if (isPaused) cutoutDiameterDp / 2f else 18.dp,
+            animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
+            label = "compact_corner",
+        )
 
-        // Spans the entire width, leaving identical outer padding on left and right as above the island
-        val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp
-        val cardWidth = screenWidthDp - (horizontalMarginDp * 2)
-        val cardHeight = 190.dp
-
-        // Concentric corner radius: device's rounded corner radius MINUS the outer padding
-        // Follows the physical display's rounded corners evenly all around the curve
-        val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
-        val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
-
-        // Morphing animation for the Dynamic Island container (matching mtisland zl0.c and zl0.h)
-        val animatedWidth by animateDpAsState(
-            targetValue = when {
-                isPaused -> cutoutDiameterDp
-                isExpanded -> cardWidth
-                else -> compactWidth
+        var isIslandPressed by remember { mutableStateOf(false) }
+        val islandScale by animateFloatAsState(
+            targetValue = if (isIslandPressed) 1.10f else 1f,
+            animationSpec = if (isIslandPressed) {
+                spring(dampingRatio = 0.9f, stiffness = 300f)
+            } else {
+                tween(durationMillis = 260, easing = MtIslandDecelerate)
             },
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 360 else 280,
-                easing = if (isExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-            ),
-            label = "morph_width",
+            label = "compact_scale",
         )
 
-        val animatedHeight by animateDpAsState(
-            targetValue = if (isPaused) cutoutDiameterDp else if (isExpanded) cardHeight else compactHeight,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 360 else 280,
-                easing = if (isExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-            ),
-            label = "morph_height",
-        )
-
-        val animatedCornerRadius by animateDpAsState(
-            targetValue = if (isPaused) cutoutDiameterDp / 2f else if (isExpanded) expandedCornerRadiusDp else 18.dp,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 360 else 280,
-                easing = if (isExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-            ),
-            label = "morph_corner",
-        )
-        val animatedCornerRadiusPx = with(density) { animatedCornerRadius.toPx() }
-        val compactHorizontalOffset = if (isLandscape) {
-            with(density) { cutoutInfo.centerX.toDp() } - (screenWidthDp / 2f)
-        } else {
-            0.dp
-        }
-        val animatedHorizontalOffset by animateDpAsState(
-            targetValue = if (isExpanded) 0.dp else compactHorizontalOffset,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 360 else 280,
-                easing = if (isExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-            ),
-            label = "morph_horizontal_offset",
-        )
-        val containerShape = if (isPaused) {
-            CircleShape
-        } else if (isExpanded) {
-            squircleShape(animatedCornerRadiusPx)
-        } else {
-            RoundedCornerShape(animatedCornerRadius)
-        }
-
-        val animatedElevation by animateDpAsState(
-            targetValue = if (isExpanded) 14.dp else 4.dp,
-            animationSpec = tween(durationMillis = if (isExpanded) 240 else 280),
-            label = "morph_elevation",
-        )
-
-        // Staggered crossfade and slide choreography (matching w89.java & jc1.java)
-        val compactAlpha by animateFloatAsState(
-            targetValue = if (isPaused || isExpanded) 0f else 1f,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 90 else 180,
-                delayMillis = if (isExpanded) 0 else 140,
-                easing = LinearEasing,
-            ),
-            label = "compact_alpha",
-        )
-
-        val expandedAlpha by animateFloatAsState(
-            targetValue = if (isExpanded && !isPaused) 1f else 0f,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 160 else 70,
-                delayMillis = if (isExpanded) 45 else 0,
-                easing = if (isExpanded) MtIslandDecelerate else LinearEasing,
-            ),
-            label = "expanded_alpha",
-        )
-
-        val expandedOffsetY by animateDpAsState(
-            targetValue = if (isExpanded && !isPaused) 0.dp else 16.dp,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 280 else 70,
-                delayMillis = if (isExpanded) 35 else 0,
-                easing = if (isExpanded) MtIslandEnterEasing else LinearEasing,
-            ),
-            label = "expanded_offset_y",
-        )
-
-        // Dynamic song progress along the island's perimeter - strictly hidden when expanded
         val progressFraction = if (mediaInfo.durationMs > 0) {
             (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
         } else 0f
@@ -280,122 +195,299 @@ fun MtIslandOverlay(
         val animatedProgress by animateFloatAsState(
             targetValue = progressFraction,
             animationSpec = tween(durationMillis = 350, easing = LinearEasing),
-            label = "outline_progress",
+            label = "compact_progress",
         )
 
-        // Keep the perimeter outline visible continuously while the card morphs.
-        val showPerimeterProgress =
-            !isPaused && (!isExpanded || compactAlpha > 0.01f || expandedAlpha > 0.01f)
-        var isIslandPressed by remember { mutableStateOf(false) }
-        var isExpansionBounceActive by remember { mutableStateOf(false) }
-        LaunchedEffect(isExpanded) {
-            isIslandPressed = false
-            isExpansionBounceActive = isExpanded
-            if (isExpanded) {
-                delay(220)
-                isExpansionBounceActive = false
-            }
-        }
-        val islandScale by animateFloatAsState(
-            targetValue = when {
-                isExpansionBounceActive -> 1.02f
-                !isExpanded && isIslandPressed -> 1.10f
-                else -> 1f
-            },
-            animationSpec = if (isExpansionBounceActive || (!isExpanded && isIslandPressed)) {
-                spring(dampingRatio = 0.9f, stiffness = 300f)
-            } else {
-                tween(durationMillis = 260, easing = MtIslandDecelerate)
-            },
-            label = "island_press_scale",
+        val compactAlpha by animateFloatAsState(
+            targetValue = if (isExpanded) 0f else 1f,
+            animationSpec = tween(
+                durationMillis = if (isExpanded) 180 else 240,
+                delayMillis = 0,
+                easing = if (isExpanded) MtIslandDecelerate else MtIslandStandard,
+            ),
+            label = "compact_alpha",
         )
-        val hapticFeedback = LocalHapticFeedback.current
 
-        // Outer container: TopCenter alignment with 14dp padding matching WindowManager canvas
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .padding(14.dp),
+                .pointerInput(isPaused, isExpanded) {
+                    if (!isPaused && !isExpanded) {
+                        detectVerticalDragGestures { change, dragAmount ->
+                            if (dragAmount > 15f) {
+                                change.consume()
+                                ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
+                            }
+                        }
+                    }
+                }
+                .pointerInput(isPaused, isExpanded) {
+                    if (!isPaused && !isExpanded) {
+                        detectTapGestures(
+                            onPress = {
+                                isIslandPressed = true
+                                try {
+                                    tryAwaitRelease()
+                                } finally {
+                                    isIslandPressed = false
+                                }
+                            },
+                            onTap = { openPlayerApp(context, mediaInfo) },
+                            onLongPress = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onExpand()
+                            },
+                        )
+                    }
+                },
             contentAlignment = Alignment.TopCenter,
         ) {
-            // Fluid morphing Dynamic Island container
             Surface(
                 modifier = Modifier
-                    .width(animatedWidth)
-                    .height(animatedHeight)
-                    .offset(x = animatedHorizontalOffset)
+                    .padding(top = 14.dp)
+                    .width(currentWidth)
+                    .height(currentHeight)
                     .scale(islandScale)
+                    .graphicsLayer {
+                        alpha = compactAlpha
+                    }
+                    .clip(RoundedCornerShape(currentCornerRadius))
                     .then(
-                        if (showPerimeterProgress) {
+                        if (!isPaused) {
                             Modifier.islandFluidProgressBorder(
                                 progressFraction = animatedProgress,
-                                cornerRadius = animatedCornerRadius,
-                                shape = containerShape,
+                                cornerRadius = currentCornerRadius,
+                                shape = RoundedCornerShape(currentCornerRadius),
                                 strokeWidth = 0.75.dp,
                                 trackColor = Color(0x30FFFFFF),
                                 progressColor = mediaInfo.dominantColor,
                             )
                         } else Modifier
-                    )
-                    .pointerInput(isExpanded) {
-                        if (!isExpanded && !isPaused) {
-                            detectTapGestures(
-                                onPress = {
-                                    isIslandPressed = true
-                                    try {
-                                        tryAwaitRelease()
-                                    } finally {
-                                        isIslandPressed = false
-                                    }
-                                },
-                                onTap = { openPlayerApp(context, mediaInfo) },
-                                onLongPress = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onExpandChange(true)
-                                },
-                            )
-                        }
-                    },
-                shape = containerShape,
+                    ),
+                shape = RoundedCornerShape(currentCornerRadius),
                 color = Color.Black,
-                shadowElevation = animatedElevation,
+                shadowElevation = if (isExpanded) 12.dp else 4.dp,
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // 1. Compact Pill Content (Fades smoothly during expansion)
-                    if (compactAlpha > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = compactAlpha },
-                        ) {
-                            CompactIslandContent(
-                                mediaInfo = mediaInfo,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                onExpand = { onExpandChange(true) },
-                            )
-                        }
-                    }
+                if (!isPaused) {
+                    CompactIslandContent(
+                        mediaInfo = mediaInfo,
+                        cutoutDiameterDp = cutoutDiameterDp,
+                        onExpand = onExpand,
+                    )
+                }
+            }
+        }
+    }
+}
 
-                    // 2. Expanded Card Content (Cascades in with upward slide & fade)
-                    if (expandedAlpha > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    alpha = expandedAlpha
-                                    translationY = expandedOffsetY.toPx()
-                                },
-                        ) {
-                            ExpandedIslandContent(
-                                mediaInfo = mediaInfo,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                isExpanded = isExpanded,
-                                onCollapse = { onExpandChange(false) },
-                            )
-                        }
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ExpandedIslandOverlay(
+    cutoutInfo: CutoutInfo,
+    mediaInfo: MediaTrackInfo,
+    isExpanded: Boolean,
+    onCollapse: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val density = LocalDensity.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(24.dp, 36.dp)
+    val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
+    val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
+
+    val compactWidth = cutoutDiameterDp + 74.dp
+    val compactHeight = 36.dp
+
+    val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
+    val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
+    val cardWidth = screenWidthDp - (horizontalMarginDp * 2)
+    val cardHeight = 190.dp
+
+    val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
+    val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
+
+    var morphExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(isExpanded) {
+        morphExpanded = isExpanded
+    }
+
+    val animatedWidth by animateDpAsState(
+        targetValue = if (morphExpanded) cardWidth else compactWidth,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 360 else 280,
+            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
+        ),
+        label = "expanded_morph_width",
+    )
+
+    val animatedHeight by animateDpAsState(
+        targetValue = if (morphExpanded) cardHeight else compactHeight,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 360 else 280,
+            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
+        ),
+        label = "expanded_morph_height",
+    )
+
+    val animatedCornerRadius by animateDpAsState(
+        targetValue = if (morphExpanded) expandedCornerRadiusDp else 18.dp,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 360 else 280,
+            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
+        ),
+        label = "expanded_morph_corner",
+    )
+    val animatedCornerRadiusPx = with(density) { animatedCornerRadius.toPx() }
+
+    val containerShape = if (morphExpanded) {
+        squircleShape(animatedCornerRadiusPx)
+    } else {
+        RoundedCornerShape(animatedCornerRadius)
+    }
+
+    val animatedElevation by animateDpAsState(
+        targetValue = if (morphExpanded) 14.dp else 4.dp,
+        animationSpec = tween(durationMillis = if (morphExpanded) 240 else 280),
+        label = "expanded_elevation",
+    )
+
+    val cutoutOffsetX = with(density) {
+        val screenWidthPx = screenWidthDp.toPx()
+        (cutoutInfo.centerX - (screenWidthPx / 2f)).toDp()
+    }
+    val animatedOffsetX by animateDpAsState(
+        targetValue = if (morphExpanded) 0.dp else cutoutOffsetX,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 360 else 280,
+            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
+        ),
+        label = "expanded_morph_offset_x",
+    )
+
+    val compactAlpha by animateFloatAsState(
+        targetValue = if (morphExpanded) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 90 else 180,
+            delayMillis = if (morphExpanded) 0 else 140,
+            easing = LinearEasing,
+        ),
+        label = "expanded_compact_alpha",
+    )
+
+    val expandedAlpha by animateFloatAsState(
+        targetValue = if (morphExpanded) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 160 else 70,
+            delayMillis = if (morphExpanded) 45 else 0,
+            easing = if (morphExpanded) MtIslandDecelerate else LinearEasing,
+        ),
+        label = "expanded_alpha",
+    )
+
+    val expandedOffsetY by animateDpAsState(
+        targetValue = if (morphExpanded) 0.dp else 16.dp,
+        animationSpec = tween(
+            durationMillis = if (morphExpanded) 280 else 70,
+            delayMillis = if (morphExpanded) 35 else 0,
+            easing = if (morphExpanded) MtIslandEnterEasing else LinearEasing,
+        ),
+        label = "expanded_offset_y",
+    )
+
+    var isExpansionBounceActive by remember { mutableStateOf(false) }
+    LaunchedEffect(morphExpanded) {
+        if (morphExpanded) {
+            isExpansionBounceActive = true
+            delay(220)
+            isExpansionBounceActive = false
+        } else {
+            isExpansionBounceActive = false
+        }
+    }
+
+    val islandScale by animateFloatAsState(
+        targetValue = if (isExpansionBounceActive) 1.02f else 1f,
+        animationSpec = if (isExpansionBounceActive) {
+            spring(dampingRatio = 0.9f, stiffness = 300f)
+        } else {
+            tween(durationMillis = 260, easing = MtIslandDecelerate)
+        },
+        label = "expanded_bounce_scale",
+    )
+
+    val progressFraction = if (mediaInfo.durationMs > 0) {
+        (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
+    } else 0f
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = progressFraction,
+        animationSpec = tween(durationMillis = 350, easing = LinearEasing),
+        label = "expanded_progress",
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onCollapse() })
+            }
+            .padding(14.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Surface(
+            modifier = Modifier
+                .offset(x = animatedOffsetX)
+                .width(animatedWidth)
+                .height(animatedHeight)
+                .scale(islandScale)
+                .islandFluidProgressBorder(
+                    progressFraction = animatedProgress,
+                    cornerRadius = animatedCornerRadius,
+                    shape = containerShape,
+                    strokeWidth = 0.75.dp,
+                    trackColor = Color(0x30FFFFFF),
+                    progressColor = mediaInfo.dominantColor,
+                ),
+            shape = containerShape,
+            color = Color.Black,
+            shadowElevation = animatedElevation,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (compactAlpha > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = compactAlpha },
+                    ) {
+                        CompactIslandContent(
+                            mediaInfo = mediaInfo,
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            onExpand = {},
+                        )
+                    }
+                }
+
+                if (expandedAlpha > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = expandedAlpha
+                                translationY = expandedOffsetY.toPx()
+                            },
+                    ) {
+                        ExpandedIslandContent(
+                            mediaInfo = mediaInfo,
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            isExpanded = morphExpanded,
+                            onCollapse = onCollapse,
+                        )
                     }
                 }
             }
