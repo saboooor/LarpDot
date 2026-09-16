@@ -38,13 +38,8 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Upload Release APK
-        uses: actions/upload-artifact@v4
         uses: softprops/action-gh-release@v2
         with:
-          name: LarpDot-release
-          path: app/build/outputs/apk/release/app-release.apk
-          retention-days: 30
-
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
           files: app/build/outputs/apk/release/app-release.apk
