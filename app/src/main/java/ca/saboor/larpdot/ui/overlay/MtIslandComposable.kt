@@ -119,7 +119,6 @@ fun MtIslandOverlay(
     modifier: Modifier = Modifier,
 ) {
     var pauseHideReady by remember { mutableStateOf(false) }
-    var wasPausedWhileExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(mediaInfo.hasMedia, mediaInfo.isPlaying, isExpanded) {
         pauseHideReady = false
@@ -130,15 +129,6 @@ fun MtIslandOverlay(
     }
 
     val isPaused = mediaInfo.hasMedia && !mediaInfo.isPlaying && !isExpanded && pauseHideReady
-
-    LaunchedEffect(mediaInfo.isPlaying, isExpanded) {
-        if (isExpanded && mediaInfo.hasMedia && !mediaInfo.isPlaying) {
-            wasPausedWhileExpanded = true
-        } else if (mediaInfo.isPlaying && wasPausedWhileExpanded) {
-            wasPausedWhileExpanded = false
-            onExpandChange(false)
-        }
-    }
 
     if (!mediaInfo.hasMedia) {
         // Idle Dot Mode: Subtle glowing ring strictly covering the hole punch camera
@@ -158,7 +148,7 @@ fun MtIslandOverlay(
                     modifier = Modifier
                         .size((dotDiameter - 4.dp).coerceAtLeast(12.dp))
                         .clip(CircleShape)
-                        .background(Color(0xFF00E676))
+                        .background(Color(0xFF00E676)),
                 )
             }
         }
