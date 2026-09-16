@@ -4,6 +4,7 @@ import android.provider.Settings
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.navigation.Destination
 import ca.saboor.larpdot.service.DotOverlayService
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.screens.HomeScreen
 
@@ -56,14 +60,16 @@ fun LarpDotApp() {
     var selectedDestinationName by rememberSaveable { mutableStateOf(Destination.Home.name) }
     val selectedDestination = Destination.valueOf(selectedDestinationName)
 
-    var isEnabled by rememberSaveable { mutableStateOf(ca.saboor.larpdot.service.OverlayPreferences.isOverlayEnabled(context)) }
+    var isEnabled by rememberSaveable { mutableStateOf(OverlayPreferences.isOverlayEnabled(context)) }
     var showSetupDialog by remember { mutableStateOf(false) }
+
+    val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
 
     // Automatically locate the camera hole punch cutout
     var cutoutInfo by remember { mutableStateOf(CutoutDetector.detect(context)) }
 
-    // Re-detect cutout position when orientation / configuration changes
-    LaunchedEffect(configuration) {
+    // Re-detect cutout position when orientation / configuration or manual alignment changes
+    LaunchedEffect(configuration, cutoutConfig) {
         cutoutInfo = CutoutDetector.detect(context)
     }
 
@@ -112,11 +118,28 @@ fun LarpDotApp() {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = "LarpDot",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
+                        val statusText = if (!isEnabled) {
+                            "STANDBY"
+                        } else if (hasAccessibility) {
+                            "SHADE & LOCK ON"
+                        } else {
+                            "OVERLAY ON"
+                        }
+
+                        Column {
+                            Text(
+                                text = "LarpDot",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isEnabled) Color(0xFF00E676) else MaterialTheme.colorScheme.outline,
+                            )
+                        }
                     },
                     actions = {
                         Row(

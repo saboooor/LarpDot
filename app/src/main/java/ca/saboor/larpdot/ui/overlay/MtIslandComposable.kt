@@ -140,7 +140,7 @@ fun CompactIslandOverlay(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            val dotDiameter = (cutoutInfo.radiusPx * 2f).dp.coerceAtLeast(18.dp)
+            val dotDiameter = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceAtLeast(18.dp)
             Box(
                 modifier = Modifier
                     .size(dotDiameter)
@@ -157,8 +157,8 @@ fun CompactIslandOverlay(
             }
         }
     } else {
-        val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(24.dp, 36.dp)
-        val compactWidth = cutoutDiameterDp + 74.dp
+        val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
+        val compactWidth = cutoutDiameterDp + 72.dp
         val compactHeight = 36.dp
 
         val currentWidth by animateDpAsState(
@@ -294,11 +294,11 @@ fun ExpandedIslandOverlay(
     val density = LocalDensity.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(24.dp, 36.dp)
+    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
-    val compactWidth = cutoutDiameterDp + 74.dp
+    val compactWidth = cutoutDiameterDp + 72.dp
     val compactHeight = 36.dp
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
@@ -495,7 +495,7 @@ fun ExpandedIslandOverlay(
     }
 }
 
-private fun squircleShape(radiusPx: Float) = GenericShape { size, _ ->
+internal fun squircleShape(radiusPx: Float) = GenericShape { size, _ ->
     val radius = radiusPx.coerceAtMost(minOf(size.width, size.height) / 2f)
     val controlDistance = radius * 0.8f
 
@@ -701,45 +701,40 @@ private fun CompactIslandContent(
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Left Wing: Album art fills the pill height, left-aligned, fades to black on the right.
+        // Left Wing: Album art fills the full pill height, left-aligned, fades to black on the right.
         // The pill's Surface(shape = RoundedCornerShape(...)) already clips the left edge to the
-        // pill's curvature — no additional clip needed here.
+        // pill's curvature — no vertical padding above or below.
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             contentAlignment = Alignment.CenterStart,
         ) {
-            // Square thumbnail matching the pill height
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(1f),
-            ) {
-                if (mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White,
-                                            1.00f to Color.Transparent,
-                                        )
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
-                }
+            if (mediaInfo.albumArt != null) {
+                Image(
+                    bitmap = mediaInfo.albumArt.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.White,
+                                        0.80f to Color.White.copy(alpha = 0.5f),
+                                        1.00f to Color.Transparent,
+                                    )
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                    contentScale = ContentScale.Crop,
+                )
             }
         }
 
@@ -771,7 +766,7 @@ private fun CompactIslandContent(
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ExpandedIslandContent(
+internal fun ExpandedIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
     isExpanded: Boolean,
@@ -911,11 +906,15 @@ private fun ExpandedIslandContent(
                     )
                 }
 
-                // Dancing 4-bar equalizer
+                // Dancing 4-bar equalizer (prominent and large on expanded island)
                 EqualizerWaveform(
                     isPlaying = mediaInfo.isPlaying,
-                    maxHeightDp = 13f,
+                    maxHeightDp = 28f,
                     accentColor = mediaInfo.dominantColor,
+                    barWidth = 5.dp,
+                    barSpacing = 3.5.dp,
+                    minHeight = 5.dp,
+                    barCornerRadius = 2.5.dp,
                 )
 
                 // Symmetrical clearance spacer hugging the hole punch camera
@@ -1036,6 +1035,10 @@ private fun EqualizerWaveform(
     maxHeightDp: Float,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    barWidth: Dp = 2.2.dp,
+    barSpacing: Dp = 2.dp,
+    minHeight: Dp = 2.8.dp,
+    barCornerRadius: Dp = barWidth / 2f,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "eq_transition")
 
@@ -1077,23 +1080,25 @@ private fun EqualizerWaveform(
         label = "eq_4",
     )
 
+    val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
+
     val animatedH1 by animateFloatAsState(
-        targetValue = if (isPlaying) bar1 else 0.18f,
+        targetValue = if (isPlaying) bar1 else restingFraction,
         animationSpec = tween(durationMillis = 2),
         label = "h1",
     )
     val animatedH2 by animateFloatAsState(
-        targetValue = if (isPlaying) bar2 else 0.18f,
+        targetValue = if (isPlaying) bar2 else restingFraction,
         animationSpec = tween(durationMillis = 4),
         label = "h2",
     )
     val animatedH3 by animateFloatAsState(
-        targetValue = if (isPlaying) bar3 else 0.18f,
+        targetValue = if (isPlaying) bar3 else restingFraction,
         animationSpec = tween(durationMillis = 8),
         label = "h3",
     )
     val animatedH4 by animateFloatAsState(
-        targetValue = if (isPlaying) bar4 else 0.18f,
+        targetValue = if (isPlaying) bar4 else restingFraction,
         animationSpec = tween(durationMillis = 16),
         label = "h4",
     )
@@ -1102,15 +1107,15 @@ private fun EqualizerWaveform(
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(barSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         heights.forEach { fraction ->
             Box(
                 modifier = Modifier
-                    .width(2.2.dp)
-                    .height((maxHeightDp * fraction).dp.coerceAtLeast(2.8.dp))
-                    .clip(RoundedCornerShape(1.1.dp))
+                    .width(barWidth)
+                    .height((maxHeightDp * fraction).dp.coerceAtLeast(minHeight))
+                    .clip(RoundedCornerShape(barCornerRadius))
                     .background(accentColor)
             )
         }

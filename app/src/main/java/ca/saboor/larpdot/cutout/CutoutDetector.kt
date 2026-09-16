@@ -4,11 +4,11 @@ import android.content.Context
 import android.graphics.Rect
 import android.os.Build
 import android.view.DisplayCutout
+import android.view.RoundedCorner
 import android.view.Surface
 import android.view.WindowManager
+import ca.saboor.larpdot.service.OverlayPreferences
 import kotlin.math.abs
-
-import android.view.RoundedCorner
 
 data class CutoutInfo(
     val centerX: Float,
@@ -17,15 +17,44 @@ data class CutoutInfo(
     val isAutoDetected: Boolean,
     val boundingRect: Rect? = null,
     val displayCornerRadiusPx: Float = 0f,
+    val manualOffsetX: Float = 0f,
+    val manualOffsetY: Float = 0f,
+    val manualDiameterDp: Float = 0f,
 )
 
 object CutoutDetector {
     /**
-     * Automatically locates the camera hole punch cutout on the device.
-     * Uses DisplayCutout boundingRects with rotation compensation,
-     * derived from the essentials cutout detection implementation.
+     * Locates the camera cutout on the device, applying user manual adjustments if enabled.
      */
     fun detect(context: Context): CutoutInfo {
+        val hw = detectHardwareCutout(context)
+        val config = OverlayPreferences.getCutoutConfig(context)
+        if (!config.isManualEnabled) {
+            return hw
+        }
+
+        val density = context.resources.displayMetrics.density
+        val rad = if (config.customDiameterDp > 0f) {
+            (config.customDiameterDp * density) / 2f
+        } else {
+            hw.radiusPx
+        }
+
+        return hw.copy(
+            centerX = hw.centerX + (config.offsetX * density),
+            centerY = hw.centerY + (config.offsetY * density),
+            radiusPx = rad,
+            isAutoDetected = false,
+            manualOffsetX = config.offsetX,
+            manualOffsetY = config.offsetY,
+            manualDiameterDp = config.customDiameterDp,
+        )
+    }
+
+    /**
+     * Automatically locates the physical camera hole punch cutout from device hardware.
+     */
+    fun detectHardwareCutout(context: Context): CutoutInfo {
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val dm = context.resources.displayMetrics
         val screenWidth = dm.widthPixels.toFloat()
@@ -40,9 +69,9 @@ object CutoutDetector {
             24f * density
         }
         val displayCornerRadius = detectDisplayCornerRadius(context)
-        var defaultCenterX = screenWidth / 2f
-        var defaultCenterY = statusBarHeight / 2f
-        var defaultRadius = 16f * density
+        val defaultCenterX = screenWidth / 2f
+        val defaultCenterY = statusBarHeight / 2f
+        val defaultRadius = 16f * density
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val cutout: DisplayCutout? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -96,7 +125,12 @@ object CutoutDetector {
                 if (targetRect != null && !targetRect.isEmpty) {
                     val cx = targetRect.centerX().toFloat()
                     val cy = targetRect.centerY().toFloat()
-                    val computedRadius = (targetRect.width().coerceAtLeast(targetRect.height()) / 2f)
+                    val w = targetRect.width().toFloat()
+                    val h = targetRect.height().toFloat()
+                    // On punch-hole cutouts, one dimension often extends to the display edge (e.g. height from top=0),
+                    // so the smaller dimension represents the actual circular camera diameter.
+                    val dimension = if (w > 0f && h > 0f) minOf(w, h) else maxOf(w, h)
+                    val computedRadius = (dimension / 2f).coerceIn(12f * density, 16f * density)
                     val rad = if (computedRadius > 0f) computedRadius else defaultRadius
 
                     return CutoutInfo(
@@ -123,10 +157,6 @@ object CutoutDetector {
 
     /**
      * Detects the physical display's rounded corner radius in pixels.
-     * Follows the exact decompiled implementation from com.pryshedko.mtisland (ca7.F and em4.c):
-     * 1. On Android 12+ (API 31+): Queries WindowInsets.getRoundedCorner() for POSITION_TOP_RIGHT / POSITION_TOP_LEFT.
-     * 2. Fallback via system framework dimension "rounded_corner_radius" or "rounded_corner_radius_top".
-     * 3. Fallback to 28dp density-scaled radius for modern curved displays.
      */
     fun detectDisplayCornerRadius(context: Context): Float {
         val dm = context.resources.displayMetrics

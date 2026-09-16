@@ -65,7 +65,7 @@ class IslandOverlayViewController(
     private var isIslandExpanded by mutableStateOf(false)
 
     private var controllerJob = Job()
-    private val controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
+    private var controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
     private var collapseJob: Job? = null
     private var lastObservedHasMedia: Boolean? = null
 
@@ -75,6 +75,10 @@ class IslandOverlayViewController(
 
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = wm
+
+        controllerJob.cancel()
+        controllerJob = Job()
+        controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
 
         val cutout = CutoutDetector.detect(context)
         currentCutoutInfo = cutout
@@ -122,6 +126,7 @@ class IslandOverlayViewController(
             wm.addView(compView, compParams)
             isOverlayAdded = true
             observeMediaState()
+            observeCutoutConfig()
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -235,12 +240,12 @@ class IslandOverlayViewController(
         val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
 
-        val paddingHorizontalPx = (28f * density).toInt()
+        val paddingHorizontalPx = (14f * density).toInt()
         val topPaddingPx = (14f * density).toInt()
         val bottomPaddingPx = (28f * density).toInt()
 
-        val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(24f * density, 36f * density)
-        val compactWPx = (cutoutDiameterPx + (74f * density)).toInt()
+        val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
+        val compactWPx = (cutoutDiameterPx + (72f * density)).toInt()
         val compactHPx = (36f * density).toInt()
 
         val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
@@ -263,7 +268,7 @@ class IslandOverlayViewController(
             // Sized consistently with generous padding so the window never resizes and touch area remains stable
             targetWidth = compactWPx + (paddingHorizontalPx * 2)
             targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
-            val pillCenterX = if (isLandscape) cutout.centerX else screenWidth / 2f
+            val pillCenterX = cutout.centerX
             posX = (pillCenterX - targetWidth / 2f).toInt()
             posY = windowPosY
         }
@@ -384,6 +389,15 @@ class IslandOverlayViewController(
                         collapseOverlay()
                     }
                 }
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeCutoutConfig() {
+        controllerScope.launch {
+            OverlayPreferences.cutoutConfigFlow.collectLatest {
+                currentCutoutInfo = CutoutDetector.detect(context)
                 updateOverlayLayout()
             }
         }
