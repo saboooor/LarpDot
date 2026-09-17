@@ -981,11 +981,14 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
 
     float scoopY(float x) {
         float dist = abs(x - uDotCenter.x);
-        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
-        
-        // Perfectly symmetrical smooth sine bump with quadratic taper at shoulders
-        float bump = sin(t * 1.5707963);
-        bump = bump * bump;
+        // Flat plateau under the camera punch hole so it forms a rounded U-cradle instead of a sharp V
+        float plateauR = uDotRadius * 0.85;
+        if (dist <= plateauR) {
+            return uScoopDepth;
+        }
+        float norm = clamp((dist - plateauR) / max(uHalfWidth - plateauR, 1.0), 0.0, 1.0);
+        // Smoothstep S-curve fillet: zero derivative at plateau, zero derivative at top edge
+        float bump = 1.0 - smoothstep(0.0, 1.0, norm);
         return bump * uScoopDepth;
     }
 
@@ -1824,10 +1827,10 @@ internal fun ExpandedIslandContent(
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
             // Move scoop upwards: hug closer under the camera cutout without drooping low
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 6.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
-            val fadeWidthPx = with(density) { 24.dp.toPx() }
-            // Tighten scoop width: keep it snugly centered rather than stretching wide left/right
-            val halfWidthPx = with(density) { (cutoutDiameterDp * 1.35f).coerceIn(38.dp, 56.dp).toPx() }
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 4.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
+            val fadeWidthPx = with(density) { 20.dp.toPx() }
+            // Width: graceful rounded U-cradle centered around the camera hole
+            val halfWidthPx = with(density) { (cutoutDiameterDp * 1.8f).coerceIn(54.dp, 72.dp).toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
