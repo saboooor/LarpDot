@@ -1629,8 +1629,16 @@ internal fun ExpandedIslandContent(
             Image(
                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                 contentDescription = "Background album art",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // Offset downwards so the center of the album art is shown better below the camera swoop
+                        translationY = 22.dp.toPx()
+                        scaleX = 1.15f
+                        scaleY = 1.15f
+                    },
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
             )
             // Android Media Player scrim: dark vertical gradient to maintain contrast and legibility
             Box(
@@ -1647,33 +1655,72 @@ internal fun ExpandedIslandContent(
                     )
             )
         } else if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BASIC_FADED && mediaInfo.albumArt != null) {
+            val bitmap = mediaInfo.albumArt.asImageBitmap()
+            val side = minOf(bitmap.width, bitmap.height)
+            val cropX = (bitmap.width - side) / 2
+            val cropY = (bitmap.height - side) / 2
+            val eighth = side / 8
+
+            val realArtHeight = 190.dp
+            val topReflectionHeight = 30.dp
+            val totalArtWidth = realArtHeight
+            val topSeamPx = with(density) { topReflectionHeight.toPx() }
+
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .aspectRatio(1f),
+                    .width(totalArtWidth)
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                colorStops = arrayOf(
+                                    0.00f to Color.White.copy(alpha = 0.65f),
+                                    1.00f to Color.Transparent,
+                                )
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
             ) {
-                Image(
-                    bitmap = mediaInfo.albumArt.asImageBitmap(),
-                    contentDescription = "Album art",
+                // Unified Canvas containing Real Art + Top Reflection with progressive blur
+                Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colorStops = arrayOf(
-                                        0.00f to Color.White.copy(alpha = 0.65f),
-                                        1.00f to Color.Transparent,
-                                    )
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
-                    contentScale = ContentScale.Crop,
-                )
+                        .progressiveBlur(
+                            direction = 3,
+                            maxBlurDp = 48.dp,
+                            topSeamPx = topSeamPx,
+                            rightSeamPx = 99999f,
+                        ),
+                ) {
+                    val realArtW = size.width
+                    val realArtH = with(density) { realArtHeight.toPx() }
+                    val topRefH = topSeamPx
+
+                    // 1. Primary Album Art (1:1 square, completely uncut and visible below camera swoop)
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset(cropX, cropY),
+                        srcSize = IntSize(side, side),
+                        dstOffset = IntOffset(0, topRefH.roundToInt()),
+                        dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
+                    )
+
+                    // 2. Flipped 1/8 Top Reflection that absorbs the camera swoop cover
+                    scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX, cropY),
+                            srcSize = IntSize(side, eighth),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                        )
+                    }
+                }
             }
         } else if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED && mediaInfo.albumArt != null) {
             val bitmap = mediaInfo.albumArt.asImageBitmap()
