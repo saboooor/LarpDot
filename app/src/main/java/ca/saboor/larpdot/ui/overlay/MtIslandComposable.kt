@@ -1837,14 +1837,14 @@ internal fun ExpandedIslandContent(
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
             val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
-            val fadeRadiusPx = with(density) { 52.dp.toPx() }
+            val fadeRadiusPx = with(density) { 72.dp.toPx() }
+            val halfWidthPx = with(density) { (cutoutDiameterDp * 2.3f).coerceIn(72.dp, 92.dp).toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
                 val scoopBrush = remember(scoopShader) { ShaderBrush(scoopShader) }
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
                     scoopShader.setFloatUniform("uSize", size.width, size.height)
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
