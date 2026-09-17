@@ -58,6 +58,10 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.toShape
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -855,10 +859,45 @@ fun Modifier.islandFluidProgressBorder(
 /**
  * Resolves a Material 3 Expressive shape for nested album art presentation.
  */
+class RotatedShape(
+    private val baseShape: Shape,
+    private val rotationDegrees: Float,
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline {
+        val normalizedRotation = ((rotationDegrees % 360f) + 360f) % 360f
+        if (normalizedRotation == 0f) {
+            return baseShape.createOutline(size, layoutDirection, density)
+        }
+        val baseOutline = baseShape.createOutline(size, layoutDirection, density)
+        val composePath = when (baseOutline) {
+            is Outline.Rectangle -> androidx.compose.ui.graphics.Path().apply { addRect(baseOutline.rect) }
+            is Outline.Rounded -> androidx.compose.ui.graphics.Path().apply { addRoundRect(baseOutline.roundRect) }
+            is Outline.Generic -> baseOutline.path
+        }
+        val matrix = android.graphics.Matrix().apply {
+            postRotate(normalizedRotation, size.width / 2f, size.height / 2f)
+        }
+        val rotatedAndroidPath = android.graphics.Path()
+        composePath.asAndroidPath().transform(matrix, rotatedAndroidPath)
+        return Outline.Generic(rotatedAndroidPath.asComposePath())
+    }
+}
+
+/**
+ * Resolves a Material 3 Expressive shape for nested album art presentation, with optional rotation
+ * while keeping album art inside strictly upright and unrotated.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun nestedAlbumArtShape(shapeOption: OverlayPreferences.NestedAlbumArtShape): Shape {
-    return when (shapeOption) {
+internal fun nestedAlbumArtShape(
+    shapeOption: OverlayPreferences.NestedAlbumArtShape,
+    rotationDegrees: Float = 0f,
+): Shape {
+    val baseShape = when (shapeOption) {
         OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE -> MaterialShapes.Square.toShape()
         OverlayPreferences.NestedAlbumArtShape.CIRCLE -> MaterialShapes.Circle.toShape()
         OverlayPreferences.NestedAlbumArtShape.SLANTED -> MaterialShapes.Slanted.toShape()
@@ -895,6 +934,11 @@ internal fun nestedAlbumArtShape(shapeOption: OverlayPreferences.NestedAlbumArtS
         OverlayPreferences.NestedAlbumArtShape.BUN -> MaterialShapes.Bun.toShape()
         OverlayPreferences.NestedAlbumArtShape.HEART -> MaterialShapes.Heart.toShape()
     }
+    return if (rotationDegrees % 360f == 0f) {
+        baseShape
+    } else {
+        RotatedShape(baseShape, rotationDegrees)
+    }
 }
 
 @Composable
@@ -905,6 +949,7 @@ internal fun CompactIslandContent(
     modifier: Modifier = Modifier,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
+    nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -954,7 +999,7 @@ internal fun CompactIslandContent(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(24.dp)
-                                    .clip(nestedAlbumArtShape(nestedShape)),
+                                    .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -1076,7 +1121,7 @@ internal fun CompactIslandContent(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(24.dp)
-                                    .clip(nestedAlbumArtShape(nestedShape)),
+                                    .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -1173,6 +1218,7 @@ internal fun ExpandedIslandContent(
     modifier: Modifier = Modifier,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
+    nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1409,7 +1455,7 @@ internal fun ExpandedIslandContent(
                         contentDescription = "Album art",
                         modifier = Modifier
                             .size(52.dp)
-                            .clip(nestedAlbumArtShape(nestedShape)),
+                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(14.dp))

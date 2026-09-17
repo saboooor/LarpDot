@@ -22,6 +22,8 @@ object OverlayPreferences {
     private const val KEY_MINIMIZED_ALBUM_ART_SHAPE = "minimized_album_art_shape"
     private const val KEY_EXPANDED_ALBUM_ART_SHAPE = "expanded_album_art_shape"
     private const val KEY_SHOW_PROGRESS_OUTLINE = "show_progress_outline"
+    private const val KEY_MINIMIZED_ALBUM_ART_ROTATION = "minimized_album_art_rotation"
+    private const val KEY_EXPANDED_ALBUM_ART_ROTATION = "expanded_album_art_rotation"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -107,6 +109,12 @@ object OverlayPreferences {
     private val _showProgressOutlineFlow = MutableStateFlow(true)
     val showProgressOutlineFlow: StateFlow<Boolean> = _showProgressOutlineFlow.asStateFlow()
 
+    private val _minimizedAlbumArtRotationFlow = MutableStateFlow(0f)
+    val minimizedAlbumArtRotationFlow: StateFlow<Float> = _minimizedAlbumArtRotationFlow.asStateFlow()
+
+    private val _expandedAlbumArtRotationFlow = MutableStateFlow(0f)
+    val expandedAlbumArtRotationFlow: StateFlow<Float> = _expandedAlbumArtRotationFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -126,6 +134,8 @@ object OverlayPreferences {
     private var isMinimizedAlbumArtShapeInitialized = false
     private var isExpandedAlbumArtShapeInitialized = false
     private var isShowProgressOutlineInitialized = false
+    private var isMinimizedAlbumArtRotationInitialized = false
+    private var isExpandedAlbumArtRotationInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -298,5 +308,35 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_PROGRESS_OUTLINE, enabled).apply()
         _showProgressOutlineFlow.value = enabled
         isShowProgressOutlineInitialized = true
+    }
+
+    fun getMinimizedAlbumArtRotation(context: Context): Float {
+        if (!isMinimizedAlbumArtRotationInitialized) {
+            val rotation = getPrefs(context).getFloat(KEY_MINIMIZED_ALBUM_ART_ROTATION, 0f)
+            _minimizedAlbumArtRotationFlow.value = rotation
+            isMinimizedAlbumArtRotationInitialized = true
+        }
+        return _minimizedAlbumArtRotationFlow.value
+    }
+
+    fun setMinimizedAlbumArtRotation(context: Context, degrees: Float) {
+        getPrefs(context).edit().putFloat(KEY_MINIMIZED_ALBUM_ART_ROTATION, degrees).apply()
+        _minimizedAlbumArtRotationFlow.value = degrees
+        isMinimizedAlbumArtRotationInitialized = true
+    }
+
+    fun getExpandedAlbumArtRotation(context: Context): Float {
+        if (!isExpandedAlbumArtRotationInitialized) {
+            val rotation = getPrefs(context).getFloat(KEY_EXPANDED_ALBUM_ART_ROTATION, 0f)
+            _expandedAlbumArtRotationFlow.value = rotation
+            isExpandedAlbumArtRotationInitialized = true
+        }
+        return _expandedAlbumArtRotationFlow.value
+    }
+
+    fun setExpandedAlbumArtRotation(context: Context, degrees: Float) {
+        getPrefs(context).edit().putFloat(KEY_EXPANDED_ALBUM_ART_ROTATION, degrees).apply()
+        _expandedAlbumArtRotationFlow.value = degrees
+        isExpandedAlbumArtRotationInitialized = true
     }
 }

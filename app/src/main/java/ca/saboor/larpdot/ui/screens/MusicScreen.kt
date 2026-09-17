@@ -16,16 +16,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +52,7 @@ import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.nestedAlbumArtShape
+import kotlin.math.roundToInt
 
 private enum class ShapeCategory(val label: String) {
     ALL("All (35)"),
@@ -62,7 +68,9 @@ private fun ShapePickerSection(
     title: String,
     subtitle: String,
     selectedShape: OverlayPreferences.NestedAlbumArtShape,
+    rotationDegrees: Float,
     onShapeSelected: (OverlayPreferences.NestedAlbumArtShape) -> Unit,
+    onRotationChanged: (Float) -> Unit,
 ) {
     var selectedCategory by remember { mutableStateOf(ShapeCategory.ALL) }
 
@@ -148,7 +156,7 @@ private fun ShapePickerSection(
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(nestedAlbumArtShape(selectedShape))
+                        .clip(nestedAlbumArtShape(selectedShape, rotationDegrees))
                         .background(MaterialTheme.colorScheme.primary),
                 )
                 Column {
@@ -214,7 +222,7 @@ private fun ShapePickerSection(
                             Box(
                                 modifier = Modifier
                                     .size(13.dp)
-                                    .clip(nestedAlbumArtShape(shapeOption))
+                                    .clip(nestedAlbumArtShape(shapeOption, rotationDegrees))
                                     .background(
                                         if (selectedShape == shapeOption)
                                             MaterialTheme.colorScheme.onSecondaryContainer
@@ -226,6 +234,97 @@ private fun ShapePickerSection(
                         weight = 1f,
                     )
                 }
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        // Rotation Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.RotateRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = "Shape Rotation",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = "${rotationDegrees.roundToInt()}°",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        // Quick Rotation Presets ButtonGroup
+        val rotationPresets = listOf(0f, 45f, 90f, 180f, 270f)
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+        ) {
+            rotationPresets.forEach { preset ->
+                val isSelected = (((rotationDegrees % 360f) + 360f) % 360f).roundToInt() == preset.toInt()
+                toggleableItem(
+                    checked = isSelected,
+                    label = "${preset.toInt()}°",
+                    onCheckedChange = { onRotationChanged(preset) },
+                    weight = 1f,
+                )
+            }
+        }
+
+        // Rotation Slider with Minus & Plus buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalIconButton(
+                onClick = {
+                    val next = (((rotationDegrees - 15f) % 360f) + 360f) % 360f
+                    onRotationChanged(next.roundToInt().toFloat())
+                },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Remove,
+                    contentDescription = "Rotate Counter-Clockwise",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+
+            Slider(
+                value = (((rotationDegrees % 360f) + 360f) % 360f),
+                onValueChange = { onRotationChanged(it.roundToInt().toFloat()) },
+                valueRange = 0f..360f,
+                modifier = Modifier.weight(1f),
+            )
+
+            FilledTonalIconButton(
+                onClick = {
+                    val next = (rotationDegrees + 15f) % 360f
+                    onRotationChanged(next.roundToInt().toFloat())
+                },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Rotate Clockwise",
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
     }
@@ -244,6 +343,8 @@ fun MusicScreen(
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
     val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
     val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
+    val minimizedRotation by OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState()
+    val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
@@ -252,6 +353,8 @@ fun MusicScreen(
         OverlayPreferences.getExpandedAlbumArtStyle(context)
         OverlayPreferences.getMinimizedAlbumArtShape(context)
         OverlayPreferences.getExpandedAlbumArtShape(context)
+        OverlayPreferences.getMinimizedAlbumArtRotation(context)
+        OverlayPreferences.getExpandedAlbumArtRotation(context)
     }
 
     val minimizedStyles = listOf(
@@ -341,8 +444,12 @@ fun MusicScreen(
                             title = "Minimized Shape",
                             subtitle = "minimized island",
                             selectedShape = minimizedShape,
+                            rotationDegrees = minimizedRotation,
                             onShapeSelected = {
                                 OverlayPreferences.setMinimizedAlbumArtShape(context, it)
+                            },
+                            onRotationChanged = {
+                                OverlayPreferences.setMinimizedAlbumArtRotation(context, it)
                             },
                         )
                     }
@@ -429,8 +536,12 @@ fun MusicScreen(
                             title = "Expanded Shape",
                             subtitle = "expanded card",
                             selectedShape = expandedShape,
+                            rotationDegrees = expandedRotation,
                             onShapeSelected = {
                                 OverlayPreferences.setExpandedAlbumArtShape(context, it)
+                            },
+                            onRotationChanged = {
+                                OverlayPreferences.setExpandedAlbumArtRotation(context, it)
                             },
                         )
                     }
