@@ -976,8 +976,9 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float2 uDotCenter;
     uniform float uDotRadius;
     uniform float uScoopDepth;
-    uniform float uFadeWidth;
-    uniform float uHalfWidth;
+    uniform float uCoreRadiusX;
+    uniform float uFadeRadiusX;
+    uniform float uFadeRadiusY;
 
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
@@ -985,33 +986,28 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float dist = abs(coord.x - uDotCenter.x);
-        // Outside the scoop width: strictly transparent so no fade spans across the island
-        if (dist >= uHalfWidth) {
-            return half4(0.0, 0.0, 0.0, 0.0);
-        }
+        // Distance to the solid core plateau under the camera cutout
+        float dx = max(abs(coord.x - uDotCenter.x) - uCoreRadiusX, 0.0);
+        float dy = max(coord.y - uScoopDepth, 0.0);
 
-        // Flat plateau under the camera punch hole so it forms a rounded U-cradle instead of a sharp V
-        float plateauR = uDotRadius * 0.85;
-        float bump = 1.0;
-        if (dist > plateauR) {
-            float norm = clamp((dist - plateauR) / max(uHalfWidth - plateauR, 1.0), 0.0, 1.0);
-            bump = 1.0 - smoothstep(0.0, 1.0, norm);
-        }
-
-        float sy = bump * uScoopDepth;
-        float localFade = bump * uFadeWidth;
-        float diff = coord.y - sy;
-
-        if (diff <= 0.0) {
+        // Inside the solid cradle core: solid black
+        if (dx <= 0.0 && dy <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        if (localFade <= 0.001 || diff >= localFade) {
+        // 2D elliptical distance to the solid core boundary
+        float nx = dx / max(uFadeRadiusX, 1.0);
+        float ny = dy / max(uFadeRadiusY, 1.0);
+        float distNorm = sqrt(nx * nx + ny * ny);
+
+        // Completely transparent outside the fade radius (no screen-wide bleed)
+        if (distNorm >= 1.0) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
 
-        float alpha = smoothstep(localFade, 0.0, diff);
+        // Wide, luxurious organic feathering with smoothstep
+        float alpha = smoothstep(1.0, 0.0, distNorm);
+        alpha = pow(alpha, 1.3);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
@@ -1821,16 +1817,18 @@ internal fun ExpandedIslandContent(
         }
 
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // raised snug under the camera cutout with a gentle, compact fade.
+        // raised snug under the camera cutout with a generous, feather-soft organic fade radius.
         if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
-            // Move scoop upwards: hug closer under the camera cutout without drooping low
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 4.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
-            val fadeWidthPx = with(density) { 20.dp.toPx() }
-            // Width: graceful rounded U-cradle centered around the camera hole
-            val halfWidthPx = with(density) { (cutoutDiameterDp * 1.8f).coerceIn(54.dp, 72.dp).toPx() }
+            // Hugs close under the camera cutout
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 3.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
+            // Solid plateau width under the punch hole
+            val coreRadiusXPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
+            // Generous fade radii for a wide, feathery organic halo without screen-wide bleed
+            val fadeRadiusXPx = with(density) { 56.dp.toPx() }
+            val fadeRadiusYPx = with(density) { 44.dp.toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
@@ -1841,8 +1839,9 @@ internal fun ExpandedIslandContent(
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
                     scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
-                    scoopShader.setFloatUniform("uFadeWidth", fadeWidthPx)
-                    scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
+                    scoopShader.setFloatUniform("uCoreRadiusX", coreRadiusXPx)
+                    scoopShader.setFloatUniform("uFadeRadiusX", fadeRadiusXPx)
+                    scoopShader.setFloatUniform("uFadeRadiusY", fadeRadiusYPx)
 
                     drawRect(brush = scoopBrush)
                 }
