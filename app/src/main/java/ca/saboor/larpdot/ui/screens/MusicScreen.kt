@@ -13,16 +13,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -44,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
@@ -206,8 +209,8 @@ private fun ShapePickerSection(
             }
         }
 
-        // Display shapes in chunks of 3
-        val chunks = displayedShapes.chunked(3)
+        // Display shapes in rows of 6 without text labels so more shapes fit per row
+        val chunks = displayedShapes.chunked(6)
         chunks.forEach { chunk ->
             ButtonGroup(
                 modifier = Modifier.fillMaxWidth(),
@@ -216,19 +219,21 @@ private fun ShapePickerSection(
                 chunk.forEach { shapeOption ->
                     toggleableItem(
                         checked = selectedShape == shapeOption,
-                        label = shapeOption.label,
+                        label = "",
                         onCheckedChange = { onShapeSelected(shapeOption) },
                         icon = {
                             Box(
                                 modifier = Modifier
-                                    .size(13.dp)
+                                    .size(20.dp)
+                                    .offset(x = 4.dp)
                                     .clip(nestedAlbumArtShape(shapeOption, rotationDegrees))
                                     .background(
                                         if (selectedShape == shapeOption)
                                             MaterialTheme.colorScheme.onSecondaryContainer
                                         else
                                             MaterialTheme.colorScheme.primary
-                                    ),
+                                    )
+                                    .semantics { contentDescription = shapeOption.label },
                             )
                         },
                         weight = 1f,
