@@ -33,10 +33,54 @@ object OverlayPreferences {
     enum class NestedAlbumArtShape(val label: String) {
         ROUNDED_SQUARE("Square"),
         CIRCLE("Circle"),
-        COOKIE("Cookie"),
-        CLOVER("Clover"),
+        SLANTED("Slanted"),
+        ARCH("Arch"),
+        FAN("Fan"),
+        ARROW("Arrow"),
+        SEMI_CIRCLE("Semi Circle"),
+        OVAL("Oval"),
+        PILL("Pill"),
+        TRIANGLE("Triangle"),
+        DIAMOND("Diamond"),
+        CLAM_SHELL("Clam Shell"),
+        PENTAGON("Pentagon"),
+        GEM("Gem"),
         SUNNY("Sunny"),
-        HEART("Heart"),
+        VERY_SUNNY("Very Sunny"),
+        COOKIE("Cookie 4"),
+        COOKIE_6("Cookie 6"),
+        COOKIE_7("Cookie 7"),
+        COOKIE_9("Cookie 9"),
+        COOKIE_12("Cookie 12"),
+        GHOSTISH("Ghost"),
+        CLOVER("Clover 4"),
+        CLOVER_8("Clover 8"),
+        BURST("Burst"),
+        SOFT_BURST("Soft Burst"),
+        BOOM("Boom"),
+        SOFT_BOOM("Soft Boom"),
+        FLOWER("Flower"),
+        PUFFY("Puffy"),
+        PUFFY_DIAMOND("Puffy Dia."),
+        PIXEL_CIRCLE("Pixel Circle"),
+        PIXEL_TRIANGLE("Pixel Tri."),
+        BUN("Bun"),
+        HEART("Heart");
+
+        companion object {
+            fun fromName(name: String?): NestedAlbumArtShape {
+                if (name == null) return ROUNDED_SQUARE
+                return when (name) {
+                    "COOKIE_4" -> COOKIE
+                    "CLOVER_4" -> CLOVER
+                    else -> try {
+                        valueOf(name)
+                    } catch (_: Exception) {
+                        ROUNDED_SQUARE
+                    }
+                }
+            }
+        }
     }
 
     private val _isEnabledFlow = MutableStateFlow(false)
@@ -97,11 +141,7 @@ object OverlayPreferences {
     }
 
     private fun parseNestedAlbumArtShape(shapeName: String?): NestedAlbumArtShape {
-        return try {
-            NestedAlbumArtShape.valueOf(shapeName ?: NestedAlbumArtShape.ROUNDED_SQUARE.name)
-        } catch (_: Exception) {
-            NestedAlbumArtShape.ROUNDED_SQUARE
-        }
+        return NestedAlbumArtShape.fromName(shapeName)
     }
 
     fun isOverlayEnabled(context: Context): Boolean {

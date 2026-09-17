@@ -11,14 +11,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
@@ -35,6 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +47,189 @@ import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.nestedAlbumArtShape
+
+private enum class ShapeCategory(val label: String) {
+    ALL("All (35)"),
+    GEOMETRIC("Geometric"),
+    COOKIES("Cookies"),
+    STARS("Stars"),
+    EXPRESSIVE("Expressive"),
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ShapePickerSection(
+    title: String,
+    subtitle: String,
+    selectedShape: OverlayPreferences.NestedAlbumArtShape,
+    onShapeSelected: (OverlayPreferences.NestedAlbumArtShape) -> Unit,
+) {
+    var selectedCategory by remember { mutableStateOf(ShapeCategory.ALL) }
+
+    val geometricShapes = remember {
+        listOf(
+            OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+            OverlayPreferences.NestedAlbumArtShape.CIRCLE,
+            OverlayPreferences.NestedAlbumArtShape.SEMI_CIRCLE,
+            OverlayPreferences.NestedAlbumArtShape.OVAL,
+            OverlayPreferences.NestedAlbumArtShape.PILL,
+            OverlayPreferences.NestedAlbumArtShape.SLANTED,
+            OverlayPreferences.NestedAlbumArtShape.TRIANGLE,
+            OverlayPreferences.NestedAlbumArtShape.DIAMOND,
+            OverlayPreferences.NestedAlbumArtShape.PENTAGON,
+            OverlayPreferences.NestedAlbumArtShape.GEM,
+        )
+    }
+
+    val cookieShapes = remember {
+        listOf(
+            OverlayPreferences.NestedAlbumArtShape.COOKIE,
+            OverlayPreferences.NestedAlbumArtShape.COOKIE_6,
+            OverlayPreferences.NestedAlbumArtShape.COOKIE_7,
+            OverlayPreferences.NestedAlbumArtShape.COOKIE_9,
+            OverlayPreferences.NestedAlbumArtShape.COOKIE_12,
+            OverlayPreferences.NestedAlbumArtShape.CLOVER,
+            OverlayPreferences.NestedAlbumArtShape.CLOVER_8,
+        )
+    }
+
+    val starShapes = remember {
+        listOf(
+            OverlayPreferences.NestedAlbumArtShape.SUNNY,
+            OverlayPreferences.NestedAlbumArtShape.VERY_SUNNY,
+            OverlayPreferences.NestedAlbumArtShape.BURST,
+            OverlayPreferences.NestedAlbumArtShape.SOFT_BURST,
+            OverlayPreferences.NestedAlbumArtShape.BOOM,
+            OverlayPreferences.NestedAlbumArtShape.SOFT_BOOM,
+        )
+    }
+
+    val expressiveShapes = remember {
+        listOf(
+            OverlayPreferences.NestedAlbumArtShape.HEART,
+            OverlayPreferences.NestedAlbumArtShape.FLOWER,
+            OverlayPreferences.NestedAlbumArtShape.GHOSTISH,
+            OverlayPreferences.NestedAlbumArtShape.BUN,
+            OverlayPreferences.NestedAlbumArtShape.PUFFY,
+            OverlayPreferences.NestedAlbumArtShape.PUFFY_DIAMOND,
+            OverlayPreferences.NestedAlbumArtShape.PIXEL_CIRCLE,
+            OverlayPreferences.NestedAlbumArtShape.PIXEL_TRIANGLE,
+            OverlayPreferences.NestedAlbumArtShape.ARCH,
+            OverlayPreferences.NestedAlbumArtShape.FAN,
+            OverlayPreferences.NestedAlbumArtShape.ARROW,
+            OverlayPreferences.NestedAlbumArtShape.CLAM_SHELL,
+        )
+    }
+
+    val displayedShapes = when (selectedCategory) {
+        ShapeCategory.ALL -> OverlayPreferences.NestedAlbumArtShape.entries
+        ShapeCategory.GEOMETRIC -> geometricShapes
+        ShapeCategory.COOKIES -> cookieShapes
+        ShapeCategory.STARS -> starShapes
+        ShapeCategory.EXPRESSIVE -> expressiveShapes
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(nestedAlbumArtShape(selectedShape))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Active: ${selectedShape.label} ($subtitle)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        // Category Filter ButtonGroups
+        val catRow1 = listOf(ShapeCategory.ALL, ShapeCategory.GEOMETRIC, ShapeCategory.COOKIES)
+        val catRow2 = listOf(ShapeCategory.STARS, ShapeCategory.EXPRESSIVE)
+
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+        ) {
+            catRow1.forEach { category ->
+                toggleableItem(
+                    checked = selectedCategory == category,
+                    label = category.label,
+                    onCheckedChange = { selectedCategory = category },
+                    weight = 1f,
+                )
+            }
+        }
+
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+        ) {
+            catRow2.forEach { category ->
+                toggleableItem(
+                    checked = selectedCategory == category,
+                    label = category.label,
+                    onCheckedChange = { selectedCategory = category },
+                    weight = 1f,
+                )
+            }
+        }
+
+        // Display shapes in chunks of 3
+        val chunks = displayedShapes.chunked(3)
+        chunks.forEach { chunk ->
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth(),
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+            ) {
+                chunk.forEach { shapeOption ->
+                    toggleableItem(
+                        checked = selectedShape == shapeOption,
+                        label = shapeOption.label,
+                        onCheckedChange = { onShapeSelected(shapeOption) },
+                        icon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(13.dp)
+                                    .clip(nestedAlbumArtShape(shapeOption))
+                                    .background(
+                                        if (selectedShape == shapeOption)
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.primary
+                                    ),
+                            )
+                        },
+                        weight = 1f,
+                    )
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -70,10 +253,6 @@ fun MusicScreen(
         OverlayPreferences.getMinimizedAlbumArtShape(context)
         OverlayPreferences.getExpandedAlbumArtShape(context)
     }
-
-    val shapeEntries = OverlayPreferences.NestedAlbumArtShape.entries
-    val shapeRow1 = shapeEntries.take(3)
-    val shapeRow2 = shapeEntries.drop(3)
 
     val minimizedStyles = listOf(
         OverlayPreferences.AlbumArtStyle.BASIC_FADED,
@@ -158,97 +337,14 @@ fun MusicScreen(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Category,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Minimized Shape",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        text = "Material 3 shape for minimized thumbnail",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-
-                            // Small Shape Row 1: Square, Circle, Cookie
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                shapeRow1.forEach { shapeOption ->
-                                    toggleableItem(
-                                        checked = minimizedShape == shapeOption,
-                                        label = shapeOption.label,
-                                        onCheckedChange = {
-                                            OverlayPreferences.setMinimizedAlbumArtShape(context, shapeOption)
-                                        },
-                                        icon = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(13.dp)
-                                                    .clip(nestedAlbumArtShape(shapeOption))
-                                                    .background(
-                                                        if (minimizedShape == shapeOption)
-                                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else
-                                                            MaterialTheme.colorScheme.primary
-                                                    ),
-                                            )
-                                        },
-                                        weight = 1f,
-                                    )
-                                }
-                            }
-
-                            // Small Shape Row 2: Clover, Sunny, Heart
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                shapeRow2.forEach { shapeOption ->
-                                    toggleableItem(
-                                        checked = minimizedShape == shapeOption,
-                                        label = shapeOption.label,
-                                        onCheckedChange = {
-                                            OverlayPreferences.setMinimizedAlbumArtShape(context, shapeOption)
-                                        },
-                                        icon = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(13.dp)
-                                                    .clip(nestedAlbumArtShape(shapeOption))
-                                                    .background(
-                                                        if (minimizedShape == shapeOption)
-                                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else
-                                                            MaterialTheme.colorScheme.primary
-                                                    ),
-                                            )
-                                        },
-                                        weight = 1f,
-                                    )
-                                }
-                            }
-                        }
+                        ShapePickerSection(
+                            title = "Minimized Shape",
+                            subtitle = "minimized island",
+                            selectedShape = minimizedShape,
+                            onShapeSelected = {
+                                OverlayPreferences.setMinimizedAlbumArtShape(context, it)
+                            },
+                        )
                     }
                 }
             }
@@ -329,97 +425,14 @@ fun MusicScreen(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Category,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Expanded Shape",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        text = "Material 3 shape for expanded cover art",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-
-                            // Expanded Shape Row 1: Square, Circle, Cookie
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                shapeRow1.forEach { shapeOption ->
-                                    toggleableItem(
-                                        checked = expandedShape == shapeOption,
-                                        label = shapeOption.label,
-                                        onCheckedChange = {
-                                            OverlayPreferences.setExpandedAlbumArtShape(context, shapeOption)
-                                        },
-                                        icon = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(13.dp)
-                                                    .clip(nestedAlbumArtShape(shapeOption))
-                                                    .background(
-                                                        if (expandedShape == shapeOption)
-                                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else
-                                                            MaterialTheme.colorScheme.primary
-                                                    ),
-                                            )
-                                        },
-                                        weight = 1f,
-                                    )
-                                }
-                            }
-
-                            // Expanded Shape Row 2: Clover, Sunny, Heart
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                shapeRow2.forEach { shapeOption ->
-                                    toggleableItem(
-                                        checked = expandedShape == shapeOption,
-                                        label = shapeOption.label,
-                                        onCheckedChange = {
-                                            OverlayPreferences.setExpandedAlbumArtShape(context, shapeOption)
-                                        },
-                                        icon = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(13.dp)
-                                                    .clip(nestedAlbumArtShape(shapeOption))
-                                                    .background(
-                                                        if (expandedShape == shapeOption)
-                                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else
-                                                            MaterialTheme.colorScheme.primary
-                                                    ),
-                                            )
-                                        },
-                                        weight = 1f,
-                                    )
-                                }
-                            }
-                        }
+                        ShapePickerSection(
+                            title = "Expanded Shape",
+                            subtitle = "expanded card",
+                            selectedShape = expandedShape,
+                            onShapeSelected = {
+                                OverlayPreferences.setExpandedAlbumArtShape(context, it)
+                            },
+                        )
                     }
                 }
             }
