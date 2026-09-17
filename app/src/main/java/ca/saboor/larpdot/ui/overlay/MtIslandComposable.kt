@@ -976,9 +976,8 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float2 uDotCenter;
     uniform float uDotRadius;
     uniform float uScoopDepth;
-    uniform float uCoreRadiusX;
-    uniform float uFadeRadiusX;
-    uniform float uFadeRadiusY;
+    uniform float uFadeRadius;
+    uniform float uHalfWidth;
 
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
@@ -986,28 +985,35 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        // Distance to the solid core plateau under the camera cutout
-        float dx = max(abs(coord.x - uDotCenter.x) - uCoreRadiusX, 0.0);
-        float dy = max(coord.y - uScoopDepth, 0.0);
-
-        // Inside the solid cradle core: solid black
-        if (dx <= 0.0 && dy <= 0.0) {
-            return half4(0.0, 0.0, 0.0, 1.0);
-        }
-
-        // 2D elliptical distance to the solid core boundary
-        float nx = dx / max(uFadeRadiusX, 1.0);
-        float ny = dy / max(uFadeRadiusY, 1.0);
-        float distNorm = sqrt(nx * nx + ny * ny);
-
-        // Completely transparent outside the fade radius (no screen-wide bleed)
-        if (distNorm >= 1.0) {
+        float dist = abs(coord.x - uDotCenter.x);
+        if (dist >= uHalfWidth) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
 
-        // Wide, luxurious organic feathering with smoothstep
-        float alpha = smoothstep(1.0, 0.0, distNorm);
-        alpha = pow(alpha, 1.3);
+        // Swoop contour: smooth cosine curve swooping from top edge down to cradle the camera
+        float plateauR = uDotRadius * 0.75;
+        float t = 0.0;
+        if (dist > plateauR) {
+            t = (dist - plateauR) / max(uHalfWidth - plateauR, 1.0);
+        }
+        float swoop = 0.5 + 0.5 * cos(3.14159265 * t);
+
+        // Scaled solid depth and fade boundary along the curved swoop
+        float solidY = swoop * uScoopDepth;
+        float fadeY = swoop * (uScoopDepth + uFadeRadius);
+
+        if (coord.y <= solidY) {
+            return half4(0.0, 0.0, 0.0, 1.0);
+        }
+
+        if (coord.y >= fadeY || fadeY <= solidY + 0.5) {
+            return half4(0.0, 0.0, 0.0, 0.0);
+        }
+
+        // Soft, generous fade between solid swoop and outer swoop contour
+        float fraction = (coord.y - solidY) / (fadeY - solidY);
+        float alpha = smoothstep(1.0, 0.0, fraction);
+        alpha = pow(alpha, 1.2);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
@@ -1817,18 +1823,17 @@ internal fun ExpandedIslandContent(
         }
 
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // raised snug under the camera cutout with a generous, feather-soft organic fade radius.
+        // swooping gracefully down from the top edge to cradle the camera cutout with a generous fade.
         if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
-            // Hugs close under the camera cutout
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 3.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
-            // Solid plateau width under the punch hole
-            val coreRadiusXPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
-            // Generous fade radii for a wide, feathery organic halo without screen-wide bleed
-            val fadeRadiusXPx = with(density) { 56.dp.toPx() }
-            val fadeRadiusYPx = with(density) { 44.dp.toPx() }
+            // Solid scoop depth under camera hole
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
+            // Generous vertical fade radius along the swoop
+            val fadeRadiusPx = with(density) { 36.dp.toPx() }
+            // Swoop width: generous curved span so the swoop curves gracefully up to the top bezel
+            val halfWidthPx = with(density) { (cutoutDiameterDp * 2.2f).coerceIn(65.dp, 85.dp).toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
@@ -1839,9 +1844,8 @@ internal fun ExpandedIslandContent(
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
                     scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
-                    scoopShader.setFloatUniform("uCoreRadiusX", coreRadiusXPx)
-                    scoopShader.setFloatUniform("uFadeRadiusX", fadeRadiusXPx)
-                    scoopShader.setFloatUniform("uFadeRadiusY", fadeRadiusYPx)
+                    scoopShader.setFloatUniform("uFadeRadius", fadeRadiusPx)
+                    scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
 
                     drawRect(brush = scoopBrush)
                 }
