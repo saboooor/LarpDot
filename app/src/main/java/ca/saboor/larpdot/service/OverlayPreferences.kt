@@ -19,6 +19,9 @@ object OverlayPreferences {
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
     private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
     private const val KEY_NESTED_ALBUM_ART_SHAPE = "nested_album_art_shape"
+    private const val KEY_MINIMIZED_ALBUM_ART_SHAPE = "minimized_album_art_shape"
+    private const val KEY_EXPANDED_ALBUM_ART_SHAPE = "expanded_album_art_shape"
+    private const val KEY_SHOW_PROGRESS_OUTLINE = "show_progress_outline"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -50,8 +53,14 @@ object OverlayPreferences {
     private val _expandedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
     val expandedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _expandedAlbumArtStyleFlow.asStateFlow()
 
-    private val _nestedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
-    val nestedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _nestedAlbumArtShapeFlow.asStateFlow()
+    private val _minimizedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
+    val minimizedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _minimizedAlbumArtShapeFlow.asStateFlow()
+
+    private val _expandedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
+    val expandedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _expandedAlbumArtShapeFlow.asStateFlow()
+
+    private val _showProgressOutlineFlow = MutableStateFlow(true)
+    val showProgressOutlineFlow: StateFlow<Boolean> = _showProgressOutlineFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -69,7 +78,9 @@ object OverlayPreferences {
     private var isTapToExpandInitialized = false
     private var isMinimizedAlbumArtStyleInitialized = false
     private var isExpandedAlbumArtStyleInitialized = false
-    private var isNestedAlbumArtShapeInitialized = false
+    private var isMinimizedAlbumArtShapeInitialized = false
+    private var isExpandedAlbumArtShapeInitialized = false
+    private var isShowProgressOutlineInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -196,19 +207,54 @@ object OverlayPreferences {
         isExpandedAlbumArtStyleInitialized = true
     }
 
-    fun getNestedAlbumArtShape(context: Context): NestedAlbumArtShape {
-        if (!isNestedAlbumArtShapeInitialized) {
-            val shapeName = getPrefs(context).getString(KEY_NESTED_ALBUM_ART_SHAPE, NestedAlbumArtShape.ROUNDED_SQUARE.name)
+    fun getMinimizedAlbumArtShape(context: Context): NestedAlbumArtShape {
+        if (!isMinimizedAlbumArtShapeInitialized) {
+            val prefs = getPrefs(context)
+            val legacy = prefs.getString(KEY_NESTED_ALBUM_ART_SHAPE, null)
+            val shapeName = prefs.getString(KEY_MINIMIZED_ALBUM_ART_SHAPE, legacy ?: NestedAlbumArtShape.ROUNDED_SQUARE.name)
             val shape = parseNestedAlbumArtShape(shapeName)
-            _nestedAlbumArtShapeFlow.value = shape
-            isNestedAlbumArtShapeInitialized = true
+            _minimizedAlbumArtShapeFlow.value = shape
+            isMinimizedAlbumArtShapeInitialized = true
         }
-        return _nestedAlbumArtShapeFlow.value
+        return _minimizedAlbumArtShapeFlow.value
     }
 
-    fun setNestedAlbumArtShape(context: Context, shape: NestedAlbumArtShape) {
-        getPrefs(context).edit().putString(KEY_NESTED_ALBUM_ART_SHAPE, shape.name).apply()
-        _nestedAlbumArtShapeFlow.value = shape
-        isNestedAlbumArtShapeInitialized = true
+    fun setMinimizedAlbumArtShape(context: Context, shape: NestedAlbumArtShape) {
+        getPrefs(context).edit().putString(KEY_MINIMIZED_ALBUM_ART_SHAPE, shape.name).apply()
+        _minimizedAlbumArtShapeFlow.value = shape
+        isMinimizedAlbumArtShapeInitialized = true
+    }
+
+    fun getExpandedAlbumArtShape(context: Context): NestedAlbumArtShape {
+        if (!isExpandedAlbumArtShapeInitialized) {
+            val prefs = getPrefs(context)
+            val legacy = prefs.getString(KEY_NESTED_ALBUM_ART_SHAPE, null)
+            val shapeName = prefs.getString(KEY_EXPANDED_ALBUM_ART_SHAPE, legacy ?: NestedAlbumArtShape.ROUNDED_SQUARE.name)
+            val shape = parseNestedAlbumArtShape(shapeName)
+            _expandedAlbumArtShapeFlow.value = shape
+            isExpandedAlbumArtShapeInitialized = true
+        }
+        return _expandedAlbumArtShapeFlow.value
+    }
+
+    fun setExpandedAlbumArtShape(context: Context, shape: NestedAlbumArtShape) {
+        getPrefs(context).edit().putString(KEY_EXPANDED_ALBUM_ART_SHAPE, shape.name).apply()
+        _expandedAlbumArtShapeFlow.value = shape
+        isExpandedAlbumArtShapeInitialized = true
+    }
+
+    fun isShowProgressOutlineEnabled(context: Context): Boolean {
+        if (!isShowProgressOutlineInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_PROGRESS_OUTLINE, true)
+            _showProgressOutlineFlow.value = enabled
+            isShowProgressOutlineInitialized = true
+        }
+        return _showProgressOutlineFlow.value
+    }
+
+    fun setShowProgressOutlineEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_PROGRESS_OUTLINE, enabled).apply()
+        _showProgressOutlineFlow.value = enabled
+        isShowProgressOutlineInitialized = true
     }
 }

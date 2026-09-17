@@ -229,6 +229,7 @@ fun CompactIslandOverlay(
         val maxDragOffsetPx = with(density) { 8.dp.toPx() }
 
         val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+        val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
         val showTitleText = showMinimizedTitle && !isPaused && mediaInfo.hasMedia && mediaInfo.title.isNotBlank() && !isExpanded
 
         val compactHPx = with(density) { 36.dp.toPx() }
@@ -419,7 +420,7 @@ fun CompactIslandOverlay(
                     }
                     .clip(RoundedCornerShape(currentCornerRadius))
                     .then(
-                        if (!isPaused) {
+                        if (!isPaused && showProgressOutline) {
                             Modifier.islandFluidProgressBorder(
                                 progressFraction = animatedProgress,
                                 cornerRadius = currentCornerRadius,
@@ -466,6 +467,7 @@ fun ExpandedIslandOverlay(
 
     val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 72.dp)
     val compactHeight = if (isLandscape) (cutoutDiameterDp + 72.dp) else 36.dp
+    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
     val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
@@ -609,13 +611,17 @@ fun ExpandedIslandOverlay(
                 .width(animatedWidth)
                 .height(animatedHeight)
                 .scale(islandScale)
-                .islandFluidProgressBorder(
-                    progressFraction = animatedProgress,
-                    cornerRadius = animatedCornerRadius,
-                    shape = containerShape,
-                    strokeWidth = 0.75.dp,
-                    trackColor = Color(0x30FFFFFF),
-                    progressColor = mediaInfo.dominantColor,
+                .then(
+                    if (showProgressOutline) {
+                        Modifier.islandFluidProgressBorder(
+                            progressFraction = animatedProgress,
+                            cornerRadius = animatedCornerRadius,
+                            shape = containerShape,
+                            strokeWidth = 0.75.dp,
+                            trackColor = Color(0x30FFFFFF),
+                            progressColor = mediaInfo.dominantColor,
+                        )
+                    } else Modifier
                 ),
             shape = containerShape,
             color = Color.Black,
@@ -869,7 +875,7 @@ internal fun CompactIslandContent(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
-    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.nestedAlbumArtShapeFlow.collectAsState().value,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -1133,7 +1139,7 @@ internal fun ExpandedIslandContent(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
-    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.nestedAlbumArtShapeFlow.collectAsState().value,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current

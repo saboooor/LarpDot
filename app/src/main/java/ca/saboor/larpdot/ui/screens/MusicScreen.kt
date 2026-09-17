@@ -1,25 +1,34 @@
 package ca.saboor.larpdot.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +48,7 @@ import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.nestedAlbumArtShape
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MusicScreen(
     cutoutInfo: CutoutInfo,
@@ -46,16 +56,24 @@ fun MusicScreen(
 ) {
     val context = LocalContext.current
     val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
-    val nestedShape by OverlayPreferences.nestedAlbumArtShapeFlow.collectAsState()
+    val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
+    val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
+        OverlayPreferences.isShowProgressOutlineEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtStyle(context)
         OverlayPreferences.getExpandedAlbumArtStyle(context)
-        OverlayPreferences.getNestedAlbumArtShape(context)
+        OverlayPreferences.getMinimizedAlbumArtShape(context)
+        OverlayPreferences.getExpandedAlbumArtShape(context)
     }
+
+    val shapeEntries = OverlayPreferences.NestedAlbumArtShape.entries
+    val shapeRow1 = shapeEntries.take(3)
+    val shapeRow2 = shapeEntries.drop(3)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -104,27 +122,117 @@ fun MusicScreen(
                         }
                     }
 
-                    SingleChoiceSegmentedButtonRow(
+                    ButtonGroup(
                         modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     ) {
-                        OverlayPreferences.AlbumArtStyle.entries.forEachIndexed { index, style ->
-                            SegmentedButton(
-                                selected = minimizedStyle == style,
-                                onClick = {
+                        OverlayPreferences.AlbumArtStyle.entries.forEach { style ->
+                            toggleableItem(
+                                checked = minimizedStyle == style,
+                                label = style.label,
+                                onCheckedChange = {
                                     OverlayPreferences.setMinimizedAlbumArtStyle(context, style)
                                 },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = OverlayPreferences.AlbumArtStyle.entries.size,
-                                ),
-                                label = {
-                                    Text(
-                                        text = style.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                    )
-                                },
+                                weight = 1f,
                             )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                                Column {
+                                    Text(
+                                        text = "Minimized Shape",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = "Material 3 shape for minimized thumbnail",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            // Small Shape Row 1: Square, Circle, Cookie
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                shapeRow1.forEach { shapeOption ->
+                                    toggleableItem(
+                                        checked = minimizedShape == shapeOption,
+                                        label = shapeOption.label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setMinimizedAlbumArtShape(context, shapeOption)
+                                        },
+                                        icon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .clip(nestedAlbumArtShape(shapeOption))
+                                                    .background(
+                                                        if (minimizedShape == shapeOption)
+                                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                                        else
+                                                            MaterialTheme.colorScheme.primary
+                                                    ),
+                                            )
+                                        },
+                                        weight = 1f,
+                                    )
+                                }
+                            }
+
+                            // Small Shape Row 2: Clover, Sunny, Heart
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                shapeRow2.forEach { shapeOption ->
+                                    toggleableItem(
+                                        checked = minimizedShape == shapeOption,
+                                        label = shapeOption.label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setMinimizedAlbumArtShape(context, shapeOption)
+                                        },
+                                        icon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .clip(nestedAlbumArtShape(shapeOption))
+                                                    .background(
+                                                        if (minimizedShape == shapeOption)
+                                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                                        else
+                                                            MaterialTheme.colorScheme.primary
+                                                    ),
+                                            )
+                                        },
+                                        weight = 1f,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -168,143 +276,117 @@ fun MusicScreen(
                         }
                     }
 
-                    SingleChoiceSegmentedButtonRow(
+                    ButtonGroup(
                         modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     ) {
-                        OverlayPreferences.AlbumArtStyle.entries.forEachIndexed { index, style ->
-                            SegmentedButton(
-                                selected = expandedStyle == style,
-                                onClick = {
+                        OverlayPreferences.AlbumArtStyle.entries.forEach { style ->
+                            toggleableItem(
+                                checked = expandedStyle == style,
+                                label = style.label,
+                                onCheckedChange = {
                                     OverlayPreferences.setExpandedAlbumArtStyle(context, style)
                                 },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = OverlayPreferences.AlbumArtStyle.entries.size,
-                                ),
-                                label = {
-                                    Text(
-                                        text = style.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Material 3 Shapes for Nested Art
-        item {
-            SectionHeader(title = "Nested Artwork Shape")
-            LarpCard {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Category,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Material 3 Shape",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Expressive shape applied when Nested style is selected",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                weight = 1f,
                             )
                         }
                     }
 
-                    val shapeEntries = OverlayPreferences.NestedAlbumArtShape.entries
-                    val row1 = shapeEntries.take(3)
-                    val row2 = shapeEntries.drop(3)
-
-                    // Row 1: Square, Circle, Cookie
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth(),
+                    AnimatedVisibility(
+                        visible = expandedStyle == OverlayPreferences.AlbumArtStyle.NESTED,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
                     ) {
-                        row1.forEachIndexed { index, shapeOption ->
-                            SegmentedButton(
-                                selected = nestedShape == shapeOption,
-                                onClick = {
-                                    OverlayPreferences.setNestedAlbumArtShape(context, shapeOption)
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = row1.size,
-                                ),
-                                icon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(13.dp)
-                                            .clip(nestedAlbumArtShape(shapeOption))
-                                            .background(
-                                                if (nestedShape == shapeOption)
-                                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                                else
-                                                    MaterialTheme.colorScheme.primary
-                                            ),
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = shapeOption.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                    )
-                                },
-                            )
-                        }
-                    }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-                    // Row 2: Clover, Sunny, Heart
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        row2.forEachIndexed { index, shapeOption ->
-                            SegmentedButton(
-                                selected = nestedShape == shapeOption,
-                                onClick = {
-                                    OverlayPreferences.setNestedAlbumArtShape(context, shapeOption)
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = row2.size,
-                                ),
-                                icon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(13.dp)
-                                            .clip(nestedAlbumArtShape(shapeOption))
-                                            .background(
-                                                if (nestedShape == shapeOption)
-                                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                                else
-                                                    MaterialTheme.colorScheme.primary
-                                            ),
-                                    )
-                                },
-                                label = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                                Column {
                                     Text(
-                                        text = shapeOption.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
+                                        text = "Expanded Shape",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
                                     )
-                                },
-                            )
+                                    Text(
+                                        text = "Material 3 shape for expanded cover art",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            // Expanded Shape Row 1: Square, Circle, Cookie
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                shapeRow1.forEach { shapeOption ->
+                                    toggleableItem(
+                                        checked = expandedShape == shapeOption,
+                                        label = shapeOption.label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setExpandedAlbumArtShape(context, shapeOption)
+                                        },
+                                        icon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .clip(nestedAlbumArtShape(shapeOption))
+                                                    .background(
+                                                        if (expandedShape == shapeOption)
+                                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                                        else
+                                                            MaterialTheme.colorScheme.primary
+                                                    ),
+                                            )
+                                        },
+                                        weight = 1f,
+                                    )
+                                }
+                            }
+
+                            // Expanded Shape Row 2: Clover, Sunny, Heart
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                shapeRow2.forEach { shapeOption ->
+                                    toggleableItem(
+                                        checked = expandedShape == shapeOption,
+                                        label = shapeOption.label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setExpandedAlbumArtShape(context, shapeOption)
+                                        },
+                                        icon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .clip(nestedAlbumArtShape(shapeOption))
+                                                    .background(
+                                                        if (expandedShape == shapeOption)
+                                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                                        else
+                                                            MaterialTheme.colorScheme.primary
+                                                    ),
+                                            )
+                                        },
+                                        weight = 1f,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -315,42 +397,89 @@ fun MusicScreen(
         item {
             SectionHeader(title = "Display Options")
             LarpCard {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
+                    // Show Song Title
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Show Song Title",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
                             )
-                            Text(
-                                text = "Display track title above minimized island",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column {
+                                Text(
+                                    text = "Show Song Title",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "Display track title above minimized island",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
+
+                        Switch(
+                            checked = showTitle,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
+                            },
+                        )
                     }
 
-                    Switch(
-                        checked = showTitle,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
-                        },
-                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Progress Outline
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Column {
+                                Text(
+                                    text = "Progress Outline",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "Draw fluid perimeter progress ring around island",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = showProgressOutline,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setShowProgressOutlineEnabled(context, isChecked)
+                            },
+                        )
+                    }
                 }
             }
         }

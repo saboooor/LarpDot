@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactIslandContent
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
@@ -57,6 +58,7 @@ fun ExpandedIslandPreview(
     val context = LocalContext.current
     val density = LocalDensity.current
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
+    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
 
     val hasNotificationAccess = remember(context) {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
@@ -112,13 +114,17 @@ fun ExpandedIslandPreview(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(190.dp)
-                .islandFluidProgressBorder(
-                    progressFraction = animatedProgress,
-                    cornerRadius = 32.dp,
-                    shape = containerShape,
-                    strokeWidth = 1.dp,
-                    trackColor = Color(0x30FFFFFF),
-                    progressColor = nowPlaying.dominantColor,
+                .then(
+                    if (showProgressOutline) {
+                        Modifier.islandFluidProgressBorder(
+                            progressFraction = animatedProgress,
+                            cornerRadius = 32.dp,
+                            shape = containerShape,
+                            strokeWidth = 1.dp,
+                            trackColor = Color(0x30FFFFFF),
+                            progressColor = nowPlaying.dominantColor,
+                        )
+                    } else Modifier
                 ),
             shape = containerShape,
             color = Color.Black,

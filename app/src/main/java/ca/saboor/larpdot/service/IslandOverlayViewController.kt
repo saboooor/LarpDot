@@ -134,7 +134,9 @@ class IslandOverlayViewController(
             observeTitlePreference()
             OverlayPreferences.getMinimizedAlbumArtStyle(context)
             OverlayPreferences.getExpandedAlbumArtStyle(context)
-            OverlayPreferences.getNestedAlbumArtShape(context)
+            OverlayPreferences.getMinimizedAlbumArtShape(context)
+            OverlayPreferences.getExpandedAlbumArtShape(context)
+            OverlayPreferences.isShowProgressOutlineEnabled(context)
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
