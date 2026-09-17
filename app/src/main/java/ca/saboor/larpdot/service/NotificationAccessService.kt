@@ -86,11 +86,17 @@ class NotificationAccessService : NotificationListenerService() {
                 }
 
                 if (artwork != null || title != null) {
+                    val resolvedAppName = try {
+                        packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString()
+                    } catch (_: Exception) {
+                        null
+                    }
                     MediaPlaybackState.updateNotificationMetadata(
                         title = title,
                         artist = artist,
                         artwork = artwork,
                         packageName = sbn.packageName,
+                        appName = resolvedAppName,
                     )
                 }
             }

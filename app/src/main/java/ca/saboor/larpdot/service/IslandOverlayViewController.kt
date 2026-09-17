@@ -67,6 +67,7 @@ class IslandOverlayViewController(
 
     private var currentCutoutInfo by mutableStateOf<CutoutInfo?>(null)
     private var isIslandExpanded by mutableStateOf(false)
+    private var isOverlayMorphing by mutableStateOf(false)
 
     private var controllerJob = Job()
     private var controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
@@ -114,7 +115,7 @@ class IslandOverlayViewController(
                 CompactIslandOverlay(
                     cutoutInfo = activeCutout,
                     mediaInfo = mediaTrack,
-                    isExpanded = isIslandExpanded,
+                    isExpanded = isOverlayMorphing,
                     onExpand = { expandOverlay() },
                 )
             }
@@ -193,6 +194,7 @@ class IslandOverlayViewController(
         collapseJob = null
         if (!isIslandExpanded) {
             isIslandExpanded = true
+            isOverlayMorphing = true
             showExpandedWindow()
         }
     }
@@ -202,7 +204,8 @@ class IslandOverlayViewController(
             isIslandExpanded = false
             collapseJob?.cancel()
             collapseJob = controllerScope.launch {
-                delay(440)
+                delay(350)
+                isOverlayMorphing = false
                 collapseJob = null
                 if (!isIslandExpanded) {
                     hideExpandedWindow()
@@ -280,7 +283,7 @@ class IslandOverlayViewController(
         } else if (isLandscape) {
             // Minimized Dynamic Island in landscape: vertical capsule over the camera hole punch
             val pillWPx = (36f * density).toInt()
-            val pillHPx = (cutoutDiameterPx + (72f * density)).toInt()
+            val pillHPx = (cutoutDiameterPx + (108f * density)).toInt()
             val paddingPx = (14f * density).toInt()
             val topExtraPx = if (showTitleAbove) (20f * density).toInt() else 0
             val minTitleWPx = (140f * density).toInt()
@@ -300,7 +303,7 @@ class IslandOverlayViewController(
             val paddingHorizontalPx = (24f * density).toInt()
             val topPaddingPx = if (showTitleAbove) (20f * density).toInt() else (14f * density).toInt()
             val bottomPaddingPx = (28f * density).toInt()
-            val compactWPx = (cutoutDiameterPx + (72f * density)).toInt()
+            val compactWPx = (cutoutDiameterPx + (108f * density)).toInt()
             val compactHPx = (36f * density).toInt()
 
             val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
@@ -364,10 +367,10 @@ class IslandOverlayViewController(
 
         val paddingPx = (14f * density).toInt()
         val cutoutDiameterPx = (effectiveCutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
-        val compactHPx = if (isLandscape) (cutoutDiameterPx + (72f * density)).toInt() else (36f * density).toInt()
+        val compactHPx = if (isLandscape) (cutoutDiameterPx + (108f * density)).toInt() else (36f * density).toInt()
         val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
-        val cardHPx = (190f * density).toInt()
+        val cardHPx = (220f * density).toInt()
 
         @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or

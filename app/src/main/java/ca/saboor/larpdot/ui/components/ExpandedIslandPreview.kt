@@ -113,7 +113,7 @@ fun ExpandedIslandPreview(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(190.dp)
+                .height(220.dp)
                 .then(
                     if (showProgressOutline) {
                         Modifier.islandFluidProgressBorder(
@@ -133,7 +133,7 @@ fun ExpandedIslandPreview(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(190.dp),
+                    .height(220.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 ExpandedIslandContent(
@@ -141,6 +141,7 @@ fun ExpandedIslandPreview(
                     cutoutDiameterDp = cutoutDiameterDp,
                     isExpanded = true,
                     onCollapse = { /* In-app preview */ },
+                    cutoutInfo = cutoutInfo,
                 )
             }
         }
