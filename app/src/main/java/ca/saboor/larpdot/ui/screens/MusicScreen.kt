@@ -75,6 +75,20 @@ fun MusicScreen(
     val shapeRow1 = shapeEntries.take(3)
     val shapeRow2 = shapeEntries.drop(3)
 
+    val minimizedStyles = listOf(
+        OverlayPreferences.AlbumArtStyle.BASIC_FADED,
+        OverlayPreferences.AlbumArtStyle.BLENDED,
+        OverlayPreferences.AlbumArtStyle.NESTED,
+    )
+    val expandedStyleRow1 = listOf(
+        OverlayPreferences.AlbumArtStyle.BASIC_FADED,
+        OverlayPreferences.AlbumArtStyle.BLENDED,
+    )
+    val expandedStyleRow2 = listOf(
+        OverlayPreferences.AlbumArtStyle.NESTED,
+        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+    )
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
@@ -115,6 +129,7 @@ fun MusicScreen(
                                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear edge fade into capsule pill"
                                     OverlayPreferences.AlbumArtStyle.BLENDED -> "Smooth gradient blend with ambient glow"
                                     OverlayPreferences.AlbumArtStyle.NESTED -> "Crisp nested album art thumbnail"
+                                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> "Artwork fills the pill wing"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -126,7 +141,7 @@ fun MusicScreen(
                         modifier = Modifier.fillMaxWidth(),
                         overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     ) {
-                        OverlayPreferences.AlbumArtStyle.entries.forEach { style ->
+                        minimizedStyles.forEach { style ->
                             toggleableItem(
                                 checked = minimizedStyle == style,
                                 label = style.label,
@@ -269,6 +284,7 @@ fun MusicScreen(
                                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear faded background card cover"
                                     OverlayPreferences.AlbumArtStyle.BLENDED -> "Curved gradient blend with dominant backdrop"
                                     OverlayPreferences.AlbumArtStyle.NESTED -> "Prominent nested cover beside track title"
+                                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> "Artwork fills the entire island card like Android media player"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -280,7 +296,23 @@ fun MusicScreen(
                         modifier = Modifier.fillMaxWidth(),
                         overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     ) {
-                        OverlayPreferences.AlbumArtStyle.entries.forEach { style ->
+                        expandedStyleRow1.forEach { style ->
+                            toggleableItem(
+                                checked = expandedStyle == style,
+                                label = style.label,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedAlbumArtStyle(context, style)
+                                },
+                                weight = 1f,
+                            )
+                        }
+                    }
+
+                    ButtonGroup(
+                        modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    ) {
+                        expandedStyleRow2.forEach { style ->
                             toggleableItem(
                                 checked = expandedStyle == style,
                                 label = style.label,

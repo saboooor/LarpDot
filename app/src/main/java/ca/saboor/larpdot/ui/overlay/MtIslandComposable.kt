@@ -891,7 +891,8 @@ internal fun CompactIslandContent(
                 )
             )
             OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-            OverlayPreferences.AlbumArtStyle.NESTED -> Brush.verticalGradient(
+            OverlayPreferences.AlbumArtStyle.NESTED,
+            OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.00f to Color.Black,
                     1.00f to Color.Black,
@@ -953,6 +954,7 @@ internal fun CompactIslandContent(
                                 contentScale = ContentScale.Crop,
                             )
                         }
+                        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
                         OverlayPreferences.AlbumArtStyle.BLENDED -> {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
@@ -1011,7 +1013,8 @@ internal fun CompactIslandContent(
                 )
             )
             OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-            OverlayPreferences.AlbumArtStyle.NESTED -> Brush.horizontalGradient(
+            OverlayPreferences.AlbumArtStyle.NESTED,
+            OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> Brush.horizontalGradient(
                 colorStops = arrayOf(
                     0.00f to Color.Black,
                     1.00f to Color.Black,
@@ -1073,6 +1076,7 @@ internal fun CompactIslandContent(
                                 contentScale = ContentScale.Crop,
                             )
                         }
+                        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
                         OverlayPreferences.AlbumArtStyle.BLENDED -> {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
@@ -1175,28 +1179,32 @@ internal fun ExpandedIslandContent(
             }
             .background(Color.Black)
             .drawWithCache {
-                val dominantTint = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED) {
-                    mediaInfo.dominantColor.copy(alpha = 0.25f)
+                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND) {
+                    onDrawBehind { /* Full background image rendered inside content */ }
                 } else {
-                    Color.Transparent
-                }
-                val blackTint = Color.Black.copy(alpha = 0.5f)
-                val rightGradient = Brush.horizontalGradient(
-                    colorStops = arrayOf(
-                        0.60f to blackTint,
-                        1.00f to dominantTint,
+                    val dominantTint = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED) {
+                        mediaInfo.dominantColor.copy(alpha = 0.25f)
+                    } else {
+                        Color.Transparent
+                    }
+                    val blackTint = Color.Black.copy(alpha = 0.5f)
+                    val rightGradient = Brush.horizontalGradient(
+                        colorStops = arrayOf(
+                            0.60f to blackTint,
+                            1.00f to dominantTint,
+                        )
                     )
-                )
-                val bottomGradient = Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0.00f to blackTint,
-                        0.25f to blackTint,
-                        1.00f to dominantTint,
+                    val bottomGradient = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.00f to blackTint,
+                            0.25f to blackTint,
+                            1.00f to dominantTint,
+                        )
                     )
-                )
-                onDrawBehind {
-                    drawRect(rightGradient)
-                    drawRect(bottomGradient)
+                    onDrawBehind {
+                        drawRect(rightGradient)
+                        drawRect(bottomGradient)
+                    }
                 }
             }
             .pointerInput(mediaInfo.hasMedia) {
@@ -1279,8 +1287,29 @@ internal fun ExpandedIslandContent(
                 )
             }
     ) {
-        // For Basic Faded and Blended, keep the album art on the left and fade its right edge into the black card.
-        if (albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED && mediaInfo.albumArt != null) {
+        // Full background album art like Android media player
+        if (albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND && mediaInfo.albumArt != null) {
+            Image(
+                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                contentDescription = "Background album art",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // Android Media Player scrim: dark vertical gradient to maintain contrast and legibility
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.Black.copy(alpha = 0.45f),
+                                0.40f to Color.Black.copy(alpha = 0.58f),
+                                1.00f to Color.Black.copy(alpha = 0.75f),
+                            )
+                        )
+                    )
+            )
+        } else if (albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED && mediaInfo.albumArt != null) {
             val fadeBrush = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BASIC_FADED) {
                 Brush.horizontalGradient(
                     colorStops = arrayOf(

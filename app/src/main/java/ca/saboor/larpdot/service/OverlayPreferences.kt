@@ -27,6 +27,7 @@ object OverlayPreferences {
         BASIC_FADED("Basic Faded"),
         BLENDED("Blended"),
         NESTED("Nested"),
+        FULL_BACKGROUND("Full Background"),
     }
 
     enum class NestedAlbumArtShape(val label: String) {
@@ -90,6 +91,7 @@ object OverlayPreferences {
         return when (styleName) {
             "BASIC_FADED" -> AlbumArtStyle.BASIC_FADED
             "NESTED", "NESTED_ROUNDED_SQUARE" -> AlbumArtStyle.NESTED
+            "FULL_BACKGROUND" -> AlbumArtStyle.FULL_BACKGROUND
             else -> AlbumArtStyle.BLENDED
         }
     }
