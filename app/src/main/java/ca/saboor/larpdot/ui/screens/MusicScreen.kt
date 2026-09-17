@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,9 +40,11 @@ fun MusicScreen(
 ) {
     val context = LocalContext.current
     val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val albumArtStyle by OverlayPreferences.albumArtStyleFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
+        OverlayPreferences.getAlbumArtStyle(context)
     }
 
     LazyColumn(
@@ -46,14 +52,82 @@ fun MusicScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Live Expanded Island Card Preview
+        // Live Island Preview
         item {
             ExpandedIslandPreview(cutoutInfo = cutoutInfo)
         }
 
-        // Music Options Card
+        // Album Art Style Card
         item {
-            SectionHeader(title = "Music Options")
+            SectionHeader(title = "Album Art Style")
+            LarpCard {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Artwork Presentation",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = when (albumArtStyle) {
+                                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear fade into island edge"
+                                    OverlayPreferences.AlbumArtStyle.BLENDED -> "Smooth gradient blend with ambient glow"
+                                    OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> "Crisp rounded square cover nested in island"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OverlayPreferences.AlbumArtStyle.entries.forEachIndexed { index, style ->
+                            SegmentedButton(
+                                selected = albumArtStyle == style,
+                                onClick = {
+                                    OverlayPreferences.setAlbumArtStyle(context, style)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = OverlayPreferences.AlbumArtStyle.entries.size,
+                                ),
+                                label = {
+                                    Text(
+                                        text = when (style) {
+                                            OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Basic Faded"
+                                            OverlayPreferences.AlbumArtStyle.BLENDED -> "Blended"
+                                            OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> "Nested Square"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Display Options Card
+        item {
+            SectionHeader(title = "Display Options")
             LarpCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -845,66 +845,116 @@ fun Modifier.islandFluidProgressBorder(
  * Right Wing: 4-bar equalizer dancing organically to playback.
  */
 @Composable
-private fun CompactIslandContent(
+internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.albumArtStyleFlow.collectAsState().value,
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
-        // Top: Full width album art fading downwards
-        // Center: Camera hole punch clearance cushion
-        // Bottom: 4-bar equalizer dancing organically to playback
+        val landscapeBgBrush = when (albumArtStyle) {
+            OverlayPreferences.AlbumArtStyle.BLENDED -> Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color.Black,
+                    0.66f to Color.Black,
+                    1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
+                )
+            )
+            OverlayPreferences.AlbumArtStyle.BASIC_FADED,
+            OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color.Black,
+                    1.00f to Color.Black,
+                )
+            )
+        }
+
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Black,
-                            0.66f to Color.Black,
-                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
-                        )
-                    )
-                ),
+                .background(landscapeBgBrush),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Top Wing: Album art fills the full pill width, top-aligned, fades to black at the bottom.
+            // Top Wing: Album art fills the full pill width or nested rounded square
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter,
+                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE) {
+                    Alignment.Center
+                } else {
+                    Alignment.TopCenter
+                },
             ) {
                 if (mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = false)
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White,
-                                            0.80f to Color.White.copy(alpha = 0.5f),
-                                            1.00f to Color.Transparent,
+                    when (albumArtStyle) {
+                        OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(6.5.dp)),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = false)
+                                    .graphicsLayer {
+                                        compositingStrategy = CompositingStrategy.Offscreen
+                                    }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colorStops = arrayOf(
+                                                    0.00f to Color.White,
+                                                    1.00f to Color.Transparent,
+                                                )
+                                            ),
+                                            blendMode = BlendMode.DstIn,
                                         )
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
+                                    },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        OverlayPreferences.AlbumArtStyle.BLENDED -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = false)
+                                    .graphicsLayer {
+                                        compositingStrategy = CompositingStrategy.Offscreen
+                                    }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colorStops = arrayOf(
+                                                    0.00f to Color.White,
+                                                    0.80f to Color.White.copy(alpha = 0.5f),
+                                                    1.00f to Color.Transparent,
+                                                )
+                                            ),
+                                            blendMode = BlendMode.DstIn,
+                                        )
+                                    },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -927,54 +977,104 @@ private fun CompactIslandContent(
         }
     } else {
         // Portrait Mode: Horizontal Dynamic Island Pill
+        val portraitBgBrush = when (albumArtStyle) {
+            OverlayPreferences.AlbumArtStyle.BLENDED -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color.Black,
+                    0.66f to Color.Black,
+                    1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
+                )
+            )
+            OverlayPreferences.AlbumArtStyle.BASIC_FADED,
+            OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color.Black,
+                    1.00f to Color.Black,
+                )
+            )
+        }
+
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Black,
-                            0.66f to Color.Black,
-                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
-                        )
-                    )
-                ),
+                .background(portraitBgBrush),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left Wing: Album art fills the full pill height, left-aligned, fades to black on the right.
-            // The pill's Surface(shape = RoundedCornerShape(...)) already clips the left edge to the
-            // pill's curvature — no vertical padding above or below.
+            // Left Wing: Album art fills the full pill height or nested rounded square
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                contentAlignment = Alignment.CenterStart,
+                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE) {
+                    Alignment.Center
+                } else {
+                    Alignment.CenterStart
+                },
             ) {
                 if (mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White,
-                                            0.80f to Color.White.copy(alpha = 0.5f),
-                                            1.00f to Color.Transparent,
+                    when (albumArtStyle) {
+                        OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(6.5.dp)),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                    .graphicsLayer {
+                                        compositingStrategy = CompositingStrategy.Offscreen
+                                    }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                colorStops = arrayOf(
+                                                    0.00f to Color.White,
+                                                    1.00f to Color.Transparent,
+                                                )
+                                            ),
+                                            blendMode = BlendMode.DstIn,
                                         )
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
+                                    },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        OverlayPreferences.AlbumArtStyle.BLENDED -> {
+                            Image(
+                                bitmap = mediaInfo.albumArt.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                    .graphicsLayer {
+                                        compositingStrategy = CompositingStrategy.Offscreen
+                                    }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                colorStops = arrayOf(
+                                                    0.00f to Color.White,
+                                                    0.80f to Color.White.copy(alpha = 0.5f),
+                                                    1.00f to Color.Transparent,
+                                                )
+                                            ),
+                                            blendMode = BlendMode.DstIn,
+                                        )
+                                    },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1013,6 +1113,7 @@ internal fun ExpandedIslandContent(
     isExpanded: Boolean,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.albumArtStyleFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1048,7 +1149,11 @@ internal fun ExpandedIslandContent(
             }
             .background(Color.Black)
             .drawWithCache {
-                val dominantTint = mediaInfo.dominantColor.copy(alpha = 0.25f)
+                val dominantTint = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED) {
+                    mediaInfo.dominantColor.copy(alpha = 0.25f)
+                } else {
+                    Color.Transparent
+                }
                 val blackTint = Color.Black.copy(alpha = 0.5f)
                 val rightGradient = Brush.horizontalGradient(
                     colorStops = arrayOf(
@@ -1148,8 +1253,24 @@ internal fun ExpandedIslandContent(
                 )
             }
     ) {
-        // Keep the album art on the left and fade its right edge into the black card.
-        if (mediaInfo.albumArt != null) {
+        // For Basic Faded and Blended, keep the album art on the left and fade its right edge into the black card.
+        if (albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE && mediaInfo.albumArt != null) {
+            val fadeBrush = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BASIC_FADED) {
+                Brush.horizontalGradient(
+                    colorStops = arrayOf(
+                        0.00f to Color.White.copy(alpha = 0.65f),
+                        1.00f to Color.Transparent,
+                    )
+                )
+            } else {
+                Brush.horizontalGradient(
+                    colorStops = arrayOf(
+                        0.00f to Color.White.copy(alpha = 0.65f),
+                        0.80f to Color.White.copy(alpha = 0.10f),
+                        1.00f to Color.Transparent,
+                    )
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -1166,13 +1287,7 @@ internal fun ExpandedIslandContent(
                         .drawWithContent {
                             drawContent()
                             drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colorStops = arrayOf(
-                                        0.00f to Color.White.copy(alpha = 0.65f),
-                                        0.80f to Color.White.copy(alpha = 0.10f),
-                                        1.00f to Color.Transparent,
-                                    )
-                                ),
+                                brush = fadeBrush,
                                 blendMode = BlendMode.DstIn,
                             )
                         },
@@ -1204,6 +1319,18 @@ internal fun ExpandedIslandContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE && mediaInfo.albumArt != null) {
+                    Image(
+                        bitmap = mediaInfo.albumArt.asImageBitmap(),
+                        contentDescription = "Album art",
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(14.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Spacer(Modifier.width(14.dp))
+                }
+
                 Column(
                     modifier = Modifier
                         .weight(1f)

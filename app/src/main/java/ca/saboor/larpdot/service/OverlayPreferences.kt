@@ -15,6 +15,13 @@ object OverlayPreferences {
     private const val KEY_CUTOUT_DIAMETER = "cutout_diameter"
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
+    private const val KEY_ALBUM_ART_STYLE = "album_art_style"
+
+    enum class AlbumArtStyle(val label: String) {
+        BASIC_FADED("Basic Faded"),
+        BLENDED("Blended"),
+        NESTED_ROUNDED_SQUARE("Nested Square"),
+    }
 
     private val _isEnabledFlow = MutableStateFlow(false)
     val isEnabledFlow: StateFlow<Boolean> = _isEnabledFlow.asStateFlow()
@@ -24,6 +31,9 @@ object OverlayPreferences {
 
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
+
+    private val _albumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
+    val albumArtStyleFlow: StateFlow<AlbumArtStyle> = _albumArtStyleFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -37,6 +47,9 @@ object OverlayPreferences {
 
     private var isInitialized = false
     private var isCutoutInitialized = false
+    private var isTitlePrefInitialized = false
+    private var isTapToExpandInitialized = false
+    private var isAlbumArtStyleInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -87,8 +100,6 @@ object OverlayPreferences {
         isCutoutInitialized = true
     }
 
-    private var isTitlePrefInitialized = false
-
     fun isShowMinimizedTitleEnabled(context: Context): Boolean {
         if (!isTitlePrefInitialized) {
             val enabled = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_TITLE, true)
@@ -104,8 +115,6 @@ object OverlayPreferences {
         isTitlePrefInitialized = true
     }
 
-    private var isTapToExpandInitialized = false
-
     fun isTapToExpandEnabled(context: Context): Boolean {
         if (!isTapToExpandInitialized) {
             val enabled = getPrefs(context).getBoolean(KEY_TAP_TO_EXPAND, false)
@@ -119,5 +128,25 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_TAP_TO_EXPAND, enabled).apply()
         _tapToExpandFlow.value = enabled
         isTapToExpandInitialized = true
+    }
+
+    fun getAlbumArtStyle(context: Context): AlbumArtStyle {
+        if (!isAlbumArtStyleInitialized) {
+            val styleName = getPrefs(context).getString(KEY_ALBUM_ART_STYLE, AlbumArtStyle.BLENDED.name)
+            val style = try {
+                AlbumArtStyle.valueOf(styleName ?: AlbumArtStyle.BLENDED.name)
+            } catch (_: Exception) {
+                AlbumArtStyle.BLENDED
+            }
+            _albumArtStyleFlow.value = style
+            isAlbumArtStyleInitialized = true
+        }
+        return _albumArtStyleFlow.value
+    }
+
+    fun setAlbumArtStyle(context: Context, style: AlbumArtStyle) {
+        getPrefs(context).edit().putString(KEY_ALBUM_ART_STYLE, style.name).apply()
+        _albumArtStyleFlow.value = style
+        isAlbumArtStyleInitialized = true
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
@@ -39,13 +40,14 @@ import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.ui.overlay.CompactIslandContent
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.squircleShape
 
 /**
- * Authentic live preview of the Expanded Dynamic Island card directly inside the app,
- * replacing the legacy notification player card.
+ * Authentic live preview of the Dynamic Island (both minimized pill and expanded card)
+ * directly inside the app.
  */
 @Composable
 fun ExpandedIslandPreview(
@@ -80,8 +82,32 @@ fun ExpandedIslandPreview(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SectionHeader(title = "Expanded Island Preview")
+        SectionHeader(title = "Live Island Preview")
 
+        // Compact Pill Live Preview
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier
+                    .width(cutoutDiameterDp + 74.dp)
+                    .height(36.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = Color.Black,
+                shadowElevation = 4.dp,
+            ) {
+                CompactIslandContent(
+                    mediaInfo = nowPlaying,
+                    cutoutDiameterDp = cutoutDiameterDp,
+                    onExpand = {},
+                )
+            }
+        }
+
+        // Expanded Card Live Preview
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -158,4 +184,3 @@ fun ExpandedIslandPreview(
         }
     }
 }
-
