@@ -979,37 +979,49 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float uFadeRadius;
     uniform float uHalfWidth;
 
+    float getDistanceToSwoop(float2 pos, float wi, float he) {
+        pos.x = abs(pos.x);
+        float ik = (wi * wi) / max(he, 0.001);
+        float curveY = he - (pos.x * pos.x) / ik;
+        if (pos.y <= curveY && pos.x <= wi) {
+            return 0.0;
+        }
+
+        float p = ik * (he - pos.y - 0.5 * ik) / 3.0;
+        float q = pos.x * ik * ik * 0.25;
+        float h = q * q - p * p * p;
+        float r = sqrt(abs(h));
+        float x = 0.0;
+        if (h > 0.0) {
+            float diff = q - r;
+            x = pow(max(q + r, 0.0), 1.0 / 3.0) + pow(max(abs(diff), 0.0), 1.0 / 3.0) * sign(diff);
+        } else {
+            x = 2.0 * cos(atan(r, q) / 3.0) * sqrt(max(p, 0.0));
+        }
+        x = clamp(x, 0.0, wi);
+        float2 closest = float2(x, he - (x * x) / ik);
+        return length(pos - closest);
+    }
+
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
         if (length(coord - uDotCenter) <= uDotRadius) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float dist = abs(coord.x - uDotCenter.x);
-        if (dist >= uHalfWidth) {
-            return half4(0.0, 0.0, 0.0, 0.0);
-        }
+        float2 localPos = float2(coord.x - uDotCenter.x, coord.y);
+        float dist = getDistanceToSwoop(localPos, uHalfWidth, uScoopDepth);
 
-        // Pure quadratic-spline swoop: continuous curvature from center apex to wings
-        float t = dist / uHalfWidth;
-        float oneMinusT2 = 1.0 - t * t;
-        float swoop = oneMinusT2 * oneMinusT2;
-
-        // Scaled solid depth and fade boundary along the curved swoop
-        float solidY = swoop * uScoopDepth;
-        float fadeY = swoop * (uScoopDepth + uFadeRadius);
-
-        if (coord.y <= solidY) {
+        if (dist <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        if (coord.y >= fadeY || fadeY <= solidY + 0.5) {
+        if (dist >= uFadeRadius) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
 
-        // Luxurious, wide fade between solid swoop and outer swoop boundary
-        float fraction = (coord.y - solidY) / (fadeY - solidY);
-        float alpha = smoothstep(1.0, 0.0, fraction);
+        // Even fade throughout the entire swoop shape
+        float alpha = smoothstep(uFadeRadius, 0.0, dist);
         alpha = pow(alpha, 1.15);
         return half4(0.0, 0.0, 0.0, alpha);
     }
@@ -1826,11 +1838,11 @@ internal fun ExpandedIslandContent(
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
             // Solid scoop depth right at the base of the camera hole
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 3.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
-            // Even more generous fade radius: wide, feather-soft atmospheric gradient
-            val fadeRadiusPx = with(density) { 58.dp.toPx() }
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
+            // Even fade radius throughout the entire shape
+            val fadeRadiusPx = with(density) { 44.dp.toPx() }
             // Swoop wingspan: wide curved span so the swoop curves gracefully up to the top bezel
-            val halfWidthPx = with(density) { (cutoutDiameterDp * 2.8f).coerceIn(85.dp, 110.dp).toPx() }
+            val halfWidthPx = with(density) { (cutoutDiameterDp * 2.3f).coerceIn(72.dp, 92.dp).toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
