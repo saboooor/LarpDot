@@ -27,6 +27,7 @@ data class MediaTrackInfo(
     val isSimulated: Boolean = false,
     val controller: MediaController? = null,
     val playerPackageName: String? = null,
+    val appName: String? = null,
 ) {
     val hasMedia: Boolean get() = title.isNotBlank() || isPlaying
 }
@@ -123,6 +124,7 @@ object MediaPlaybackState {
         artist: String?,
         artwork: Bitmap?,
         packageName: String? = null,
+        appName: String? = null,
     ) {
         val current = _currentTrack.value
         if (current.isSimulated) return
@@ -142,6 +144,7 @@ object MediaPlaybackState {
             albumArt = newArt,
             dominantColor = dominant,
             playerPackageName = packageName ?: current.playerPackageName,
+            appName = appName ?: current.appName,
         )
     }
 
@@ -264,6 +267,8 @@ object MediaPlaybackState {
                 durationMs = 230000L,
                 dominantColor = dominant,
                 isSimulated = true,
+                playerPackageName = "com.spotify.music",
+                appName = "Spotify",
             )
 
             checkTickerState(true)

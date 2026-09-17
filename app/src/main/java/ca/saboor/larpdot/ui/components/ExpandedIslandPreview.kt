@@ -85,7 +85,7 @@ fun ExpandedIslandPreview(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(190.dp)
+                .height(220.dp)
                 .islandFluidProgressBorder(
                     progressFraction = animatedProgress,
                     cornerRadius = 32.dp,
@@ -101,7 +101,7 @@ fun ExpandedIslandPreview(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(190.dp),
+                    .height(220.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 ExpandedIslandContent(

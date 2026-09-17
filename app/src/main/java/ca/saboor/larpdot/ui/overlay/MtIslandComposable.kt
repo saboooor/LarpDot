@@ -15,7 +15,18 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import android.graphics.RenderEffect
+import android.graphics.RuntimeShader
+import android.os.Build
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.ShaderBrush
+import org.intellij.lang.annotations.Language
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -172,8 +183,8 @@ fun CompactIslandOverlay(
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
         val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
-        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 72.dp)
-        val compactHeight = if (isLandscape) (cutoutDiameterDp + 72.dp) else 36.dp
+        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 108.dp)
+        val compactHeight = if (isLandscape) (cutoutDiameterDp + 108.dp) else 36.dp
 
         val currentWidth by animateDpAsState(
             targetValue = if (isPaused) cutoutDiameterDp else compactWidth,
@@ -193,11 +204,11 @@ fun CompactIslandOverlay(
 
         var isIslandPressed by remember { mutableStateOf(false) }
         val islandScale by animateFloatAsState(
-            targetValue = if (isIslandPressed) 1.10f else 1f,
+            targetValue = if (isIslandPressed) 1.08f else 1f,
             animationSpec = if (isIslandPressed) {
-                spring(dampingRatio = 0.9f, stiffness = 300f)
+                spring(dampingRatio = 0.72f, stiffness = 450f)
             } else {
-                tween(durationMillis = 260, easing = MtIslandDecelerate)
+                spring(dampingRatio = 0.78f, stiffness = 360f)
             },
             label = "compact_scale",
         )
@@ -212,15 +223,8 @@ fun CompactIslandOverlay(
             label = "compact_progress",
         )
 
-        val compactAlpha by animateFloatAsState(
-            targetValue = if (isExpanded) 0f else 1f,
-            animationSpec = tween(
-                durationMillis = if (isExpanded) 180 else 240,
-                delayMillis = 0,
-                easing = if (isExpanded) MtIslandDecelerate else MtIslandStandard,
-            ),
-            label = "compact_alpha",
-        )
+        // When expanded window is morphing, compact overlay remains completely invisible to avoid double outlines
+        val compactAlpha = if (isExpanded) 0f else 1f
 
         val coroutineScope = rememberCoroutineScope()
         val dragOffsetAnim = remember { Animatable(0f) }
@@ -402,17 +406,19 @@ fun CompactIslandOverlay(
                     .then(if (isLandscape) Modifier else Modifier.padding(top = pillTopOffsetDp))
                     .width(currentWidth)
                     .height(currentHeight)
-                    .scale(islandScale)
+                    
                     .graphicsLayer {
                         alpha = compactAlpha
                         // Stretch the side being swiped toward instead of translating
                         val stretchMag = dragOffsetAnim.value / maxDragOffsetPx // -1..1
                         val maxStretch = 0.06f // 6% max stretch
-                        scaleX = 1f + kotlin.math.abs(stretchMag) * maxStretch
-                        transformOrigin = if (stretchMag >= 0f) {
-                            TransformOrigin(0f, 0.5f) // swiping right → pivot left, stretch right
+                        val isSwiping = kotlin.math.abs(stretchMag) > 0.01f
+                        scaleX = (1f + kotlin.math.abs(stretchMag) * maxStretch) * islandScale
+                        scaleY = islandScale
+                        transformOrigin = if (isSwiping) {
+                            if (stretchMag >= 0f) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
                         } else {
-                            TransformOrigin(1f, 0.5f) // swiping left → pivot right, stretch left
+                            TransformOrigin.Center
                         }
                     }
                     .clip(RoundedCornerShape(currentCornerRadius))
@@ -462,59 +468,53 @@ fun ExpandedIslandOverlay(
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
-    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 72.dp)
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + 72.dp) else 36.dp
+    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 108.dp)
+    val compactHeight = if (isLandscape) (cutoutDiameterDp + 108.dp) else 36.dp
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
     val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
     val cardWidth = screenWidthDp - (horizontalMarginDp * 2)
-    val cardHeight = 190.dp
+    val cardHeight = 220.dp
 
     val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
     val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
 
-    var morphExpanded by remember { mutableStateOf(false) }
-    LaunchedEffect(isExpanded) {
-        morphExpanded = isExpanded
+    val morphSpringDp = if (isExpanded) {
+        spring<Dp>(dampingRatio = 0.82f, stiffness = 380f)
+    } else {
+        spring<Dp>(dampingRatio = 0.88f, stiffness = 420f)
     }
 
     val animatedWidth by animateDpAsState(
-        targetValue = if (morphExpanded) cardWidth else compactWidth,
-        animationSpec = tween(
-            durationMillis = if (morphExpanded) 360 else 280,
-            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-        ),
+        targetValue = if (isExpanded) cardWidth else compactWidth,
+        animationSpec = morphSpringDp,
         label = "expanded_morph_width",
     )
 
     val animatedHeight by animateDpAsState(
-        targetValue = if (morphExpanded) cardHeight else compactHeight,
-        animationSpec = tween(
-            durationMillis = if (morphExpanded) 360 else 280,
-            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-        ),
+        targetValue = if (isExpanded) cardHeight else compactHeight,
+        animationSpec = morphSpringDp,
         label = "expanded_morph_height",
     )
 
     val animatedCornerRadius by animateDpAsState(
-        targetValue = if (morphExpanded) expandedCornerRadiusDp else 18.dp,
-        animationSpec = tween(
-            durationMillis = if (morphExpanded) 360 else 280,
-            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-        ),
+        targetValue = if (isExpanded) expandedCornerRadiusDp else 18.dp,
+        animationSpec = morphSpringDp,
         label = "expanded_morph_corner",
     )
     val animatedCornerRadiusPx = with(density) { animatedCornerRadius.toPx() }
 
-    val containerShape = if (morphExpanded) {
-        squircleShape(animatedCornerRadiusPx)
-    } else {
-        RoundedCornerShape(animatedCornerRadius)
-    }
+    // Smoothly morph between exact circular pill ends (0.5523f) and Apple squircle (0.80f)
+    val curvatureFactor by animateFloatAsState(
+        targetValue = if (isExpanded) 0.80f else 0.55228475f,
+        animationSpec = tween(durationMillis = if (isExpanded) 240 else 200),
+        label = "expanded_curvature_factor",
+    )
+    val containerShape = squircleShape(animatedCornerRadiusPx, curvatureFactor)
 
     val animatedElevation by animateDpAsState(
-        targetValue = if (morphExpanded) 14.dp else 4.dp,
-        animationSpec = tween(durationMillis = if (morphExpanded) 240 else 280),
+        targetValue = if (isExpanded) 14.dp else 2.dp,
+        animationSpec = tween(durationMillis = if (isExpanded) 220 else 200),
         label = "expanded_elevation",
     )
 
@@ -523,63 +523,49 @@ fun ExpandedIslandOverlay(
         (cutoutInfo.centerX - (screenWidthPx / 2f)).toDp()
     }
     val animatedOffsetX by animateDpAsState(
-        targetValue = if (morphExpanded) 0.dp else cutoutOffsetX,
-        animationSpec = tween(
-            durationMillis = if (morphExpanded) 360 else 280,
-            easing = if (morphExpanded) MtIslandEnterEasing else MtIslandExitEasing,
-        ),
+        targetValue = if (isExpanded) 0.dp else cutoutOffsetX,
+        animationSpec = morphSpringDp,
         label = "expanded_morph_offset_x",
     )
 
     val compactAlpha by animateFloatAsState(
-        targetValue = if (morphExpanded) 0f else 1f,
+        targetValue = if (isExpanded) 0f else 1f,
         animationSpec = tween(
-            durationMillis = if (morphExpanded) 90 else 180,
-            delayMillis = if (morphExpanded) 0 else 140,
-            easing = LinearEasing,
+            durationMillis = if (isExpanded) 120 else 160,
+            delayMillis = if (isExpanded) 0 else 60,
+            easing = FastOutSlowInEasing,
         ),
         label = "expanded_compact_alpha",
     )
 
     val expandedAlpha by animateFloatAsState(
-        targetValue = if (morphExpanded) 1f else 0f,
+        targetValue = if (isExpanded) 1f else 0f,
         animationSpec = tween(
-            durationMillis = if (morphExpanded) 160 else 70,
-            delayMillis = if (morphExpanded) 45 else 0,
-            easing = if (morphExpanded) MtIslandDecelerate else LinearEasing,
+            durationMillis = if (isExpanded) 220 else 110,
+            delayMillis = if (isExpanded) 30 else 0,
+            easing = FastOutSlowInEasing,
         ),
         label = "expanded_alpha",
     )
 
-    val expandedOffsetY by animateDpAsState(
-        targetValue = if (morphExpanded) 0.dp else 16.dp,
-        animationSpec = tween(
-            durationMillis = if (morphExpanded) 280 else 70,
-            delayMillis = if (morphExpanded) 35 else 0,
-            easing = if (morphExpanded) MtIslandEnterEasing else LinearEasing,
-        ),
-        label = "expanded_offset_y",
+    val expandedContentScale by animateFloatAsState(
+        targetValue = if (isExpanded) 1f else 0.92f,
+        animationSpec = if (isExpanded) {
+            spring(dampingRatio = 0.82f, stiffness = 380f)
+        } else {
+            tween(durationMillis = 130, easing = MtIslandExitEasing)
+        },
+        label = "expanded_content_scale",
     )
 
-    var isExpansionBounceActive by remember { mutableStateOf(false) }
-    LaunchedEffect(morphExpanded) {
-        if (morphExpanded) {
-            isExpansionBounceActive = true
-            delay(220)
-            isExpansionBounceActive = false
+    val expandedOffsetY by animateDpAsState(
+        targetValue = if (isExpanded) 0.dp else 10.dp,
+        animationSpec = if (isExpanded) {
+            spring(dampingRatio = 0.82f, stiffness = 380f)
         } else {
-            isExpansionBounceActive = false
-        }
-    }
-
-    val islandScale by animateFloatAsState(
-        targetValue = if (isExpansionBounceActive) 1.02f else 1f,
-        animationSpec = if (isExpansionBounceActive) {
-            spring(dampingRatio = 0.9f, stiffness = 300f)
-        } else {
-            tween(durationMillis = 260, easing = MtIslandDecelerate)
+            tween(durationMillis = 130, easing = MtIslandExitEasing)
         },
-        label = "expanded_bounce_scale",
+        label = "expanded_offset_y",
     )
 
     val progressFraction = if (mediaInfo.durationMs > 0) {
@@ -590,6 +576,21 @@ fun ExpandedIslandOverlay(
         targetValue = progressFraction,
         animationSpec = tween(durationMillis = 350, easing = LinearEasing),
         label = "expanded_progress",
+    )
+
+    var isTouchFeedbackActive by remember { mutableStateOf(false) }
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            isTouchFeedbackActive = true
+            kotlinx.coroutines.delay(180L)
+            isTouchFeedbackActive = false
+        }
+    }
+
+    val touchScale by animateFloatAsState(
+        targetValue = if (isTouchFeedbackActive) 1.035f else 1f,
+        animationSpec = spring(dampingRatio = 0.76f, stiffness = 380f),
+        label = "expanded_touch_scale",
     )
 
     Box(
@@ -606,7 +607,7 @@ fun ExpandedIslandOverlay(
                 .offset(x = animatedOffsetX)
                 .width(animatedWidth)
                 .height(animatedHeight)
-                .scale(islandScale)
+                .scale(touchScale)
                 .islandFluidProgressBorder(
                     progressFraction = animatedProgress,
                     cornerRadius = animatedCornerRadius,
@@ -643,14 +644,17 @@ fun ExpandedIslandOverlay(
                             .fillMaxSize()
                             .graphicsLayer {
                                 alpha = expandedAlpha
+                                scaleX = expandedContentScale
+                                scaleY = expandedContentScale
                                 translationY = expandedOffsetY.toPx()
                             },
                     ) {
                         ExpandedIslandContent(
                             mediaInfo = mediaInfo,
                             cutoutDiameterDp = cutoutDiameterDp,
-                            isExpanded = morphExpanded,
+                            isExpanded = isExpanded,
                             onCollapse = onCollapse,
+                            cutoutInfo = cutoutInfo,
                         )
                     }
                 }
@@ -659,9 +663,9 @@ fun ExpandedIslandOverlay(
     }
 }
 
-internal fun squircleShape(radiusPx: Float) = GenericShape { size, _ ->
+internal fun squircleShape(radiusPx: Float, curvatureFactor: Float = 0.8f) = GenericShape { size, _ ->
     val radius = radiusPx.coerceAtMost(minOf(size.width, size.height) / 2f)
-    val controlDistance = radius * 0.8f
+    val controlDistance = radius * curvatureFactor
 
     moveTo(radius, 0f)
     lineTo(size.width - radius, 0f)
@@ -838,6 +842,190 @@ fun Modifier.islandFluidProgressBorder(
     }
 }
 
+@Language("AGSL")
+private const val PROGRESSIVE_BLUR_SHADER = """
+    uniform shader composable;
+    uniform float2 size;
+    uniform float direction; // 0 = L->R (curved arc), 1 = T->B (curved arc), 2 = B->T, 3 = 2D (expanded island leak)
+    uniform float maxBlur;
+    uniform float startFraction;
+    uniform float uTopSeam;
+    uniform float uRightSeam;
+    uniform float uDotRadius;
+
+    const float GOLDEN_ANGLE = 2.39996323;
+
+    float gaussian(float r, float sigma) {
+        return exp(-0.5 * (r * r) / (sigma * sigma));
+    }
+
+    half4 main(float2 coord) {
+        float progress = 0.0;
+        float fadeFactor = 1.0;
+
+        if (direction < 0.5) {
+            // ONLY blur and fade on the RIGHT side towards the dot:
+            // The left perimeter and body of the album art remain 100% unblurred and solid.
+            // The right boundary curves outward in the center like a circular dome: )
+            float yc = size.y * 0.5;
+            float dy = coord.y - yc;
+            float rCurve = size.y * 0.85;
+            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dy * dy, 0.0));
+            float xEff = coord.x + curveOffset;
+
+            float blurStart = size.x * 0.40;
+            float blurEnd = size.x * 0.90;
+            float blurT = clamp((xEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
+            progress = smoothstep(0.0, 1.0, blurT);
+
+            float fadeStart = size.x * 0.50;
+            float fadeEnd = size.x * 0.96;
+            float fadeT = clamp((xEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
+            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
+        } else if (direction < 1.5) {
+            // Landscape: ONLY blur and fade on the BOTTOM side towards the dot
+            float xc = size.x * 0.5;
+            float dx = coord.x - xc;
+            float rCurve = size.x * 0.85;
+            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dx * dx, 0.0));
+            float yEff = coord.y + curveOffset;
+
+            float blurStart = size.y * 0.40;
+            float blurEnd = size.y * 0.90;
+            float blurT = clamp((yEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
+            progress = smoothstep(0.0, 1.0, blurT);
+
+            float fadeStart = size.y * 0.50;
+            float fadeEnd = size.y * 0.96;
+            float fadeT = clamp((yEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
+            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
+        } else if (direction < 2.5) {
+            // Vertical: bottom (0) -> top (1) with startFraction leak
+            float t = 1.0 - (coord.y / size.y);
+            progress = clamp((t - startFraction) / max(1.0 - startFraction, 0.001), 0.0, 1.0);
+        } else {
+            // Direction 3: 2D leak for expanded island
+            float leakTop = 20.0;
+            float topBound = uTopSeam + leakTop;
+            float progTop = clamp((topBound - coord.y) / max(topBound, 1.0), 0.0, 1.0);
+
+            float leakRight = 24.0;
+            float rightBound = uRightSeam - leakRight;
+            float progRight = clamp((coord.x - rightBound) / max(size.x - rightBound, 1.0), 0.0, 1.0);
+
+            progress = max(progTop, progRight);
+        }
+
+        // If completely faded out past the fade edge, return transparent black immediately
+        if (fadeFactor <= 0.001) {
+            return half4(0.0, 0.0, 0.0, 0.0);
+        }
+
+        float blurFactor = smoothstep(0.0, 1.0, progress);
+        float currentRadius = blurFactor * maxBlur;
+
+        if (currentRadius < 0.5) {
+            return composable.eval(coord) * fadeFactor;
+        }
+
+        half4 accumColor = half4(0.0);
+        float accumWeight = 0.0;
+        float sigma = max(currentRadius * 0.45, 0.8);
+
+        float centerWeight = gaussian(0.0, sigma);
+        accumColor += composable.eval(coord) * centerWeight;
+        accumWeight += centerWeight;
+
+        const int SAMPLES = 24;
+        for (int i = 0; i < SAMPLES; ++i) {
+            float fi = float(i);
+            float r = sqrt((fi + 0.5) / float(SAMPLES)) * currentRadius;
+            float theta = fi * GOLDEN_ANGLE;
+            float2 offset = float2(cos(theta), sin(theta)) * r;
+            float weight = gaussian(r, sigma);
+
+            accumColor += composable.eval(coord + offset) * weight;
+            accumWeight += weight;
+        }
+
+        // The fade factor is applied AFTER blur accumulation, ensuring the blur is fully faded
+        return (accumColor / accumWeight) * fadeFactor;
+    }
+"""
+
+@Language("AGSL")
+private const val ORGANIC_SCOOP_FADE_SHADER = """
+    uniform float2 uSize;
+    uniform float2 uDotCenter;
+    uniform float uDotRadius;
+    uniform float uScoopDepth;
+    uniform float uFadeWidth;
+    uniform float uHalfWidth;
+
+    float scoopY(float x) {
+        float dist = abs(x - uDotCenter.x);
+        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
+        
+        // Perfectly symmetrical smooth sine bump
+        float bump = sin(t * 1.5707963);
+        bump = pow(max(bump, 0.0), 1.5);
+        return bump * uScoopDepth;
+    }
+
+    half4 main(float2 coord) {
+        // Guaranteed solid black over the physical camera cutout
+        if (length(coord - uDotCenter) <= uDotRadius) {
+            return half4(0.0, 0.0, 0.0, 1.0);
+        }
+
+        float sy = scoopY(coord.x);
+        float diff = coord.y - sy;
+        
+        if (diff <= 0.0) {
+            return half4(0.0, 0.0, 0.0, 1.0);
+        }
+        
+        if (diff >= uFadeWidth) {
+            return half4(0.0, 0.0, 0.0, 0.0);
+        }
+        
+        float alpha = smoothstep(uFadeWidth, 0.0, diff);
+        return half4(0.0, 0.0, 0.0, alpha);
+    }
+"""
+
+@Composable
+private fun Modifier.progressiveBlur(
+    direction: Int, // 0 = L->R, 1 = T->B, 2 = B->T, 3 = 2D leak
+    maxBlurDp: Dp = 16.dp,
+    startFraction: Float = 0f,
+    topSeamPx: Float = 0f,
+    rightSeamPx: Float = 0f,
+    dotRadiusPx: Float = 0f,
+): Modifier {
+    val density = LocalDensity.current
+    val maxBlurPx = with(density) { maxBlurDp.toPx() }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val shader = remember { RuntimeShader(PROGRESSIVE_BLUR_SHADER) }
+        return this.graphicsLayer {
+            if (size.width > 0f && size.height > 0f) {
+                shader.setFloatUniform("size", size.width, size.height)
+                shader.setFloatUniform("direction", direction.toFloat())
+                shader.setFloatUniform("maxBlur", maxBlurPx)
+                shader.setFloatUniform("startFraction", startFraction)
+                shader.setFloatUniform("uTopSeam", topSeamPx)
+                shader.setFloatUniform("uRightSeam", rightSeamPx)
+                shader.setFloatUniform("uDotRadius", dotRadiusPx)
+                renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "composable")
+                    .asComposeRenderEffect()
+            }
+        }
+    } else {
+        return this
+    }
+}
+
 /**
  * Compact Dynamic Island pill content following mtisland's layout:
  * Left Wing: Album Art thumbnail circular glyph snug against the camera cutout.
@@ -851,8 +1039,11 @@ private fun CompactIslandContent(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
+    val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 36.dp).toPx() }
 
     if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
@@ -862,60 +1053,77 @@ private fun CompactIslandContent(
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Black,
-                            0.66f to Color.Black,
-                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
-                        )
-                    )
-                ),
+                .background(Color.Black),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Top Wing: Album art fills the full pill width, top-aligned, fades to black at the bottom.
-            Box(
+            // Top Wing: Album art fading in a circular dome with no edge
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top,
             ) {
                 if (mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = null,
+                    val bitmap = mediaInfo.albumArt.asImageBitmap()
+                    val side = minOf(bitmap.width, bitmap.height)
+                    val cropX = (bitmap.width - side) / 2
+                    val cropY = (bitmap.height - side) / 2
+
+                    val eighth = side / 8
+
+                    // Primary Art (spanning island width) + Flipped 1/8 Reflection up to the dot with curved progressive blur
+                    Canvas(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = false)
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White,
-                                            0.80f to Color.White.copy(alpha = 0.5f),
-                                            1.00f to Color.Transparent,
-                                        )
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
+                            .fillMaxSize()
+                            .progressiveBlur(
+                                direction = 1,
+                                startFraction = 0.65f,
+                                maxBlurDp = 24.dp,
+                                dotRadiusPx = dotRadiusPx,
+                            ),
+                    ) {
+                        val w = size.width
+                        val artH = w
+                        val refH = size.height - artH
+                        // Primary Album Art (1:1 square spanning full width of island)
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX, cropY),
+                            srcSize = IntSize(side, side),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(w.roundToInt(), artH.roundToInt()),
+                        )
+                        // Flipped 1/8 slice reflection filling the rest of the space to the dot
+                        scale(scaleX = 1f, scaleY = -1f, pivot = Offset(w / 2f, artH + refH / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, cropY + side - eighth),
+                                srcSize = IntSize(side, eighth),
+                                dstOffset = IntOffset(0, artH.roundToInt()),
+                                dstSize = IntSize(w.roundToInt(), refH.roundToInt()),
+                            )
+                        }
+                    }
                 }
             }
 
             // Center: Symmetrical clearance spacer hugging the hole punch camera
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
 
-            // Bottom Wing: 4-Bar Equalizer
+            // Bottom Wing: Equalizer with ambient glow extending from the dot to the bottom edge
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Transparent,
+                                mediaInfo.dominantColor.copy(alpha = 0.28f),
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 EqualizerWaveform(
@@ -930,62 +1138,79 @@ private fun CompactIslandContent(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Black,
-                            0.66f to Color.Black,
-                            1.00f to mediaInfo.dominantColor.copy(alpha = 0.25f),
-                        )
-                    )
-                ),
+                .background(Color.Black),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left Wing: Album art fills the full pill height, left-aligned, fades to black on the right.
+            // Left Wing: Album art fading in a circular dome with no edge
             // The pill's Surface(shape = RoundedCornerShape(...)) already clips the left edge to the
             // pill's curvature — no vertical padding above or below.
-            Box(
+            Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                contentAlignment = Alignment.CenterStart,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start,
             ) {
                 if (mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = null,
+                    val bitmap = mediaInfo.albumArt.asImageBitmap()
+                    val side = minOf(bitmap.width, bitmap.height)
+                    val cropX = (bitmap.width - side) / 2
+                    val cropY = (bitmap.height - side) / 2
+
+                    val eighth = side / 8
+
+                    // Primary Art (spanning island height) + Flipped 1/8 Reflection up to the dot with curved progressive blur
+                    Canvas(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colorStops = arrayOf(
-                                            0.00f to Color.White,
-                                            0.80f to Color.White.copy(alpha = 0.5f),
-                                            1.00f to Color.Transparent,
-                                        )
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
+                            .fillMaxSize()
+                            .progressiveBlur(
+                                direction = 0,
+                                startFraction = 0.65f,
+                                maxBlurDp = 24.dp,
+                                dotRadiusPx = dotRadiusPx,
+                            ),
+                    ) {
+                        val h = size.height
+                        val artW = h
+                        val refW = size.width - artW
+                        // Primary Album Art (1:1 square spanning exact height of island)
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX, cropY),
+                            srcSize = IntSize(side, side),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(artW.roundToInt(), h.roundToInt()),
+                        )
+                        // Flipped 1/8 slice reflection filling the rest of the space to the dot
+                        scale(scaleX = -1f, scaleY = 1f, pivot = Offset(artW + refW / 2f, h / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX + side - eighth, cropY),
+                                srcSize = IntSize(eighth, side),
+                                dstOffset = IntOffset(artW.roundToInt(), 0),
+                                dstSize = IntSize(refW.roundToInt(), h.roundToInt()),
+                            )
+                        }
+                    }
                 }
             }
 
             // Center: Symmetrical clearance spacer hugging the hole punch camera
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
 
-            // Right Wing: 4-Bar Equalizer (no image, no circle)
+            // Right Wing: Equalizer with ambient glow extending from the dot to the right edge
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                mediaInfo.dominantColor.copy(alpha = 0.28f),
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 EqualizerWaveform(
@@ -1013,6 +1238,7 @@ internal fun ExpandedIslandContent(
     isExpanded: Boolean,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
+    cutoutInfo: CutoutInfo? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1031,6 +1257,21 @@ internal fun ExpandedIslandContent(
     val cardDragOffsetAnim = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
     val maxCardDragOffsetPx = with(density) { 8.dp.toPx() }
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val dotCenterXDp = if (cutoutInfo != null) {
+        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+        val orientedCenterX = if (isLandscape) {
+            minOf(cutoutInfo.centerX, screenWidthPx - cutoutInfo.centerX)
+        } else {
+            cutoutInfo.centerX
+        }
+        with(density) { orientedCenterX.toDp() } - 14.dp
+    } else {
+        (configuration.screenWidthDp.dp - 28.dp) / 2f
+    }
+    val dotCenterYDp = 18.dp
 
     Box(
         modifier = modifier
@@ -1148,43 +1389,132 @@ internal fun ExpandedIslandContent(
                 )
             }
     ) {
-        // Keep the album art on the left and fade its right edge into the black card.
+        // Primary album art + flipped 1/8 reflections (both on the top and right) with progressive blur
+        // The top reflection absorbs the scoop fade so the real album art is completely uncut and visible!
         if (mediaInfo.albumArt != null) {
+            val bitmap = mediaInfo.albumArt.asImageBitmap()
+            val side = minOf(bitmap.width, bitmap.height)
+            val cropX = (bitmap.width - side) / 2
+            val cropY = (bitmap.height - side) / 2
+            val eighth = side / 8
+
+            val realArtHeight = 190.dp
+            val topReflectionHeight = 30.dp
+            val rightReflectionWidth = realArtHeight * 0.5f
+            val totalArtWidth = realArtHeight + rightReflectionWidth
+            val topSeamPx = with(density) { topReflectionHeight.toPx() }
+            val rightSeamPx = with(density) { realArtHeight.toPx() }
+
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .aspectRatio(1f),
+                    .width(totalArtWidth)
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        // Dark scrim over expanded album art so text is clear and readable
+                        drawRect(Color.Black.copy(alpha = 0.35f))
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                listOf(Color.White, Color.Transparent)
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
             ) {
-                Image(
-                    bitmap = mediaInfo.albumArt.asImageBitmap(),
-                    contentDescription = "Album art",
+                // Unified Canvas containing Real Art + Top/Right/Corner Reflections
+                // With 2D progressive blur that leaks into the top and right edges of the main album art!
+                Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colorStops = arrayOf(
-                                        0.00f to Color.White.copy(alpha = 0.65f),
-                                        0.80f to Color.White.copy(alpha = 0.10f),
-                                        1.00f to Color.Transparent,
-                                    )
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
-                    contentScale = ContentScale.Crop,
-                )
+                        .progressiveBlur(
+                            direction = 3,
+                            maxBlurDp = 48.dp,
+                            topSeamPx = topSeamPx,
+                            rightSeamPx = rightSeamPx,
+                        ),
+                ) {
+                    val realArtW = rightSeamPx
+                    val realArtH = rightSeamPx
+                    val topRefH = topSeamPx
+                    val rightRefW = size.width - realArtW
+
+                    // 1. Primary Album Art (1:1 square, completely uncut and visible!)
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset(cropX, cropY),
+                        srcSize = IntSize(side, side),
+                        dstOffset = IntOffset(0, topRefH.roundToInt()),
+                        dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
+                    )
+
+                    // 2. Flipped 1/8 Top Reflection
+                    scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX, cropY),
+                            srcSize = IntSize(side, eighth),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                        )
+                    }
+
+                    // 3. Flipped 1/8 Right Reflection
+                    scale(scaleX = -1f, scaleY = 1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH + realArtH / 2f)) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX + side - eighth, cropY),
+                            srcSize = IntSize(eighth, side),
+                            dstOffset = IntOffset(realArtW.roundToInt(), topRefH.roundToInt()),
+                            dstSize = IntSize(rightRefW.roundToInt(), realArtH.roundToInt()),
+                        )
+                    }
+
+                    // 4. Flipped 1/8 Corner Reflection
+                    scale(scaleX = -1f, scaleY = -1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH / 2f)) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX + side - eighth, cropY),
+                            srcSize = IntSize(eighth, eighth),
+                            dstOffset = IntOffset(realArtW.roundToInt(), 0),
+                            dstSize = IntSize(rightRefW.roundToInt(), topRefH.roundToInt()),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
+        // raised snug under the camera cutout with an ultra-smooth wide fade.
+        val dotXPx = with(density) { dotCenterXDp.toPx() }
+        val dotYPx = with(density) { dotCenterYDp.toPx() }
+        val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
+        val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
+        val fadeWidthPx = with(density) { 72.dp.toPx() }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
+            val scoopBrush = remember(scoopShader) { ShaderBrush(scoopShader) }
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
+                scoopShader.setFloatUniform("uSize", size.width, size.height)
+                scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
+                scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
+                scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
+                scoopShader.setFloatUniform("uFadeWidth", fadeWidthPx)
+                scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
+
+                drawRect(brush = scoopBrush)
             }
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             // Row 1: Header
@@ -1197,7 +1527,7 @@ internal fun ExpandedIslandContent(
                 Spacer(modifier = Modifier.width(cutoutDiameterDp))
             }
 
-            // Row 2: Track Title & Artist (Left) + Squircle 18dp Play/Pause Button (Right)
+            // Row 2: Track Title & Artist (Left) + Visualizer stacked above Play/Pause Button (Right)
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -1212,56 +1542,66 @@ internal fun ExpandedIslandContent(
                 ) {
                     Text(
                         text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Normal),
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = mediaInfo.artist.ifEmpty { "" },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
                         color = Color.White.copy(alpha = 0.80f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
 
-                // Dancing 4-bar equalizer (prominent and large on expanded island)
-                EqualizerWaveform(
-                    isPlaying = mediaInfo.isPlaying,
-                    maxHeightDp = 28f,
-                    accentColor = mediaInfo.dominantColor,
-                    barWidth = 5.dp,
-                    barSpacing = 3.5.dp,
-                    minHeight = 5.dp,
-                    barCornerRadius = 2.5.dp,
-                )
-
-                // Symmetrical clearance spacer hugging the hole punch camera
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Native Android 13/14 M3 18dp squircle Play/Pause button
-                Surface(
-                    onClick = {
-                        if (!mediaInfo.hasMedia && !mediaInfo.isSimulated) {
-                            MediaPlaybackState.setSimulatedPlayback(true)
-                        } else {
-                            MediaPlaybackState.togglePlayPause()
-                        }
-                    },
-                    shape = RoundedCornerShape(18.dp),
-                    color = Color.White.copy(alpha = 0.94f),
-                    modifier = Modifier.size(52.dp),
-                    shadowElevation = 2.dp,
+                // Controls Column: 5-bar visualizer in a fixed container stacked directly above the Play/Pause button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
-                            tint = Color(0xFF1B1A1E),
-                            modifier = Modifier.size(28.dp),
+                    Box(
+                        modifier = Modifier
+                            .height(20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        EqualizerWaveform(
+                            isPlaying = mediaInfo.isPlaying,
+                            maxHeightDp = 20f,
+                            accentColor = mediaInfo.dominantColor,
+                            barWidth = 4.dp,
+                            barSpacing = 3.dp,
+                            minHeight = 4.dp,
+                            barCornerRadius = 2.dp,
                         )
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    // Native Android 13/14 M3 wide pill Play/Pause button
+                    Surface(
+                        onClick = {
+                            if (!mediaInfo.hasMedia && !mediaInfo.isSimulated) {
+                                MediaPlaybackState.setSimulatedPlayback(true)
+                            } else {
+                                MediaPlaybackState.togglePlayPause()
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.94f),
+                        modifier = Modifier
+                            .width(64.dp)
+                            .height(46.dp),
+                        shadowElevation = 2.dp,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                                tint = Color(0xFF1B1A1E),
+                                modifier = Modifier.size(26.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -1324,8 +1664,10 @@ internal fun ExpandedIslandContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(14.dp),
-                        color = Color.White,
-                        trackColor = Color.White.copy(alpha = 0.32f),
+                        color = mediaInfo.dominantColor,
+                        trackColor = mediaInfo.dominantColor.copy(alpha = 0.32f),
+                        amplitude = { if (mediaInfo.isPlaying) 0.5f else 0.15f },
+                        wavelength = 28.dp,
                     )
                 }
 
@@ -1346,7 +1688,7 @@ internal fun ExpandedIslandContent(
 }
 
 /**
- * Animated 4-bar equalizer visualizer component modeled after com.pryshedko.mtisland.
+ * Animated 5-bar equalizer visualizer component modeled after com.pryshedko.mtisland.
  * Each bar oscillates smoothly with organic sinusoidal harmonics when audio is playing,
  * and gently settles to resting dots when paused.
  */
@@ -1392,13 +1734,22 @@ private fun EqualizerWaveform(
         label = "eq_3",
     )
     val bar4 by infiniteTransition.animateFloat(
-        initialValue = 0.24f,
-        targetValue = 0.72f,
+        initialValue = 0.20f,
+        targetValue = 0.88f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 880, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 860, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "eq_4",
+    )
+    val bar5 by infiniteTransition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 0.68f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 640, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "eq_5",
     )
 
     val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
@@ -1423,8 +1774,13 @@ private fun EqualizerWaveform(
         animationSpec = tween(durationMillis = 16),
         label = "h4",
     )
+    val animatedH5 by animateFloatAsState(
+        targetValue = if (isPlaying) bar5 else restingFraction,
+        animationSpec = tween(durationMillis = 20),
+        label = "h5",
+    )
 
-    val heights = listOf(animatedH1, animatedH2, animatedH3, animatedH4)
+    val heights = listOf(animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
 
     Row(
         modifier = modifier,
