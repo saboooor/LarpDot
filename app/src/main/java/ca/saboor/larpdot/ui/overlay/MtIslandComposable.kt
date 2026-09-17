@@ -976,31 +976,17 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float2 uDotCenter;
     uniform float uDotRadius;
     uniform float uScoopDepth;
-    uniform float uFadeRadius;
+    uniform float uFadeWidth;
     uniform float uHalfWidth;
 
-    float getDistanceToSwoop(float2 pos, float wi, float he) {
-        pos.x = abs(pos.x);
-        float ik = (wi * wi) / max(he, 0.001);
-        float curveY = he - (pos.x * pos.x) / ik;
-        if (pos.y <= curveY && pos.x <= wi) {
-            return 0.0;
-        }
-
-        float p = ik * (he - pos.y - 0.5 * ik) / 3.0;
-        float q = pos.x * ik * ik * 0.25;
-        float h = q * q - p * p * p;
-        float r = sqrt(abs(h));
-        float x = 0.0;
-        if (h > 0.0) {
-            float diff = q - r;
-            x = pow(max(q + r, 0.0), 1.0 / 3.0) + pow(max(abs(diff), 0.0), 1.0 / 3.0) * sign(diff);
-        } else {
-            x = 2.0 * cos(atan(r, q) / 3.0) * sqrt(max(p, 0.0));
-        }
-        x = clamp(x, 0.0, wi);
-        float2 closest = float2(x, he - (x * x) / ik);
-        return length(pos - closest);
+    float scoopY(float x) {
+        float dist = abs(x - uDotCenter.x);
+        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
+        
+        // Perfectly symmetrical smooth sine bump
+        float bump = sin(t * 1.5707963);
+        bump = pow(max(bump, 0.0), 1.5);
+        return bump * uScoopDepth;
     }
 
     half4 main(float2 coord) {
@@ -1009,20 +995,18 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float2 localPos = float2(coord.x - uDotCenter.x, coord.y);
-        float dist = getDistanceToSwoop(localPos, uHalfWidth, uScoopDepth);
-
-        if (dist <= 0.0) {
+        float sy = scoopY(coord.x);
+        float diff = coord.y - sy;
+        
+        if (diff <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
-
-        if (dist >= uFadeRadius) {
+        
+        if (diff >= uFadeWidth) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
-
-        // Even fade throughout the entire swoop shape
-        float alpha = smoothstep(uFadeRadius, 0.0, dist);
-        alpha = pow(alpha, 1.15);
+        
+        float alpha = smoothstep(uFadeWidth, 0.0, diff);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
@@ -1830,30 +1814,26 @@ internal fun ExpandedIslandContent(
                 }
             }
         }
-
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // swooping gracefully down from the top edge to cradle the camera cutout with a generous fade.
+        // raised snug under the camera cutout with an ultra-smooth wide fade.
         if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
-            val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
-            // Solid scoop depth right at the base of the camera hole
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
-            // Even fade radius throughout the entire shape
-            val fadeRadiusPx = with(density) { 44.dp.toPx() }
-            // Swoop wingspan: wide curved span so the swoop curves gracefully up to the top bezel
-            val halfWidthPx = with(density) { (cutoutDiameterDp * 2.3f).coerceIn(72.dp, 92.dp).toPx() }
+            val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
+            val fadeWidthPx = with(density) { 72.dp.toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
                 val scoopBrush = remember(scoopShader) { ShaderBrush(scoopShader) }
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
                     scoopShader.setFloatUniform("uSize", size.width, size.height)
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
                     scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
-                    scoopShader.setFloatUniform("uFadeRadius", fadeRadiusPx)
+                    scoopShader.setFloatUniform("uFadeWidth", fadeWidthPx)
                     scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
 
                     drawRect(brush = scoopBrush)
