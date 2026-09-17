@@ -50,6 +50,7 @@ import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.screens.HomeScreen
+import ca.saboor.larpdot.ui.screens.MusicScreen
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -201,6 +202,9 @@ fun LarpDotApp() {
                     Destination.Home -> HomeScreen(
                         cutoutInfo = cutoutInfo,
                         isEnabled = isEnabled,
+                    )
+                    Destination.Music -> MusicScreen(
+                        cutoutInfo = cutoutInfo,
                     )
                 }
             }

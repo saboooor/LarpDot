@@ -19,12 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,11 +59,9 @@ fun HomeScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
-    val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
 
     LaunchedEffect(Unit) {
-        OverlayPreferences.isShowMinimizedTitleEnabled(context)
         OverlayPreferences.isTapToExpandEnabled(context)
     }
 
@@ -95,51 +91,10 @@ fun HomeScreen(
             )
         }
 
-        // Island Customization & Display Options
+        // Island Customization & Interaction Options
         item {
             SectionHeader(title = "Island Customization")
             LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Show Song Title",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Display track title above minimized island",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = showTitle,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
-                        },
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Tap to Expand toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -422,4 +377,3 @@ private fun AlignmentSliderControl(
         }
     }
 }
-
