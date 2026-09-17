@@ -979,34 +979,35 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float uFadeWidth;
     uniform float uHalfWidth;
 
-    float scoopY(float x) {
-        float dist = abs(x - uDotCenter.x);
-        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
-        
-        // Perfectly symmetrical smooth sine bump
-        float bump = sin(t * 1.5707963);
-        bump = pow(max(bump, 0.0), 1.5);
-        return bump * uScoopDepth;
-    }
-
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
         if (length(coord - uDotCenter) <= uDotRadius) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float sy = scoopY(coord.x);
+        float dist = abs(coord.x - uDotCenter.x);
+        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
+        float bump = sin(t * 1.5707963);
+        bump = pow(max(bump, 0.0), 1.5);
+
+        // Confine swoop and fade strictly to the scoop footprint (no island-wide top fade)
+        if (bump <= 0.001) {
+            return half4(0.0, 0.0, 0.0, 0.0);
+        }
+
+        float sy = bump * uScoopDepth;
+        float localFade = bump * uFadeWidth;
         float diff = coord.y - sy;
         
         if (diff <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
         
-        if (diff >= uFadeWidth) {
+        if (diff >= localFade) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
         
-        float alpha = smoothstep(uFadeWidth, 0.0, diff);
+        float alpha = smoothstep(localFade, 0.0, diff);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
