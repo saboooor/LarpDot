@@ -979,37 +979,39 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float uFadeWidth;
     uniform float uHalfWidth;
 
-    float scoopY(float x) {
-        float dist = abs(x - uDotCenter.x);
-        // Flat plateau under the camera punch hole so it forms a rounded U-cradle instead of a sharp V
-        float plateauR = uDotRadius * 0.85;
-        if (dist <= plateauR) {
-            return uScoopDepth;
-        }
-        float norm = clamp((dist - plateauR) / max(uHalfWidth - plateauR, 1.0), 0.0, 1.0);
-        // Smoothstep S-curve fillet: zero derivative at plateau, zero derivative at top edge
-        float bump = 1.0 - smoothstep(0.0, 1.0, norm);
-        return bump * uScoopDepth;
-    }
-
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
         if (length(coord - uDotCenter) <= uDotRadius) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float sy = scoopY(coord.x);
+        float dist = abs(coord.x - uDotCenter.x);
+        // Outside the scoop width: strictly transparent so no fade spans across the island
+        if (dist >= uHalfWidth) {
+            return half4(0.0, 0.0, 0.0, 0.0);
+        }
+
+        // Flat plateau under the camera punch hole so it forms a rounded U-cradle instead of a sharp V
+        float plateauR = uDotRadius * 0.85;
+        float bump = 1.0;
+        if (dist > plateauR) {
+            float norm = clamp((dist - plateauR) / max(uHalfWidth - plateauR, 1.0), 0.0, 1.0);
+            bump = 1.0 - smoothstep(0.0, 1.0, norm);
+        }
+
+        float sy = bump * uScoopDepth;
+        float localFade = bump * uFadeWidth;
         float diff = coord.y - sy;
-        
+
         if (diff <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
-        
-        if (diff >= uFadeWidth) {
+
+        if (localFade <= 0.001 || diff >= localFade) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
-        
-        float alpha = smoothstep(uFadeWidth, 0.0, diff);
+
+        float alpha = smoothstep(localFade, 0.0, diff);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
@@ -1527,17 +1529,15 @@ internal fun ExpandedIslandContent(
                     } else {
                         Color.Transparent
                     }
-                    val blackTint = Color.Black.copy(alpha = 0.5f)
                     val rightGradient = Brush.horizontalGradient(
                         colorStops = arrayOf(
-                            0.60f to blackTint,
+                            0.60f to Color.Transparent,
                             1.00f to dominantTint,
                         )
                     )
                     val bottomGradient = Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.00f to blackTint,
-                            0.25f to blackTint,
+                            0.40f to Color.Transparent,
                             1.00f to dominantTint,
                         )
                     )
