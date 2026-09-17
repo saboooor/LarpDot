@@ -132,7 +132,9 @@ class IslandOverlayViewController(
             observeMediaState()
             observeCutoutConfig()
             observeTitlePreference()
-            OverlayPreferences.getAlbumArtStyle(context)
+            OverlayPreferences.getMinimizedAlbumArtStyle(context)
+            OverlayPreferences.getExpandedAlbumArtStyle(context)
+            OverlayPreferences.getNestedAlbumArtShape(context)
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()

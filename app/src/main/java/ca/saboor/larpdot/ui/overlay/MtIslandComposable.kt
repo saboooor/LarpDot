@@ -55,7 +55,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.toShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -844,13 +846,30 @@ fun Modifier.islandFluidProgressBorder(
  * Center: Precise clearance cushion for the physical camera dot.
  * Right Wing: 4-bar equalizer dancing organically to playback.
  */
+/**
+ * Resolves a Material 3 Expressive shape for nested album art presentation.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun nestedAlbumArtShape(shapeOption: OverlayPreferences.NestedAlbumArtShape): Shape {
+    return when (shapeOption) {
+        OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE -> MaterialShapes.Square.toShape()
+        OverlayPreferences.NestedAlbumArtShape.CIRCLE -> MaterialShapes.Circle.toShape()
+        OverlayPreferences.NestedAlbumArtShape.COOKIE -> MaterialShapes.Cookie4Sided.toShape()
+        OverlayPreferences.NestedAlbumArtShape.CLOVER -> MaterialShapes.Clover4Leaf.toShape()
+        OverlayPreferences.NestedAlbumArtShape.SUNNY -> MaterialShapes.Sunny.toShape()
+        OverlayPreferences.NestedAlbumArtShape.HEART -> MaterialShapes.Heart.toShape()
+    }
+}
+
 @Composable
 internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.albumArtStyleFlow.collectAsState().value,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.nestedAlbumArtShapeFlow.collectAsState().value,
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -866,7 +885,7 @@ internal fun CompactIslandContent(
                 )
             )
             OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-            OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> Brush.verticalGradient(
+            OverlayPreferences.AlbumArtStyle.NESTED -> Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.00f to Color.Black,
                     1.00f to Color.Black,
@@ -885,7 +904,7 @@ internal fun CompactIslandContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE) {
+                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
                     Alignment.Center
                 } else {
                     Alignment.TopCenter
@@ -893,13 +912,13 @@ internal fun CompactIslandContent(
             ) {
                 if (mediaInfo.albumArt != null) {
                     when (albumArtStyle) {
-                        OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> {
+                        OverlayPreferences.AlbumArtStyle.NESTED -> {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(24.dp)
-                                    .clip(RoundedCornerShape(6.5.dp)),
+                                    .clip(nestedAlbumArtShape(nestedShape)),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -986,7 +1005,7 @@ internal fun CompactIslandContent(
                 )
             )
             OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-            OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> Brush.horizontalGradient(
+            OverlayPreferences.AlbumArtStyle.NESTED -> Brush.horizontalGradient(
                 colorStops = arrayOf(
                     0.00f to Color.Black,
                     1.00f to Color.Black,
@@ -1005,7 +1024,7 @@ internal fun CompactIslandContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE) {
+                contentAlignment = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
                     Alignment.Center
                 } else {
                     Alignment.CenterStart
@@ -1013,13 +1032,13 @@ internal fun CompactIslandContent(
             ) {
                 if (mediaInfo.albumArt != null) {
                     when (albumArtStyle) {
-                        OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE -> {
+                        OverlayPreferences.AlbumArtStyle.NESTED -> {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(24.dp)
-                                    .clip(RoundedCornerShape(6.5.dp)),
+                                    .clip(nestedAlbumArtShape(nestedShape)),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -1113,7 +1132,8 @@ internal fun ExpandedIslandContent(
     isExpanded: Boolean,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
-    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.albumArtStyleFlow.collectAsState().value,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.nestedAlbumArtShapeFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1254,7 +1274,7 @@ internal fun ExpandedIslandContent(
             }
     ) {
         // For Basic Faded and Blended, keep the album art on the left and fade its right edge into the black card.
-        if (albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE && mediaInfo.albumArt != null) {
+        if (albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED && mediaInfo.albumArt != null) {
             val fadeBrush = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BASIC_FADED) {
                 Brush.horizontalGradient(
                     colorStops = arrayOf(
@@ -1319,13 +1339,13 @@ internal fun ExpandedIslandContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED_ROUNDED_SQUARE && mediaInfo.albumArt != null) {
+                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED && mediaInfo.albumArt != null) {
                     Image(
                         bitmap = mediaInfo.albumArt.asImageBitmap(),
                         contentDescription = "Album art",
                         modifier = Modifier
                             .size(52.dp)
-                            .clip(RoundedCornerShape(14.dp)),
+                            .clip(nestedAlbumArtShape(nestedShape)),
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(14.dp))

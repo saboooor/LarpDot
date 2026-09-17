@@ -16,11 +16,23 @@ object OverlayPreferences {
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
     private const val KEY_ALBUM_ART_STYLE = "album_art_style"
+    private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
+    private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
+    private const val KEY_NESTED_ALBUM_ART_SHAPE = "nested_album_art_shape"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
         BLENDED("Blended"),
-        NESTED_ROUNDED_SQUARE("Nested Square"),
+        NESTED("Nested"),
+    }
+
+    enum class NestedAlbumArtShape(val label: String) {
+        ROUNDED_SQUARE("Square"),
+        CIRCLE("Circle"),
+        COOKIE("Cookie"),
+        CLOVER("Clover"),
+        SUNNY("Sunny"),
+        HEART("Heart"),
     }
 
     private val _isEnabledFlow = MutableStateFlow(false)
@@ -32,8 +44,14 @@ object OverlayPreferences {
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
 
-    private val _albumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
-    val albumArtStyleFlow: StateFlow<AlbumArtStyle> = _albumArtStyleFlow.asStateFlow()
+    private val _minimizedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
+    val minimizedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _minimizedAlbumArtStyleFlow.asStateFlow()
+
+    private val _expandedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
+    val expandedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _expandedAlbumArtStyleFlow.asStateFlow()
+
+    private val _nestedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
+    val nestedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _nestedAlbumArtShapeFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -49,10 +67,28 @@ object OverlayPreferences {
     private var isCutoutInitialized = false
     private var isTitlePrefInitialized = false
     private var isTapToExpandInitialized = false
-    private var isAlbumArtStyleInitialized = false
+    private var isMinimizedAlbumArtStyleInitialized = false
+    private var isExpandedAlbumArtStyleInitialized = false
+    private var isNestedAlbumArtShapeInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun parseAlbumArtStyle(styleName: String?): AlbumArtStyle {
+        return when (styleName) {
+            "BASIC_FADED" -> AlbumArtStyle.BASIC_FADED
+            "NESTED", "NESTED_ROUNDED_SQUARE" -> AlbumArtStyle.NESTED
+            else -> AlbumArtStyle.BLENDED
+        }
+    }
+
+    private fun parseNestedAlbumArtShape(shapeName: String?): NestedAlbumArtShape {
+        return try {
+            NestedAlbumArtShape.valueOf(shapeName ?: NestedAlbumArtShape.ROUNDED_SQUARE.name)
+        } catch (_: Exception) {
+            NestedAlbumArtShape.ROUNDED_SQUARE
+        }
     }
 
     fun isOverlayEnabled(context: Context): Boolean {
@@ -73,17 +109,11 @@ object OverlayPreferences {
     fun getCutoutConfig(context: Context): CutoutConfig {
         if (!isCutoutInitialized) {
             val prefs = getPrefs(context)
-            val isManual = prefs.getBoolean(KEY_MANUAL_CUTOUT_ENABLED, false)
+            val manual = prefs.getBoolean(KEY_MANUAL_CUTOUT_ENABLED, false)
             val offX = prefs.getFloat(KEY_CUTOUT_OFFSET_X, 0f)
             val offY = prefs.getFloat(KEY_CUTOUT_OFFSET_Y, 0f)
-            val diameter = prefs.getFloat(KEY_CUTOUT_DIAMETER, 0f)
-            val config = CutoutConfig(
-                isManualEnabled = isManual,
-                offsetX = offX,
-                offsetY = offY,
-                customDiameterDp = diameter,
-            )
-            _cutoutConfigFlow.value = config
+            val diam = prefs.getFloat(KEY_CUTOUT_DIAMETER, 0f)
+            _cutoutConfigFlow.value = CutoutConfig(manual, offX, offY, diam)
             isCutoutInitialized = true
         }
         return _cutoutConfigFlow.value
@@ -130,23 +160,55 @@ object OverlayPreferences {
         isTapToExpandInitialized = true
     }
 
-    fun getAlbumArtStyle(context: Context): AlbumArtStyle {
-        if (!isAlbumArtStyleInitialized) {
-            val styleName = getPrefs(context).getString(KEY_ALBUM_ART_STYLE, AlbumArtStyle.BLENDED.name)
-            val style = try {
-                AlbumArtStyle.valueOf(styleName ?: AlbumArtStyle.BLENDED.name)
-            } catch (_: Exception) {
-                AlbumArtStyle.BLENDED
-            }
-            _albumArtStyleFlow.value = style
-            isAlbumArtStyleInitialized = true
+    fun getMinimizedAlbumArtStyle(context: Context): AlbumArtStyle {
+        if (!isMinimizedAlbumArtStyleInitialized) {
+            val prefs = getPrefs(context)
+            val legacy = prefs.getString(KEY_ALBUM_ART_STYLE, null)
+            val styleName = prefs.getString(KEY_MINIMIZED_ALBUM_ART_STYLE, legacy ?: AlbumArtStyle.BLENDED.name)
+            val style = parseAlbumArtStyle(styleName)
+            _minimizedAlbumArtStyleFlow.value = style
+            isMinimizedAlbumArtStyleInitialized = true
         }
-        return _albumArtStyleFlow.value
+        return _minimizedAlbumArtStyleFlow.value
     }
 
-    fun setAlbumArtStyle(context: Context, style: AlbumArtStyle) {
-        getPrefs(context).edit().putString(KEY_ALBUM_ART_STYLE, style.name).apply()
-        _albumArtStyleFlow.value = style
-        isAlbumArtStyleInitialized = true
+    fun setMinimizedAlbumArtStyle(context: Context, style: AlbumArtStyle) {
+        getPrefs(context).edit().putString(KEY_MINIMIZED_ALBUM_ART_STYLE, style.name).apply()
+        _minimizedAlbumArtStyleFlow.value = style
+        isMinimizedAlbumArtStyleInitialized = true
+    }
+
+    fun getExpandedAlbumArtStyle(context: Context): AlbumArtStyle {
+        if (!isExpandedAlbumArtStyleInitialized) {
+            val prefs = getPrefs(context)
+            val legacy = prefs.getString(KEY_ALBUM_ART_STYLE, null)
+            val styleName = prefs.getString(KEY_EXPANDED_ALBUM_ART_STYLE, legacy ?: AlbumArtStyle.BLENDED.name)
+            val style = parseAlbumArtStyle(styleName)
+            _expandedAlbumArtStyleFlow.value = style
+            isExpandedAlbumArtStyleInitialized = true
+        }
+        return _expandedAlbumArtStyleFlow.value
+    }
+
+    fun setExpandedAlbumArtStyle(context: Context, style: AlbumArtStyle) {
+        getPrefs(context).edit().putString(KEY_EXPANDED_ALBUM_ART_STYLE, style.name).apply()
+        _expandedAlbumArtStyleFlow.value = style
+        isExpandedAlbumArtStyleInitialized = true
+    }
+
+    fun getNestedAlbumArtShape(context: Context): NestedAlbumArtShape {
+        if (!isNestedAlbumArtShapeInitialized) {
+            val shapeName = getPrefs(context).getString(KEY_NESTED_ALBUM_ART_SHAPE, NestedAlbumArtShape.ROUNDED_SQUARE.name)
+            val shape = parseNestedAlbumArtShape(shapeName)
+            _nestedAlbumArtShapeFlow.value = shape
+            isNestedAlbumArtShapeInitialized = true
+        }
+        return _nestedAlbumArtShapeFlow.value
+    }
+
+    fun setNestedAlbumArtShape(context: Context, shape: NestedAlbumArtShape) {
+        getPrefs(context).edit().putString(KEY_NESTED_ALBUM_ART_SHAPE, shape.name).apply()
+        _nestedAlbumArtShapeFlow.value = shape
+        isNestedAlbumArtShapeInitialized = true
     }
 }
