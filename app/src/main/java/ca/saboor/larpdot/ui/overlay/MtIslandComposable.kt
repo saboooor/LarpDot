@@ -1143,6 +1143,7 @@ internal fun CompactIslandContent(
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
+    showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -1274,13 +1275,17 @@ internal fun CompactIslandContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                mediaInfo.dominantColor.copy(alpha = 0.28f),
+                    .then(
+                        if (showDominantGlow) {
+                            Modifier.background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        mediaInfo.dominantColor.copy(alpha = 0.28f),
+                                    )
+                                )
                             )
-                        )
+                        } else Modifier
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1415,13 +1420,17 @@ internal fun CompactIslandContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Color.Transparent,
-                                mediaInfo.dominantColor.copy(alpha = 0.28f),
+                    .then(
+                        if (showDominantGlow) {
+                            Modifier.background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        mediaInfo.dominantColor.copy(alpha = 0.28f),
+                                    )
+                                )
                             )
-                        )
+                        } else Modifier
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1455,6 +1464,8 @@ internal fun ExpandedIslandContent(
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
+    showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
+    showCameraSwoop: Boolean = OverlayPreferences.showCameraSwoopFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1508,7 +1519,7 @@ internal fun ExpandedIslandContent(
                 if (albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND) {
                     onDrawBehind { /* Full background image rendered inside content */ }
                 } else {
-                    val dominantTint = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED) {
+                    val dominantTint = if (showDominantGlow) {
                         mediaInfo.dominantColor.copy(alpha = 0.25f)
                     } else {
                         Color.Transparent
@@ -1761,7 +1772,7 @@ internal fun ExpandedIslandContent(
 
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
         // raised snug under the camera cutout with an ultra-smooth wide fade.
-        if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED) {
+        if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }

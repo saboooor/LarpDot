@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Flare
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
@@ -375,6 +377,8 @@ fun MusicScreen(
     val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
     val minimizedRotation by OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState()
     val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
+    val showDominantGlow by OverlayPreferences.showDominantColorGlowFlow.collectAsState()
+    val showCameraSwoop by OverlayPreferences.showCameraSwoopFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
@@ -385,6 +389,8 @@ fun MusicScreen(
         OverlayPreferences.getExpandedAlbumArtShape(context)
         OverlayPreferences.getMinimizedAlbumArtRotation(context)
         OverlayPreferences.getExpandedAlbumArtRotation(context)
+        OverlayPreferences.isShowDominantColorGlowEnabled(context)
+        OverlayPreferences.isShowCameraSwoopEnabled(context)
     }
 
     val minimizedStyles = listOf(
@@ -663,6 +669,88 @@ fun MusicScreen(
                             checked = showProgressOutline,
                             onCheckedChange = { isChecked ->
                                 OverlayPreferences.setShowProgressOutlineEnabled(context, isChecked)
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Dominant Color Glow
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Flare,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Column {
+                                Text(
+                                    text = "Dominant Color Glow",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "Ambient dominant color glow on the right wing and card backdrop",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = showDominantGlow,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setShowDominantColorGlowEnabled(context, isChecked)
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Camera Swoop Cutout Cover
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Column {
+                                Text(
+                                    text = "Camera Swoop Cover",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "Smooth organic swoop shader over camera cutout on expanded card",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = showCameraSwoop,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setShowCameraSwoopEnabled(context, isChecked)
                             },
                         )
                     }

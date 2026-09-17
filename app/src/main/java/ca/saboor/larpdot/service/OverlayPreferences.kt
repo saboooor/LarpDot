@@ -24,6 +24,8 @@ object OverlayPreferences {
     private const val KEY_SHOW_PROGRESS_OUTLINE = "show_progress_outline"
     private const val KEY_MINIMIZED_ALBUM_ART_ROTATION = "minimized_album_art_rotation"
     private const val KEY_EXPANDED_ALBUM_ART_ROTATION = "expanded_album_art_rotation"
+    private const val KEY_SHOW_DOMINANT_COLOR_GLOW = "show_dominant_color_glow"
+    private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -115,6 +117,12 @@ object OverlayPreferences {
     private val _expandedAlbumArtRotationFlow = MutableStateFlow(0f)
     val expandedAlbumArtRotationFlow: StateFlow<Float> = _expandedAlbumArtRotationFlow.asStateFlow()
 
+    private val _showDominantColorGlowFlow = MutableStateFlow(true)
+    val showDominantColorGlowFlow: StateFlow<Boolean> = _showDominantColorGlowFlow.asStateFlow()
+
+    private val _showCameraSwoopFlow = MutableStateFlow(true)
+    val showCameraSwoopFlow: StateFlow<Boolean> = _showCameraSwoopFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -136,6 +144,8 @@ object OverlayPreferences {
     private var isShowProgressOutlineInitialized = false
     private var isMinimizedAlbumArtRotationInitialized = false
     private var isExpandedAlbumArtRotationInitialized = false
+    private var isShowDominantColorGlowInitialized = false
+    private var isShowCameraSwoopInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -338,5 +348,35 @@ object OverlayPreferences {
         getPrefs(context).edit().putFloat(KEY_EXPANDED_ALBUM_ART_ROTATION, degrees).apply()
         _expandedAlbumArtRotationFlow.value = degrees
         isExpandedAlbumArtRotationInitialized = true
+    }
+
+    fun isShowDominantColorGlowEnabled(context: Context): Boolean {
+        if (!isShowDominantColorGlowInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, true)
+            _showDominantColorGlowFlow.value = enabled
+            isShowDominantColorGlowInitialized = true
+        }
+        return _showDominantColorGlowFlow.value
+    }
+
+    fun setShowDominantColorGlowEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, enabled).apply()
+        _showDominantColorGlowFlow.value = enabled
+        isShowDominantColorGlowInitialized = true
+    }
+
+    fun isShowCameraSwoopEnabled(context: Context): Boolean {
+        if (!isShowCameraSwoopInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_CAMERA_SWOOP, true)
+            _showCameraSwoopFlow.value = enabled
+            isShowCameraSwoopInitialized = true
+        }
+        return _showCameraSwoopFlow.value
+    }
+
+    fun setShowCameraSwoopEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_CAMERA_SWOOP, enabled).apply()
+        _showCameraSwoopFlow.value = enabled
+        isShowCameraSwoopInitialized = true
     }
 }
