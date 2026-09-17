@@ -189,8 +189,10 @@ fun CompactIslandOverlay(
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
         val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
-        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 108.dp)
-        val compactHeight = if (isLandscape) (cutoutDiameterDp + 108.dp) else 36.dp
+        val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+        val compactExtraDp = if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
+        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + compactExtraDp)
+        val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else 36.dp
 
         val currentWidth by animateDpAsState(
             targetValue = if (isPaused) cutoutDiameterDp else compactWidth,
@@ -475,8 +477,10 @@ fun ExpandedIslandOverlay(
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
-    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + 108.dp)
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + 108.dp) else 36.dp
+    val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+    val compactExtraDp = if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
+    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + compactExtraDp)
+    val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else 36.dp
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
@@ -667,6 +671,7 @@ fun ExpandedIslandOverlay(
                             isExpanded = isExpanded,
                             onCollapse = onCollapse,
                             cutoutInfo = cutoutInfo,
+                            cardHorizontalMarginDp = horizontalMarginDp,
                         )
                     }
                 }
@@ -1446,6 +1451,7 @@ internal fun ExpandedIslandContent(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
     cutoutInfo: CutoutInfo? = null,
+    cardHorizontalMarginDp: Dp = 14.dp,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
@@ -1477,9 +1483,9 @@ internal fun ExpandedIslandContent(
         } else {
             cutoutInfo.centerX
         }
-        with(density) { orientedCenterX.toDp() } - 14.dp
+        with(density) { orientedCenterX.toDp() } - cardHorizontalMarginDp
     } else {
-        (configuration.screenWidthDp.dp - 28.dp) / 2f
+        (configuration.screenWidthDp.dp - (cardHorizontalMarginDp * 2)) / 2f
     }
     val dotCenterYDp = 18.dp
 

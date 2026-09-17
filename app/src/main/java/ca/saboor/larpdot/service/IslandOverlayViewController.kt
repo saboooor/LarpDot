@@ -133,6 +133,7 @@ class IslandOverlayViewController(
             observeMediaState()
             observeCutoutConfig()
             observeTitlePreference()
+            observeMinimizedAlbumArtStyle()
             OverlayPreferences.getMinimizedAlbumArtStyle(context)
             OverlayPreferences.getExpandedAlbumArtStyle(context)
             OverlayPreferences.getMinimizedAlbumArtShape(context)
@@ -267,6 +268,8 @@ class IslandOverlayViewController(
         val showTitleAbove = showTitlePref && hasMedia && currentTrack.title.isNotBlank()
 
         val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
+        val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
+        val compactExtraDp = if (isBlended) 108f else 72f
         val shouldShowDotOnly = !hasMedia
 
         val targetWidth: Int
@@ -283,7 +286,7 @@ class IslandOverlayViewController(
         } else if (isLandscape) {
             // Minimized Dynamic Island in landscape: vertical capsule over the camera hole punch
             val pillWPx = (36f * density).toInt()
-            val pillHPx = (cutoutDiameterPx + (108f * density)).toInt()
+            val pillHPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
             val paddingPx = (14f * density).toInt()
             val topExtraPx = if (showTitleAbove) (20f * density).toInt() else 0
             val minTitleWPx = (140f * density).toInt()
@@ -303,7 +306,7 @@ class IslandOverlayViewController(
             val paddingHorizontalPx = (24f * density).toInt()
             val topPaddingPx = if (showTitleAbove) (20f * density).toInt() else (14f * density).toInt()
             val bottomPaddingPx = (28f * density).toInt()
-            val compactWPx = (cutoutDiameterPx + (108f * density)).toInt()
+            val compactWPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
             val compactHPx = (36f * density).toInt()
 
             val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
@@ -367,7 +370,9 @@ class IslandOverlayViewController(
 
         val paddingPx = (14f * density).toInt()
         val cutoutDiameterPx = (effectiveCutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
-        val compactHPx = if (isLandscape) (cutoutDiameterPx + (108f * density)).toInt() else (36f * density).toInt()
+        val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
+        val compactExtraDp = if (isBlended) 108f else 72f
+        val compactHPx = if (isLandscape) (cutoutDiameterPx + (compactExtraDp * density)).toInt() else (36f * density).toInt()
         val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
         val cardHPx = (220f * density).toInt()
@@ -489,6 +494,14 @@ class IslandOverlayViewController(
     private fun observeTitlePreference() {
         controllerScope.launch {
             OverlayPreferences.showMinimizedTitleFlow.collectLatest {
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeMinimizedAlbumArtStyle() {
+        controllerScope.launch {
+            OverlayPreferences.minimizedAlbumArtStyleFlow.collectLatest {
                 updateOverlayLayout()
             }
         }
