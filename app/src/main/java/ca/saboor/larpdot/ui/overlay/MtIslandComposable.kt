@@ -983,9 +983,9 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
         float dist = abs(x - uDotCenter.x);
         float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
         
-        // Perfectly symmetrical smooth sine bump
+        // Perfectly symmetrical smooth sine bump with quadratic taper at shoulders
         float bump = sin(t * 1.5707963);
-        bump = pow(max(bump, 0.0), 1.5);
+        bump = bump * bump;
         return bump * uScoopDepth;
     }
 
@@ -1818,20 +1818,22 @@ internal fun ExpandedIslandContent(
         }
 
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // raised snug under the camera cutout with an ultra-smooth wide fade.
+        // raised snug under the camera cutout with a gentle, compact fade.
         if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
-            val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
-            val fadeWidthPx = with(density) { 72.dp.toPx() }
+            val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 2.dp).toPx() }
+            // Move scoop upwards: hug closer under the camera cutout without drooping low
+            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 6.dp).toPx().coerceAtLeast(dotCenterYDp.toPx()) }
+            val fadeWidthPx = with(density) { 24.dp.toPx() }
+            // Tighten scoop width: keep it snugly centered rather than stretching wide left/right
+            val halfWidthPx = with(density) { (cutoutDiameterDp * 1.35f).coerceIn(38.dp, 56.dp).toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
                 val scoopBrush = remember(scoopShader) { ShaderBrush(scoopShader) }
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
                     scoopShader.setFloatUniform("uSize", size.width, size.height)
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
