@@ -976,8 +976,32 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
     uniform float2 uDotCenter;
     uniform float uDotRadius;
     uniform float uScoopDepth;
-    uniform float uFadeWidth;
+    uniform float uFadeRadius;
     uniform float uHalfWidth;
+
+    float getDistanceToSwoop(float2 pos, float wi, float he) {
+        pos.x = abs(pos.x);
+        float ik = (wi * wi) / max(he, 0.001);
+        float curveY = he - (pos.x * pos.x) / ik;
+        if (pos.y <= curveY && pos.x <= wi) {
+            return 0.0;
+        }
+
+        float p = ik * (he - pos.y - 0.5 * ik) / 3.0;
+        float q = pos.x * ik * ik * 0.25;
+        float h = q * q - p * p * p;
+        float r = sqrt(abs(h));
+        float x = 0.0;
+        if (h > 0.0) {
+            float diff = q - r;
+            x = pow(max(q + r, 0.0), 1.0 / 3.0) + pow(max(abs(diff), 0.0), 1.0 / 3.0) * sign(diff);
+        } else {
+            x = 2.0 * cos(atan(r, q) / 3.0) * sqrt(max(p, 0.0));
+        }
+        x = clamp(x, 0.0, wi);
+        float2 closest = float2(x, he - (x * x) / ik);
+        return length(pos - closest);
+    }
 
     half4 main(float2 coord) {
         // Guaranteed solid black over the physical camera cutout
@@ -985,29 +1009,20 @@ private const val ORGANIC_SCOOP_FADE_SHADER = """
             return half4(0.0, 0.0, 0.0, 1.0);
         }
 
-        float dist = abs(coord.x - uDotCenter.x);
-        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
-        float bump = sin(t * 1.5707963);
-        bump = pow(max(bump, 0.0), 1.5);
+        float2 localPos = float2(coord.x - uDotCenter.x, coord.y);
+        float dist = getDistanceToSwoop(localPos, uHalfWidth, uScoopDepth);
 
-        // Confine swoop and fade strictly to the scoop footprint (no island-wide top fade)
-        if (bump <= 0.001) {
-            return half4(0.0, 0.0, 0.0, 0.0);
-        }
-
-        float sy = bump * uScoopDepth;
-        float localFade = bump * uFadeWidth;
-        float diff = coord.y - sy;
-        
-        if (diff <= 0.0) {
+        if (dist <= 0.0) {
             return half4(0.0, 0.0, 0.0, 1.0);
         }
-        
-        if (diff >= localFade) {
+
+        if (dist >= uFadeRadius) {
             return half4(0.0, 0.0, 0.0, 0.0);
         }
-        
-        float alpha = smoothstep(localFade, 0.0, diff);
+
+        // Strictly uniform fade throughout the entire swoop shape
+        float alpha = smoothstep(uFadeRadius, 0.0, dist);
+        alpha = pow(alpha, 1.15);
         return half4(0.0, 0.0, 0.0, alpha);
     }
 """
@@ -1816,13 +1831,13 @@ internal fun ExpandedIslandContent(
             }
         }
         // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // raised snug under the camera cutout with an ultra-smooth wide fade.
+        // with analytical 2D SDF distance to guarantee a strictly uniform fade radius everywhere.
         if (showCameraSwoop) {
             val dotXPx = with(density) { dotCenterXDp.toPx() }
             val dotYPx = with(density) { dotCenterYDp.toPx() }
             val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
             val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
-            val fadeWidthPx = with(density) { 72.dp.toPx() }
+            val fadeRadiusPx = with(density) { 52.dp.toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
@@ -1834,7 +1849,7 @@ internal fun ExpandedIslandContent(
                     scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
                     scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
                     scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
-                    scoopShader.setFloatUniform("uFadeWidth", fadeWidthPx)
+                    scoopShader.setFloatUniform("uFadeRadius", fadeRadiusPx)
                     scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
 
                     drawRect(brush = scoopBrush)
