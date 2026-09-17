@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Add
@@ -32,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -209,35 +213,56 @@ private fun ShapePickerSection(
             }
         }
 
-        // Display shapes in rows of 6 without text labels so more shapes fit per row
-        val chunks = displayedShapes.chunked(6)
-        chunks.forEach { chunk ->
-            ButtonGroup(
-                modifier = Modifier.fillMaxWidth(),
-                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-            ) {
-                chunk.forEach { shapeOption ->
-                    toggleableItem(
-                        checked = selectedShape == shapeOption,
-                        label = "",
-                        onCheckedChange = { onShapeSelected(shapeOption) },
-                        icon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .offset(x = 4.dp)
-                                    .clip(nestedAlbumArtShape(shapeOption, rotationDegrees))
-                                    .background(
-                                        if (selectedShape == shapeOption)
-                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                        else
-                                            MaterialTheme.colorScheme.primary
-                                    )
-                                    .semantics { contentDescription = shapeOption.label },
-                            )
-                        },
-                        weight = 1f,
-                    )
+        // Horizontal list of shapes ensuring shapes are never squished or distorted
+        val shapeListState = rememberLazyListState()
+
+        LaunchedEffect(selectedShape, selectedCategory) {
+            val index = displayedShapes.indexOf(selectedShape)
+            if (index >= 0) {
+                shapeListState.animateScrollToItem(index)
+            }
+        }
+
+        LazyRow(
+            state = shapeListState,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+        ) {
+            items(displayedShapes, key = { it.name }) { shapeOption ->
+                val isSelected = selectedShape == shapeOption
+                Surface(
+                    selected = isSelected,
+                    onClick = { onShapeSelected(shapeOption) },
+                    shape = MaterialTheme.shapes.medium,
+                    color = if (isSelected)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = if (isSelected)
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    else
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .size(54.dp)
+                        .semantics { contentDescription = shapeOption.label },
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(nestedAlbumArtShape(shapeOption, rotationDegrees))
+                                .background(
+                                    if (isSelected)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                        )
+                    }
                 }
             }
         }
