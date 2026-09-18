@@ -2,6 +2,7 @@ package ca.saboor.larpdot.cutout
 
 import android.content.Context
 import android.graphics.Rect
+import android.graphics.RectF
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.util.DisplayMetrics
@@ -146,15 +147,27 @@ object CutoutDetector {
                 wm?.defaultDisplay?.cutout
             }
 
-            if (cutout != null && cutout.boundingRects.isNotEmpty()) {
-                val rects = cutout.boundingRects
-                val targetRect = rects.minByOrNull { it.width() * it.height() } ?: rects.first()
+            if (cutout != null) {
+                var exactRect: RectF? = null
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val path = cutout.cutoutPath
+                    if (path != null) {
+                        val bounds = RectF()
+                        path.computeBounds(bounds, true)
+                        if (!bounds.isEmpty) {
+                            exactRect = bounds
+                        }
+                    }
+                }
 
-                if (!targetRect.isEmpty) {
-                    var cx = targetRect.centerX().toFloat()
-                    var cy = targetRect.centerY().toFloat()
-                    val w = targetRect.width().toFloat()
-                    val h = targetRect.height().toFloat()
+                val rects = cutout.boundingRects
+                val targetRect = rects.minByOrNull { it.width() * it.height() } ?: rects.firstOrNull()
+
+                if (exactRect != null || (targetRect != null && !targetRect.isEmpty)) {
+                    var cx = exactRect?.centerX() ?: targetRect!!.centerX().toFloat()
+                    var cy = exactRect?.centerY() ?: targetRect!!.centerY().toFloat()
+                    val w = exactRect?.width() ?: targetRect!!.width().toFloat()
+                    val h = exactRect?.height() ?: targetRect!!.height().toFloat()
 
                     // In landscape mode:
                     // In ROTATION_90 (standard landscape): camera hole punch is physically on the left edge.
@@ -182,7 +195,12 @@ object CutoutDetector {
                         centerY = cy,
                         radiusPx = rad,
                         isAutoDetected = true,
-                        boundingRect = targetRect,
+                        boundingRect = targetRect ?: Rect(
+                            exactRect!!.left.toInt(),
+                            exactRect.top.toInt(),
+                            exactRect.right.toInt(),
+                            exactRect.bottom.toInt()
+                        ),
                         displayCornerRadiusPx = displayCornerRadius,
                     )
                 }

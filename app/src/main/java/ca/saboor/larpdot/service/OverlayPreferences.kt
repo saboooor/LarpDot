@@ -26,6 +26,11 @@ object OverlayPreferences {
     private const val KEY_EXPANDED_ALBUM_ART_ROTATION = "expanded_album_art_rotation"
     private const val KEY_SHOW_DOMINANT_COLOR_GLOW = "show_dominant_color_glow"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
+    private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
+    private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
+    private const val KEY_USE_PIXELLIGHT = "use_pixellight" 
+    private const val KEY_DEBUG_MODE = "debug_mode"
+    private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -123,6 +128,19 @@ object OverlayPreferences {
     private val _showCameraSwoopFlow = MutableStateFlow(true)
     val showCameraSwoopFlow: StateFlow<Boolean> = _showCameraSwoopFlow.asStateFlow()
 
+    private val _showFlashlightIslandFlow = MutableStateFlow(true)
+    val showFlashlightIslandFlow: StateFlow<Boolean> = _showFlashlightIslandFlow.asStateFlow()
+
+    private val _flashlightTapToToggleFlow = MutableStateFlow(true)
+    val flashlightTapToToggleFlow: StateFlow<Boolean> = _flashlightTapToToggleFlow.asStateFlow()
+
+    private val _usePixelLightFlow = MutableStateFlow(true)
+    val usePixelLightFlow: StateFlow<Boolean> = _usePixelLightFlow.asStateFlow()
+
+    private val _isDebugModeFlow = MutableStateFlow(false)
+    val isDebugModeFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
+    val showDebugDotFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -146,6 +164,10 @@ object OverlayPreferences {
     private var isExpandedAlbumArtRotationInitialized = false
     private var isShowDominantColorGlowInitialized = false
     private var isShowCameraSwoopInitialized = false
+    private var isShowFlashlightIslandInitialized = false
+    private var isFlashlightTapToToggleInitialized = false
+    private var isUsePixelLightInitialized = false
+    private var isDebugModeInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -379,4 +401,71 @@ object OverlayPreferences {
         _showCameraSwoopFlow.value = enabled
         isShowCameraSwoopInitialized = true
     }
+
+    fun isShowFlashlightIslandEnabled(context: Context): Boolean {
+        if (!isShowFlashlightIslandInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_FLASHLIGHT_ISLAND, true)
+            _showFlashlightIslandFlow.value = enabled
+            isShowFlashlightIslandInitialized = true
+        }
+        return _showFlashlightIslandFlow.value
+    }
+
+    fun setShowFlashlightIslandEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_FLASHLIGHT_ISLAND, enabled).apply()
+        _showFlashlightIslandFlow.value = enabled
+        isShowFlashlightIslandInitialized = true
+    }
+
+    fun isFlashlightTapToToggleEnabled(context: Context): Boolean {
+        if (!isFlashlightTapToToggleInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_TAP_TO_TOGGLE, true)
+            _flashlightTapToToggleFlow.value = enabled
+            isFlashlightTapToToggleInitialized = true
+        }
+        return _flashlightTapToToggleFlow.value
+    }
+
+    fun setFlashlightTapToToggleEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_TAP_TO_TOGGLE, enabled).apply()
+        _flashlightTapToToggleFlow.value = enabled
+        isFlashlightTapToToggleInitialized = true
+    }
+
+    fun isUsePixelLightEnabled(context: Context): Boolean {
+        if (!isUsePixelLightInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_USE_PIXELLIGHT, true)
+            _usePixelLightFlow.value = enabled
+            isUsePixelLightInitialized = true
+        }
+        return _usePixelLightFlow.value
+    }
+
+    fun setUsePixelLightEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_USE_PIXELLIGHT, enabled).apply()
+        _usePixelLightFlow.value = enabled
+        isUsePixelLightInitialized = true
+    }
+
+    fun isDebugModeEnabled(context: Context): Boolean {
+        if (!isDebugModeInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(KEY_DEBUG_MODE, prefs.getBoolean(KEY_SHOW_DEBUG_DOT, false))
+            _isDebugModeFlow.value = enabled
+            isDebugModeInitialized = true
+        }
+        return _isDebugModeFlow.value
+    }
+
+    fun setDebugModeEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_DEBUG_MODE, enabled)
+            .putBoolean(KEY_SHOW_DEBUG_DOT, enabled)
+            .apply()
+        _isDebugModeFlow.value = enabled
+        isDebugModeInitialized = true
+    }
+
+    fun isShowDebugDotEnabled(context: Context): Boolean = isDebugModeEnabled(context)
+    fun setShowDebugDotEnabled(context: Context, enabled: Boolean) = setDebugModeEnabled(context, enabled)
 }

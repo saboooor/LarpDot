@@ -45,10 +45,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
+import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.navigation.Destination
 import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
+import ca.saboor.larpdot.ui.screens.FlashlightScreen
 import ca.saboor.larpdot.ui.screens.HomeScreen
 import ca.saboor.larpdot.ui.screens.MusicScreen
 
@@ -65,6 +67,26 @@ fun LarpDotApp() {
     var showSetupDialog by remember { mutableStateOf(false) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
+
+    val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+    val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+
+    // Initialize Flashlight controller
+    LaunchedEffect(Unit) {
+        FlashlightController.init(context)
+    }
+
+    // Ensure overlay service is active when overlay is enabled OR when flashlight is on
+    LaunchedEffect(isEnabled, isFlashlightOn, showFlashlightIsland) {
+        val shouldShow = isEnabled || (isFlashlightOn && showFlashlightIsland)
+        val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isServiceConnected.value
+        val hasOverlay = Settings.canDrawOverlays(context)
+        if (shouldShow) {
+            if (!hasAccessibility && hasOverlay) {
+                ca.saboor.larpdot.service.DotOverlayService.start(context)
+            }
+        }
+    }
 
     // Automatically locate the camera hole punch cutout
     var cutoutInfo by remember { mutableStateOf(CutoutDetector.detect(context)) }
@@ -204,6 +226,9 @@ fun LarpDotApp() {
                         isEnabled = isEnabled,
                     )
                     Destination.Music -> MusicScreen(
+                        cutoutInfo = cutoutInfo,
+                    )
+                    Destination.Flashlight -> FlashlightScreen(
                         cutoutInfo = cutoutInfo,
                     )
                 }

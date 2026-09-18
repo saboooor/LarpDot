@@ -1,12 +1,21 @@
 package ca.saboor.larpdot.service
 
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
 import android.view.WindowManager
+import ca.saboor.larpdot.flashlight.FlashlightController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 /**
  * Standard system overlay service that acts as a fallback when Accessibility Service is not enabled.
@@ -14,15 +23,36 @@ import android.view.WindowManager
  */
 class DotOverlayService : Service() {
     private var overlayController: IslandOverlayViewController? = null
+    private var serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+
+    private val flashlightReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT") {
+                FlashlightController.toggleFlashlight()
+            }
+        }
+    }
+    private var isReceiverRegistered = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        // If accessibility service is already handling the overlay, do not create duplicate
-        if (DotAccessibilityService.isServiceConnected.value || DotAccessibilityService.isAccessibilityEnabled(this)) {
+        // If accessibility service is already actively handling the overlay, do not create duplicate
+        if (DotAccessibilityService.isServiceConnected.value) {
             stopSelf()
             return
+        }
+
+        if (!isReceiverRegistered) {
+            val filter = IntentFilter("ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(flashlightReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(flashlightReceiver, filter)
+            }
+            isReceiverRegistered = true
         }
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -32,27 +62,49 @@ class DotOverlayService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        overlayController = IslandOverlayViewController(this, overlayType).apply {
-            show()
+        val controller = IslandOverlayViewController(this, overlayType)
+        overlayController = controller
+
+        serviceScope.launch {
+            combine(
+                OverlayPreferences.isEnabledFlow,
+                FlashlightController.isFlashlightOn,
+                OverlayPreferences.showFlashlightIslandFlow,
+            ) { isEnabled, isTorchOn, showTorchIsland ->
+                isEnabled || (isTorchOn && showTorchIsland)
+            }.collectLatest { shouldShow ->
+                if (shouldShow) {
+                    controller.show()
+                } else {
+                    controller.hide()
+                    if (!OverlayPreferences.isOverlayEnabled(this@DotOverlayService) && !FlashlightController.isFlashlightOn.value) {
+                        stopSelf()
+                    }
+                }
+            }
+        }
+
+        val initialShow = OverlayPreferences.isOverlayEnabled(this) ||
+                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))
+        if (initialShow) {
+            controller.show()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (DotAccessibilityService.isServiceConnected.value || DotAccessibilityService.isAccessibilityEnabled(this)) {
+        if (intent?.action == "ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT") {
+            FlashlightController.toggleFlashlight()
+        }
+
+        if (DotAccessibilityService.isServiceConnected.value) {
             stopSelf()
             return START_NOT_STICKY
         }
 
-        if (overlayController == null) {
-            val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
-            overlayController = IslandOverlayViewController(this, overlayType).apply {
-                show()
-            }
+        val shouldShow = OverlayPreferences.isOverlayEnabled(this) ||
+                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))
+        if (shouldShow) {
+            overlayController?.show()
         }
         return START_STICKY
     }
@@ -63,6 +115,13 @@ class DotOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        if (isReceiverRegistered) {
+            try {
+                unregisterReceiver(flashlightReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
+        }
+        serviceJob.cancel()
         overlayController?.destroy()
         overlayController = null
         super.onDestroy()

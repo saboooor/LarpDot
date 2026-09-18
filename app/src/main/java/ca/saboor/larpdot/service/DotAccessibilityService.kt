@@ -2,14 +2,18 @@ package ca.saboor.larpdot.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
+import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -28,6 +33,15 @@ class DotAccessibilityService : AccessibilityService() {
     private var overlayController: IslandOverlayViewController? = null
     private var serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+
+    private val flashlightReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT") {
+                FlashlightController.toggleFlashlight()
+            }
+        }
+    }
+    private var isReceiverRegistered = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Accessibility events are not needed for the overlay display
@@ -49,16 +63,32 @@ class DotAccessibilityService : AccessibilityService() {
         // Stop standard fallback overlay if it was running
         DotOverlayService.stop(this)
 
+        if (!isReceiverRegistered) {
+            val filter = IntentFilter("ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(flashlightReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(flashlightReceiver, filter)
+            }
+            isReceiverRegistered = true
+        }
+
         val controller = IslandOverlayViewController(
             context = this,
             windowType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         )
         overlayController = controller
 
-        // Reactively display or hide based on user toggle
+        // Reactively display or hide based on user toggle or active flashlight state
         serviceScope.launch {
-            OverlayPreferences.isEnabledFlow.collectLatest { enabled ->
-                if (enabled) {
+            combine(
+                OverlayPreferences.isEnabledFlow,
+                FlashlightController.isFlashlightOn,
+                OverlayPreferences.showFlashlightIslandFlow,
+            ) { isEnabled, isTorchOn, showTorchIsland ->
+                isEnabled || (isTorchOn && showTorchIsland)
+            }.collectLatest { shouldShow ->
+                if (shouldShow) {
                     controller.show()
                 } else {
                     controller.hide()
@@ -66,8 +96,10 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        // If enabled in preferences upon service start, show immediately
-        if (OverlayPreferences.isOverlayEnabled(this)) {
+        // If enabled in preferences or flashlight is on upon service start, show immediately
+        val initialShow = OverlayPreferences.isOverlayEnabled(this) ||
+                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))
+        if (initialShow) {
             controller.show()
         }
     }
@@ -80,6 +112,12 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance == this) instance = null
         _isServiceConnected.value = false
+        if (isReceiverRegistered) {
+            try {
+                unregisterReceiver(flashlightReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
+        }
         overlayController?.destroy()
         overlayController = null
         return super.onUnbind(intent)
@@ -88,6 +126,12 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         if (instance == this) instance = null
         _isServiceConnected.value = false
+        if (isReceiverRegistered) {
+            try {
+                unregisterReceiver(flashlightReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
+        }
         serviceJob.cancel()
         overlayController?.destroy()
         overlayController = null
@@ -110,15 +154,31 @@ class DotAccessibilityService : AccessibilityService() {
             if (service != null && service.performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)) {
                 return true
             }
-            try {
+            return try {
                 @android.annotation.SuppressLint("WrongConstant")
                 val statusBarService = context.getSystemService("statusbar")
                 val statusBarManager = Class.forName("android.app.StatusBarManager")
                 val expandMethod = statusBarManager.getMethod("expandNotificationsPanel")
                 expandMethod.invoke(statusBarService)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        fun openQuickSettings(context: Context): Boolean {
+            val service = instance
+            if (service != null && service.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)) {
                 return true
-            } catch (_: Exception) {}
-            return false
+            }
+            return try {
+                val sbm = context.getSystemService("statusbar")
+                val method = sbm.javaClass.getMethod("expandSettingsPanel")
+                method.invoke(sbm)
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
 
         /**
@@ -168,4 +228,3 @@ class DotAccessibilityService : AccessibilityService() {
         }
     }
 }
-

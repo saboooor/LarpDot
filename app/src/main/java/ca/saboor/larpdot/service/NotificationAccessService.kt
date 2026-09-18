@@ -9,10 +9,12 @@ import android.media.session.MediaSessionManager
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 
 /**
- * Service to listen for system notifications and active media sessions when Notification Access is granted.
+ * Service to listen for system notifications, active media sessions, and PixelLight state
+ * when Notification Access is granted.
  */
 class NotificationAccessService : NotificationListenerService() {
     private var mediaSessionManager: MediaSessionManager? = null
@@ -29,6 +31,9 @@ class NotificationAccessService : NotificationListenerService() {
             mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, component)
             val activeControllers = mediaSessionManager?.getActiveSessions(component)
             MediaPlaybackState.updateFromControllers(activeControllers)
+
+            // Check if PixelLight is currently active
+            checkActivePixelLight()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -37,6 +42,19 @@ class NotificationAccessService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         if (sbn == null) return
+
+        // Intercept PixelLight torch notification
+        if (sbn.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
+            val extras = sbn.notification?.extras
+            val progress = extras?.getInt("android.progress", -1) ?: -1
+            val max = extras?.getInt("android.progressMax", -1) ?: -1
+            val turnOffIntent = sbn.notification?.actions?.firstOrNull {
+                it.title?.toString()?.contains("Turn off", ignoreCase = true) == true
+            }?.actionIntent
+            FlashlightController.setPixelLightTurnOffPendingIntent(turnOffIntent)
+            android.util.Log.i("NotificationAccessService", "PixelLight notification posted: progress=$progress, max=$max, hasTurnOffIntent=${turnOffIntent != null}")
+            FlashlightController.onPixelLightNotificationPosted(progress, max)
+        }
 
         try {
             val component = ComponentName(this, NotificationAccessService::class.java)
@@ -105,10 +123,40 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
+        if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
+            android.util.Log.i("NotificationAccessService", "PixelLight notification removed")
+            FlashlightController.onPixelLightNotificationRemoved()
+        }
+
         try {
             val component = ComponentName(this, NotificationAccessService::class.java)
             val activeControllers = mediaSessionManager?.getActiveSessions(component)
             MediaPlaybackState.updateFromControllers(activeControllers)
+        } catch (_: Exception) {}
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?, rankingMap: RankingMap?, reason: Int) {
+        super.onNotificationRemoved(sbn, rankingMap, reason)
+        if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
+            android.util.Log.i("NotificationAccessService", "PixelLight notification removed (reason=$reason)")
+            FlashlightController.onPixelLightNotificationRemoved()
+        }
+    }
+
+    private fun checkActivePixelLight() {
+        try {
+            val active = activeNotifications ?: return
+            val pixellightNotif = active.firstOrNull { it.packageName == FlashlightController.PIXELLIGHT_PACKAGE }
+            if (pixellightNotif != null) {
+                val extras = pixellightNotif.notification?.extras
+                val progress = extras?.getInt("android.progress", -1) ?: -1
+                val max = extras?.getInt("android.progressMax", -1) ?: -1
+                val turnOffIntent = pixellightNotif.notification?.actions?.firstOrNull {
+                    it.title?.toString()?.contains("Turn off", ignoreCase = true) == true
+                }?.actionIntent
+                FlashlightController.setPixelLightTurnOffPendingIntent(turnOffIntent)
+                FlashlightController.onPixelLightNotificationPosted(progress, max)
+            }
         } catch (_: Exception) {}
     }
 

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,8 +18,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.FlashlightOff
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TouchApp
@@ -28,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,10 +49,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
+import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import kotlin.math.roundToInt
 
 @Composable
@@ -63,6 +71,8 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
+        OverlayPreferences.isDebugModeEnabled(context)
+        FlashlightController.init(context)
     }
 
     val hardwareCutout = remember(configuration) { CutoutDetector.detectHardwareCutout(context) }
@@ -89,6 +99,65 @@ fun HomeScreen(
                     OverlayPreferences.setCutoutConfig(context, newConfig)
                 },
             )
+        }
+
+        // Quick Controls
+        item {
+            val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+            val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+
+            SectionHeader(title = "Quick Controls")
+            LarpCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isFlashlightOn) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
+                                    contentDescription = null,
+                                    tint = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Flashlight",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = if (isFlashlightOn) {
+                                    if (showFlashlightIsland) "Illuminating · Active in Island" else "Illuminating"
+                                } else {
+                                    "Turned off"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isFlashlightOn,
+                        onCheckedChange = {
+                            FlashlightController.setTorch(it)
+                        },
+                    )
+                }
+            }
         }
 
         // Island Customization & Interaction Options
@@ -144,6 +213,7 @@ private fun CutoutAlignmentCard(
     defaultDiameterDp: Int,
     onConfigChange: (OverlayPreferences.CutoutConfig) -> Unit,
 ) {
+    val context = LocalContext.current
     LarpCard {
         // Header row with Title, status subtitle, and Switch
         Row(
@@ -209,6 +279,48 @@ private fun CutoutAlignmentCard(
             )
         }
 
+        Spacer(Modifier.height(8.dp))
+
+        // Debug mode / Green dot toggle
+        val isDebugMode by OverlayPreferences.isDebugModeFlow.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.BugReport,
+                    contentDescription = null,
+                    tint = if (isDebugMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column {
+                    Text(
+                        text = "Debug Mode",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Show green cutout alignment dot when idle",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Switch(
+                checked = isDebugMode,
+                onCheckedChange = { isChecked ->
+                    OverlayPreferences.setDebugModeEnabled(context, isChecked)
+                },
+            )
+        }
+
         AnimatedVisibility(
             visible = config.isManualEnabled,
             enter = fadeIn() + expandVertically(),
@@ -220,90 +332,67 @@ private fun CutoutAlignmentCard(
                     .padding(top = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    text = "Adjust offsets and dot diameter to align the island with your camera cutout in real-time.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                // 1. Horizontal Offset (X)
-                AlignmentSliderControl(
+                // Horizontal Offset (X) Slider
+                CutoutSliderRow(
                     label = "Horizontal Offset (X)",
-                    valueText = "${if (config.offsetX > 0) "+" else ""}${config.offsetX.roundToInt()} dp",
                     value = config.offsetX,
-                    range = -80f..80f,
+                    valueRange = -80f..80f,
+                    unit = "dp",
                     onValueChange = { onConfigChange(config.copy(offsetX = it)) },
                     onNudge = { delta ->
-                        val next = (config.offsetX + delta).coerceIn(-80f, 80f)
-                        onConfigChange(config.copy(offsetX = next))
+                        val newX = (config.offsetX + delta).coerceIn(-80f, 80f)
+                        onConfigChange(config.copy(offsetX = newX))
                     },
                 )
 
-                // 2. Vertical Offset (Y)
-                AlignmentSliderControl(
+                // Vertical Offset (Y) Slider
+                CutoutSliderRow(
                     label = "Vertical Offset (Y)",
-                    valueText = "${if (config.offsetY > 0) "+" else ""}${config.offsetY.roundToInt()} dp",
                     value = config.offsetY,
-                    range = -40f..60f,
+                    valueRange = -40f..60f,
+                    unit = "dp",
                     onValueChange = { onConfigChange(config.copy(offsetY = it)) },
                     onNudge = { delta ->
-                        val next = (config.offsetY + delta).coerceIn(-40f, 60f)
-                        onConfigChange(config.copy(offsetY = next))
+                        val newY = (config.offsetY + delta).coerceIn(-40f, 60f)
+                        onConfigChange(config.copy(offsetY = newY))
                     },
                 )
 
-                // 3. Cutout Dot Size (Diameter)
-                val currentDiameter = if (config.customDiameterDp > 0f) {
-                    config.customDiameterDp
-                } else {
-                    defaultDiameterDp.toFloat()
-                }
-                AlignmentSliderControl(
-                    label = "Cutout Dot Size",
-                    valueText = if (config.customDiameterDp <= 0f) {
-                        "Auto ($defaultDiameterDp dp)"
-                    } else {
-                        "${config.customDiameterDp.roundToInt()} dp"
-                    },
-                    value = currentDiameter.coerceIn(18f, 40f),
-                    range = 18f..40f,
+                // Custom Cutout Diameter Slider
+                val currentDiameter = if (config.customDiameterDp > 0f) config.customDiameterDp else defaultDiameterDp.toFloat()
+                CutoutSliderRow(
+                    label = "Hole Punch Diameter",
+                    value = currentDiameter,
+                    valueRange = 16f..40f,
+                    unit = "dp",
                     onValueChange = { onConfigChange(config.copy(customDiameterDp = it)) },
                     onNudge = { delta ->
-                        val next = (currentDiameter + delta).coerceIn(18f, 40f)
-                        onConfigChange(config.copy(customDiameterDp = next))
+                        val newDiameter = (currentDiameter + delta).coerceIn(16f, 40f)
+                        onConfigChange(config.copy(customDiameterDp = newDiameter))
                     },
                 )
 
-                // Reset button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            onConfigChange(
-                                OverlayPreferences.CutoutConfig(
-                                    isManualEnabled = true,
-                                    offsetX = 0f,
-                                    offsetY = 0f,
-                                    customDiameterDp = 0f,
-                                )
+                // Reset to Default button
+                OutlinedButton(
+                    onClick = {
+                        onConfigChange(
+                            OverlayPreferences.CutoutConfig(
+                                isManualEnabled = true,
+                                offsetX = 0f,
+                                offsetY = 0f,
+                                customDiameterDp = defaultDiameterDp.toFloat(),
                             )
-                        },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.RestartAlt,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Reset Offsets",
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RestartAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Reset Offsets to Default")
                 }
             }
         }
@@ -311,16 +400,18 @@ private fun CutoutAlignmentCard(
 }
 
 @Composable
-private fun AlignmentSliderControl(
+private fun CutoutSliderRow(
     label: String,
-    valueText: String,
     value: Float,
-    range: ClosedFloatingPointRange<Float>,
+    valueRange: ClosedFloatingPointRange<Float>,
+    unit: String,
     onValueChange: (Float) -> Unit,
-    onNudge: (Float) -> Unit,
-    modifier: Modifier = Modifier,
+    onNudge: (Int) -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -332,14 +423,12 @@ private fun AlignmentSliderControl(
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = valueText,
+                text = "${value.roundToInt()} $unit",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
             )
         }
-
-        Spacer(Modifier.height(2.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -347,32 +436,24 @@ private fun AlignmentSliderControl(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilledTonalIconButton(
-                onClick = { onNudge(-1f) },
-                modifier = Modifier.size(36.dp),
+                onClick = { onNudge(-1) },
+                modifier = Modifier.size(32.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Remove,
-                    contentDescription = "Decrease",
-                    modifier = Modifier.size(18.dp),
-                )
+                Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
             }
 
             Slider(
                 value = value,
-                onValueChange = { onValueChange(it.roundToInt().toFloat()) },
-                valueRange = range,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
                 modifier = Modifier.weight(1f),
             )
 
             FilledTonalIconButton(
-                onClick = { onNudge(1f) },
-                modifier = Modifier.size(36.dp),
+                onClick = { onNudge(1) },
+                modifier = Modifier.size(32.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Increase",
-                    modifier = Modifier.size(18.dp),
-                )
+                Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
             }
         }
     }

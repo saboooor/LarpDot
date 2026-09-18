@@ -21,13 +21,18 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
+import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandOverlay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -68,11 +73,26 @@ class IslandOverlayViewController(
     private var currentCutoutInfo by mutableStateOf<CutoutInfo?>(null)
     private var isIslandExpanded by mutableStateOf(false)
     private var isOverlayMorphing by mutableStateOf(false)
+    private var isCompactHidden by mutableStateOf(false)
+    private var isExpandedFromTinyDot by mutableStateOf(false)
+    private var isTinyDotHidden by mutableStateOf(false)
+
+    private val _expandedType = MutableStateFlow(IslandType.MEDIA)
+    val expandedType: StateFlow<IslandType> = _expandedType.asStateFlow()
 
     private var controllerJob = Job()
     private var controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
     private var collapseJob: Job? = null
     private var lastObservedHasMedia: Boolean? = null
+    private var lastObservedIsPlaying: Boolean? = null
+
+    // Active visibility states coordinated with Compose show/hide animations:
+    // When music pauses or flashlight turns off, these remain true during exit animation delays
+    // so WindowManager does not prematurely resize or clip the collapsing island.
+    private var isMusicActive = false
+    private var isFlashlightActive = false
+    private var musicHideJob: Job? = null
+    private var flashlightHideJob: Job? = null
 
     @SuppressLint("ClickableViewAccessibility")
     fun show() {
@@ -85,6 +105,14 @@ class IslandOverlayViewController(
         controllerJob = Job()
         controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
 
+        FlashlightController.init(context)
+
+        val initialTrack = MediaPlaybackState.currentTrack.value
+        isMusicActive = initialTrack.hasMedia && initialTrack.isPlaying
+        isFlashlightActive = FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(context)
+        lastObservedIsPlaying = initialTrack.isPlaying
+        lastObservedHasMedia = initialTrack.hasMedia
+
         val cutout = CutoutDetector.detect(context)
         currentCutoutInfo = cutout
 
@@ -94,6 +122,7 @@ class IslandOverlayViewController(
 
         val compView = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
             // Live hardware rounded corners listener directly from view's WindowInsets (Android 12+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -110,13 +139,20 @@ class IslandOverlayViewController(
 
             setContent {
                 val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+                val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                 val activeCutout = currentCutoutInfo ?: cutout
+
+                val compactIsExpanded = if (isExpandedFromTinyDot) isTinyDotHidden else isCompactHidden
 
                 CompactIslandOverlay(
                     cutoutInfo = activeCutout,
                     mediaInfo = mediaTrack,
-                    isExpanded = isOverlayMorphing,
-                    onExpand = { expandOverlay() },
+                    isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                    isExpanded = compactIsExpanded,
+                    fromTinyDot = isExpandedFromTinyDot,
+                    onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
+                    onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                 )
             }
         }
@@ -131,9 +167,14 @@ class IslandOverlayViewController(
             wm.addView(compView, compParams)
             isOverlayAdded = true
             observeMediaState()
+            observeFlashlightState()
             observeCutoutConfig()
             observeTitlePreference()
             observeMinimizedAlbumArtStyle()
+            observeDebugPreference()
+            OverlayPreferences.isDebugModeEnabled(context)
+            OverlayPreferences.isShowFlashlightIslandEnabled(context)
+            OverlayPreferences.isFlashlightTapToToggleEnabled(context)
             OverlayPreferences.getMinimizedAlbumArtStyle(context)
             OverlayPreferences.getExpandedAlbumArtStyle(context)
             OverlayPreferences.getMinimizedAlbumArtShape(context)
@@ -154,16 +195,33 @@ class IslandOverlayViewController(
 
         val expView = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
             setContent {
                 val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+                val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                 val activeCutout = currentCutoutInfo ?: cutout
+
+                val activeExpandedType by expandedType.collectAsState()
 
                 ExpandedIslandOverlay(
                     cutoutInfo = activeCutout,
                     mediaInfo = mediaTrack,
+                    isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                    expandedType = activeExpandedType,
+                    fromTinyDot = isExpandedFromTinyDot,
                     isExpanded = isIslandExpanded,
                     onCollapse = { collapseOverlay() },
+                    onFirstFrameDrawn = {
+                        if (isIslandExpanded) {
+                            if (!isExpandedFromTinyDot) {
+                                isCompactHidden = true
+                            } else {
+                                isTinyDotHidden = true
+                            }
+                        }
+                    },
                 )
             }
 
@@ -181,7 +239,7 @@ class IslandOverlayViewController(
         expOwner.onCreate()
         expandedView = expView
 
-        expView.visibility = View.GONE
+        expView.visibility = View.INVISIBLE
         val expParams = createExpandedLayoutParams(cutout)
         expandedWindowParams = expParams
         try {
@@ -192,10 +250,14 @@ class IslandOverlayViewController(
         }
     }
 
-    fun expandOverlay() {
+    fun expandOverlay(type: IslandType = IslandType.MEDIA, fromTinyDot: Boolean = false) {
+        _expandedType.value = type
+        isExpandedFromTinyDot = fromTinyDot
         collapseJob?.cancel()
         collapseJob = null
         if (!isIslandExpanded) {
+            isCompactHidden = false
+            isTinyDotHidden = false
             isIslandExpanded = true
             isOverlayMorphing = true
             showExpandedWindow()
@@ -207,8 +269,12 @@ class IslandOverlayViewController(
             isIslandExpanded = false
             collapseJob?.cancel()
             collapseJob = controllerScope.launch {
-                delay(350)
+                delay(280)
+                isCompactHidden = false
+                isTinyDotHidden = false
+                delay(40)
                 isOverlayMorphing = false
+                isExpandedFromTinyDot = false
                 collapseJob = null
                 if (!isIslandExpanded) {
                     hideExpandedWindow()
@@ -239,7 +305,9 @@ class IslandOverlayViewController(
         val expView = expandedView ?: return
         val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
 
-        expView.visibility = View.GONE
+        isCompactHidden = false
+        isExpandedFromTinyDot = false
+        expView.visibility = View.INVISIBLE
         val expParams = createExpandedLayoutParams(cutout)
         expandedWindowParams = expParams
         try {
@@ -264,63 +332,67 @@ class IslandOverlayViewController(
         val rotation = display?.rotation ?: Surface.ROTATION_0
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
                 context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
-        val currentTrack = MediaPlaybackState.currentTrack.value
+        val hasActiveMusic = isMusicActive
+        val hasFlashlight = isFlashlightActive
+        val isSplit = hasActiveMusic && hasFlashlight
         val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context)
-        val showTitleAbove = showTitlePref && hasMedia && currentTrack.title.isNotBlank()
 
-        val cutoutDiameterPx = (cutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
+        val cutoutDiameterPx = maxOf(cutout.radiusPx * 2f, 36f * density)
         val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
-        val compactExtraDp = if (isBlended) 108f else 72f
-        val shouldShowDotOnly = !hasMedia
+        val compactExtraDp = if (hasActiveMusic) {
+            if (isBlended) 108f else 72f
+        } else if (hasFlashlight) {
+            64f
+        } else {
+            if (isBlended) 108f else 72f
+        }
+        val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight
 
         val targetWidth: Int
         val targetHeight: Int
         val posX: Int
         val posY: Int
 
-        if (shouldShowDotOnly) {
-            val diameter = ((cutout.radiusPx * 2) + (10f * density)).toInt()
-            targetWidth = diameter
-            targetHeight = diameter
-            posX = (cutout.centerX - diameter / 2f).toInt()
-            posY = (cutout.centerY - diameter / 2f).toInt()
-        } else if (isLandscape) {
-            // Minimized Dynamic Island in landscape: vertical capsule over the camera hole punch
+        if (isLandscape) {
             val pillWPx = (36f * density).toInt()
             val pillHPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
+            val splitExtraHPx = if (isSplit) ((36f + 8f) * density).toInt() else 0
             val paddingPx = (14f * density).toInt()
-            val topExtraPx = if (showTitleAbove) (20f * density).toInt() else 0
+            val topExtraPx = if (showTitlePref) (20f * density).toInt() else 0
             val minTitleWPx = (140f * density).toInt()
             val minLandscapeWPx = (90f * density).toInt()
 
-            targetWidth = if (showTitleAbove) maxOf(pillWPx + (paddingPx * 2), minTitleWPx) else maxOf(pillWPx + (paddingPx * 2), minLandscapeWPx)
-            targetHeight = pillHPx + (paddingPx * 2) + topExtraPx
+            targetWidth = if (showTitlePref) {
+                maxOf(pillWPx + (paddingPx * 2), minTitleWPx)
+            } else {
+                maxOf(pillWPx + (paddingPx * 2), minLandscapeWPx)
+            }
+            targetHeight = pillHPx + splitExtraHPx + (paddingPx * 2) + topExtraPx
             val orientedCenterX = if (rotation == Surface.ROTATION_270) {
                 maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             } else {
                 minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             }
             posX = (orientedCenterX - targetWidth / 2f).toInt()
-            posY = (cutout.centerY - targetHeight / 2f).toInt()
+            val topAnchor = (cutout.centerY - (pillHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+            posY = (topAnchor - paddingPx - topExtraPx).coerceAtLeast(0)
         } else {
-            // Minimized Dynamic Island in portrait: horizontal capsule
-            val paddingHorizontalPx = (24f * density).toInt()
-            val topPaddingPx = if (showTitleAbove) (20f * density).toInt() else (14f * density).toInt()
-            val bottomPaddingPx = (28f * density).toInt()
             val compactWPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
             val compactHPx = (36f * density).toInt()
-
+            val splitExtraWPx = if (isSplit) ((36f + 8f) * density).toInt() else 0
+            val paddingHorizontalPx = (14f * density).toInt()
             val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+            val topPaddingPx = if (showTitlePref) (20f * density).toInt() else (14f * density).toInt()
+            val bottomPaddingPx = (14f * density).toInt()
             val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
 
-            // Sized consistently with generous padding so the window never resizes and touch area remains stable
-            val minCompactWPx = (170f * density).toInt()
-            val minTitleWPx = (200f * density).toInt()
-            targetWidth = if (showTitleAbove) maxOf(compactWPx + (paddingHorizontalPx * 2), minTitleWPx) else maxOf(compactWPx + (paddingHorizontalPx * 2), minCompactWPx)
+            val minTitleWPx = (180f * density).toInt()
+            val baseWPx = compactWPx + (paddingHorizontalPx * 2)
+            val effectiveBaseWPx = if (showTitlePref) maxOf(baseWPx, minTitleWPx) else baseWPx
+
+            targetWidth = effectiveBaseWPx + splitExtraWPx
             targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
-            val pillCenterX = cutout.centerX
-            posX = (pillCenterX - targetWidth / 2f).toInt()
+            posX = (cutout.centerX - (effectiveBaseWPx / 2f)).toInt()
             posY = windowPosY
         }
 
@@ -346,6 +418,7 @@ class IslandOverlayViewController(
             gravity = Gravity.TOP or Gravity.START
             x = posX
             y = posY
+            windowAnimations = 0
             applyCutoutMode(this)
         }
     }
@@ -372,8 +445,13 @@ class IslandOverlayViewController(
 
         val paddingPx = (14f * density).toInt()
         val cutoutDiameterPx = (effectiveCutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
+        val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
         val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
-        val compactExtraDp = if (isBlended) 108f else 72f
+        val compactExtraDp = if (hasMedia) {
+            if (isBlended) 108f else 72f
+        } else {
+            84f
+        }
         val compactHPx = if (isLandscape) (cutoutDiameterPx + (compactExtraDp * density)).toInt() else (36f * density).toInt()
         val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
@@ -475,11 +553,100 @@ class IslandOverlayViewController(
 
                 if (hasMedia != lastObservedHasMedia) {
                     lastObservedHasMedia = hasMedia
-                    if (!hasMedia && isIslandExpanded) {
+                    val hasFlashlight = isFlashlightActive
+                    if (!hasMedia && !hasFlashlight && isIslandExpanded) {
                         collapseOverlay()
                     }
                 }
-                updateOverlayLayout()
+
+                val playingChanged = track.isPlaying != lastObservedIsPlaying
+                lastObservedIsPlaying = track.isPlaying
+
+                if (track.hasMedia && track.isPlaying) {
+                    musicHideJob?.cancel()
+                    musicHideJob = null
+                    isMusicActive = true
+                    updateOverlayLayout()
+                } else if (track.hasMedia && !track.isPlaying) {
+                    if (playingChanged) {
+                        musicHideJob?.cancel()
+                        if (isMusicActive) {
+                            musicHideJob = controllerScope.launch {
+                                // 5.0s pause timeout + 400ms Compose shrink animation
+                                delay(5400L)
+                                isMusicActive = false
+                                updateOverlayLayout()
+                            }
+                        } else {
+                            updateOverlayLayout()
+                        }
+                    }
+                } else {
+                    // No media session
+                    musicHideJob?.cancel()
+                    musicHideJob = null
+                    if (isMusicActive) {
+                        musicHideJob = controllerScope.launch {
+                            delay(400L)
+                            isMusicActive = false
+                            updateOverlayLayout()
+                        }
+                    } else {
+                        isMusicActive = false
+                        updateOverlayLayout()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeFlashlightState() {
+        controllerScope.launch {
+            FlashlightController.isFlashlightOn.collectLatest { isOn ->
+                val hasMedia = isMusicActive
+                if (!isOn && !hasMedia && isIslandExpanded) {
+                    collapseOverlay()
+                } else if (!isOn && isIslandExpanded && _expandedType.value == IslandType.FLASHLIGHT) {
+                    collapseOverlay()
+                }
+
+                val showFlashlight = OverlayPreferences.isShowFlashlightIslandEnabled(context)
+                if (isOn && showFlashlight) {
+                    flashlightHideJob?.cancel()
+                    flashlightHideJob = null
+                    isFlashlightActive = true
+                    updateOverlayLayout()
+                } else {
+                    flashlightHideJob?.cancel()
+                    if (isFlashlightActive) {
+                        flashlightHideJob = controllerScope.launch {
+                            delay(350L)
+                            isFlashlightActive = false
+                            updateOverlayLayout()
+                        }
+                    } else {
+                        isFlashlightActive = false
+                        updateOverlayLayout()
+                    }
+                }
+            }
+        }
+        controllerScope.launch {
+            OverlayPreferences.showFlashlightIslandFlow.collectLatest { enabled ->
+                val isOn = FlashlightController.isFlashlightOn.value
+                if (enabled && isOn) {
+                    flashlightHideJob?.cancel()
+                    flashlightHideJob = null
+                    isFlashlightActive = true
+                    updateOverlayLayout()
+                } else if (!enabled && isFlashlightActive) {
+                    flashlightHideJob?.cancel()
+                    flashlightHideJob = controllerScope.launch {
+                        delay(350L)
+                        isFlashlightActive = false
+                        updateOverlayLayout()
+                    }
+                }
             }
         }
     }
@@ -509,18 +676,34 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun observeDebugPreference() {
+        controllerScope.launch {
+            OverlayPreferences.isDebugModeFlow.collectLatest {
+                updateOverlayLayout()
+            }
+        }
+    }
+
     fun onConfigurationChanged(newConfig: Configuration) {
         currentCutoutInfo = CutoutDetector.detect(context)
         updateOverlayLayout()
     }
 
     fun hide() {
-        if (!isOverlayAdded) return
         val wm = windowManager
 
         collapseJob?.cancel()
         collapseJob = null
         isIslandExpanded = false
+
+        musicHideJob?.cancel()
+        musicHideJob = null
+        flashlightHideJob?.cancel()
+        flashlightHideJob = null
+        isMusicActive = false
+        isFlashlightActive = false
+        lastObservedIsPlaying = null
+        lastObservedHasMedia = null
 
         controllerJob.cancel()
         controllerJob = Job()
