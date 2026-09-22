@@ -28,7 +28,9 @@ object OverlayPreferences {
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
     private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
-    private const val KEY_USE_PIXELLIGHT = "use_pixellight" 
+    private const val KEY_USE_PIXELLIGHT = "use_pixellight"
+    private const val KEY_PIXELLIGHT_MAX_STRENGTH = "pixellight_max_strength"
+    private const val KEY_PIXELLIGHT_SAVED_STRENGTH = "pixellight_saved_strength"
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
@@ -451,6 +453,28 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_USE_PIXELLIGHT, enabled).apply()
         _usePixelLightFlow.value = enabled
         isUsePixelLightInitialized = true
+    }
+
+    fun getLastKnownPixelLightMax(context: Context?): Int {
+        if (context == null) return 127
+        val saved = getPrefs(context).getInt(KEY_PIXELLIGHT_MAX_STRENGTH, 127)
+        return if (saved <= 36) 127 else saved
+    }
+
+    fun setLastKnownPixelLightMax(context: Context?, max: Int) {
+        if (context == null || max <= 1) return
+        getPrefs(context).edit().putInt(KEY_PIXELLIGHT_MAX_STRENGTH, max).apply()
+    }
+
+    fun getLastKnownPixelLightStrength(context: Context?): Int {
+        if (context == null) return 127
+        val saved = getPrefs(context).getInt(KEY_PIXELLIGHT_SAVED_STRENGTH, 127)
+        return if (saved <= 36) 127 else saved
+    }
+
+    fun setLastKnownPixelLightStrength(context: Context?, strength: Int) {
+        if (context == null || strength <= 0) return
+        getPrefs(context).edit().putInt(KEY_PIXELLIGHT_SAVED_STRENGTH, strength).apply()
     }
 
     fun isDebugModeEnabled(context: Context): Boolean {

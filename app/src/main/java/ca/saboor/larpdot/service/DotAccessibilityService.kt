@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -44,7 +45,15 @@ class DotAccessibilityService : AccessibilityService() {
     private var isReceiverRegistered = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Accessibility events are not needed for the overlay display
+        val eventType = event?.eventType ?: return
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: return
+            topPackage = pkg
+            if (pkg == FlashlightController.PIXELLIGHT_PACKAGE) {
+                lastPixelLightActivityTime = SystemClock.uptimeMillis()
+                FlashlightController.onPixelLightActivityTriggered()
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -57,7 +66,8 @@ class DotAccessibilityService : AccessibilityService() {
 
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
 
         // Stop standard fallback overlay if it was running
@@ -144,6 +154,19 @@ class DotAccessibilityService : AccessibilityService() {
 
         private val _isServiceConnected = MutableStateFlow(false)
         val isServiceConnected: StateFlow<Boolean> = _isServiceConnected.asStateFlow()
+
+        @Volatile
+        var topPackage: String? = null
+            private set
+
+        @Volatile
+        var lastPixelLightActivityTime: Long = 0L
+            private set
+
+        fun isCameraAppInForeground(): Boolean {
+            val pkg = topPackage ?: instance?.rootInActiveWindow?.packageName?.toString() ?: return false
+            return FlashlightController.isKnownCameraPackage(pkg)
+        }
 
         /**
          * Triggers opening the Android Notification Shade using Accessibility action,

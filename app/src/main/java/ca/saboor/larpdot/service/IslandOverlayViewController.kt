@@ -91,7 +91,6 @@ class IslandOverlayViewController(
     // so WindowManager does not prematurely resize or clip the collapsing island.
     private var isMusicActive = false
     private var isFlashlightActive = false
-    private var musicHideJob: Job? = null
     private var flashlightHideJob: Job? = null
 
     @SuppressLint("ClickableViewAccessibility")
@@ -108,7 +107,7 @@ class IslandOverlayViewController(
         FlashlightController.init(context)
 
         val initialTrack = MediaPlaybackState.currentTrack.value
-        isMusicActive = initialTrack.hasMedia && initialTrack.isPlaying
+        isMusicActive = MediaPlaybackState.isMusicActive.value
         isFlashlightActive = FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(context)
         lastObservedIsPlaying = initialTrack.isPlaying
         lastObservedHasMedia = initialTrack.hasMedia
@@ -189,7 +188,7 @@ class IslandOverlayViewController(
             e.printStackTrace()
         }
 
-        // 2. Setup Dedicated Expanded View & Lifecycle (Added second so it sits directly above compact view)
+        // 2. Setup Dedicated Expanded Island View (Full screen width, transparent, click-through background)
         val expOwner = OverlayLifecycleOwner()
         expandedLifecycleOwner = expOwner
 
@@ -250,73 +249,105 @@ class IslandOverlayViewController(
         }
     }
 
-    fun expandOverlay(type: IslandType = IslandType.MEDIA, fromTinyDot: Boolean = false) {
-        _expandedType.value = type
-        isExpandedFromTinyDot = fromTinyDot
+    fun expandOverlay(type: IslandType = IslandType.MEDIA, fromDot: Boolean = false) {
+        if (!isOverlayAdded || isOverlayMorphing || isIslandExpanded) return
         collapseJob?.cancel()
-        collapseJob = null
-        if (!isIslandExpanded) {
-            isCompactHidden = false
-            isTinyDotHidden = false
-            isIslandExpanded = true
-            isOverlayMorphing = true
-            showExpandedWindow()
+
+        _expandedType.value = type
+        isExpandedFromTinyDot = fromDot
+        isIslandExpanded = true
+        isOverlayMorphing = true
+
+        expandedView?.let { expView ->
+            expView.visibility = View.VISIBLE
+            expandedWindowParams?.let { params ->
+                @Suppress("DEPRECATION")
+                params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                try {
+                    windowManager?.updateViewLayout(expView, params)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        compactView?.let { compView ->
+            compactWindowParams?.let { params ->
+                @Suppress("DEPRECATION")
+                params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                try {
+                    windowManager?.updateViewLayout(compView, params)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        controllerScope.launch {
+            delay(380L)
+            isOverlayMorphing = false
         }
     }
 
     fun collapseOverlay() {
-        if (isIslandExpanded) {
-            isIslandExpanded = false
-            collapseJob?.cancel()
-            collapseJob = controllerScope.launch {
-                delay(280)
-                isCompactHidden = false
-                isTinyDotHidden = false
-                delay(40)
-                isOverlayMorphing = false
-                isExpandedFromTinyDot = false
-                collapseJob = null
-                if (!isIslandExpanded) {
-                    hideExpandedWindow()
+        if (!isOverlayAdded || isOverlayMorphing || !isIslandExpanded) return
+        collapseJob?.cancel()
+
+        isIslandExpanded = false
+        isOverlayMorphing = true
+        isCompactHidden = false
+        isTinyDotHidden = false
+
+        compactView?.let { compView ->
+            compactWindowParams?.let { params ->
+                val hasActive = isMusicActive || isFlashlightActive
+                @Suppress("DEPRECATION")
+                val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                params.flags = if (!hasActive) {
+                    baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                } else {
+                    baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                }
+                try {
+                    windowManager?.updateViewLayout(compView, params)
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
-    }
 
-    private fun showExpandedWindow() {
-        val wm = windowManager ?: return
-        val expView = expandedView ?: return
-        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
-
-        val expParams = createExpandedLayoutParams(cutout)
-        expandedWindowParams = expParams
-        try {
-            wm.updateViewLayout(expView, expParams)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        collapseJob = controllerScope.launch {
+            delay(300L)
+            expandedView?.let { expView ->
+                expView.visibility = View.INVISIBLE
+                expandedWindowParams?.let { params ->
+                    @Suppress("DEPRECATION")
+                    params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    try {
+                        windowManager?.updateViewLayout(expView, params)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            isExpandedFromTinyDot = false
+            isOverlayMorphing = false
         }
-        expView.visibility = View.VISIBLE
-
-        updateOverlayLayout()
-    }
-
-    private fun hideExpandedWindow() {
-        val wm = windowManager ?: return
-        val expView = expandedView ?: return
-        val cutout = currentCutoutInfo ?: CutoutDetector.detect(context)
-
-        isCompactHidden = false
-        isExpandedFromTinyDot = false
-        expView.visibility = View.INVISIBLE
-        val expParams = createExpandedLayoutParams(cutout)
-        expandedWindowParams = expParams
-        try {
-            wm.updateViewLayout(expView, expParams)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        updateOverlayLayout()
     }
 
     @Suppress("DEPRECATION")
@@ -335,7 +366,8 @@ class IslandOverlayViewController(
         val hasActiveMusic = isMusicActive
         val hasFlashlight = isFlashlightActive
         val isSplit = hasActiveMusic && hasFlashlight
-        val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context)
+        val showFlashlightInMain = hasFlashlight && !hasActiveMusic
+        val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context) && hasActiveMusic && !showFlashlightInMain
 
         val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
         val outlineAllowancePx = 2f * density
@@ -346,7 +378,9 @@ class IslandOverlayViewController(
         val blendedExtraDp = compactPillThicknessDp * 3f
 
         val minimizedStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.value
-        val compactExtraDp = if (hasActiveMusic) {
+        val compactExtraDp = if (showFlashlightInMain) {
+            48f
+        } else if (hasActiveMusic) {
             when (minimizedStyle) {
                 OverlayPreferences.AlbumArtStyle.BLENDED -> blendedExtraDp
                 OverlayPreferences.AlbumArtStyle.NESTED -> nestedExtraDp
@@ -451,26 +485,15 @@ class IslandOverlayViewController(
         val rotation = display?.rotation ?: Surface.ROTATION_0
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
                 context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val orientedCenterX = if (rotation == Surface.ROTATION_270) {
-            maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
-        } else {
-            minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
-        }
-        val effectiveCutout = if (isLandscape) cutout.copy(centerX = orientedCenterX) else cutout
 
-        val paddingPx = (14f * density).toInt()
-        val cutoutDiameterPx = (effectiveCutout.radiusPx * 2f).coerceIn(20f * density, 32f * density)
-        val hasMedia = MediaPlaybackState.currentTrack.value.hasMedia
-        val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
-        val compactExtraDp = if (hasMedia) {
-            if (isBlended) 108f else 72f
+        val targetWidth = if (isLandscape) {
+            val minDim = minOf(realMetrics.widthPixels, realMetrics.heightPixels)
+            val maxDim = maxOf(realMetrics.widthPixels, realMetrics.heightPixels)
+            if (screenWidth == minDim) minDim else maxDim
         } else {
-            84f
+            screenWidth
         }
-        val compactHPx = if (isLandscape) (cutoutDiameterPx + (compactExtraDp * density)).toInt() else (36f * density).toInt()
-        val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
-        val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
-        val cardHPx = (310f * density).toInt()
+        val targetHeight = (320f * density).toInt()
 
         @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -478,79 +501,47 @@ class IslandOverlayViewController(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
 
-        val touchFlags = if (isIslandExpanded) {
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        val flags = if (!isIslandExpanded) {
+            baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         } else {
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            baseFlags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         }
 
         return WindowManager.LayoutParams(
-            screenWidth,
-            cardHPx + (paddingPx * 2),
+            targetWidth,
+            targetHeight,
             windowType,
-            baseFlags or touchFlags,
+            flags,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = 0
-            y = windowPosY
+            y = 0
+            windowAnimations = 0
             applyCutoutMode(this)
         }
     }
 
-    private fun applyCutoutMode(params: WindowManager.LayoutParams) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                params.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            } catch (_: Exception) {}
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try {
-                params.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            } catch (_: Exception) {}
-        }
+    fun updateCutout(cutout: CutoutInfo) {
+        currentCutoutInfo = cutout
+        updateOverlayLayout()
     }
 
     fun updateOverlayLayout() {
         val wm = windowManager ?: return
-        val compView = compactView ?: return
-        if (!isOverlayAdded) return
+        val cutout = currentCutoutInfo ?: return
 
-        val rawCutout = currentCutoutInfo ?: CutoutDetector.detect(context)
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-        val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
-        val realMetrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        display?.getRealMetrics(realMetrics)
-        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels.toFloat() else context.resources.displayMetrics.widthPixels.toFloat()
-        val rotation = display?.rotation ?: Surface.ROTATION_0
-        val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
-                context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val orientedX = if (rotation == Surface.ROTATION_270) {
-            maxOf(rawCutout.centerX, screenWidth - rawCutout.centerX)
-        } else if (isLandscape) {
-            minOf(rawCutout.centerX, screenWidth - rawCutout.centerX)
-        } else {
-            rawCutout.centerX
-        }
-        val cutout = if (isLandscape) rawCutout.copy(centerX = orientedX) else rawCutout
-        if (currentCutoutInfo != cutout) {
-            currentCutoutInfo = cutout
+        compactView?.let { compView ->
+            val compParams = createCompactLayoutParams(cutout)
+            compactWindowParams = compParams
+            try {
+                wm.updateViewLayout(compView, compParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
-        val newParams = createCompactLayoutParams(cutout)
-        compactWindowParams = newParams
-
-        try {
-            wm.updateViewLayout(compView, newParams)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        if (isExpandedWindowAdded) {
-            val expView = expandedView ?: return
+        expandedView?.let { expView ->
             val expParams = createExpandedLayoutParams(cutout)
             expandedWindowParams = expParams
             try {
@@ -563,9 +554,18 @@ class IslandOverlayViewController(
 
     private fun observeMediaState() {
         controllerScope.launch {
+            MediaPlaybackState.isMusicActive.collectLatest { active ->
+                isMusicActive = active
+                val hasFlashlight = isFlashlightActive
+                if (!active && !hasFlashlight && isIslandExpanded) {
+                    collapseOverlay()
+                }
+                updateOverlayLayout()
+            }
+        }
+        controllerScope.launch {
             MediaPlaybackState.currentTrack.collectLatest { track ->
                 val hasMedia = track.hasMedia
-
                 if (hasMedia != lastObservedHasMedia) {
                     lastObservedHasMedia = hasMedia
                     val hasFlashlight = isFlashlightActive
@@ -573,44 +573,7 @@ class IslandOverlayViewController(
                         collapseOverlay()
                     }
                 }
-
-                val playingChanged = track.isPlaying != lastObservedIsPlaying
-                lastObservedIsPlaying = track.isPlaying
-
-                if (track.hasMedia && track.isPlaying) {
-                    musicHideJob?.cancel()
-                    musicHideJob = null
-                    isMusicActive = true
-                    updateOverlayLayout()
-                } else if (track.hasMedia && !track.isPlaying) {
-                    if (playingChanged) {
-                        musicHideJob?.cancel()
-                        if (isMusicActive) {
-                            musicHideJob = controllerScope.launch {
-                                // 5.0s pause timeout + 400ms Compose shrink animation
-                                delay(5400L)
-                                isMusicActive = false
-                                updateOverlayLayout()
-                            }
-                        } else {
-                            updateOverlayLayout()
-                        }
-                    }
-                } else {
-                    // No media session
-                    musicHideJob?.cancel()
-                    musicHideJob = null
-                    if (isMusicActive) {
-                        musicHideJob = controllerScope.launch {
-                            delay(400L)
-                            isMusicActive = false
-                            updateOverlayLayout()
-                        }
-                    } else {
-                        isMusicActive = false
-                        updateOverlayLayout()
-                    }
-                }
+                updateOverlayLayout()
             }
         }
     }
@@ -646,30 +609,11 @@ class IslandOverlayViewController(
                 }
             }
         }
-        controllerScope.launch {
-            OverlayPreferences.showFlashlightIslandFlow.collectLatest { enabled ->
-                val isOn = FlashlightController.isFlashlightOn.value
-                if (enabled && isOn) {
-                    flashlightHideJob?.cancel()
-                    flashlightHideJob = null
-                    isFlashlightActive = true
-                    updateOverlayLayout()
-                } else if (!enabled && isFlashlightActive) {
-                    flashlightHideJob?.cancel()
-                    flashlightHideJob = controllerScope.launch {
-                        delay(350L)
-                        isFlashlightActive = false
-                        updateOverlayLayout()
-                    }
-                }
-            }
-        }
     }
 
     private fun observeCutoutConfig() {
         controllerScope.launch {
             OverlayPreferences.cutoutConfigFlow.collectLatest {
-                currentCutoutInfo = CutoutDetector.detect(context)
                 updateOverlayLayout()
             }
         }
@@ -699,62 +643,52 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun applyCutoutMode(params: WindowManager.LayoutParams) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+    }
+
     fun onConfigurationChanged(newConfig: Configuration) {
         currentCutoutInfo = CutoutDetector.detect(context)
         updateOverlayLayout()
     }
 
     fun hide() {
-        val wm = windowManager
-
-        collapseJob?.cancel()
-        collapseJob = null
-        isIslandExpanded = false
-
-        musicHideJob?.cancel()
-        musicHideJob = null
-        flashlightHideJob?.cancel()
-        flashlightHideJob = null
-        isMusicActive = false
-        isFlashlightActive = false
-        lastObservedIsPlaying = null
-        lastObservedHasMedia = null
-
-        controllerJob.cancel()
-        controllerJob = Job()
-
-        if (isExpandedWindowAdded && expandedView != null && wm != null) {
-            try {
-                wm.removeView(expandedView)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            isExpandedWindowAdded = false
-        }
-
-        if (wm != null && compactView != null) {
-            try {
-                wm.removeView(compactView)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        compactLifecycleOwner?.onDestroy()
-        compactLifecycleOwner = null
-        compactView = null
-
-        expandedLifecycleOwner?.onDestroy()
-        expandedLifecycleOwner = null
-        expandedView = null
-
-        isOverlayAdded = false
-        compactWindowParams = null
-        expandedWindowParams = null
-        lastObservedHasMedia = null
+        dismiss()
     }
 
     fun destroy() {
-        hide()
+        dismiss()
+    }
+
+    fun dismiss() {
+        if (!isOverlayAdded) return
+        isOverlayAdded = false
+        controllerJob.cancel()
+
+        compactView?.let { compView ->
+            compactLifecycleOwner?.onDestroy()
+            compactLifecycleOwner = null
+            try {
+                windowManager?.removeView(compView)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            compactView = null
+        }
+
+        expandedView?.let { expView ->
+            expandedLifecycleOwner?.onDestroy()
+            expandedLifecycleOwner = null
+            try {
+                windowManager?.removeView(expView)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            expandedView = null
+            isExpandedWindowAdded = false
+        }
     }
 }

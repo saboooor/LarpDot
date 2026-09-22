@@ -36,6 +36,15 @@ object MediaPlaybackState {
     private val _currentTrack = MutableStateFlow(MediaTrackInfo())
     val currentTrack: StateFlow<MediaTrackInfo> = _currentTrack.asStateFlow()
 
+    private val _isMusicActive = MutableStateFlow(false)
+    val isMusicActive: StateFlow<Boolean> = _isMusicActive.asStateFlow()
+
+    var lastPlayTime: Long = 0L
+        private set
+    var lastPauseTime: Long = 0L
+        private set
+
+    private var musicGraceJob: Job? = null
     private var activeController: MediaController? = null
     private var controllerCallback: MediaController.Callback? = null
 
@@ -103,6 +112,28 @@ object MediaPlaybackState {
 
         val dominant = DominantColorExtractor.extractDominantColor(albumArt, (title + artist).hashCode())
 
+        val wasPlaying = _currentTrack.value.isPlaying
+        if (isPlaying) {
+            musicGraceJob?.cancel()
+            musicGraceJob = null
+            lastPlayTime = SystemClock.uptimeMillis()
+            lastPauseTime = 0L
+            _isMusicActive.value = true
+        } else if (wasPlaying) {
+            lastPauseTime = SystemClock.uptimeMillis()
+            musicGraceJob?.cancel()
+            musicGraceJob = playbackScope.launch {
+                delay(5000L)
+                if (!_currentTrack.value.isPlaying) {
+                    _isMusicActive.value = false
+                }
+            }
+        } else if (lastPauseTime == 0L || SystemClock.uptimeMillis() - lastPauseTime >= 5000L) {
+            musicGraceJob?.cancel()
+            musicGraceJob = null
+            _isMusicActive.value = false
+        }
+
         _currentTrack.value = MediaTrackInfo(
             title = title,
             artist = artist,
@@ -148,10 +179,48 @@ object MediaPlaybackState {
         )
     }
 
+    fun pause() {
+        val track = _currentTrack.value
+        if (track.isSimulated) {
+            if (track.isPlaying) {
+                lastPauseTime = SystemClock.uptimeMillis()
+                _currentTrack.value = track.copy(isPlaying = false)
+                checkTickerState(false)
+                musicGraceJob?.cancel()
+                musicGraceJob = playbackScope.launch {
+                    delay(5000L)
+                    if (!_currentTrack.value.isPlaying) {
+                        _isMusicActive.value = false
+                    }
+                }
+            }
+            return
+        }
+        try {
+            activeController?.transportControls?.pause()
+        } catch (_: Exception) {}
+    }
+
     fun togglePlayPause() {
         val track = _currentTrack.value
         if (track.isSimulated) {
             val newPlaying = !track.isPlaying
+            if (newPlaying) {
+                musicGraceJob?.cancel()
+                musicGraceJob = null
+                lastPlayTime = SystemClock.uptimeMillis()
+                lastPauseTime = 0L
+                _isMusicActive.value = true
+            } else {
+                lastPauseTime = SystemClock.uptimeMillis()
+                musicGraceJob?.cancel()
+                musicGraceJob = playbackScope.launch {
+                    delay(5000L)
+                    if (!_currentTrack.value.isPlaying) {
+                        _isMusicActive.value = false
+                    }
+                }
+            }
             _currentTrack.value = track.copy(isPlaying = newPlaying)
             checkTickerState(newPlaying)
             return
@@ -223,12 +292,12 @@ object MediaPlaybackState {
         if (progressTickerJob?.isActive == true) return
         progressTickerJob = playbackScope.launch {
             while (isActive) {
-                delay(200L) // 5 updates per second for silky smooth active song progress
+                delay(50L) // 20 updates per second for ultra-fluid song progress & visualizers
                 val current = _currentTrack.value
                 if (!current.isPlaying || current.durationMs <= 0L) continue
 
                 if (current.isSimulated) {
-                    val nextPos = (current.positionMs + 200L).let {
+                    val nextPos = (current.positionMs + 50L).let {
                         if (it > current.durationMs) 0L else it
                     }
                     _currentTrack.value = current.copy(positionMs = nextPos)
@@ -258,6 +327,12 @@ object MediaPlaybackState {
             val sampleArt = DominantColorExtractor.createSampleArtwork("Starboy")
             val dominant = DominantColorExtractor.extractDominantColor(sampleArt)
 
+            musicGraceJob?.cancel()
+            musicGraceJob = null
+            lastPlayTime = SystemClock.uptimeMillis()
+            lastPauseTime = 0L
+            _isMusicActive.value = true
+
             _currentTrack.value = MediaTrackInfo(
                 title = "Starboy",
                 artist = "The Weeknd",
@@ -278,6 +353,11 @@ object MediaPlaybackState {
     }
 
     fun clear() {
+        musicGraceJob?.cancel()
+        musicGraceJob = null
+        _isMusicActive.value = false
+        lastPlayTime = 0L
+        lastPauseTime = 0L
         progressTickerJob?.cancel()
         progressTickerJob = null
         controllerCallback?.let { activeController?.unregisterCallback(it) }
