@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.ui.overlay
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.FlashlightOn
@@ -485,19 +486,25 @@ fun CompactIslandOverlay(
                                 .fillMaxSize()
                                 .graphicsLayer { alpha = contentAlpha },
                         ) {
-                            if (activeDisplayType == IslandType.MEDIA) {
-                                CompactIslandContent(
-                                    mediaInfo = mediaInfo,
-                                    cutoutDiameterDp = cutoutDiameterDp,
-                                    onExpand = { onExpand(IslandType.MEDIA, false) },
-                                )
-                            } else {
-                                CompactFlashlightContent(
-                                    cutoutDiameterDp = cutoutDiameterDp,
-                                    onExpand = { onExpand(IslandType.FLASHLIGHT, false) },
-                                    onFlashlightToggle = onFlashlightToggle,
-                                    isLandscape = isLandscape,
-                                )
+                            Crossfade(
+                                targetState = activeDisplayType,
+                                animationSpec = tween(durationMillis = 220),
+                                label = "compact_content_type",
+                            ) { displayType ->
+                                if (displayType == IslandType.MEDIA) {
+                                    CompactIslandContent(
+                                        mediaInfo = mediaInfo,
+                                        cutoutDiameterDp = cutoutDiameterDp,
+                                        onExpand = { onExpand(IslandType.MEDIA, false) },
+                                    )
+                                } else {
+                                    CompactFlashlightContent(
+                                        cutoutDiameterDp = cutoutDiameterDp,
+                                        onExpand = { onExpand(IslandType.FLASHLIGHT, false) },
+                                        onFlashlightToggle = onFlashlightToggle,
+                                        isLandscape = isLandscape,
+                                    )
+                                }
                             }
                         }
                     }
