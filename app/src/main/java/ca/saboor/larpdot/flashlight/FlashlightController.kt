@@ -85,6 +85,18 @@ object FlashlightController {
     private var pendingStrengthJob: Job? = null
     private var pixelLightTurnOffPendingIntent: android.app.PendingIntent? = null
 
+    @Volatile
+    private var isUserInteracting = false
+    @Volatile
+    private var lastUserSetStrengthTime = 0L
+
+    fun setUserInteracting(interacting: Boolean) {
+        isUserInteracting = interacting
+        if (interacting) {
+            lastUserSetStrengthTime = SystemClock.uptimeMillis()
+        }
+    }
+
     fun setPixelLightTurnOffPendingIntent(pendingIntent: android.app.PendingIntent?) {
         pixelLightTurnOffPendingIntent = pendingIntent
     }
@@ -242,7 +254,12 @@ object FlashlightController {
             _isStrengthSupported.value = max > 1
         }
         if (progress > 0) {
-            _torchStrength.value = progress
+            val now = SystemClock.uptimeMillis()
+            // Stale notification protection: do not let notification echo overwrite torch strength
+            // if user is actively dragging the slider or recently set the strength
+            if (!isUserInteracting && (now - lastUserSetStrengthTime > 800L)) {
+                _torchStrength.value = progress
+            }
         }
         _isAvailable.value = true
         notifyTorchStateChanged(true)
@@ -283,6 +300,9 @@ object FlashlightController {
         }
         setTorch(!_isFlashlightOn.value)
     }
+
+    fun turnOn() = setTorch(true)
+    fun turnOff() = setTorch(false)
 
     /**
      * Sets flashlight mode on or off.
@@ -330,12 +350,16 @@ object FlashlightController {
      */
     fun setStrengthLevel(level: Int) {
         val clamped = level.coerceIn(1, _maxStrength.value)
+        val changed = _torchStrength.value != clamped
         _torchStrength.value = clamped
+        lastUserSetStrengthTime = SystemClock.uptimeMillis()
 
         if (_isSimulated.value) return
 
         if (shouldUsePixelLight()) {
-            schedulePixelLightBrightness(clamped)
+            if (changed) {
+                schedulePixelLightBrightness(clamped)
+            }
             return
         }
 
@@ -362,21 +386,32 @@ object FlashlightController {
     fun flushStrength(level: Int) {
         val clamped = level.coerceIn(1, _maxStrength.value)
         _torchStrength.value = clamped
+        lastUserSetStrengthTime = SystemClock.uptimeMillis()
         if (shouldUsePixelLight()) {
             pendingStrengthJob?.cancel()
             sendPixelLightBrightness(clamped)
+        } else if (_isFlashlightOn.value) {
+            val cm = cameraManager
+            val camId = targetCameraId
+            if (cm != null && camId != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && _isStrengthSupported.value) {
+                try {
+                    cm.turnOnTorchWithStrengthLevel(camId, clamped)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to flush torch strength level to $clamped", e)
+                }
+            }
         }
     }
 
     private fun schedulePixelLightBrightness(level: Int) {
         val now = SystemClock.uptimeMillis()
-        if (now - lastStrengthUpdateTime > 80L) {
+        if (now - lastStrengthUpdateTime > 200L) {
             lastStrengthUpdateTime = now
             sendPixelLightBrightness(level)
         } else {
             pendingStrengthJob?.cancel()
             pendingStrengthJob = coroutineScope.launch {
-                delay(80L)
+                delay(200L)
                 lastStrengthUpdateTime = SystemClock.uptimeMillis()
                 sendPixelLightBrightness(level)
             }
@@ -389,7 +424,7 @@ object FlashlightController {
             val intent = Intent().apply {
                 component = ComponentName(PIXELLIGHT_PACKAGE, PIXELLIGHT_TOGGLE_ACTIVITY)
                 putExtra("brightness", -2)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
@@ -412,7 +447,7 @@ object FlashlightController {
             val intent = Intent().apply {
                 component = ComponentName(PIXELLIGHT_PACKAGE, PIXELLIGHT_TOGGLE_ACTIVITY)
                 putExtra("brightness", if (enabled) -1 else 0)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
@@ -426,7 +461,7 @@ object FlashlightController {
             val intent = Intent().apply {
                 component = ComponentName(PIXELLIGHT_PACKAGE, PIXELLIGHT_TOGGLE_ACTIVITY)
                 putExtra("brightness", level)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             context.startActivity(intent)
         } catch (e: Exception) {

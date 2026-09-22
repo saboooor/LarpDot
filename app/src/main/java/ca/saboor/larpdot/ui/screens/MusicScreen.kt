@@ -379,6 +379,7 @@ fun MusicScreen(
     val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
     val showDominantGlow by OverlayPreferences.showDominantColorGlowFlow.collectAsState()
     val showCameraSwoop by OverlayPreferences.showCameraSwoopFlow.collectAsState()
+    val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
@@ -391,6 +392,7 @@ fun MusicScreen(
         OverlayPreferences.getExpandedAlbumArtRotation(context)
         OverlayPreferences.isShowDominantColorGlowEnabled(context)
         OverlayPreferences.isShowCameraSwoopEnabled(context)
+        OverlayPreferences.getWaveformBandCount(context)
     }
 
     val minimizedStyles = listOf(
@@ -753,6 +755,73 @@ fun MusicScreen(
                                 OverlayPreferences.setShowCameraSwoopEnabled(context, isChecked)
                             },
                         )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Waveform Equalizer Bands
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column {
+                                    Text(
+                                        text = "Waveform Bands",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = "Number of animated equalizer frequency bars (default: 5)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = if (waveformBandCount == OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT) {
+                                    "5 (Default)"
+                                } else {
+                                    "$waveformBandCount Bands"
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+
+                        val bandOptions = listOf(3, 4, 5, 6, 7)
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            bandOptions.forEach { count ->
+                                toggleableItem(
+                                    checked = waveformBandCount == count,
+                                    label = "$count",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setWaveformBandCount(context, count)
+                                    },
+                                    weight = 1f,
+                                )
+                            }
+                        }
                     }
                 }
             }

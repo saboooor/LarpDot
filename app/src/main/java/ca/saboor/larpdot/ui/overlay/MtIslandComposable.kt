@@ -20,6 +20,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import android.graphics.RenderEffect
@@ -116,6 +117,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -210,19 +212,37 @@ fun CompactIslandOverlay(
     val configuration = LocalConfiguration.current
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-        val cutoutDiameterDp = with(density) { maxOf((cutoutInfo.radiusPx * 2f).toDp(), 36.dp) }
+        val cutoutDiameterDp = with(density) {
+            if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
+        }.coerceIn(16.dp, 36.dp)
+        val outlineAllowanceDp = 2.dp
+        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+        val compactCornerRadius = compactPillThickness / 2f
+
         val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+        val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+        val nestedActiveExtraDp = compactPillThickness + nestedArtSize
+        val blendedActiveExtraDp = compactPillThickness * 3
+
         val activeExtraDp = when {
-            isMusicActive -> if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
-            isFlashlightActive -> 64.dp
-            lastDisplayType == IslandType.FLASHLIGHT -> 64.dp
-            else -> if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
+            isMusicActive -> when (minimizedStyle) {
+                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
+                OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
+                else -> 60.dp
+            }
+            isFlashlightActive -> 48.dp
+            lastDisplayType == IslandType.FLASHLIGHT -> 48.dp
+            else -> when (minimizedStyle) {
+                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
+                OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
+                else -> 60.dp
+            }
         }
-        val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + activeExtraDp)
-        val compactHeight = if (isLandscape) (cutoutDiameterDp + activeExtraDp) else 36.dp
+        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + activeExtraDp)
+        val compactHeight = if (isLandscape) (cutoutDiameterDp + activeExtraDp) else compactPillThickness
 
         val currentCornerRadius by animateDpAsState(
-            targetValue = if (isPillActive) 18.dp else (cutoutDiameterDp / 2f),
+            targetValue = compactCornerRadius,
             animationSpec = tween(durationMillis = 280, easing = if (isPillActive) MtIslandEnterEasing else MtIslandExitEasing),
             label = "compact_corner",
         )
@@ -262,6 +282,7 @@ fun CompactIslandOverlay(
             label = "compact_scale",
         )
 
+
         val progressFraction = if (mediaInfo.durationMs > 0) {
             (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
         } else 0f
@@ -284,22 +305,22 @@ fun CompactIslandOverlay(
         val isTitleActive = showMinimizedTitle && isMediaSessionActive && mediaInfo.title.isNotBlank() && !isExpanded
         val showTitleText = isTitleActive && isMusicActive
 
-        val compactHPx = with(density) { 36.dp.toPx() }
+        val compactHPx = with(density) { compactHeight.toPx() }
         val topPaddingPx = with(density) { (if (showMinimizedTitle) 20.dp else 14.dp).toPx() }
-        val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(with(density) { 8.dp.toPx() })
+        val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(0f)
         val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
-        val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }
+        val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }.coerceAtLeast(0.dp)
 
         val paddingHorizontalDp = 14.dp
         val minTitleWDp = 180.dp
-        val baseWDp = compactWidth + (paddingHorizontalDp * 2)
+        val baseWDp = maxOf(compactWidth, currentWidth) + (paddingHorizontalDp * 2)
         val effectiveBaseWDp = if (showMinimizedTitle) maxOf(baseWDp, minTitleWDp) else baseWDp
-        val pillStartOffset = (effectiveBaseWDp - currentWidth) / 2
+        val pillStartOffset = ((effectiveBaseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
 
         val paddingLandscapeDp = 14.dp
         val topExtraLandscapeDp = if (showMinimizedTitle) 20.dp else 0.dp
         val landscapeTopOffsetDp = paddingLandscapeDp + topExtraLandscapeDp
-        val pillTopOffsetLandscape = landscapeTopOffsetDp + (compactHeight - currentHeight) / 2
+        val pillTopOffsetLandscape = (landscapeTopOffsetDp + (compactHeight - currentHeight) / 2).coerceAtLeast(0.dp)
 
         val mainPillModifier = Modifier
             .pointerInput(isPillActive, isExpanded, mediaInfo.hasMedia) {
@@ -436,20 +457,14 @@ fun CompactIslandOverlay(
                     }
                     .clip(RoundedCornerShape(currentCornerRadius))
                     .then(
-                        if (isMusicActive && showProgressOutline) {
-                            Modifier.islandFluidProgressBorder(
-                                progressFraction = animatedProgress,
-                                cornerRadius = currentCornerRadius,
-                                shape = RoundedCornerShape(currentCornerRadius),
-                                strokeWidth = 0.75.dp,
-                                trackColor = Color(0x30FFFFFF),
-                                progressColor = mediaInfo.dominantColor,
-                            )
-                        } else if (isFlashlightActive && !isMusicActive) {
-                            Modifier.border(0.75.dp, Color.White.copy(alpha = 0.35f * contentAlpha), RoundedCornerShape(currentCornerRadius))
-                        } else {
-                            Modifier
-                        }
+                        Modifier.islandFluidProgressBorder(
+                            progressFraction = if (isMusicActive && showProgressOutline) animatedProgress else 0f,
+                            cornerRadius = currentCornerRadius,
+                            shape = RoundedCornerShape(currentCornerRadius),
+                            strokeWidth = 0.75.dp,
+                            trackColor = Color(0x30FFFFFF).copy(alpha = (48f / 255f) * contentAlpha),
+                            progressColor = mediaInfo.dominantColor,
+                        )
                     ),
                 shape = RoundedCornerShape(currentCornerRadius),
                 color = pillColor,
@@ -504,7 +519,7 @@ fun CompactIslandOverlay(
         }
 
         val bubbleSize by animateDpAsState(
-            targetValue = if (isSplit) 36.dp else 0.dp,
+            targetValue = if (isSplit) compactPillThickness else 0.dp,
             animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
             label = "bubble_size",
         )
@@ -542,6 +557,13 @@ fun CompactIslandOverlay(
             label = "torch_press_scale",
         )
 
+        LaunchedEffect(isExpanded) {
+            if (isExpanded) {
+                isIslandPressed = false
+                isTorchPressed = false
+            }
+        }
+
         val tinyFlashlightBubble = @Composable {
             if (bubbleSize > 0.5.dp || bubbleAlpha > 0.01f) {
                 Surface(
@@ -554,30 +576,33 @@ fun CompactIslandOverlay(
                             shape = CircleShape
                         }
                         .clip(CircleShape)
-                        .border(0.75.dp, Color.White.copy(alpha = 0.35f * bubbleAlpha), CircleShape)
+                        .border(0.75.dp, Color(0x30FFFFFF).copy(alpha = (48f / 255f) * bubbleAlpha), CircleShape)
                         .pointerInput(isExpanded, isSplit) {
                             if (!isExpanded && isSplit) {
                                 val tapToExpand = OverlayPreferences.tapToExpandFlow.value
                                 detectTapGestures(
                                     onPress = {
                                         isTorchPressed = true
-                                        val job = coroutineScope.launch {
-                                            delay(300L)
-                                            if (isTorchPressed) {
-                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                if (tapToExpand) {
-                                                    onFlashlightToggle()
-                                                } else {
-                                                    onExpand(IslandType.FLASHLIGHT, true)
+                                        try {
+                                            val job = coroutineScope.launch {
+                                                delay(300L)
+                                                if (isTorchPressed) {
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    if (tapToExpand) {
+                                                        onFlashlightToggle()
+                                                    } else {
+                                                        onExpand(IslandType.FLASHLIGHT, true)
+                                                    }
                                                 }
-                                                tryAwaitRelease()
                                             }
+                                            tryAwaitRelease()
+                                            job.cancel()
+                                        } finally {
+                                            isTorchPressed = false
                                         }
-                                        tryAwaitRelease()
-                                        job.cancel()
-                                        isTorchPressed = false
                                     },
                                     onTap = {
+                                        isTorchPressed = false
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                         if (tapToExpand) {
                                             onExpand(IslandType.FLASHLIGHT, true)
@@ -596,13 +621,14 @@ fun CompactIslandOverlay(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        val iconScale = (bubbleSize / 36.dp).coerceIn(0f, 1f)
+                        val iconScale = (bubbleSize / cutoutDiameterDp).coerceIn(0f, 1f)
+                        val bubbleIconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
                         Icon(
                             imageVector = Icons.Default.FlashlightOn,
                             contentDescription = "Flashlight Active",
                             tint = Color.White.copy(alpha = pulseAlpha),
                             modifier = Modifier
-                                .size(18.dp)
+                                .size(bubbleIconSize)
                                 .scale(iconScale),
                         )
                     }
@@ -668,7 +694,7 @@ fun CompactIslandOverlay(
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = pillTopOffsetLandscape),
+                        .padding(top = pillTopOffsetLandscape.coerceAtLeast(0.dp)),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(modifier = mainPillModifier) {
@@ -683,7 +709,10 @@ fun CompactIslandOverlay(
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(top = pillTopOffsetDp, start = pillStartOffset),
+                        .padding(
+                            top = pillTopOffsetDp.coerceAtLeast(0.dp),
+                            start = pillStartOffset.coerceAtLeast(0.dp),
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(modifier = mainPillModifier) {
@@ -713,23 +742,43 @@ fun ExpandedIslandOverlay(
 ) {
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
+    val screenHeightDp = configuration.screenHeightDp.dp
     val density = LocalDensity.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val cutoutDiameterDp = with(density) { maxOf((cutoutInfo.radiusPx * 2f).toDp(), 36.dp) }
+    val cutoutDiameterDp = with(density) {
+        if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
+    }.coerceIn(16.dp, 36.dp)
+    val outlineAllowanceDp = 2.dp
+    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+    val compactCornerRadius = compactPillThickness / 2f
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-    val compactExtraDp = if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
-    val compactWidth = if (isLandscape) 36.dp else (cutoutDiameterDp + compactExtraDp)
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else 36.dp
+    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+    val compactExtraDp = when {
+        expandedType == IslandType.FLASHLIGHT -> 48.dp
+        minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED -> 100.dp
+        minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
+        else -> 60.dp
+    }
+    val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + compactExtraDp)
+    val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else compactPillThickness
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
 
-    val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(8.dp)
+    val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(0.dp)
     val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
-    val cardWidth = screenWidthDp - (horizontalMarginDp * 2)
-    val cardHeight = if (expandedType == IslandType.FLASHLIGHT) 190.dp else 220.dp
+    val cardWidth = if (expandedType == IslandType.FLASHLIGHT) {
+        minOf(screenWidthDp - 96.dp, 220.dp)
+    } else {
+        screenWidthDp - (horizontalMarginDp * 2)
+    }
+    val cardHeight = if (expandedType == IslandType.FLASHLIGHT) {
+        if (isLandscape) minOf(screenHeightDp - 36.dp, 290.dp) else 290.dp
+    } else {
+        220.dp
+    }
 
     val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
     val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
@@ -739,14 +788,14 @@ fun ExpandedIslandOverlay(
         (cutoutInfo.centerX - (screenWidthPx / 2f)).toDp()
     }
 
-    val bubbleOffsetXDp = if (isLandscape) cutoutOffsetX else cutoutOffsetX + (compactWidth / 2f) + 26.dp
-    val bubbleOffsetYDp = if (isLandscape) (compactHeight / 2f) + 26.dp else 0.dp
+    val bubbleOffsetXDp = if (isLandscape) cutoutOffsetX else cutoutOffsetX + (compactWidth / 2f) + (compactPillThickness / 2f) + 8.dp
+    val bubbleOffsetYDp = if (isLandscape) (compactHeight / 2f) + (compactPillThickness / 2f) + 8.dp else 0.dp
 
-    val startWidth = if (fromTinyDot) 36.dp else compactWidth
-    val startHeight = if (fromTinyDot) 36.dp else compactHeight
+    val startWidth = if (fromTinyDot) compactPillThickness else compactWidth
+    val startHeight = if (fromTinyDot) compactPillThickness else compactHeight
     val startOffsetX = if (fromTinyDot) bubbleOffsetXDp else cutoutOffsetX
     val startOffsetY = if (fromTinyDot) bubbleOffsetYDp else 0.dp
-    val startCorner = 18.dp
+    val startCorner = compactCornerRadius
 
     val morphProgress = remember { Animatable(0f) }
 
@@ -839,18 +888,14 @@ fun ExpandedIslandOverlay(
                 .scale(touchScale)
                 .clip(containerShape)
                 .then(
-                    if (expandedType == IslandType.FLASHLIGHT) {
-                        Modifier.border(0.75.dp, Color.White.copy(alpha = 0.35f * expandedAlpha), containerShape)
-                    } else if (showProgressOutline && mediaInfo.hasMedia) {
-                        Modifier.islandFluidProgressBorder(
-                            progressFraction = animatedProgress,
-                            cornerRadius = currentCornerRadius,
-                            shape = containerShape,
-                            strokeWidth = 0.75.dp,
-                            trackColor = Color(0x30FFFFFF),
-                            progressColor = mediaInfo.dominantColor,
-                        )
-                    } else Modifier
+                    Modifier.islandFluidProgressBorder(
+                        progressFraction = if (showProgressOutline && mediaInfo.hasMedia && expandedType == IslandType.MEDIA) animatedProgress else 0f,
+                        cornerRadius = currentCornerRadius,
+                        shape = containerShape,
+                        strokeWidth = 0.75.dp,
+                        trackColor = Color(0x30FFFFFF),
+                        progressColor = mediaInfo.dominantColor,
+                    )
                 ),
             shape = containerShape,
             color = Color.Black,
@@ -1012,11 +1057,11 @@ fun Modifier.islandFluidProgressBorder(
         )
         is Outline.Rounded -> drawRoundRect(
             color = trackColor,
-            topLeft = Offset(outline.roundRect.left, outline.roundRect.top),
-            size = Size(outline.roundRect.width, outline.roundRect.height),
+            topLeft = Offset(outline.roundRect.left + halfStroke, outline.roundRect.top + halfStroke),
+            size = Size(outline.roundRect.width - strokePx, outline.roundRect.height - strokePx),
             cornerRadius = CornerRadius(
-                outline.roundRect.topLeftCornerRadius.x,
-                outline.roundRect.topLeftCornerRadius.y,
+                (outline.roundRect.topLeftCornerRadius.x - halfStroke).coerceAtLeast(0f),
+                (outline.roundRect.topLeftCornerRadius.y - halfStroke).coerceAtLeast(0f),
             ),
             style = Stroke(width = strokePx),
         )
@@ -1395,12 +1440,18 @@ internal fun CompactIslandContent(
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
+    waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
-    val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 36.dp).toPx() }
+    val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + cutoutDiameterDp).toPx() }
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (mediaInfo.isPlaying) 0.28f else 0.08f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "compact_glow_alpha",
+    )
 
     if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
@@ -1414,17 +1465,20 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
+                        val outlineAllowanceDp = 2.dp
+                        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+                        val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(albumArtSize)
                                     .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                                 contentScale = ContentScale.Crop,
                             )
@@ -1435,7 +1489,7 @@ internal fun CompactIslandContent(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
-                            contentAlignment = Alignment.TopCenter,
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
@@ -1481,6 +1535,18 @@ internal fun CompactIslandContent(
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .layout { measurable, constraints ->
+                                        val extraPx = 6.dp.roundToPx()
+                                        val placeable = measurable.measure(
+                                            constraints.copy(
+                                                minHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                                maxHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                            )
+                                        )
+                                        layout(placeable.width.coerceAtLeast(0), constraints.maxHeight.coerceAtLeast(0)) {
+                                            placeable.place(0, 0)
+                                        }
+                                    }
                                     .progressiveBlur(
                                         direction = 1,
                                         startFraction = 0.65f,
@@ -1532,7 +1598,7 @@ internal fun CompactIslandContent(
                                 Brush.verticalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        mediaInfo.dominantColor.copy(alpha = 0.28f),
+                                        mediaInfo.dominantColor.copy(alpha = glowAlpha),
                                     )
                                 )
                             )
@@ -1544,6 +1610,7 @@ internal fun CompactIslandContent(
                     isPlaying = mediaInfo.isPlaying,
                     maxHeightDp = 13.5f,
                     accentColor = mediaInfo.dominantColor,
+                    barCount = waveformBandCount,
                 )
             }
         }
@@ -1559,17 +1626,20 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
+                        val outlineAllowanceDp = 2.dp
+                        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+                        val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
-                            contentAlignment = Alignment.Center,
+                            contentAlignment = Alignment.CenterEnd,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(albumArtSize)
                                     .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                                 contentScale = ContentScale.Crop,
                             )
@@ -1580,7 +1650,7 @@ internal fun CompactIslandContent(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
-                            contentAlignment = Alignment.CenterStart,
+                            contentAlignment = Alignment.CenterEnd,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
@@ -1626,6 +1696,18 @@ internal fun CompactIslandContent(
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .layout { measurable, constraints ->
+                                        val extraPx = 6.dp.roundToPx()
+                                        val placeable = measurable.measure(
+                                            constraints.copy(
+                                                minWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                                maxWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                            )
+                                        )
+                                        layout(constraints.maxWidth.coerceAtLeast(0), placeable.height.coerceAtLeast(0)) {
+                                            placeable.place(0, 0)
+                                        }
+                                    }
                                     .progressiveBlur(
                                         direction = 0,
                                         startFraction = 0.65f,
@@ -1677,7 +1759,7 @@ internal fun CompactIslandContent(
                                 Brush.horizontalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        mediaInfo.dominantColor.copy(alpha = 0.28f),
+                                        mediaInfo.dominantColor.copy(alpha = glowAlpha),
                                     )
                                 )
                             )
@@ -1689,6 +1771,7 @@ internal fun CompactIslandContent(
                     isPlaying = mediaInfo.isPlaying,
                     maxHeightDp = 13.5f,
                     accentColor = mediaInfo.dominantColor,
+                    barCount = waveformBandCount,
                 )
             }
         }
@@ -1717,6 +1800,7 @@ internal fun ExpandedIslandContent(
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
     showCameraSwoop: Boolean = OverlayPreferences.showCameraSwoopFlow.collectAsState().value,
+    waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -2164,8 +2248,9 @@ internal fun ExpandedIslandContent(
                             isPlaying = mediaInfo.isPlaying,
                             maxHeightDp = 20f,
                             accentColor = mediaInfo.dominantColor,
-                            barWidth = 4.dp,
-                            barSpacing = 3.dp,
+                            barCount = waveformBandCount,
+                            barWidth = if (waveformBandCount > 5) 3.2.dp else 4.dp,
+                            barSpacing = if (waveformBandCount > 5) 2.4.dp else 3.dp,
                             minHeight = 4.dp,
                             barCornerRadius = 2.dp,
                         )
@@ -2291,6 +2376,7 @@ private fun EqualizerWaveform(
     maxHeightDp: Float,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    barCount: Int = OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT,
     barWidth: Dp = 2.2.dp,
     barSpacing: Dp = 2.dp,
     minHeight: Dp = 2.8.dp,
@@ -2344,49 +2430,131 @@ private fun EqualizerWaveform(
         ),
         label = "eq_5",
     )
+    val bar6 by infiniteTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue = 0.64f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 720, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "eq_6",
+    )
+    val bar7 by infiniteTransition.animateFloat(
+        initialValue = 0.18f,
+        targetValue = 0.56f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 540, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "eq_7",
+    )
+
+    // Staggered physics springs from center outward for playing <-> paused transitions
+    val playProgress3 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMedium)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+        },
+        label = "play_p3",
+    )
+    val playProgress2 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        },
+        label = "play_p2",
+    )
+    val playProgress4 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        },
+        label = "play_p4",
+    )
+    val playProgress1 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessLow)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        },
+        label = "play_p1",
+    )
+    val playProgress5 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessLow)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        },
+        label = "play_p5",
+    )
+    val playProgress6 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.70f, stiffness = 160f)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 160f)
+        },
+        label = "play_p6",
+    )
+    val playProgress7 by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = if (isPlaying) {
+            spring(dampingRatio = 0.70f, stiffness = 160f)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 160f)
+        },
+        label = "play_p7",
+    )
+
+    // Soft opacity transition: vibrant full color during playback, gently subdued when paused
+    val playAlpha by animateFloatAsState(
+        targetValue = if (isPlaying) 1.0f else 0.50f,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "eq_alpha",
+    )
 
     val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
 
-    val animatedH1 by animateFloatAsState(
-        targetValue = if (isPlaying) bar1 else restingFraction,
-        animationSpec = tween(durationMillis = 2),
-        label = "h1",
-    )
-    val animatedH2 by animateFloatAsState(
-        targetValue = if (isPlaying) bar2 else restingFraction,
-        animationSpec = tween(durationMillis = 4),
-        label = "h2",
-    )
-    val animatedH3 by animateFloatAsState(
-        targetValue = if (isPlaying) bar3 else restingFraction,
-        animationSpec = tween(durationMillis = 8),
-        label = "h3",
-    )
-    val animatedH4 by animateFloatAsState(
-        targetValue = if (isPlaying) bar4 else restingFraction,
-        animationSpec = tween(durationMillis = 16),
-        label = "h4",
-    )
-    val animatedH5 by animateFloatAsState(
-        targetValue = if (isPlaying) bar5 else restingFraction,
-        animationSpec = tween(durationMillis = 20),
-        label = "h5",
-    )
+    val animatedH1 = restingFraction + (bar1 - restingFraction) * playProgress1.coerceAtLeast(0f)
+    val animatedH2 = restingFraction + (bar2 - restingFraction) * playProgress2.coerceAtLeast(0f)
+    val animatedH3 = restingFraction + (bar3 - restingFraction) * playProgress3.coerceAtLeast(0f)
+    val animatedH4 = restingFraction + (bar4 - restingFraction) * playProgress4.coerceAtLeast(0f)
+    val animatedH5 = restingFraction + (bar5 - restingFraction) * playProgress5.coerceAtLeast(0f)
+    val animatedH6 = restingFraction + (bar6 - restingFraction) * playProgress6.coerceAtLeast(0f)
+    val animatedH7 = restingFraction + (bar7 - restingFraction) * playProgress7.coerceAtLeast(0f)
 
-    val heights = listOf(animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
+    val heights = when {
+        barCount <= 3 -> listOf(animatedH1, animatedH2, animatedH3)
+        barCount == 4 -> listOf(animatedH1, animatedH2, animatedH3, animatedH4)
+        barCount == 5 -> listOf(animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
+        barCount == 6 -> listOf(animatedH6, animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
+        else -> listOf(animatedH6, animatedH1, animatedH2, animatedH3, animatedH4, animatedH5, animatedH7)
+    }
+
+    val effectiveBarWidth = if (barWidth == 2.2.dp && barCount >= 7) 2.0.dp else barWidth
+    val effectiveBarSpacing = if (barSpacing == 2.dp && barCount >= 7) 1.6.dp else barSpacing
+    val effectiveCornerRadius = if (barCornerRadius == barWidth / 2f) effectiveBarWidth / 2f else barCornerRadius
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(barSpacing),
+        horizontalArrangement = Arrangement.spacedBy(effectiveBarSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         heights.forEach { fraction ->
             Box(
                 modifier = Modifier
-                    .width(barWidth)
+                    .width(effectiveBarWidth)
                     .height((maxHeightDp * fraction).dp.coerceAtLeast(minHeight))
-                    .clip(RoundedCornerShape(barCornerRadius))
-                    .background(accentColor)
+                    .clip(RoundedCornerShape(effectiveCornerRadius))
+                    .background(accentColor.copy(alpha = playAlpha))
             )
         }
     }

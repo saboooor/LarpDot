@@ -337,14 +337,29 @@ class IslandOverlayViewController(
         val isSplit = hasActiveMusic && hasFlashlight
         val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context)
 
-        val cutoutDiameterPx = maxOf(cutout.radiusPx * 2f, 36f * density)
-        val isBlended = OverlayPreferences.minimizedAlbumArtStyleFlow.value == OverlayPreferences.AlbumArtStyle.BLENDED
+        val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
+        val outlineAllowancePx = 2f * density
+        val compactPillThicknessPx = cutoutDiameterPx + (outlineAllowancePx * 2f)
+        val compactPillThicknessDp = compactPillThicknessPx / density
+        val nestedArtSizeDp = (compactPillThicknessDp - 12f).coerceIn(16f, 24f)
+        val nestedExtraDp = compactPillThicknessDp + nestedArtSizeDp
+        val blendedExtraDp = compactPillThicknessDp * 3f
+
+        val minimizedStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.value
         val compactExtraDp = if (hasActiveMusic) {
-            if (isBlended) 108f else 72f
+            when (minimizedStyle) {
+                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedExtraDp
+                OverlayPreferences.AlbumArtStyle.NESTED -> nestedExtraDp
+                else -> 60f
+            }
         } else if (hasFlashlight) {
-            64f
+            48f
         } else {
-            if (isBlended) 108f else 72f
+            when (minimizedStyle) {
+                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedExtraDp
+                OverlayPreferences.AlbumArtStyle.NESTED -> nestedExtraDp
+                else -> 60f
+            }
         }
         val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight
 
@@ -354,9 +369,9 @@ class IslandOverlayViewController(
         val posY: Int
 
         if (isLandscape) {
-            val pillWPx = (36f * density).toInt()
+            val pillWPx = compactPillThicknessPx.toInt()
             val pillHPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
-            val splitExtraHPx = if (isSplit) ((36f + 8f) * density).toInt() else 0
+            val splitExtraHPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
             val paddingPx = (14f * density).toInt()
             val topExtraPx = if (showTitlePref) (20f * density).toInt() else 0
             val minTitleWPx = (140f * density).toInt()
@@ -374,14 +389,14 @@ class IslandOverlayViewController(
                 minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             }
             posX = (orientedCenterX - targetWidth / 2f).toInt()
-            val topAnchor = (cutout.centerY - (pillHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+            val topAnchor = (cutout.centerY - (pillHPx / 2f)).toInt().coerceAtLeast(0)
             posY = (topAnchor - paddingPx - topExtraPx).coerceAtLeast(0)
         } else {
             val compactWPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
-            val compactHPx = (36f * density).toInt()
-            val splitExtraWPx = if (isSplit) ((36f + 8f) * density).toInt() else 0
+            val compactHPx = compactPillThicknessPx.toInt()
+            val splitExtraWPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
             val paddingHorizontalPx = (14f * density).toInt()
-            val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
+            val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast(0)
             val topPaddingPx = if (showTitlePref) (20f * density).toInt() else (14f * density).toInt()
             val bottomPaddingPx = (14f * density).toInt()
             val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
@@ -455,7 +470,7 @@ class IslandOverlayViewController(
         val compactHPx = if (isLandscape) (cutoutDiameterPx + (compactExtraDp * density)).toInt() else (36f * density).toInt()
         val topAnchor = (effectiveCutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast((8f * density).toInt())
         val windowPosY = (topAnchor - paddingPx).coerceAtLeast(0)
-        val cardHPx = (220f * density).toInt()
+        val cardHPx = (310f * density).toInt()
 
         @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or

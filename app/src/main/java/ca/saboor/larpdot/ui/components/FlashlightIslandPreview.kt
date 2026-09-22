@@ -59,8 +59,8 @@ fun FlashlightIslandPreview(
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isSimulated by FlashlightController.isSimulated.collectAsState()
 
-    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
-    val compactExtraDp = 52.dp
+    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
+    val compactExtraDp = 48.dp
     val compactWidth = cutoutDiameterDp + compactExtraDp
 
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
@@ -94,12 +94,15 @@ fun FlashlightIslandPreview(
                 .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
+            val outlineAllowanceDp = 2.dp
+            val compactHeight = cutoutDiameterDp + (outlineAllowanceDp * 2)
+            val compactCornerRadius = compactHeight / 2f
             Surface(
                 modifier = Modifier
                     .width(compactWidth)
-                    .height(36.dp)
-                    .border(0.75.dp, FlashlightAmber.copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
-                shape = RoundedCornerShape(18.dp),
+                    .height(compactHeight)
+                    .border(0.75.dp, Color(0x30FFFFFF), RoundedCornerShape(compactCornerRadius)),
+                shape = RoundedCornerShape(compactCornerRadius),
                 color = Color.Black,
                 shadowElevation = 6.dp,
             ) {
@@ -125,21 +128,23 @@ fun FlashlightIslandPreview(
         }
 
         // Expanded Card Live Preview
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .border(0.75.dp, FlashlightAmber.copy(alpha = 0.35f), containerShape),
-            shape = containerShape,
-            color = Color.Black,
-            shadowElevation = 14.dp,
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp),
-                contentAlignment = Alignment.TopStart,
+                    .width(220.dp)
+                    .height(290.dp)
+                    .border(0.75.dp, Color(0x30FFFFFF), containerShape),
+                shape = containerShape,
+                color = Color.Black,
+                shadowElevation = 14.dp,
             ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
                 ExpandedFlashlightContent(
                     cutoutDiameterDp = cutoutDiameterDp,
                     isExpanded = true,
@@ -170,6 +175,7 @@ fun FlashlightIslandPreview(
                         .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
                 )
             }
+        }
         }
 
         // Action Controls: Quick Toggle and Simulation Toggle

@@ -1,15 +1,17 @@
 package ca.saboor.larpdot.ui.overlay
 
+import android.os.Build
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,43 +23,41 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 val FlashlightWhite = Color.White
@@ -70,9 +70,7 @@ val FlashlightAmberDark = Color(0xFFFF8F00)
 
 /**
  * Minimized pill content when Flashlight is active:
- * Left Wing: Crisp white flashlight icon with subtle breathing pulse and clean padding.
- * Center: Hole punch clearance spacer.
- * Right Wing: Symmetrical clearance spacer keeping cutout strictly centered.
+ * Symmetrically aligned capsule keeping the camera cutout centered.
  */
 @Composable
 fun CompactFlashlightContent(
@@ -92,6 +90,7 @@ fun CompactFlashlightContent(
         ),
         label = "pulse_alpha",
     )
+    val torchIconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
 
     if (isLandscape) {
         Column(
@@ -100,25 +99,20 @@ fun CompactFlashlightContent(
                 .background(Color.Black),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Top Wing: Flashlight icon
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.BottomCenter,
             ) {
                 Icon(
                     imageVector = Icons.Default.FlashlightOn,
                     contentDescription = "Flashlight Active",
                     tint = Color.White.copy(alpha = pulseAlpha),
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(torchIconSize),
                 )
             }
-
-            // Hole punch clearance spacer
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
-
-            // Bottom Wing: Symmetrical balance spacer
             Spacer(
                 modifier = Modifier
                     .weight(1f)
@@ -132,25 +126,20 @@ fun CompactFlashlightContent(
                 .background(Color.Black),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left Wing: Flashlight icon with tight, clean padding
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(
                     imageVector = Icons.Default.FlashlightOn,
                     contentDescription = "Flashlight Active",
                     tint = Color.White.copy(alpha = pulseAlpha),
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(torchIconSize),
                 )
             }
-
-            // Hole punch clearance spacer
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
-
-            // Right Wing: Symmetrical balance spacer
             Spacer(
                 modifier = Modifier
                     .weight(1f)
@@ -161,10 +150,13 @@ fun CompactFlashlightContent(
 }
 
 /**
- * Rich expanded island card for Flashlight control:
- * Top Row: Status badge & close action.
- * Middle: Large animated torch glyph, status readout, and M3 power switch.
- * Bottom: Real-time brightness slider (if supported by hardware/simulation) with -/+ nudges.
+ * Taller and narrower Pixel-inspired Dynamic Island Flashlight Card:
+ * - Completely pure black OLED background (Color.Black).
+ * - Standard Material Flashlight icon.
+ * - Dynamic colors extracted directly from system wallpaper via Material You (dynamicDarkColorScheme).
+ * - Upward-projecting light beam cone originating from the Material Flashlight icon.
+ * - Horizontal pill slider bar at the top of the beam with continuous vertical drag control.
+ * - Tapping on the expanded island toggles / turns off the flashlight.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -176,262 +168,195 @@ fun ExpandedFlashlightContent(
     cutoutInfo: CutoutInfo? = null,
     cardHorizontalMarginDp: Dp = 14.dp,
 ) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
+
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    val isStrengthSupported by FlashlightController.isStrengthSupported.collectAsState()
-    val isPixelLightActive by FlashlightController.isPixelLightActive.collectAsState()
 
-    val infiniteTransition = rememberInfiniteTransition(label = "expanded_torch_pulse")
-    val pulseGlow by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.65f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "expanded_glow",
+    val currentMaxStrength by rememberUpdatedState(maxStrength)
+    val currentIsFlashlightOn by rememberUpdatedState(isFlashlightOn)
+
+    // Dynamic Material You system accent colors
+    val accentColor = remember(context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            dynamicDarkColorScheme(context).primary
+        } else {
+            Color(0xFFF2B8B5)
+        }
+    }
+
+    // Whether user is actively dragging the slider
+    var isDragging by remember { mutableStateOf(false) }
+
+    // Normalized intensity fraction (0.05f to 1.0f)
+    var intensityFraction by remember {
+        val initial = if (maxStrength > 1) {
+            (torchStrength.toFloat() / maxStrength).coerceIn(0.05f, 1.0f)
+        } else {
+            1.0f
+        }
+        mutableFloatStateOf(initial)
+    }
+
+    // Only sync from external torchStrength when user is NOT actively dragging
+    LaunchedEffect(torchStrength, maxStrength) {
+        if (!isDragging && maxStrength > 1) {
+            intensityFraction = (torchStrength.toFloat() / maxStrength).coerceIn(0.05f, 1.0f)
+        }
+    }
+
+    // Smooth transition for on/off toggle (cone fades in/out)
+    val onOffProgress by animateFloatAsState(
+        targetValue = if (isFlashlightOn) 1f else 0f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "anim_on_off",
     )
+
+    var lastHapticStep by remember { mutableIntStateOf((intensityFraction * 4).toInt()) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .background(
-                Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0.30f to Color.Transparent,
-                        1.00f to Color.White.copy(alpha = 0.08f),
-                    )
-                )
-            )
+            .background(Color.Black) // Pure OLED Black
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onCollapse() })
-            },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // Row 1: Header with Chip and Close Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                // Amber active status pill
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.14f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(if (isFlashlightOn) FlashlightAmber else Color.Gray),
-                        )
-                        Text(
-                            text = if (isPixelLightActive) "PIXELLIGHT BOOST" else if (isFlashlightOn) "FLASHLIGHT ON" else "STANDBY",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp,
-                            ),
-                            color = if (isFlashlightOn) FlashlightAmberLight else Color.White.copy(alpha = 0.6f),
-                        )
-                    }
-                }
-
-                // Hole punch clearance spacer
-                Spacer(modifier = Modifier.width(cutoutDiameterDp))
-
-                // Close / collapse button
-                IconButton(
-                    onClick = onCollapse,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Collapse",
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            // Row 2: Large Icon, Info, and Primary Power Toggle Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    // Radiant torch icon glyph
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(
-                                        FlashlightAmberLight.copy(alpha = if (isFlashlightOn) pulseGlow else 0.1f),
-                                        FlashlightAmber.copy(alpha = if (isFlashlightOn) pulseGlow * 0.5f else 0.05f),
-                                        Color.Transparent,
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                            contentDescription = "Flashlight",
-                            tint = if (isFlashlightOn) FlashlightAmberLight else Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = "Flashlight",
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = if (isFlashlightOn) {
-                                if (isPixelLightActive) {
-                                    "PixelLight Boost: $torchStrength / $maxStrength"
-                                } else if (isStrengthSupported && maxStrength > 1) {
-                                    "Brightness: ${(torchStrength.toFloat() / maxStrength * 100).roundToInt()}%"
-                                } else {
-                                    "Illuminating \u2022 Tap to turn off"
-                                }
-                            } else {
-                                "Turned off"
-                            },
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal),
-                            color = Color.White.copy(alpha = 0.75f),
-                        )
-                    }
-                }
-
-                // Tactile M3 Power Toggle Pill
-                Surface(
-                    onClick = {
+                detectTapGestures(
+                    onTap = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         FlashlightController.toggleFlashlight()
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isFlashlightOn) FlashlightAmber else Color(0x33FFFFFF),
-                    modifier = Modifier
-                        .width(64.dp)
-                        .height(46.dp),
-                    shadowElevation = 2.dp,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.PowerSettingsNew,
-                            contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
-                            tint = if (isFlashlightOn) Color(0xFF1B1A1E) else Color.White,
-                            modifier = Modifier.size(26.dp),
-                        )
                     }
-                }
-            }
-
-            // Row 3: Brightness / Strength Slider or Info Bar
-            if (isStrengthSupported && maxStrength > 1) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    IconButton(
-                        onClick = {
-                            if (torchStrength > 1) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                FlashlightController.setStrength(torchStrength - 1)
+                )
+            },
+    ) {
+        // Interactive Light Cone, Slider Bar & Material Flashlight Icon Area
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    top = (cutoutDiameterDp - 4.dp).coerceAtLeast(16.dp),
+                    bottom = 16.dp,
+                )
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            isDragging = true
+                            FlashlightController.setUserInteracting(true)
+                            if (!currentIsFlashlightOn) {
+                                FlashlightController.turnOn()
                             }
                         },
-                        modifier = Modifier.size(34.dp),
-                        enabled = torchStrength > 1,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Remove,
-                            contentDescription = "Decrease Brightness",
-                            tint = if (torchStrength > 1) Color.White else Color.White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
+                        onDragEnd = {
+                            isDragging = false
+                            val finalStrength = (intensityFraction * currentMaxStrength).roundToInt().coerceIn(1, currentMaxStrength)
+                            FlashlightController.flushStrength(finalStrength)
+                            FlashlightController.setUserInteracting(false)
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            FlashlightController.setUserInteracting(false)
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
 
-                    Slider(
-                        value = torchStrength.toFloat(),
-                        onValueChange = { newLevel ->
-                            FlashlightController.setStrength(newLevel.roundToInt())
-                        },
-                        onValueChangeFinished = {
-                            FlashlightController.flushStrength(torchStrength)
-                        },
-                        valueRange = 1f..maxStrength.toFloat(),
-                        steps = if (maxStrength > 30) 0 else (maxStrength - 2),
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(
-                            thumbColor = FlashlightAmber,
-                            activeTrackColor = FlashlightAmber,
-                            inactiveTrackColor = FlashlightAmber.copy(alpha = 0.24f),
+                            // Vertical drag: Dragging UP decreases Y -> increases brightness
+                            val deltaFraction = -dragAmount.y / 150f
+                            val newFraction = (intensityFraction + deltaFraction).coerceIn(0.05f, 1.0f)
+                            if (abs(newFraction - intensityFraction) > 0.005f) {
+                                val currentStep = (newFraction * 4).toInt()
+                                if (currentStep != lastHapticStep || newFraction >= 0.99f || newFraction <= 0.06f) {
+                                    lastHapticStep = currentStep
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                                intensityFraction = newFraction
+                                val newLevel = (newFraction * currentMaxStrength).roundToInt().coerceIn(1, currentMaxStrength)
+                                FlashlightController.setStrength(newLevel)
+                            }
+                        }
+                    )
+                },
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            // Light Cone Canvas and Horizontal Slider Bar
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val centerX = size.width / 2f
+                val canvasHeight = size.height
+
+                // Material Flashlight icon height at bottom (~36dp + 4dp padding)
+                val iconAreaHeight = 44.dp.toPx()
+                val beamOriginY = canvasHeight - iconAreaHeight
+                val beamBaseWidth = 16.dp.toPx()
+
+                // Vertical Travel Range for the horizontal slider bar
+                val maxTravelY = 6.dp.toPx() // Topmost position
+                val minTravelY = beamOriginY - 16.dp.toPx() // Lowest position
+
+                val currentSliderY = minTravelY - ((minTravelY - maxTravelY) * intensityFraction.coerceIn(0.05f, 1.0f))
+
+                // Width of top horizontal slider bar & beam based on height
+                val travelProgress = ((minTravelY - currentSliderY) / (minTravelY - maxTravelY)).coerceIn(0f, 1f)
+                val topBeamWidth = (42.dp.toPx()) + (68.dp.toPx() * travelProgress)
+                val barHeight = 6.dp.toPx()
+
+                // 1. Upward Projecting Light Cone
+                val beamPath = Path().apply {
+                    moveTo(centerX - beamBaseWidth / 2f, beamOriginY)
+                    lineTo(centerX - topBeamWidth / 2f, currentSliderY)
+                    lineTo(centerX + topBeamWidth / 2f, currentSliderY)
+                    lineTo(centerX + beamBaseWidth / 2f, beamOriginY)
+                    close()
+                }
+
+                if (isFlashlightOn && onOffProgress > 0.02f) {
+                    drawPath(
+                        path = beamPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.85f * onOffProgress),
+                                accentColor.copy(alpha = 0.45f * onOffProgress),
+                                accentColor.copy(alpha = 0.12f * onOffProgress),
+                            ),
+                            startY = currentSliderY,
+                            endY = beamOriginY,
                         ),
                     )
+                } else {
+                    // Subtle translucent guide when unlit
+                    drawPath(
+                        path = beamPath,
+                        color = Color.White.copy(alpha = 0.04f),
+                    )
+                }
 
-                    IconButton(
-                        onClick = {
-                            if (torchStrength < maxStrength) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                FlashlightController.setStrength(torchStrength + 1)
-                            }
-                        },
-                        modifier = Modifier.size(34.dp),
-                        enabled = torchStrength < maxStrength,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Increase Brightness",
-                            tint = if (torchStrength < maxStrength) Color.White else Color.White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WbSunny,
-                        contentDescription = null,
-                        tint = FlashlightAmberLight,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = if (isFlashlightOn) "Hardware torch active at full brightness" else "Tap power button to activate flashlight",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.70f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                // 2. Horizontal Slider Bar (Pill Handle at top of beam)
+                val sliderColor = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.35f)
+                drawRoundRect(
+                    color = sliderColor,
+                    topLeft = Offset(centerX - topBeamWidth / 2f, currentSliderY - barHeight / 2f),
+                    size = Size(topBeamWidth, barHeight),
+                    cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f),
+                )
+            }
+
+            // Regular Material Flashlight Icon at bottom of beam
+            IconButton(
+                onClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    FlashlightController.toggleFlashlight()
+                },
+                modifier = Modifier
+                    .padding(bottom = 2.dp)
+                    .size(44.dp),
+            ) {
+                Icon(
+                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
+                    contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
+                    tint = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.40f),
+                    modifier = Modifier.size(32.dp),
+                )
             }
         }
     }

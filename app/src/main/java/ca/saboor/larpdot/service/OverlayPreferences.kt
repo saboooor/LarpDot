@@ -31,6 +31,8 @@ object OverlayPreferences {
     private const val KEY_USE_PIXELLIGHT = "use_pixellight" 
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
+    private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
+    const val DEFAULT_WAVEFORM_BAND_COUNT = 5
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -141,6 +143,9 @@ object OverlayPreferences {
     val isDebugModeFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
     val showDebugDotFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
 
+    private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
+    val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -168,6 +173,7 @@ object OverlayPreferences {
     private var isFlashlightTapToToggleInitialized = false
     private var isUsePixelLightInitialized = false
     private var isDebugModeInitialized = false
+    private var isWaveformBandCountInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -468,4 +474,19 @@ object OverlayPreferences {
 
     fun isShowDebugDotEnabled(context: Context): Boolean = isDebugModeEnabled(context)
     fun setShowDebugDotEnabled(context: Context, enabled: Boolean) = setDebugModeEnabled(context, enabled)
+
+    fun getWaveformBandCount(context: Context): Int {
+        if (!isWaveformBandCountInitialized) {
+            val count = getPrefs(context).getInt(KEY_WAVEFORM_BAND_COUNT, DEFAULT_WAVEFORM_BAND_COUNT)
+            _waveformBandCountFlow.value = count
+            isWaveformBandCountInitialized = true
+        }
+        return _waveformBandCountFlow.value
+    }
+
+    fun setWaveformBandCount(context: Context, count: Int) {
+        getPrefs(context).edit().putInt(KEY_WAVEFORM_BAND_COUNT, count).apply()
+        _waveformBandCountFlow.value = count
+        isWaveformBandCountInitialized = true
+    }
 }

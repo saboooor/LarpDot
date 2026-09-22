@@ -70,6 +70,7 @@ fun ExpandedIslandPreview(
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
 
     val hasNotificationAccess = remember(context) {
@@ -94,8 +95,18 @@ fun ExpandedIslandPreview(
     // Always display realistic media so styles, shapes, blur, and waveforms are immediately visible
     val previewTrack = if (nowPlaying.hasMedia) nowPlaying else sampleTrack
 
-    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(20.dp, 32.dp)
-    val compactExtraDp = if (minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED) 108.dp else 72.dp
+    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
+    val outlineAllowanceDp = 2.dp
+    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+    val compactCornerRadius = compactPillThickness / 2f
+    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+    val nestedActiveExtraDp = compactPillThickness + nestedArtSize
+    val blendedActiveExtraDp = compactPillThickness * 3
+    val compactExtraDp = when (minimizedStyle) {
+        OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
+        OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
+        else -> 60.dp
+    }
     val compactWidth = cutoutDiameterDp + compactExtraDp
 
     val progressFraction = if (previewTrack.durationMs > 0) {
@@ -133,20 +144,18 @@ fun ExpandedIslandPreview(
             Surface(
                 modifier = Modifier
                     .width(compactWidth)
-                    .height(36.dp)
+                    .height(compactPillThickness)
                     .then(
-                        if (showProgressOutline) {
-                            Modifier.islandFluidProgressBorder(
-                                progressFraction = animatedProgress,
-                                cornerRadius = 18.dp,
-                                shape = RoundedCornerShape(18.dp),
-                                strokeWidth = 0.75.dp,
-                                trackColor = Color(0x30FFFFFF),
-                                progressColor = previewTrack.dominantColor,
-                            )
-                        } else Modifier
+                        Modifier.islandFluidProgressBorder(
+                            progressFraction = if (showProgressOutline) animatedProgress else 0f,
+                            cornerRadius = compactCornerRadius,
+                            shape = RoundedCornerShape(compactCornerRadius),
+                            strokeWidth = 0.75.dp,
+                            trackColor = Color(0x30FFFFFF),
+                            progressColor = previewTrack.dominantColor,
+                        )
                     ),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(compactCornerRadius),
                 color = Color.Black,
                 shadowElevation = 6.dp,
             ) {
@@ -158,6 +167,8 @@ fun ExpandedIslandPreview(
                         mediaInfo = previewTrack,
                         cutoutDiameterDp = cutoutDiameterDp,
                         onExpand = {},
+                        albumArtStyle = minimizedStyle,
+                        waveformBandCount = waveformBandCount,
                     )
                     // Hardware camera cutout visualizer centered between wings
                     Box(
@@ -177,16 +188,14 @@ fun ExpandedIslandPreview(
                 .fillMaxWidth()
                 .height(220.dp)
                 .then(
-                    if (showProgressOutline) {
-                        Modifier.islandFluidProgressBorder(
-                            progressFraction = animatedProgress,
-                            cornerRadius = expandedCornerRadiusDp,
-                            shape = containerShape,
-                            strokeWidth = 0.75.dp,
-                            trackColor = Color(0x30FFFFFF),
-                            progressColor = previewTrack.dominantColor,
-                        )
-                    } else Modifier
+                    Modifier.islandFluidProgressBorder(
+                        progressFraction = if (showProgressOutline) animatedProgress else 0f,
+                        cornerRadius = expandedCornerRadiusDp,
+                        shape = containerShape,
+                        strokeWidth = 0.75.dp,
+                        trackColor = Color(0x30FFFFFF),
+                        progressColor = previewTrack.dominantColor,
+                    )
                 ),
             shape = containerShape,
             color = Color.Black,
@@ -205,6 +214,7 @@ fun ExpandedIslandPreview(
                     onCollapse = { /* In-app preview */ },
                     cutoutInfo = cutoutInfo,
                     cardHorizontalMarginDp = 16.dp,
+                    waveformBandCount = waveformBandCount,
                 )
 
                 // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
