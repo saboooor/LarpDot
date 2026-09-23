@@ -214,6 +214,9 @@ fun CompactIslandOverlay(
         )
 
         // The minimized main island NEVER hides when expanding from tiny dot!
+        // Instant hide on expand: the expanded overlay starts at the exact same position/size,
+        // so an immediate cutover is seamless. Collapse smoothness comes from the expanded
+        // window's exit animation + the compact pill's own animateDpAsState enter animation.
         val pillVisibilityAlpha = if (isExpanded && !fromTinyDot) 0f else 1f
 
         val coroutineScope = rememberCoroutineScope()
@@ -370,7 +373,6 @@ fun CompactIslandOverlay(
                 modifier = Modifier
                     .width(currentWidth)
                     .height(currentHeight)
-                    .scale(islandScale)
                     .graphicsLayer {
                         alpha = pillVisibilityAlpha
                         val stretchMag = dragOffsetAnim.value / maxDragOffsetPx
@@ -707,6 +709,7 @@ fun ExpandedIslandOverlay(
     isExpanded: Boolean,
     onCollapse: () -> Unit,
     onFirstFrameDrawn: () -> Unit = {},
+    startPressScale: Float = 1.0f, // Scale of the compact pill at moment of expansion tap
     modifier: Modifier = Modifier,
 ) {
     val configuration = LocalConfiguration.current
@@ -760,11 +763,23 @@ fun ExpandedIslandOverlay(
     val bubbleOffsetXDp = if (isLandscape) cutoutOffsetX else cutoutOffsetX + (compactWidth / 2f) + (compactPillThickness / 2f) + 8.dp
     val bubbleOffsetYDp = if (isLandscape) (compactHeight / 2f) + (compactPillThickness / 2f) + 8.dp else 0.dp
 
-    val startWidth = if (fromTinyDot) compactPillThickness else compactWidth
-    val startHeight = if (fromTinyDot) compactPillThickness else compactHeight
+    val startWidth = if (fromTinyDot) compactPillThickness else compactWidth * startPressScale
+    val startHeight = if (fromTinyDot) compactPillThickness else compactHeight * startPressScale
     val startOffsetX = if (fromTinyDot) bubbleOffsetXDp else cutoutOffsetX
-    val startOffsetY = if (fromTinyDot) bubbleOffsetYDp else 0.dp
-    val startCorner = compactCornerRadius
+    val startOffsetY = if (fromTinyDot) {
+        bubbleOffsetYDp
+    } else if (!isLandscape) {
+        // Align the morphing card's visual CENTER with the compact pill's center (cutoutCenterYDp).
+        // The expanded Box has 14.dp top padding, so the card's natural top = 14.dp from screen top.
+        // We need offset = compact_pill_center - (14.dp + startHeight/2).
+        cutoutCenterYDp - (startHeight / 2f) - 14.dp
+    } else {
+        0.dp
+    }
+    // startCorner must also be scaled: graphicsLayer scaleY on the compact pill scales its clip
+    // shape too, so the visual corner radius = compactCornerRadius * islandScale. Match that here
+    // so startCorner/startHeight = 0.5 (full pill) regardless of the press scale.
+    val startCorner = if (fromTinyDot) compactCornerRadius else compactCornerRadius * startPressScale
 
     val morphProgress = remember { Animatable(0f) }
 
@@ -775,16 +790,16 @@ fun ExpandedIslandOverlay(
             onFirstFrameDrawn()
             morphProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = 360,
-                    easing = MtIslandEnterEasing,
+                animationSpec = spring(
+                    dampingRatio = 0.80f,  // Slight overshoot — card briefly larger than target
+                    stiffness = 340f,
                 ),
             )
         } else {
             morphProgress.animateTo(
                 targetValue = 0f,
                 animationSpec = tween(
-                    durationMillis = 280,
+                    durationMillis = 300,
                     easing = MtIslandExitEasing,
                 ),
             )
@@ -792,28 +807,34 @@ fun ExpandedIslandOverlay(
     }
 
     val progress = morphProgress.value
+    // Clamped to [0,1] for alpha/scale — the spring can overshoot beyond 1.0 freely on size/shape
+    val clampedProgress = progress.coerceIn(0f, 1f)
 
     fun lerpDp(start: Dp, stop: Dp, fraction: Float): Dp =
         (start.value + (stop.value - start.value) * fraction).dp
 
+    // Use raw progress for size/corner so spring overshoot makes the card bounce slightly larger
     val currentWidth = lerpDp(startWidth, cardWidth, progress)
     val currentHeight = lerpDp(startHeight, cardHeight, progress)
     val currentOffsetX = lerpDp(startOffsetX, 0.dp, progress)
     val currentOffsetY = lerpDp(startOffsetY, 0.dp, progress)
-    val currentCornerRadius = lerpDp(startCorner, expandedCornerRadiusDp, progress)
-    val currentElevation = lerpDp(if (fromTinyDot) 4.dp else 2.dp, 14.dp, progress.coerceIn(0f, 1f))
+    val currentCornerRadius = lerpDp(startCorner, expandedCornerRadiusDp, clampedProgress)
+    val currentElevation = lerpDp(if (fromTinyDot) 4.dp else 2.dp, 14.dp, clampedProgress)
 
     val squircleRadiusPx = with(density) { currentCornerRadius.toPx() }
-    val containerShape = squircleShape(squircleRadiusPx)
+    // Morph curvature: 0.55f ≈ circular bezier arc (pill corners) → 0.80f (squircle)
+    val curvatureFactor = 0.55f + (0.25f * clampedProgress)
+    val containerShape = squircleShape(squircleRadiusPx, curvatureFactor)
 
-    // Staggered crossfade matching Apple dynamic island:
-    // Compact content / icon gently fades out in the first 25% of the morph
-    val compactAlpha = (1f - (progress / 0.25f)).coerceIn(0f, 1f)
-    // Expanded controls gently fade in from 30% to 80% as the card opens up
-    val expandedAlpha = ((progress - 0.30f) / 0.50f).coerceIn(0f, 1f)
+    // Staggered crossfade:
+    // Compact content fades out quickly in the first 20% of the morph
+    val compactAlpha = (1f - (clampedProgress / 0.20f)).coerceIn(0f, 1f)
+    // Expanded controls fade in starting at 18% — slight overlap with compact exit for seamlessness
+    val expandedAlpha = ((clampedProgress - 0.18f) / 0.45f).coerceIn(0f, 1f)
 
-    val expandedContentScale = 0.94f + (0.06f * progress.coerceIn(0f, 1f))
-    val expandedOffsetY = 10.dp * (1f - progress.coerceIn(0f, 1f))
+    // Subtle entrance: expanded content slides up slightly and scales up from 96% as it appears
+    val expandedContentScale = 0.96f + (0.04f * clampedProgress)
+    val expandedOffsetY = 8.dp * (1f - clampedProgress)
 
     val progressFraction = if (mediaInfo.durationMs > 0) {
         (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
@@ -823,21 +844,6 @@ fun ExpandedIslandOverlay(
         targetValue = progressFraction,
         animationSpec = tween(durationMillis = 350, easing = LinearEasing),
         label = "expanded_progress",
-    )
-
-    var isTouchFeedbackActive by remember { mutableStateOf(false) }
-    LaunchedEffect(isExpanded) {
-        if (isExpanded) {
-            isTouchFeedbackActive = true
-            delay(180L)
-            isTouchFeedbackActive = false
-        }
-    }
-
-    val touchScale by animateFloatAsState(
-        targetValue = if (isTouchFeedbackActive) 1.035f else 1f,
-        animationSpec = spring(dampingRatio = 0.76f, stiffness = 380f),
-        label = "expanded_touch_scale",
     )
 
     Box(
@@ -854,7 +860,6 @@ fun ExpandedIslandOverlay(
                 .offset(x = currentOffsetX, y = currentOffsetY)
                 .width(currentWidth)
                 .height(currentHeight)
-                .scale(touchScale)
                 .clip(containerShape)
                 .then(
                     Modifier.islandFluidProgressBorder(

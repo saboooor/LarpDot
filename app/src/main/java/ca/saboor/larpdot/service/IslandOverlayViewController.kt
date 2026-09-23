@@ -211,6 +211,7 @@ class IslandOverlayViewController(
                     expandedType = activeExpandedType,
                     fromTinyDot = isExpandedFromTinyDot,
                     isExpanded = isIslandExpanded,
+                    startPressScale = 1.08f, // Matches islandScale spring target in CompactIslandOverlay
                     onCollapse = { collapseOverlay() },
                     onFirstFrameDrawn = {
                         if (isIslandExpanded) {
