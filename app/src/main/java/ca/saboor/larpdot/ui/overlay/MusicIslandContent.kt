@@ -1,97 +1,60 @@
 package ca.saboor.larpdot.ui.overlay
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.FlashlightOff
-import ca.saboor.larpdot.flashlight.FlashlightController
-import androidx.compose.runtime.withFrameNanos
-
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
+import android.os.Build
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import android.graphics.RenderEffect
-import android.graphics.RuntimeShader
-import android.os.Build
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.ShaderBrush
-import org.intellij.lang.annotations.Language
 import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.toShape
-import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.asComposePath
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,21 +62,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -123,1288 +84,21 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-
-/**
- * Authentic cubic-bezier spring and ease curves extracted directly from com.pryshedko.mtisland
- * (zl0.java, jc1.java, f92.java).
- */
-val MtIslandEnterEasing = CubicBezierEasing(0.25f, 0.9f, 0.35f, 1.02f) // Soft overshoot bounce
-val MtIslandExitEasing = CubicBezierEasing(0.42f, 0.0f, 0.12f, 1.0f)  // Apple-style snap collapse
-val MtIslandDecelerate = CubicBezierEasing(0.0f, 0.0f, 0.2f, 1.0f)
-val MtIslandStandard = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
-
-enum class IslandType {
-    MEDIA,
-    FLASHLIGHT,
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun CompactIslandOverlay(
-    cutoutInfo: CutoutInfo,
-    mediaInfo: MediaTrackInfo,
-    isFlashlightOn: Boolean = false,
-    isExpanded: Boolean = false,
-    fromTinyDot: Boolean = false,
-    onExpand: (IslandType, Boolean) -> Unit,
-    onFlashlightToggle: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val hapticFeedback = LocalHapticFeedback.current
-    val isDebugMode by OverlayPreferences.isDebugModeFlow.collectAsState()
-
-    val isMusicActiveGlobal by MediaPlaybackState.isMusicActive.collectAsState()
-    val isMusicActive = mediaInfo.hasMedia && isMusicActiveGlobal
-    val isFlashlightActive = isFlashlightOn
-    val isPillActive = isMusicActive || isFlashlightActive
-
-    var isMediaSessionActive by remember { mutableStateOf(isMusicActive) }
-    LaunchedEffect(isMusicActive) {
-        if (isMusicActive) {
-            isMediaSessionActive = true
-        } else {
-            delay(320L)
-            isMediaSessionActive = false
-        }
-    }
-
-    val isSplit = isMusicActive && isFlashlightActive
-    val showFlashlightInMain = isFlashlightActive && !isMusicActive
-
-    var lastDisplayType by remember { mutableStateOf(IslandType.MEDIA) }
-    LaunchedEffect(showFlashlightInMain, isMusicActive, isFlashlightActive) {
-        if (showFlashlightInMain) {
-            lastDisplayType = IslandType.FLASHLIGHT
-        } else if (isMusicActive) {
-            lastDisplayType = IslandType.MEDIA
-        } else if (isFlashlightActive) {
-            lastDisplayType = IslandType.FLASHLIGHT
-        }
-    }
-
-    val activeDisplayType = when {
-        showFlashlightInMain -> IslandType.FLASHLIGHT
-        isMusicActive -> IslandType.MEDIA
-        isFlashlightActive -> IslandType.FLASHLIGHT
-        else -> lastDisplayType
-    }
-
-    val configuration = LocalConfiguration.current
-        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-        val cutoutDiameterDp = with(density) {
-            if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
-        }.coerceIn(16.dp, 36.dp)
-        val outlineAllowanceDp = 2.dp
-        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
-        val compactCornerRadius = compactPillThickness / 2f
-
-        val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-        val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-        val nestedActiveExtraDp = compactPillThickness + nestedArtSize
-        val blendedActiveExtraDp = compactPillThickness * 3
-
-        val activeExtraDp = when {
-            activeDisplayType == IslandType.FLASHLIGHT -> 48.dp
-            isMusicActive -> when (minimizedStyle) {
-                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
-                OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
-                else -> 60.dp
-            }
-            lastDisplayType == IslandType.FLASHLIGHT -> 48.dp
-            else -> when (minimizedStyle) {
-                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
-                OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
-                else -> 60.dp
-            }
-        }
-        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + activeExtraDp)
-        val compactHeight = if (isLandscape) (cutoutDiameterDp + activeExtraDp) else compactPillThickness
-
-        val currentCornerRadius by animateDpAsState(
-            targetValue = compactCornerRadius,
-            animationSpec = tween(durationMillis = 280, easing = if (isPillActive) MtIslandEnterEasing else MtIslandExitEasing),
-            label = "compact_corner",
-        )
-
-        val targetPillColor = if (isPillActive) Color.Black else Color.Transparent
-        val pillColor by animateColorAsState(
-            targetValue = targetPillColor,
-            animationSpec = tween(durationMillis = 280, easing = if (isPillActive) MtIslandEnterEasing else MtIslandExitEasing),
-            label = "pill_color",
-        )
-
-        val currentWidth by animateDpAsState(
-            targetValue = if (isPillActive) compactWidth else cutoutDiameterDp,
-            animationSpec = tween(durationMillis = 280, easing = if (isPillActive) MtIslandEnterEasing else MtIslandExitEasing),
-            label = "compact_width",
-        )
-        val currentHeight by animateDpAsState(
-            targetValue = if (isPillActive) compactHeight else cutoutDiameterDp,
-            animationSpec = tween(durationMillis = 280, easing = if (isPillActive) MtIslandEnterEasing else MtIslandExitEasing),
-            label = "compact_height",
-        )
-
-        val contentAlpha by animateFloatAsState(
-            targetValue = if (isPillActive) 1f else 0f,
-            animationSpec = tween(durationMillis = if (isPillActive) 220 else 180),
-            label = "compact_content_alpha",
-        )
-
-        var isIslandPressed by remember { mutableStateOf(false) }
-        val islandScale by animateFloatAsState(
-            targetValue = if (isIslandPressed) 1.08f else 1f,
-            animationSpec = if (isIslandPressed) {
-                spring(dampingRatio = 0.72f, stiffness = 450f)
-            } else {
-                spring(dampingRatio = 0.78f, stiffness = 360f)
-            },
-            label = "compact_scale",
-        )
-
-
-        val progressFraction = if (mediaInfo.durationMs > 0) {
-            (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
-        } else 0f
-
-        val animatedProgress by animateFloatAsState(
-            targetValue = progressFraction,
-            animationSpec = tween(durationMillis = 350, easing = LinearEasing),
-            label = "compact_progress",
-        )
-
-        // The minimized main island NEVER hides when expanding from tiny dot!
-        val pillVisibilityAlpha = if (isExpanded && !fromTinyDot) 0f else 1f
-
-        val coroutineScope = rememberCoroutineScope()
-        val dragOffsetAnim = remember { Animatable(0f) }
-        val maxDragOffsetPx = with(density) { 8.dp.toPx() }
-
-        val showMinimizedTitlePref by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
-        val showMinimizedTitle = showMinimizedTitlePref && activeDisplayType == IslandType.MEDIA
-        val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
-        val isTitleActive = showMinimizedTitle && isMediaSessionActive && mediaInfo.title.isNotBlank() && !isExpanded
-        val showTitleText = isTitleActive && isMusicActive
-
-        val compactHPx = with(density) { compactHeight.toPx() }
-        val topPaddingPx = with(density) { (if (showMinimizedTitle) 20.dp else 14.dp).toPx() }
-        val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(0f)
-        val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
-        val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }.coerceAtLeast(0.dp)
-
-        val paddingHorizontalDp = 14.dp
-        val minTitleWDp = 180.dp
-        val baseWDp = maxOf(compactWidth, currentWidth) + (paddingHorizontalDp * 2)
-        val effectiveBaseWDp = if (showMinimizedTitle) maxOf(baseWDp, minTitleWDp) else baseWDp
-        val pillStartOffset = ((effectiveBaseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
-
-        val paddingLandscapeDp = 14.dp
-        val topExtraLandscapeDp = if (showMinimizedTitle) 20.dp else 0.dp
-        val landscapeTopOffsetDp = paddingLandscapeDp + topExtraLandscapeDp
-        val pillTopOffsetLandscape = (landscapeTopOffsetDp + (compactHeight - currentHeight) / 2).coerceAtLeast(0.dp)
-
-        val mainPillModifier = Modifier
-            .pointerInput(isPillActive, isExpanded, mediaInfo.hasMedia) {
-                if (isPillActive && !isExpanded) {
-                    var totalDragX = 0f
-                    var totalDragY = 0f
-                    var hasTriggered = false
-                    val swipeThresholdPx = with(density) { 28.dp.toPx() }
-
-                    detectDragGestures(
-                        onDragStart = {
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                        },
-                        onDragEnd = {
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                            coroutineScope.launch {
-                                dragOffsetAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                                )
-                            }
-                        },
-                        onDragCancel = {
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                            coroutineScope.launch {
-                                dragOffsetAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                                )
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            totalDragX += dragAmount.x
-                            totalDragY += dragAmount.y
-
-                            if (activeDisplayType == IslandType.MEDIA && isMusicActive && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY)) {
-                                val damped = (totalDragX * 0.10f).coerceIn(-maxDragOffsetPx, maxDragOffsetPx)
-                                coroutineScope.launch {
-                                    dragOffsetAnim.snapTo(damped)
-                                }
-                            }
-
-                            if (!hasTriggered) {
-                                if (totalDragY > 20f && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
-                                } else if (activeDisplayType == IslandType.MEDIA && isMusicActive && totalDragX > swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    MediaPlaybackState.skipNext()
-                                } else if (activeDisplayType == IslandType.MEDIA && isMusicActive && totalDragX < -swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    MediaPlaybackState.skipPrevious()
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            .pointerInput(isPillActive, isExpanded, activeDisplayType) {
-                if (isPillActive && !isExpanded) {
-                    val tapToExpand = OverlayPreferences.tapToExpandFlow.value
-                    detectTapGestures(
-                        onPress = {
-                            isIslandPressed = true
-                            try {
-                                val longPressJob = coroutineScope.launch {
-                                    delay(300L)
-                                    if (isIslandPressed) {
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        if (activeDisplayType == IslandType.MEDIA) {
-                                            if (tapToExpand) {
-                                                openPlayerApp(context, mediaInfo)
-                                            } else {
-                                                onExpand(IslandType.MEDIA, false)
-                                            }
-                                        } else {
-                                            if (tapToExpand) {
-                                                onFlashlightToggle()
-                                            } else {
-                                                onExpand(IslandType.FLASHLIGHT, false)
-                                            }
-                                        }
-                                        tryAwaitRelease()
-                                    }
-                                }
-                                tryAwaitRelease()
-                                longPressJob.cancel()
-                            } finally {
-                                isIslandPressed = false
-                            }
-                        },
-                        onTap = {
-                            if (activeDisplayType == IslandType.MEDIA) {
-                                if (tapToExpand) {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onExpand(IslandType.MEDIA, false)
-                                } else {
-                                    openPlayerApp(context, mediaInfo)
-                                }
-                            } else {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                if (tapToExpand) {
-                                    onExpand(IslandType.FLASHLIGHT, false)
-                                } else {
-                                    onFlashlightToggle()
-                                }
-                            }
-                        },
-                    )
-                }
-            }
-
-        val mainPill = @Composable {
-            Surface(
-                modifier = Modifier
-                    .width(currentWidth)
-                    .height(currentHeight)
-                    .scale(islandScale)
-                    .graphicsLayer {
-                        alpha = pillVisibilityAlpha
-                        val stretchMag = dragOffsetAnim.value / maxDragOffsetPx
-                        val maxStretch = 0.06f
-                        val isSwiping = kotlin.math.abs(stretchMag) > 0.01f
-                        scaleX = (1f + kotlin.math.abs(stretchMag) * maxStretch) * islandScale
-                        scaleY = islandScale
-                        transformOrigin = if (isSwiping) {
-                            if (stretchMag >= 0f) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
-                        } else {
-                            TransformOrigin.Center
-                        }
-                    }
-                    .clip(RoundedCornerShape(currentCornerRadius))
-                    .then(
-                        Modifier.islandFluidProgressBorder(
-                            progressFraction = if (activeDisplayType == IslandType.MEDIA && isMusicActive && showProgressOutline) animatedProgress else 0f,
-                            cornerRadius = currentCornerRadius,
-                            shape = RoundedCornerShape(currentCornerRadius),
-                            strokeWidth = 0.75.dp,
-                            trackColor = Color(0x30FFFFFF).copy(alpha = (48f / 255f) * contentAlpha),
-                            progressColor = mediaInfo.dominantColor,
-                        )
-                    ),
-                shape = RoundedCornerShape(currentCornerRadius),
-                color = pillColor,
-                shadowElevation = if (isExpanded) 12.dp else (if (isPillActive) 4.dp else 0.dp),
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (contentAlpha > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = contentAlpha },
-                        ) {
-                            Crossfade(
-                                targetState = activeDisplayType,
-                                animationSpec = tween(durationMillis = 220),
-                                label = "compact_content_type",
-                            ) { displayType ->
-                                if (displayType == IslandType.MEDIA) {
-                                    CompactIslandContent(
-                                        mediaInfo = mediaInfo,
-                                        cutoutDiameterDp = cutoutDiameterDp,
-                                        onExpand = { onExpand(IslandType.MEDIA, false) },
-                                    )
-                                } else {
-                                    CompactFlashlightContent(
-                                        cutoutDiameterDp = cutoutDiameterDp,
-                                        onExpand = { onExpand(IslandType.FLASHLIGHT, false) },
-                                        onFlashlightToggle = onFlashlightToggle,
-                                        isLandscape = isLandscape,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isDebugMode && contentAlpha < 0.05f) {
-                        val dotDiameter = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceAtLeast(18.dp)
-                        Box(
-                            modifier = Modifier
-                                .size(dotDiameter)
-                                .clip(CircleShape)
-                                .background(Color(0x4000E676)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size((dotDiameter - 4.dp).coerceAtLeast(12.dp))
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF00E676)),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        val bubbleSize by animateDpAsState(
-            targetValue = if (isSplit) compactPillThickness else 0.dp,
-            animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
-            label = "bubble_size",
-        )
-        val bubbleAlpha by animateFloatAsState(
-            targetValue = if (isSplit) 1f else 0f,
-            animationSpec = tween(durationMillis = 220),
-            label = "bubble_alpha",
-        )
-        val bubbleScale by animateFloatAsState(
-            targetValue = if (isSplit) 1f else 0.4f,
-            animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
-            label = "bubble_scale",
-        )
-        val bubbleGap by animateDpAsState(
-            targetValue = if (isSplit) 8.dp else 0.dp,
-            animationSpec = tween(durationMillis = 280, easing = MtIslandExitEasing),
-            label = "bubble_gap",
-        )
-
-        val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
-        val pulseAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.65f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulse_alpha",
-        )
-
-        // Unified secondary bubble — single Surface shared by both music and flashlight.
-        // Only the inner content and tap actions vary by activeDisplayType.
-        var isBubblePressed by remember { mutableStateOf(false) }
-        val bubblePressScale by animateFloatAsState(
-            targetValue = if (isBubblePressed) 1.15f else 1f,
-            animationSpec = spring(dampingRatio = 0.70f, stiffness = 500f),
-            label = "bubble_press_scale",
-        )
-
-        val secondaryBubble = @Composable {
-            if (bubbleSize > 0.5.dp || bubbleAlpha > 0.01f) {
-                // Determine secondary type: the one that is NOT in the main pill
-                val secondaryType = if (activeDisplayType == IslandType.FLASHLIGHT) IslandType.MEDIA else IslandType.FLASHLIGHT
-                Surface(
-                    modifier = Modifier
-                        .size(bubbleSize)
-                        .scale(bubblePressScale * bubbleScale)
-                        .graphicsLayer {
-                            alpha = (if (fromTinyDot && isExpanded) 0f else pillVisibilityAlpha) * bubbleAlpha
-                            clip = true
-                            shape = CircleShape
-                        }
-                        .clip(CircleShape)
-                        .border(0.75.dp, Color(0x30FFFFFF).copy(alpha = (48f / 255f) * bubbleAlpha), CircleShape)
-                        .pointerInput(isExpanded, isSplit, secondaryType) {
-                            if (!isExpanded && isSplit) {
-                                val tapToExpand = OverlayPreferences.tapToExpandFlow.value
-                                detectTapGestures(
-                                    onPress = {
-                                        isBubblePressed = true
-                                        try {
-                                            val job = coroutineScope.launch {
-                                                delay(300L)
-                                                if (isBubblePressed) {
-                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    if (secondaryType == IslandType.MEDIA) {
-                                                        if (tapToExpand) {
-                                                            openPlayerApp(context, mediaInfo)
-                                                        } else {
-                                                            onExpand(IslandType.MEDIA, true)
-                                                        }
-                                                    } else {
-                                                        if (tapToExpand) {
-                                                            onFlashlightToggle()
-                                                        } else {
-                                                            onExpand(IslandType.FLASHLIGHT, true)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            tryAwaitRelease()
-                                            job.cancel()
-                                        } finally {
-                                            isBubblePressed = false
-                                        }
-                                    },
-                                    onTap = {
-                                        isBubblePressed = false
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        if (secondaryType == IslandType.MEDIA) {
-                                            if (tapToExpand) {
-                                                onExpand(IslandType.MEDIA, true)
-                                            } else {
-                                                MediaPlaybackState.togglePlayPause()
-                                            }
-                                        } else {
-                                            if (tapToExpand) {
-                                                onExpand(IslandType.FLASHLIGHT, true)
-                                            } else {
-                                                onFlashlightToggle()
-                                            }
-                                        }
-                                    },
-                                )
-                            }
-                        },
-                    shape = CircleShape,
-                    color = Color.Black,
-                    shadowElevation = if (isExpanded) 12.dp else if (bubbleAlpha > 0.1f) 4.dp else 0.dp,
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (secondaryType == IslandType.MEDIA) {
-                            if (mediaInfo.albumArt != null) {
-                                Image(
-                                    bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                    contentDescription = "Music Artwork",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            } else {
-                                val bubbleIconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Music Active",
-                                    tint = mediaInfo.dominantColor.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(bubbleIconSize),
-                                )
-                            }
-                        } else {
-                            val iconScale = (bubbleSize / cutoutDiameterDp).coerceIn(0f, 1f)
-                            val bubbleIconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
-                            Icon(
-                                imageVector = Icons.Default.FlashlightOn,
-                                contentDescription = "Flashlight Active",
-                                tint = Color.White.copy(alpha = pulseAlpha),
-                                modifier = Modifier
-                                    .size(bubbleIconSize)
-                                    .scale(iconScale),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = if (isLandscape) Alignment.Center else Alignment.TopCenter,
-        ) {
-            if (!isLandscape && isTitleActive) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .width(effectiveBaseWDp)
-                        .height(pillTopOffsetDp)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.2.sp,
-                        ),
-                        color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .basicMarquee(iterations = Int.MAX_VALUE)
-                            .graphicsLayer { alpha = pillVisibilityAlpha * contentAlpha },
-                    )
-                }
-            }
-
-            if (isLandscape && isTitleActive) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 60.dp)
-                        .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                        .graphicsLayer { alpha = pillVisibilityAlpha * contentAlpha },
-                ) {
-                    Text(
-                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                        color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-                    )
-                }
-            }
-
-            val isBubbleVisible = isSplit || bubbleSize > 0.5.dp || bubbleAlpha > 0.01f
-
-            if (isLandscape) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = pillTopOffsetLandscape.coerceAtLeast(0.dp)),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(modifier = mainPillModifier) {
-                        mainPill()
-                    }
-                    if (isBubbleVisible) {
-                        Spacer(modifier = Modifier.height(bubbleGap))
-                        secondaryBubble()
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(
-                            top = pillTopOffsetDp.coerceAtLeast(0.dp),
-                            start = pillStartOffset.coerceAtLeast(0.dp),
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(modifier = mainPillModifier) {
-                        mainPill()
-                    }
-                    if (isBubbleVisible) {
-                        Spacer(modifier = Modifier.width(bubbleGap))
-                        secondaryBubble()
-                    }
-                }
-            }
-        }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun ExpandedIslandOverlay(
-    cutoutInfo: CutoutInfo,
-    mediaInfo: MediaTrackInfo,
-    isFlashlightOn: Boolean = false,
-    expandedType: IslandType = IslandType.MEDIA,
-    fromTinyDot: Boolean = false,
-    isExpanded: Boolean,
-    onCollapse: () -> Unit,
-    onFirstFrameDrawn: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    val configuration = LocalConfiguration.current
-    val screenWidthDp = configuration.screenWidthDp.dp
-    val screenHeightDp = configuration.screenHeightDp.dp
-    val density = LocalDensity.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    val cutoutDiameterDp = with(density) {
-        if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
-    }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
-    val compactCornerRadius = compactPillThickness / 2f
-    val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
-    val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
-
-    val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-    val compactExtraDp = when {
-        expandedType == IslandType.FLASHLIGHT -> 48.dp
-        minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED -> 100.dp
-        minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
-        else -> 60.dp
-    }
-    val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + compactExtraDp)
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else compactPillThickness
-    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
-
-    val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(0.dp)
-    val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
-    val cardWidth = if (expandedType == IslandType.FLASHLIGHT) {
-        minOf(screenWidthDp - 96.dp, 220.dp)
-    } else {
-        screenWidthDp - (horizontalMarginDp * 2)
-    }
-    val cardHeight = if (expandedType == IslandType.FLASHLIGHT) {
-        if (isLandscape) minOf(screenHeightDp - 36.dp, 290.dp) else 290.dp
-    } else {
-        220.dp
-    }
-
-    val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
-    val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
-
-    val cutoutOffsetX = with(density) {
-        val screenWidthPx = screenWidthDp.toPx()
-        (cutoutInfo.centerX - (screenWidthPx / 2f)).toDp()
-    }
-
-    val bubbleOffsetXDp = if (isLandscape) cutoutOffsetX else cutoutOffsetX + (compactWidth / 2f) + (compactPillThickness / 2f) + 8.dp
-    val bubbleOffsetYDp = if (isLandscape) (compactHeight / 2f) + (compactPillThickness / 2f) + 8.dp else 0.dp
-
-    val startWidth = if (fromTinyDot) compactPillThickness else compactWidth
-    val startHeight = if (fromTinyDot) compactPillThickness else compactHeight
-    val startOffsetX = if (fromTinyDot) bubbleOffsetXDp else cutoutOffsetX
-    val startOffsetY = if (fromTinyDot) bubbleOffsetYDp else 0.dp
-    val startCorner = compactCornerRadius
-
-    val morphProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(isExpanded, fromTinyDot) {
-        if (isExpanded) {
-            morphProgress.snapTo(0f)
-            withFrameNanos { }
-            onFirstFrameDrawn()
-            morphProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = 360,
-                    easing = MtIslandEnterEasing,
-                ),
-            )
-        } else {
-            morphProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = 280,
-                    easing = MtIslandExitEasing,
-                ),
-            )
-        }
-    }
-
-    val progress = morphProgress.value
-
-    fun lerpDp(start: Dp, stop: Dp, fraction: Float): Dp =
-        (start.value + (stop.value - start.value) * fraction).dp
-
-    val currentWidth = lerpDp(startWidth, cardWidth, progress)
-    val currentHeight = lerpDp(startHeight, cardHeight, progress)
-    val currentOffsetX = lerpDp(startOffsetX, 0.dp, progress)
-    val currentOffsetY = lerpDp(startOffsetY, 0.dp, progress)
-    val currentCornerRadius = lerpDp(startCorner, expandedCornerRadiusDp, progress)
-    val currentElevation = lerpDp(if (fromTinyDot) 4.dp else 2.dp, 14.dp, progress.coerceIn(0f, 1f))
-
-    val squircleRadiusPx = with(density) { currentCornerRadius.toPx() }
-    val containerShape = squircleShape(squircleRadiusPx)
-
-    // Staggered crossfade matching Apple dynamic island:
-    // Compact content / icon gently fades out in the first 25% of the morph
-    val compactAlpha = (1f - (progress / 0.25f)).coerceIn(0f, 1f)
-    // Expanded controls gently fade in from 30% to 80% as the card opens up
-    val expandedAlpha = ((progress - 0.30f) / 0.50f).coerceIn(0f, 1f)
-
-    val expandedContentScale = 0.94f + (0.06f * progress.coerceIn(0f, 1f))
-    val expandedOffsetY = 10.dp * (1f - progress.coerceIn(0f, 1f))
-
-    val progressFraction = if (mediaInfo.durationMs > 0) {
-        (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
-    } else 0f
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressFraction,
-        animationSpec = tween(durationMillis = 350, easing = LinearEasing),
-        label = "expanded_progress",
-    )
-
-    var isTouchFeedbackActive by remember { mutableStateOf(false) }
-    LaunchedEffect(isExpanded) {
-        if (isExpanded) {
-            isTouchFeedbackActive = true
-            delay(180L)
-            isTouchFeedbackActive = false
-        }
-    }
-
-    val touchScale by animateFloatAsState(
-        targetValue = if (isTouchFeedbackActive) 1.035f else 1f,
-        animationSpec = spring(dampingRatio = 0.76f, stiffness = 380f),
-        label = "expanded_touch_scale",
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onCollapse() })
-            }
-            .padding(14.dp),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Surface(
-            modifier = Modifier
-                .offset(x = currentOffsetX, y = currentOffsetY)
-                .width(currentWidth)
-                .height(currentHeight)
-                .scale(touchScale)
-                .clip(containerShape)
-                .then(
-                    Modifier.islandFluidProgressBorder(
-                        progressFraction = if (showProgressOutline && mediaInfo.hasMedia && expandedType == IslandType.MEDIA) animatedProgress else 0f,
-                        cornerRadius = currentCornerRadius,
-                        shape = containerShape,
-                        strokeWidth = 0.75.dp,
-                        trackColor = Color(0x30FFFFFF),
-                        progressColor = mediaInfo.dominantColor,
-                    )
-                ),
-            shape = containerShape,
-            color = Color.Black,
-            shadowElevation = currentElevation,
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (compactAlpha > 0.01f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = compactAlpha },
-                    ) {
-                        if (fromTinyDot) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (expandedType == IslandType.FLASHLIGHT) {
-                                    Icon(
-                                        imageVector = Icons.Default.FlashlightOn,
-                                        contentDescription = "Flashlight Active",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                } else {
-                                    if (mediaInfo.albumArt != null) {
-                                        Image(
-                                            bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                            contentDescription = "Music Artwork",
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                    } else {
-                                        val iconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
-                                        Icon(
-                                            imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = "Music Active",
-                                            tint = mediaInfo.dominantColor.copy(alpha = 0.9f),
-                                            modifier = Modifier.size(iconSize),
-                                        )
-                                    }
-                                }
-                            }
-                        } else if (expandedType == IslandType.FLASHLIGHT) {
-                            CompactFlashlightContent(
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                onExpand = {},
-                                onFlashlightToggle = { FlashlightController.toggleFlashlight() },
-                                isLandscape = isLandscape,
-                            )
-                        } else {
-                            CompactIslandContent(
-                                mediaInfo = mediaInfo,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                onExpand = {},
-                            )
-                        }
-                    }
-                }
-
-                if (expandedAlpha > 0.01f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                alpha = expandedAlpha
-                                scaleX = expandedContentScale
-                                scaleY = expandedContentScale
-                                translationY = with(density) { expandedOffsetY.toPx() }
-                            },
-                    ) {
-                        if (expandedType == IslandType.FLASHLIGHT) {
-                            ExpandedFlashlightContent(
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                isExpanded = isExpanded,
-                                onCollapse = onCollapse,
-                                cutoutInfo = cutoutInfo,
-                                cardHorizontalMarginDp = horizontalMarginDp,
-                            )
-                        } else {
-                            ExpandedIslandContent(
-                                mediaInfo = mediaInfo,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                isExpanded = isExpanded,
-                                onCollapse = onCollapse,
-                                cutoutInfo = cutoutInfo,
-                                cardHorizontalMarginDp = horizontalMarginDp,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-internal fun squircleShape(radiusPx: Float, curvatureFactor: Float = 0.8f) = GenericShape { size, _ ->
-    val radius = radiusPx.coerceAtMost(minOf(size.width, size.height) / 2f)
-    val controlDistance = radius * curvatureFactor
-
-    moveTo(radius, 0f)
-    lineTo(size.width - radius, 0f)
-    cubicTo(
-        size.width - radius + controlDistance,
-        0f,
-        size.width,
-        radius - controlDistance,
-        size.width,
-        radius,
-    )
-    lineTo(size.width, size.height - radius)
-    cubicTo(
-        size.width,
-        size.height - radius + controlDistance,
-        size.width - radius + controlDistance,
-        size.height,
-        size.width - radius,
-        size.height,
-    )
-    lineTo(radius, size.height)
-    cubicTo(
-        radius - controlDistance,
-        size.height,
-        0f,
-        size.height - radius + controlDistance,
-        0f,
-        size.height - radius,
-    )
-    lineTo(0f, radius)
-    cubicTo(
-        0f,
-        radius - controlDistance,
-        radius - controlDistance,
-        0f,
-        radius,
-        0f,
-    )
-    close()
-}
-
-/**
- * Sweeps song playback progress along the perimeter of the fluid morphing capsule/card.
- * Accurately traces from 12 o'clock (top center above the camera cutout) clockwise,
- * dynamically matching the container's animated width, height, and corner radius.
- */
-fun Modifier.islandFluidProgressBorder(
-    progressFraction: Float,
-    cornerRadius: Dp,
-    shape: Shape,
-    strokeWidth: Dp = 0.75.dp,
-    trackColor: Color = Color(0x30FFFFFF),
-    progressColor: Color = Color(0xFF00E676),
-): Modifier = this.drawWithContent {
-    drawContent()
-
-    val strokePx = strokeWidth.toPx()
-    val halfStroke = strokePx / 2f
-    val w = size.width
-    val h = size.height
-    val rPx = (cornerRadius.toPx() - halfStroke).coerceIn(0f, (minOf(w, h) / 2f) - halfStroke)
-
-    val left = halfStroke
-    val top = halfStroke
-    val right = w - halfStroke
-    val bottom = h - halfStroke
-
-    val outline = shape.createOutline(size, layoutDirection, this)
-
-    // 1. Ambient hairline outline follows the surface shape, including the expanded squircle.
-    when (outline) {
-        is Outline.Generic -> drawPath(
-            path = outline.path,
-            color = trackColor,
-            style = Stroke(width = strokePx),
-        )
-        is Outline.Rounded -> drawRoundRect(
-            color = trackColor,
-            topLeft = Offset(outline.roundRect.left + halfStroke, outline.roundRect.top + halfStroke),
-            size = Size(outline.roundRect.width - strokePx, outline.roundRect.height - strokePx),
-            cornerRadius = CornerRadius(
-                (outline.roundRect.topLeftCornerRadius.x - halfStroke).coerceAtLeast(0f),
-                (outline.roundRect.topLeftCornerRadius.y - halfStroke).coerceAtLeast(0f),
-            ),
-            style = Stroke(width = strokePx),
-        )
-        is Outline.Rectangle -> drawRect(
-            color = trackColor,
-            topLeft = Offset(outline.rect.left, outline.rect.top),
-            size = Size(outline.rect.width, outline.rect.height),
-            style = Stroke(width = strokePx),
-        )
-    }
-
-    // 2. Sweeping active playback progress arc
-    if (progressFraction > 0.002f) {
-        if (outline is Outline.Generic) {
-            val pathMeasure = PathMeasure()
-            pathMeasure.setPath(outline.path, forceClosed = false)
-            val progressSegment = Path()
-            val squircleRadius = cornerRadius.toPx()
-                .coerceAtMost(minOf(w, h) / 2f)
-            val startDistance = ((w / 2f) - squircleRadius)
-                .coerceIn(0f, pathMeasure.length)
-            val progressDistance = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
-            val endDistance = startDistance + progressDistance
-            pathMeasure.getSegment(
-                startDistance,
-                endDistance.coerceAtMost(pathMeasure.length),
-                progressSegment,
-                startWithMoveTo = true,
-            )
-            if (endDistance > pathMeasure.length) {
-                pathMeasure.getSegment(
-                    0f,
-                    endDistance - pathMeasure.length,
-                    progressSegment,
-                    startWithMoveTo = false,
-                )
-            }
-            drawPath(
-                path = progressSegment,
-                color = progressColor,
-                style = Stroke(width = strokePx, cap = StrokeCap.Round),
-            )
-        } else {
-        val centerX = w / 2f
-        val path = Path().apply {
-            moveTo(centerX, top)
-            lineTo(right - rPx, top)
-            arcTo(
-                rect = Rect(right - 2 * rPx, top, right, top + 2 * rPx),
-                startAngleDegrees = -90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(right, bottom - rPx)
-            arcTo(
-                rect = Rect(right - 2 * rPx, bottom - 2 * rPx, right, bottom),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(left + rPx, bottom)
-            arcTo(
-                rect = Rect(left, bottom - 2 * rPx, left + 2 * rPx, bottom),
-                startAngleDegrees = 90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(left, top + rPx)
-            arcTo(
-                rect = Rect(left, top, left + 2 * rPx, top + 2 * rPx),
-                startAngleDegrees = 180f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(centerX, top)
-        }
-
-        val pathMeasure = PathMeasure()
-        pathMeasure.setPath(path, forceClosed = true)
-        val progressLength = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
-
-        val progressSegment = Path()
-        pathMeasure.getSegment(0f, progressLength, progressSegment, startWithMoveTo = true)
-
-        drawPath(
-            path = progressSegment,
-            color = progressColor,
-            style = Stroke(width = strokePx, cap = StrokeCap.Round),
-        )
-        }
-    }
-}
-
-@Language("AGSL")
-private const val PROGRESSIVE_BLUR_SHADER = """
-    uniform shader composable;
-    uniform float2 size;
-    uniform float direction; // 0 = L->R (curved arc), 1 = T->B (curved arc), 2 = B->T, 3 = 2D (expanded island leak)
-    uniform float maxBlur;
-    uniform float startFraction;
-    uniform float uTopSeam;
-    uniform float uRightSeam;
-    uniform float uDotRadius;
-
-    const float GOLDEN_ANGLE = 2.39996323;
-
-    float gaussian(float r, float sigma) {
-        return exp(-0.5 * (r * r) / (sigma * sigma));
-    }
-
-    half4 main(float2 coord) {
-        float progress = 0.0;
-        float fadeFactor = 1.0;
-
-        if (direction < 0.5) {
-            // ONLY blur and fade on the RIGHT side towards the dot:
-            // The left perimeter and body of the album art remain 100% unblurred and solid.
-            // The right boundary curves outward in the center like a circular dome: )
-            float yc = size.y * 0.5;
-            float dy = coord.y - yc;
-            float rCurve = size.y * 0.85;
-            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dy * dy, 0.0));
-            float xEff = coord.x + curveOffset;
-
-            float blurStart = size.x * 0.40;
-            float blurEnd = size.x * 0.90;
-            float blurT = clamp((xEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
-            progress = smoothstep(0.0, 1.0, blurT);
-
-            float fadeStart = size.x * 0.50;
-            float fadeEnd = size.x * 0.96;
-            float fadeT = clamp((xEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
-            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
-        } else if (direction < 1.5) {
-            // Landscape: ONLY blur and fade on the BOTTOM side towards the dot
-            float xc = size.x * 0.5;
-            float dx = coord.x - xc;
-            float rCurve = size.x * 0.85;
-            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dx * dx, 0.0));
-            float yEff = coord.y + curveOffset;
-
-            float blurStart = size.y * 0.40;
-            float blurEnd = size.y * 0.90;
-            float blurT = clamp((yEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
-            progress = smoothstep(0.0, 1.0, blurT);
-
-            float fadeStart = size.y * 0.50;
-            float fadeEnd = size.y * 0.96;
-            float fadeT = clamp((yEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
-            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
-        } else if (direction < 2.5) {
-            // Vertical: bottom (0) -> top (1) with startFraction leak
-            float t = 1.0 - (coord.y / size.y);
-            progress = clamp((t - startFraction) / max(1.0 - startFraction, 0.001), 0.0, 1.0);
-        } else {
-            // Direction 3: 2D leak for expanded island
-            float leakTop = 20.0;
-            float topBound = uTopSeam + leakTop;
-            float progTop = clamp((topBound - coord.y) / max(topBound, 1.0), 0.0, 1.0);
-
-            float leakRight = 24.0;
-            float rightBound = uRightSeam - leakRight;
-            float progRight = clamp((coord.x - rightBound) / max(size.x - rightBound, 1.0), 0.0, 1.0);
-
-            progress = max(progTop, progRight);
-        }
-
-        // If completely faded out past the fade edge, return transparent black immediately
-        if (fadeFactor <= 0.001) {
-            return half4(0.0, 0.0, 0.0, 0.0);
-        }
-
-        float blurFactor = smoothstep(0.0, 1.0, progress);
-        float currentRadius = blurFactor * maxBlur;
-
-        if (currentRadius < 0.5) {
-            return composable.eval(coord) * fadeFactor;
-        }
-
-        half4 accumColor = half4(0.0);
-        float accumWeight = 0.0;
-        float sigma = max(currentRadius * 0.45, 0.8);
-
-        float centerWeight = gaussian(0.0, sigma);
-        accumColor += composable.eval(coord) * centerWeight;
-        accumWeight += centerWeight;
-
-        const int SAMPLES = 24;
-        for (int i = 0; i < SAMPLES; ++i) {
-            float fi = float(i);
-            float r = sqrt((fi + 0.5) / float(SAMPLES)) * currentRadius;
-            float theta = fi * GOLDEN_ANGLE;
-            float2 offset = float2(cos(theta), sin(theta)) * r;
-            float weight = gaussian(r, sigma);
-
-            accumColor += composable.eval(coord + offset) * weight;
-            accumWeight += weight;
-        }
-
-        // The fade factor is applied AFTER blur accumulation, ensuring the blur is fully faded
-        return (accumColor / accumWeight) * fadeFactor;
-    }
-"""
-
-@Language("AGSL")
-private const val ORGANIC_SCOOP_FADE_SHADER = """
-    uniform float2 uSize;
-    uniform float2 uDotCenter;
-    uniform float uDotRadius;
-    uniform float uScoopDepth;
-    uniform float uFadeWidth;
-    uniform float uHalfWidth;
-
-    float scoopY(float x) {
-        float dist = abs(x - uDotCenter.x);
-        float t = clamp(1.0 - (dist / uHalfWidth), 0.0, 1.0);
-        
-        // Perfectly symmetrical smooth sine bump
-        float bump = sin(t * 1.5707963);
-        bump = pow(max(bump, 0.0), 1.5);
-        return bump * uScoopDepth;
-    }
-
-    half4 main(float2 coord) {
-        // Guaranteed solid black over the physical camera cutout
-        if (length(coord - uDotCenter) <= uDotRadius) {
-            return half4(0.0, 0.0, 0.0, 1.0);
-        }
-
-        float sy = scoopY(coord.x);
-        float diff = coord.y - sy;
-        
-        if (diff <= 0.0) {
-            return half4(0.0, 0.0, 0.0, 1.0);
-        }
-        
-        if (diff >= uFadeWidth) {
-            return half4(0.0, 0.0, 0.0, 0.0);
-        }
-        
-        float alpha = smoothstep(uFadeWidth, 0.0, diff);
-        return half4(0.0, 0.0, 0.0, alpha);
-    }
-"""
-
-@Composable
-private fun Modifier.progressiveBlur(
-    direction: Int, // 0 = L->R, 1 = T->B, 2 = B->T, 3 = 2D leak
-    maxBlurDp: Dp = 16.dp,
-    startFraction: Float = 0f,
-    topSeamPx: Float = 0f,
-    rightSeamPx: Float = 0f,
-    dotRadiusPx: Float = 0f,
-): Modifier {
-    val density = LocalDensity.current
-    val maxBlurPx = with(density) { maxBlurDp.toPx() }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val shader = remember { RuntimeShader(PROGRESSIVE_BLUR_SHADER) }
-        return this.graphicsLayer {
-            if (size.width > 0f && size.height > 0f) {
-                shader.setFloatUniform("size", size.width, size.height)
-                shader.setFloatUniform("direction", direction.toFloat())
-                shader.setFloatUniform("maxBlur", maxBlurPx)
-                shader.setFloatUniform("startFraction", startFraction)
-                shader.setFloatUniform("uTopSeam", topSeamPx)
-                shader.setFloatUniform("uRightSeam", rightSeamPx)
-                shader.setFloatUniform("uDotRadius", dotRadiusPx)
-                renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "composable")
-                    .asComposeRenderEffect()
-            }
-        }
-    } else {
-        return this
-    }
-}
 
 /**
  * Compact Dynamic Island pill content following mtisland's layout:
@@ -1412,6 +106,7 @@ private fun Modifier.progressiveBlur(
  * Center: Precise clearance cushion for the physical camera dot.
  * Right Wing: 4-bar equalizer dancing organically to playback.
  */
+
 /**
  * Resolves a Material 3 Expressive shape for nested album art presentation.
  */
@@ -1420,7 +115,7 @@ class RotatedShape(
     private val rotationDegrees: Float,
 ) : Shape {
     override fun createOutline(
-        size: Size,
+        size: androidx.compose.ui.geometry.Size,
         layoutDirection: LayoutDirection,
         density: Density,
     ): Outline {
@@ -1883,7 +578,7 @@ internal fun ExpandedIslandContent(
 
     val activeFraction = if (isDragging) dragFraction else progressFraction
 
-    val cardDragOffsetAnim = remember { Animatable(0f) }
+    val cardDragOffsetAnim = androidx.compose.animation.core.Animatable(0f)
     val coroutineScope = rememberCoroutineScope()
     val maxCardDragOffsetPx = with(density) { 8.dp.toPx() }
 
@@ -2226,8 +921,8 @@ internal fun ExpandedIslandContent(
             val fadeWidthPx = with(density) { 72.dp.toPx() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val scoopShader = remember { RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
-                val scoopBrush = remember(scoopShader) { ShaderBrush(scoopShader) }
+                val scoopShader = remember { android.graphics.RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
+                val scoopBrush = remember(scoopShader) { androidx.compose.ui.graphics.ShaderBrush(scoopShader) }
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
@@ -2438,7 +1133,7 @@ internal fun ExpandedIslandContent(
  * and gently settles to resting dots when paused.
  */
 @Composable
-private fun EqualizerWaveform(
+internal fun EqualizerWaveform(
     isPlaying: Boolean,
     maxHeightDp: Float,
     accentColor: Color,
@@ -2627,7 +1322,7 @@ private fun EqualizerWaveform(
     }
 }
 
-private fun openPlayerApp(context: Context, track: MediaTrackInfo) {
+internal fun openPlayerApp(context: Context, track: MediaTrackInfo) {
     val controller = track.controller
     val pkg = track.playerPackageName ?: controller?.packageName
 
@@ -2650,14 +1345,14 @@ private fun openPlayerApp(context: Context, track: MediaTrackInfo) {
     }
 }
 
-private fun formatTime(ms: Long): String {
+internal fun formatTime(ms: Long): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
     val min = totalSec / 60
     val sec = totalSec % 60
     return String.format("%d:%02d", min, sec)
 }
 
-private fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
+internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     if (durationMs <= 0) return "--:--"
     val remaining = (durationMs - positionMs).coerceAtLeast(0)
     val totalSec = remaining / 1000
@@ -2665,3 +1360,4 @@ private fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     val sec = totalSec % 60
     return String.format("-%d:%02d", min, sec)
 }
+
