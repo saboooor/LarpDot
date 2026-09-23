@@ -4,6 +4,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -91,6 +92,9 @@ fun ExpandedIslandPreview(
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+    val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
+    val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
+    val isAnnouncing = isSongAnnouncement && showSongAnnouncement
 
     val hasNotificationAccess = remember(context) {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
@@ -126,7 +130,13 @@ fun ExpandedIslandPreview(
         OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
         else -> 60.dp
     }
-    val compactWidth = cutoutDiameterDp + compactExtraDp
+    val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
+    val targetCompactWidth = cutoutDiameterDp + maxOf(compactExtraDp, announcementExtraDp)
+    val animatedCompactWidth by animateDpAsState(
+        targetValue = targetCompactWidth,
+        animationSpec = tween(durationMillis = 280),
+        label = "preview_compact_width",
+    )
 
     val progressFraction = if (previewTrack.durationMs > 0) {
         (previewTrack.positionMs.toFloat() / previewTrack.durationMs).coerceIn(0f, 1f)
@@ -203,7 +213,7 @@ fun ExpandedIslandPreview(
             ) {
                 Surface(
                     modifier = Modifier
-                        .width(compactWidth)
+                        .width(animatedCompactWidth)
                         .height(compactPillThickness)
                         .then(
                             Modifier.islandFluidProgressBorder(
@@ -229,6 +239,7 @@ fun ExpandedIslandPreview(
                             onExpand = {},
                             albumArtStyle = minimizedStyle,
                             waveformBandCount = waveformBandCount,
+                            isSongAnnouncement = isAnnouncing,
                         )
                         // Hardware camera cutout visualizer centered between wings
                         Box(

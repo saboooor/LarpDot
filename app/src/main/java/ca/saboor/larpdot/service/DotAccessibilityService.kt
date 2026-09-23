@@ -45,7 +45,9 @@ class DotAccessibilityService : AccessibilityService() {
     private var isReceiverRegistered = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val eventType = event?.eventType ?: return
+        if (event == null) return
+        ForegroundAppTracker.updateFromAccessibility(event)
+        val eventType = event.eventType
         if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val pkg = event.packageName?.toString() ?: return
             topPackage = pkg
@@ -63,6 +65,9 @@ class DotAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         _isServiceConnected.value = true
+
+        ScreenStateTracker.init(this)
+        ForegroundAppTracker.init(this)
 
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -89,14 +94,28 @@ class DotAccessibilityService : AccessibilityService() {
         )
         overlayController = controller
 
-        // Reactively display or hide based on user toggle or active flashlight state
+        // Reactively display or hide based on user toggle, screen on/off, lock screen, and active flashlight state
         serviceScope.launch {
             combine(
                 OverlayPreferences.isEnabledFlow,
                 FlashlightController.isFlashlightOn,
                 OverlayPreferences.showFlashlightIslandFlow,
-            ) { isEnabled, isTorchOn, showTorchIsland ->
-                isEnabled || (isTorchOn && showTorchIsland)
+                ScreenStateTracker.isScreenOn,
+                OverlayPreferences.hideWhenScreenOffFlow,
+                ScreenStateTracker.isDeviceLocked,
+                OverlayPreferences.hideOnLockScreenFlow,
+            ) { values ->
+                val isEnabled = values[0]
+                val isTorchOn = values[1]
+                val showTorchIsland = values[2]
+                val isScreenOn = values[3]
+                val hideWhenScreenOff = values[4]
+                val isLocked = values[5]
+                val hideOnLockScreen = values[6]
+                val baseCondition = isEnabled || (isTorchOn && showTorchIsland)
+                val screenAllowed = if (hideWhenScreenOff) isScreenOn else true
+                val lockAllowed = if (hideOnLockScreen) !isLocked else true
+                baseCondition && screenAllowed && lockAllowed
             }.collectLatest { shouldShow ->
                 if (shouldShow) {
                     controller.show()
@@ -106,9 +125,17 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        // If enabled in preferences or flashlight is on upon service start, show immediately
-        val initialShow = OverlayPreferences.isOverlayEnabled(this) ||
-                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))
+        val initialScreenAllowed = if (OverlayPreferences.isHideWhenScreenOffEnabled(this)) {
+            ScreenStateTracker.isScreenOn.value
+        } else true
+        val initialLockAllowed = if (OverlayPreferences.isHideOnLockScreenEnabled(this)) {
+            !ScreenStateTracker.isDeviceLocked.value
+        } else true
+
+        // If enabled in preferences or flashlight is on upon service start, show immediately if screen allowed
+        val initialShow = (OverlayPreferences.isOverlayEnabled(this) ||
+                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))) &&
+                initialScreenAllowed && initialLockAllowed
         if (initialShow) {
             controller.show()
         }
@@ -164,7 +191,7 @@ class DotAccessibilityService : AccessibilityService() {
             private set
 
         fun isCameraAppInForeground(): Boolean {
-            val pkg = topPackage ?: instance?.rootInActiveWindow?.packageName?.toString() ?: return false
+            val pkg = ForegroundAppTracker.foregroundPackage.value ?: topPackage ?: instance?.rootInActiveWindow?.packageName?.toString() ?: return false
             return FlashlightController.isKnownCameraPackage(pkg)
         }
 
@@ -204,50 +231,43 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        /**
-         * Checks if DotAccessibilityService is currently enabled in Android Accessibility Settings.
-         */
-        fun isAccessibilityEnabled(context: Context): Boolean {
-            val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-                ?: return false
-            val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            for (service in enabledServices) {
-                val serviceInfo = service.resolveInfo?.serviceInfo ?: continue
-                if (serviceInfo.packageName == context.packageName &&
-                    serviceInfo.name == DotAccessibilityService::class.java.name
-                ) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        /**
-         * Opens Accessibility Settings directly to LarpDot's service config page.
-         */
         fun openAccessibilitySettings(context: Context) {
-            val intent = Intent("com.samsung.accessibility.installed_service").apply {
-                if (resolveActivity(context.packageManager) == null) {
-                    action = Settings.ACTION_ACCESSIBILITY_SETTINGS
-                }
-            }
-            val serviceComponent = "${context.packageName}/${DotAccessibilityService::class.java.name}"
-            val bundle = Bundle().apply {
-                putString(":settings:fragment_args_key", serviceComponent)
-            }
-            intent.putExtra(":settings:fragment_args_key", serviceComponent)
-            intent.putExtra(":settings:show_fragment_args", bundle)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             try {
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                val fallbackIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                try {
-                    context.startActivity(fallbackIntent)
-                } catch (_: Exception) {}
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
+        }
+
+        fun openAppInAccessibilitySettings(context: Context) {
+            try {
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val showArgs = "${context.packageName}/${DotAccessibilityService::class.java.canonicalName}"
+                    putExtra(":settings:fragment_args_key", showArgs)
+                    val bundle = Bundle()
+                    bundle.putString(":settings:fragment_args_key", showArgs)
+                    putExtra(":settings:show_fragment_args", bundle)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                openAccessibilitySettings(context)
+            }
+        }
+
+        fun isAccessibilityEnabled(context: Context): Boolean {
+            val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return false
+            val enabledServices = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            val colonSplitter = enabledServices.split(":")
+            val myService = "${context.packageName}/${DotAccessibilityService::class.java.canonicalName}"
+            val mySimpleService = "${context.packageName}/${DotAccessibilityService::class.java.name}"
+            return colonSplitter.any { it.equals(myService, ignoreCase = true) || it.equals(mySimpleService, ignoreCase = true) }
         }
     }
 }

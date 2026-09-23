@@ -291,7 +291,6 @@ internal const val PROGRESSIVE_BLUR_SHADER = """
             float leakRight = 24.0;
             float rightBound = uRightSeam - leakRight;
             float progRight = clamp((coord.x - rightBound) / max(size.x - rightBound, 1.0), 0.0, 1.0);
-
             progress = max(progTop, progRight);
         }
 

@@ -39,6 +39,26 @@ object MediaPlaybackState {
     private val _isMusicActive = MutableStateFlow(false)
     val isMusicActive: StateFlow<Boolean> = _isMusicActive.asStateFlow()
 
+    private val _isSongAnnouncementActive = MutableStateFlow(false)
+    val isSongAnnouncementActive: StateFlow<Boolean> = _isSongAnnouncementActive.asStateFlow()
+    private var songAnnouncementJob: Job? = null
+    private var lastAnnouncedTrackKey: String = ""
+
+    fun triggerSongAnnouncement(durationMs: Long = 3600L) {
+        songAnnouncementJob?.cancel()
+        _isSongAnnouncementActive.value = true
+        songAnnouncementJob = playbackScope.launch {
+            delay(durationMs)
+            _isSongAnnouncementActive.value = false
+        }
+    }
+
+    fun dismissSongAnnouncement() {
+        songAnnouncementJob?.cancel()
+        songAnnouncementJob = null
+        _isSongAnnouncementActive.value = false
+    }
+
     var lastPlayTime: Long = 0L
         private set
     var lastPauseTime: Long = 0L
@@ -136,6 +156,10 @@ object MediaPlaybackState {
             DominantColorExtractor.extractDominantColor(albumArt, (title + artist).hashCode())
         }
 
+        val trackKey = "${title}_${artist}".trim()
+        val wasMusicActive = _isMusicActive.value
+        val isNewTrack = trackKey.isNotBlank() && (trackKey != lastAnnouncedTrackKey || !wasMusicActive)
+
         val wasPlaying = current.isPlaying
         if (isPlaying) {
             musicGraceJob?.cancel()
@@ -143,6 +167,10 @@ object MediaPlaybackState {
             lastPlayTime = SystemClock.uptimeMillis()
             lastPauseTime = 0L
             _isMusicActive.value = true
+            if (isNewTrack) {
+                lastAnnouncedTrackKey = trackKey
+                triggerSongAnnouncement()
+            }
         } else if (wasPlaying) {
             lastPauseTime = SystemClock.uptimeMillis()
             musicGraceJob?.cancel()
@@ -260,6 +288,12 @@ object MediaPlaybackState {
             playerPackageName = newPackage,
             appName = resolvedAppName,
         )
+
+        val notifTrackKey = "${newTitle}_${newArtist}".trim()
+        if (current.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {
+            lastAnnouncedTrackKey = notifTrackKey
+            triggerSongAnnouncement()
+        }
     }
 
     fun pause() {
@@ -306,6 +340,9 @@ object MediaPlaybackState {
             }
             _currentTrack.value = track.copy(isPlaying = newPlaying)
             checkTickerState(newPlaying)
+            if (newPlaying) {
+                triggerSongAnnouncement()
+            }
             return
         }
         val controller = activeController ?: return
@@ -323,6 +360,7 @@ object MediaPlaybackState {
             val nextTitle = if (track.title == "Starboy") "Blinding Lights" else "Starboy"
             val artwork = DominantColorExtractor.createSampleArtwork(nextTitle)
             val dominant = DominantColorExtractor.extractDominantColor(artwork)
+            lastAnnouncedTrackKey = "${nextTitle}_The Weeknd"
             _currentTrack.value = track.copy(
                 title = nextTitle,
                 artist = "The Weeknd",
@@ -330,6 +368,7 @@ object MediaPlaybackState {
                 dominantColor = dominant,
                 positionMs = 0L,
             )
+            triggerSongAnnouncement()
             return
         }
         activeController?.transportControls?.skipToNext()
@@ -341,6 +380,7 @@ object MediaPlaybackState {
             val prevTitle = if (track.title == "Starboy") "Die For You" else "Starboy"
             val artwork = DominantColorExtractor.createSampleArtwork(prevTitle)
             val dominant = DominantColorExtractor.extractDominantColor(artwork)
+            lastAnnouncedTrackKey = "${prevTitle}_The Weeknd"
             _currentTrack.value = track.copy(
                 title = prevTitle,
                 artist = "The Weeknd",
@@ -348,6 +388,7 @@ object MediaPlaybackState {
                 dominantColor = dominant,
                 positionMs = 0L,
             )
+            triggerSongAnnouncement()
             return
         }
         activeController?.transportControls?.skipToPrevious()
@@ -416,6 +457,7 @@ object MediaPlaybackState {
             lastPauseTime = 0L
             _isMusicActive.value = true
 
+            lastAnnouncedTrackKey = "Starboy_The Weeknd"
             _currentTrack.value = MediaTrackInfo(
                 title = "Starboy",
                 artist = "The Weeknd",
@@ -429,6 +471,7 @@ object MediaPlaybackState {
                 appName = "Spotify",
             )
 
+            triggerSongAnnouncement()
             checkTickerState(true)
         } else {
             clear()
@@ -436,6 +479,8 @@ object MediaPlaybackState {
     }
 
     fun clear() {
+        dismissSongAnnouncement()
+        lastAnnouncedTrackKey = ""
         musicGraceJob?.cancel()
         musicGraceJob = null
         _isMusicActive.value = false

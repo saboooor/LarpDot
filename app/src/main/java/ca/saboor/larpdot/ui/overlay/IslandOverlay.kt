@@ -21,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -144,6 +145,10 @@ fun CompactIslandOverlay(
 
         val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
         val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+        val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
+        val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
+        val isAnnouncing = isSongAnnouncement && showSongAnnouncement && isMusicActive
+
         val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
         val nestedActiveExtraDp = compactPillThickness + nestedArtSize
         val blendedActiveExtraDp = compactPillThickness * 3
@@ -163,8 +168,9 @@ fun CompactIslandOverlay(
             }
         }
         val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180.dp else 0.dp
-        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp))
-        val compactHeight = if (isLandscape) (cutoutDiameterDp + activeExtraDp) else compactPillThickness
+        val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
+        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp, announcementExtraDp))
+        val compactHeight = if (isLandscape) (cutoutDiameterDp + maxOf(activeExtraDp, if (isAnnouncing) 140.dp else 0.dp)) else compactPillThickness
 
         val currentCornerRadius by animateDpAsState(
             targetValue = compactCornerRadius,
@@ -235,13 +241,7 @@ fun CompactIslandOverlay(
         val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
         val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }.coerceAtLeast(0.dp)
 
-        val paddingHorizontalDp = 14.dp
-        val minTitleWDp = 180.dp
-        val baseWDp = maxOf(compactWidth, currentWidth) + (paddingHorizontalDp * 2)
-        val pillStartOffset = ((baseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
 
-        val paddingLandscapeDp = 14.dp
-        val pillTopOffsetLandscape = (paddingLandscapeDp + (compactHeight - currentHeight) / 2).coerceAtLeast(0.dp)
 
         val mainPillModifier = Modifier
             .pointerInput(isPillActive, isExpanded, mediaInfo.hasMedia) {
@@ -316,6 +316,7 @@ fun CompactIslandOverlay(
                     val tapToExpand = OverlayPreferences.tapToExpandFlow.value
                     detectTapGestures(
                         onPress = {
+                            MediaPlaybackState.dismissSongAnnouncement()
                             isIslandPressed = true
                             try {
                                 val longPressJob = coroutineScope.launch {
@@ -419,6 +420,7 @@ fun CompactIslandOverlay(
                                         cutoutDiameterDp = cutoutDiameterDp,
                                         onExpand = { onExpand(IslandType.MEDIA, false) },
                                         showMinimizedTitle = showMinimizedTitle,
+                                        isSongAnnouncement = isAnnouncing,
                                     )
                                 } else {
                                     CompactFlashlightContent(
@@ -605,17 +607,25 @@ fun CompactIslandOverlay(
             }
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = modifier.fillMaxSize(),
             contentAlignment = if (isLandscape) Alignment.Center else Alignment.TopCenter,
         ) {
             val isBubbleVisible = isSplit || bubbleSize > 0.5.dp || bubbleAlpha > 0.01f
 
+            val splitExtraWDp = if (isSplit) (compactPillThickness + bubbleGap) else 0.dp
+            val baseWDp = (maxWidth - splitExtraWDp).coerceAtLeast(currentWidth)
+            val pillStartOffset = ((baseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
+
+            val splitExtraHDp = if (isSplit) (compactPillThickness + bubbleGap) else 0.dp
+            val baseHDp = (maxHeight - splitExtraHDp).coerceAtLeast(currentHeight)
+            val pillTopOffsetLandscape = ((baseHDp - currentHeight) / 2).coerceAtLeast(0.dp)
+
             if (isLandscape) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = pillTopOffsetLandscape.coerceAtLeast(0.dp)),
+                        .padding(top = pillTopOffsetLandscape),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(modifier = mainPillModifier) {
@@ -632,7 +642,7 @@ fun CompactIslandOverlay(
                         .align(Alignment.TopStart)
                         .padding(
                             top = pillTopOffsetDp.coerceAtLeast(0.dp),
-                            start = pillStartOffset.coerceAtLeast(0.dp),
+                            start = pillStartOffset,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

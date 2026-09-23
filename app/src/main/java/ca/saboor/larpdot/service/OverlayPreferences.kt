@@ -14,6 +14,7 @@ object OverlayPreferences {
     private const val KEY_CUTOUT_OFFSET_Y = "cutout_offset_y"
     private const val KEY_CUTOUT_DIAMETER = "cutout_diameter"
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
+    private const val KEY_SHOW_SONG_ANNOUNCEMENT = "show_song_announcement"
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
     private const val KEY_ALBUM_ART_STYLE = "album_art_style"
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
@@ -33,6 +34,9 @@ object OverlayPreferences {
     private const val KEY_PIXELLIGHT_SAVED_STRENGTH = "pixellight_saved_strength"
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
+    private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
+    private const val KEY_HIDE_ON_LOCK_SCREEN = "hide_on_lock_screen"
+    private const val KEY_HIDE_MUSIC_WHEN_APP_OPEN = "hide_music_when_app_open"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
     const val DEFAULT_WAVEFORM_BAND_COUNT = 5
     private const val KEY_WAVEFORM_BAR_WIDTH = "waveform_bar_width"
@@ -112,6 +116,9 @@ object OverlayPreferences {
     private val _showMinimizedTitleFlow = MutableStateFlow(false)
     val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
 
+    private val _showSongAnnouncementFlow = MutableStateFlow(true)
+    val showSongAnnouncementFlow: StateFlow<Boolean> = _showSongAnnouncementFlow.asStateFlow()
+
     private val _minimizedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
     val minimizedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _minimizedAlbumArtStyleFlow.asStateFlow()
 
@@ -152,6 +159,15 @@ object OverlayPreferences {
     val isDebugModeFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
     val showDebugDotFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
 
+    private val _hideWhenScreenOffFlow = MutableStateFlow(true)
+    val hideWhenScreenOffFlow: StateFlow<Boolean> = _hideWhenScreenOffFlow.asStateFlow()
+
+    private val _hideOnLockScreenFlow = MutableStateFlow(false)
+    val hideOnLockScreenFlow: StateFlow<Boolean> = _hideOnLockScreenFlow.asStateFlow()
+
+    private val _hideMusicWhenAppOpenFlow = MutableStateFlow(true)
+    val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = _hideMusicWhenAppOpenFlow.asStateFlow()
+
     private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
     val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
 
@@ -183,6 +199,7 @@ object OverlayPreferences {
     private var isInitialized = false
     private var isCutoutInitialized = false
     private var isTitlePrefInitialized = false
+    private var isSongAnnouncementInitialized = false
     private var isTapToExpandInitialized = false
     private var isMinimizedAlbumArtStyleInitialized = false
     private var isExpandedAlbumArtStyleInitialized = false
@@ -197,6 +214,9 @@ object OverlayPreferences {
     private var isFlashlightTapToToggleInitialized = false
     private var isUsePixelLightInitialized = false
     private var isDebugModeInitialized = false
+    private var isHideWhenScreenOffInitialized = false
+    private var isHideOnLockScreenInitialized = false
+    private var isHideMusicWhenAppOpenInitialized = false
     private var isWaveformBandCountInitialized = false
     private var isWaveformBarWidthInitialized = false
     private var isWaveformBarSpacingInitialized = false
@@ -285,6 +305,21 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_TITLE, enabled).apply()
         _showMinimizedTitleFlow.value = enabled
         isTitlePrefInitialized = true
+    }
+
+    fun isShowSongAnnouncementEnabled(context: Context): Boolean {
+        if (!isSongAnnouncementInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_SONG_ANNOUNCEMENT, true)
+            _showSongAnnouncementFlow.value = enabled
+            isSongAnnouncementInitialized = true
+        }
+        return _showSongAnnouncementFlow.value
+    }
+
+    fun setShowSongAnnouncementEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_SONG_ANNOUNCEMENT, enabled).apply()
+        _showSongAnnouncementFlow.value = enabled
+        isSongAnnouncementInitialized = true
     }
 
     fun getMinimizedAlbumArtStyle(context: Context): AlbumArtStyle {
@@ -522,6 +557,51 @@ object OverlayPreferences {
 
     fun isShowDebugDotEnabled(context: Context): Boolean = isDebugModeEnabled(context)
     fun setShowDebugDotEnabled(context: Context, enabled: Boolean) = setDebugModeEnabled(context, enabled)
+
+    fun isHideWhenScreenOffEnabled(context: Context): Boolean {
+        if (!isHideWhenScreenOffInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_HIDE_WHEN_SCREEN_OFF, true)
+            _hideWhenScreenOffFlow.value = enabled
+            isHideWhenScreenOffInitialized = true
+        }
+        return _hideWhenScreenOffFlow.value
+    }
+
+    fun setHideWhenScreenOffEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_HIDE_WHEN_SCREEN_OFF, enabled).apply()
+        _hideWhenScreenOffFlow.value = enabled
+        isHideWhenScreenOffInitialized = true
+    }
+
+    fun isHideOnLockScreenEnabled(context: Context): Boolean {
+        if (!isHideOnLockScreenInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_HIDE_ON_LOCK_SCREEN, false)
+            _hideOnLockScreenFlow.value = enabled
+            isHideOnLockScreenInitialized = true
+        }
+        return _hideOnLockScreenFlow.value
+    }
+
+    fun setHideOnLockScreenEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_HIDE_ON_LOCK_SCREEN, enabled).apply()
+        _hideOnLockScreenFlow.value = enabled
+        isHideOnLockScreenInitialized = true
+    }
+
+    fun isHideMusicWhenAppOpenEnabled(context: Context): Boolean {
+        if (!isHideMusicWhenAppOpenInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_HIDE_MUSIC_WHEN_APP_OPEN, true)
+            _hideMusicWhenAppOpenFlow.value = enabled
+            isHideMusicWhenAppOpenInitialized = true
+        }
+        return _hideMusicWhenAppOpenFlow.value
+    }
+
+    fun setHideMusicWhenAppOpenEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_HIDE_MUSIC_WHEN_APP_OPEN, enabled).apply()
+        _hideMusicWhenAppOpenFlow.value = enabled
+        isHideMusicWhenAppOpenInitialized = true
+    }
 
     fun getWaveformBandCount(context: Context): Int {
         if (!isWaveformBandCountInitialized) {

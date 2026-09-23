@@ -243,21 +243,18 @@ fun MediaPlayer(
                             .weight(1f)
                             .padding(end = 16.dp)
                     ) {
-                        Text(
+                        MarqueeText(
                             text = nowPlaying.title.ifEmpty { "No Media Playing" },
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
                             color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(
+                        MarqueeText(
                             text = nowPlaying.artist.ifEmpty { "Play music in Spotify or tap Simulate" },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.80f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
                         )
                     }
 

@@ -1,5 +1,8 @@
 package ca.saboor.larpdot.ui.overlay
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.ui.text.style.TextAlign
+import ca.saboor.larpdot.ui.components.MarqueeText
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -202,6 +205,182 @@ internal fun nestedAlbumArtShape(
 }
 
 @Composable
+private fun AnnouncementTrackText(
+    title: String,
+    artist: String,
+    accentColor: Color,
+    titleFontSize: Float,
+    artistFontSize: Float,
+    fadeWidth: Dp,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        MarqueeText(
+            text = title.ifBlank { "Playing Track" },
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = titleFontSize.sp,
+            ),
+            textAlign = TextAlign.Center,
+            fadeWidth = fadeWidth,
+            initialDelayMillis = 600,
+            repeatDelayMillis = 1000,
+            velocity = 35.dp,
+        )
+        MarqueeText(
+            text = artist.ifBlank { "Media Player" },
+            color = accentColor.copy(alpha = 0.95f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = artistFontSize.sp),
+            textAlign = TextAlign.Center,
+            fadeWidth = fadeWidth,
+            initialDelayMillis = 600,
+            repeatDelayMillis = 1000,
+            velocity = 35.dp,
+        )
+    }
+}
+
+@Composable
+private fun AnnouncementAlbumArt(
+    mediaInfo: MediaTrackInfo,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape,
+    nestedRotation: Float,
+    cutoutDiameterDp: Dp,
+    isLandscape: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val albumArt = mediaInfo.albumArt ?: return
+    val density = LocalDensity.current
+    val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
+    when (albumArtStyle) {
+        OverlayPreferences.AlbumArtStyle.NESTED -> Image(
+            bitmap = albumArt.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier
+                .size((cutoutDiameterDp - 8.dp).coerceIn(20.dp, 32.dp))
+                .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
+            contentScale = ContentScale.Crop,
+        )
+
+        OverlayPreferences.AlbumArtStyle.BASIC_FADED -> Image(
+            bitmap = albumArt.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier
+                .then(
+                    if (isLandscape) Modifier.fillMaxWidth().aspectRatio(1f)
+                    else Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true)
+                )
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = if (isLandscape) {
+                            Brush.verticalGradient(listOf(Color.White, Color.Transparent))
+                        } else {
+                            Brush.horizontalGradient(listOf(Color.White, Color.Transparent))
+                        },
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+            contentScale = ContentScale.Crop,
+        )
+
+        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+        OverlayPreferences.AlbumArtStyle.BLENDED -> {
+            val bitmap = albumArt.asImageBitmap()
+            val side = minOf(bitmap.width, bitmap.height)
+            val cropX = (bitmap.width - side) / 2
+            val cropY = (bitmap.height - side) / 2
+            // Use a wider source slice to reduce distortion in the mirrored extension.
+            val reflectionSlice = side / 4
+            Canvas(
+                modifier = modifier
+                    .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        val extraPx = 6.dp.roundToPx()
+                        val placeable = if (isLandscape) {
+                            measurable.measure(
+                                constraints.copy(
+                                    minHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                    maxHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                )
+                            )
+                        } else {
+                            measurable.measure(
+                                constraints.copy(
+                                    minWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                    maxWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                )
+                            )
+                        }
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            placeable.place(0, 0)
+                        }
+                    }
+                    .progressiveBlur(
+                        direction = if (isLandscape) 1 else 0,
+                        startFraction = 0.65f,
+                        maxBlurDp = 24.dp,
+                        dotRadiusPx = dotRadiusPx,
+                    ),
+            ) {
+                if (isLandscape) {
+                    val artHeight = size.width
+                    val reflectionHeight = (size.height - artHeight).coerceAtLeast(0f)
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset(cropX, cropY),
+                        srcSize = IntSize(side, side),
+                        dstOffset = IntOffset.Zero,
+                        dstSize = IntSize(size.width.roundToInt(), artHeight.roundToInt()),
+                    )
+                    scale(
+                        scaleX = 1f,
+                        scaleY = -1f,
+                        pivot = Offset(size.width / 2f, artHeight + reflectionHeight / 2f),
+                    ) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX, cropY + side - reflectionSlice),
+                            srcSize = IntSize(side, reflectionSlice),
+                            dstOffset = IntOffset(0, artHeight.roundToInt()),
+                            dstSize = IntSize(size.width.roundToInt(), reflectionHeight.roundToInt()),
+                        )
+                    }
+                } else {
+                    val artWidth = size.height
+                    val reflectionWidth = (size.width - artWidth).coerceAtLeast(0f)
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset(cropX, cropY),
+                        srcSize = IntSize(side, side),
+                        dstOffset = IntOffset.Zero,
+                        dstSize = IntSize(artWidth.roundToInt(), size.height.roundToInt()),
+                    )
+                    scale(
+                        scaleX = -1f,
+                        scaleY = 1f,
+                        pivot = Offset(artWidth + reflectionWidth / 2f, size.height / 2f),
+                    ) {
+                        drawImage(
+                            image = bitmap,
+                            srcOffset = IntOffset(cropX + side - reflectionSlice, cropY),
+                            srcSize = IntSize(reflectionSlice, side),
+                            dstOffset = IntOffset(artWidth.roundToInt(), 0),
+                            dstSize = IntSize(reflectionWidth.roundToInt(), size.height.roundToInt()),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
@@ -215,6 +394,7 @@ internal fun CompactIslandContent(
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
+    isSongAnnouncement: Boolean = false,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -229,7 +409,169 @@ internal fun CompactIslandContent(
         label = "compact_glow_alpha",
     )
 
-    if (isLandscape) {
+    Crossfade(
+        targetState = isSongAnnouncement,
+        animationSpec = tween(durationMillis = 280),
+        label = "song_announcement_crossfade",
+    ) { announcing ->
+        if (announcing) {
+            if (isLandscape) {
+                Column(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnnouncementAlbumArt(
+                            mediaInfo = mediaInfo,
+                            albumArtStyle = albumArtStyle,
+                            nestedShape = nestedShape,
+                            nestedRotation = nestedRotation,
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            isLandscape = true,
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(cutoutDiameterDp))
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnnouncementTrackText(
+                            title = mediaInfo.title,
+                            artist = mediaInfo.artist,
+                            accentColor = accentColor,
+                            titleFontSize = 10.5f,
+                            artistFontSize = 9f,
+                            fadeWidth = 6.dp,
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                AnnouncementAlbumArt(
+                                    mediaInfo = mediaInfo,
+                                    albumArtStyle = albumArtStyle,
+                                    nestedShape = nestedShape,
+                                    nestedRotation = nestedRotation,
+                                    cutoutDiameterDp = cutoutDiameterDp,
+                                    isLandscape = false,
+                                )
+                                MarqueeText(
+                                    text = mediaInfo.title.ifBlank { "Playing Track" },
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.5.sp,
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center,
+                                    fadeWidth = 8.dp,
+                                    initialDelayMillis = 600,
+                                    repeatDelayMillis = 1000,
+                                    velocity = 35.dp,
+                                )
+                            }
+                        } else {
+                            AnnouncementAlbumArt(
+                                mediaInfo = mediaInfo,
+                                albumArtStyle = albumArtStyle,
+                                nestedShape = nestedShape,
+                                nestedRotation = nestedRotation,
+                                cutoutDiameterDp = cutoutDiameterDp,
+                                isLandscape = false,
+                                modifier = Modifier.align(Alignment.CenterStart),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(Color.Black.copy(alpha = 0.34f)),
+                            )
+                            MarqueeText(
+                                text = mediaInfo.title.ifBlank { "Playing Track" },
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.5.sp,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp),
+                                textAlign = TextAlign.Center,
+                                fadeWidth = 8.dp,
+                                initialDelayMillis = 600,
+                                repeatDelayMillis = 1000,
+                                velocity = 35.dp,
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(cutoutDiameterDp))
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .then(
+                                if (showDominantGlow) {
+                                    Modifier.background(
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                Color.Transparent,
+                                                accentColor.copy(alpha = glowAlpha),
+                                            )
+                                        )
+                                    )
+                                } else Modifier
+                            )
+                            .padding(start = 6.dp, end = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        MarqueeText(
+                            text = mediaInfo.artist.ifBlank { "Media Player" },
+                            color = accentColor.copy(alpha = 0.95f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            textAlign = TextAlign.Center,
+                            fadeWidth = 8.dp,
+                            initialDelayMillis = 600,
+                            repeatDelayMillis = 1000,
+                            velocity = 35.dp,
+                        )
+                    }
+                }
+            }
+        } else {
+            if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
         Column(
             modifier = modifier
@@ -610,13 +952,12 @@ internal fun CompactIslandContent(
                 contentAlignment = Alignment.Center,
             ) {
                 if (showMinimizedTitle && mediaInfo.title.isNotBlank()) {
-                    Text(
+                    MarqueeText(
                         text = mediaInfo.title,
                         color = Color.White,
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        fadeWidth = 6.dp,
                     )
                 } else {
                     EqualizerWaveform(
@@ -631,6 +972,8 @@ internal fun CompactIslandContent(
                     )
                 }
             }
+        }
+    }
         }
     }
 }
@@ -1075,20 +1418,16 @@ internal fun ExpandedIslandContent(
                         .padding(end = 16.dp)
                         .clickable { openPlayerApp(context, mediaInfo) },
                 ) {
-                    Text(
+                    MarqueeText(
                         text = mediaInfo.title.ifEmpty { "No Media Playing" },
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Normal),
                         color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
+                    MarqueeText(
                         text = mediaInfo.artist.ifEmpty { "" },
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
                         color = Color.White.copy(alpha = 0.80f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
