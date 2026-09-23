@@ -731,7 +731,7 @@ fun ExpandedIslandOverlay(
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val compactExtraDp = when {
         expandedType == IslandType.FLASHLIGHT -> 48.dp
-        minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED -> 100.dp
+        minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED -> compactPillThickness * 3  // Matches CompactIslandOverlay's blendedActiveExtraDp
         minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
         else -> 60.dp
     }

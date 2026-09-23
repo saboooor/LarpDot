@@ -35,6 +35,10 @@ object OverlayPreferences {
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
     const val DEFAULT_WAVEFORM_BAND_COUNT = 5
+    private const val KEY_WAVEFORM_BAR_WIDTH = "waveform_bar_width"
+    const val DEFAULT_WAVEFORM_BAR_WIDTH = 2.2f   // dp
+    private const val KEY_WAVEFORM_BAR_SPACING = "waveform_bar_spacing"
+    const val DEFAULT_WAVEFORM_BAR_SPACING = 2.0f // dp
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -148,6 +152,12 @@ object OverlayPreferences {
     private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
     val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
 
+    private val _waveformBarWidthFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAR_WIDTH)
+    val waveformBarWidthFlow: StateFlow<Float> = _waveformBarWidthFlow.asStateFlow()
+
+    private val _waveformBarSpacingFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAR_SPACING)
+    val waveformBarSpacingFlow: StateFlow<Float> = _waveformBarSpacingFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -176,6 +186,8 @@ object OverlayPreferences {
     private var isUsePixelLightInitialized = false
     private var isDebugModeInitialized = false
     private var isWaveformBandCountInitialized = false
+    private var isWaveformBarWidthInitialized = false
+    private var isWaveformBarSpacingInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -512,5 +524,35 @@ object OverlayPreferences {
         getPrefs(context).edit().putInt(KEY_WAVEFORM_BAND_COUNT, count).apply()
         _waveformBandCountFlow.value = count
         isWaveformBandCountInitialized = true
+    }
+
+    fun getWaveformBarWidth(context: Context): Float {
+        if (!isWaveformBarWidthInitialized) {
+            val w = getPrefs(context).getFloat(KEY_WAVEFORM_BAR_WIDTH, DEFAULT_WAVEFORM_BAR_WIDTH)
+            _waveformBarWidthFlow.value = w
+            isWaveformBarWidthInitialized = true
+        }
+        return _waveformBarWidthFlow.value
+    }
+
+    fun setWaveformBarWidth(context: Context, widthDp: Float) {
+        getPrefs(context).edit().putFloat(KEY_WAVEFORM_BAR_WIDTH, widthDp).apply()
+        _waveformBarWidthFlow.value = widthDp
+        isWaveformBarWidthInitialized = true
+    }
+
+    fun getWaveformBarSpacing(context: Context): Float {
+        if (!isWaveformBarSpacingInitialized) {
+            val s = getPrefs(context).getFloat(KEY_WAVEFORM_BAR_SPACING, DEFAULT_WAVEFORM_BAR_SPACING)
+            _waveformBarSpacingFlow.value = s
+            isWaveformBarSpacingInitialized = true
+        }
+        return _waveformBarSpacingFlow.value
+    }
+
+    fun setWaveformBarSpacing(context: Context, spacingDp: Float) {
+        getPrefs(context).edit().putFloat(KEY_WAVEFORM_BAR_SPACING, spacingDp).apply()
+        _waveformBarSpacingFlow.value = spacingDp
+        isWaveformBarSpacingInitialized = true
     }
 }

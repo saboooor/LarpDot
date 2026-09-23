@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -203,6 +204,8 @@ internal fun CompactIslandContent(
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
+    waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
+    waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -373,6 +376,8 @@ internal fun CompactIslandContent(
                     maxHeightDp = 13.5f,
                     accentColor = mediaInfo.dominantColor,
                     barCount = waveformBandCount,
+                    barWidth = waveformBarWidth.dp,
+                    barSpacing = waveformBarSpacing.dp,
                 )
             }
         }
@@ -510,7 +515,16 @@ internal fun CompactIslandContent(
             // Center: Symmetrical clearance spacer hugging the hole punch camera
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
 
-            // Right Wing: Equalizer with ambient glow extending from the dot to the right edge
+            // Right Wing: Equalizer with ambient glow extending from the dot to the right edge.
+            // Compact styles (NESTED, BASIC_FADED, no-art) have a narrow right wing (~30dp) with a
+            // ~14dp rounded corner on the right — shift the waveform left by cornerRadius/2 so it
+            // sits optically centered in the visible straight area rather than close to the edge.
+            val outlineAllowanceDp = 2.dp
+            val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+            val equalizerShift = if (
+                albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
+                albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
+            ) 0.dp else -(compactPillThickness / if (waveformBandCount >= 6) 16f else 8f)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -534,6 +548,9 @@ internal fun CompactIslandContent(
                     maxHeightDp = 13.5f,
                     accentColor = mediaInfo.dominantColor,
                     barCount = waveformBandCount,
+                    barWidth = waveformBarWidth.dp,
+                    barSpacing = waveformBarSpacing.dp,
+                    modifier = Modifier.offset(x = equalizerShift),
                 )
             }
         }
@@ -1146,136 +1163,6 @@ internal fun EqualizerWaveform(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "eq_transition")
 
-    // Organic sinusoidal frequency phases
-    val bar1 by infiniteTransition.animateFloat(
-        initialValue = 0.28f,
-        targetValue = 0.78f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 680, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_1",
-    )
-    val bar2 by infiniteTransition.animateFloat(
-        initialValue = 0.22f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 980, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_2",
-    )
-    val bar3 by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.88f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 760, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_3",
-    )
-    val bar4 by infiniteTransition.animateFloat(
-        initialValue = 0.20f,
-        targetValue = 0.88f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 860, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_4",
-    )
-    val bar5 by infiniteTransition.animateFloat(
-        initialValue = 0.30f,
-        targetValue = 0.68f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 640, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_5",
-    )
-    val bar6 by infiniteTransition.animateFloat(
-        initialValue = 0.20f,
-        targetValue = 0.64f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 720, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_6",
-    )
-    val bar7 by infiniteTransition.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 0.56f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 540, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "eq_7",
-    )
-
-    // Staggered physics springs from center outward for playing <-> paused transitions
-    val playProgress3 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMedium)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "play_p3",
-    )
-    val playProgress2 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-        },
-        label = "play_p2",
-    )
-    val playProgress4 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-        },
-        label = "play_p4",
-    )
-    val playProgress1 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessLow)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
-        },
-        label = "play_p1",
-    )
-    val playProgress5 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessLow)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
-        },
-        label = "play_p5",
-    )
-    val playProgress6 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.70f, stiffness = 160f)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 160f)
-        },
-        label = "play_p6",
-    )
-    val playProgress7 by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.70f, stiffness = 160f)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 160f)
-        },
-        label = "play_p7",
-    )
-
     // Soft opacity transition: vibrant full color during playback, gently subdued when paused
     val playAlpha by animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.50f,
@@ -1283,22 +1170,40 @@ internal fun EqualizerWaveform(
         label = "eq_alpha",
     )
 
+    val normalizedBarCount = barCount.coerceAtLeast(1)
     val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
-
-    val animatedH1 = restingFraction + (bar1 - restingFraction) * playProgress1.coerceAtLeast(0f)
-    val animatedH2 = restingFraction + (bar2 - restingFraction) * playProgress2.coerceAtLeast(0f)
-    val animatedH3 = restingFraction + (bar3 - restingFraction) * playProgress3.coerceAtLeast(0f)
-    val animatedH4 = restingFraction + (bar4 - restingFraction) * playProgress4.coerceAtLeast(0f)
-    val animatedH5 = restingFraction + (bar5 - restingFraction) * playProgress5.coerceAtLeast(0f)
-    val animatedH6 = restingFraction + (bar6 - restingFraction) * playProgress6.coerceAtLeast(0f)
-    val animatedH7 = restingFraction + (bar7 - restingFraction) * playProgress7.coerceAtLeast(0f)
-
-    val heights = when {
-        barCount <= 3 -> listOf(animatedH1, animatedH2, animatedH3)
-        barCount == 4 -> listOf(animatedH1, animatedH2, animatedH3, animatedH4)
-        barCount == 5 -> listOf(animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
-        barCount == 6 -> listOf(animatedH6, animatedH1, animatedH2, animatedH3, animatedH4, animatedH5)
-        else -> listOf(animatedH6, animatedH1, animatedH2, animatedH3, animatedH4, animatedH5, animatedH7)
+    val heights = (0 until normalizedBarCount).map { index ->
+        val normalizedIndex = index.toFloat() / normalizedBarCount.coerceAtLeast(2).toFloat()
+        val initialFraction = (0.18f + (index * 0.037f % 0.18f)).coerceIn(0.18f, 0.35f)
+        val targetFraction = (0.56f + ((index * 0.173f) % 0.44f)).coerceIn(0.56f, 1f)
+        val animatedFraction by infiniteTransition.animateFloat(
+            initialValue = initialFraction,
+            targetValue = targetFraction,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = 540 + ((index * 137) % 460),
+                    easing = FastOutSlowInEasing,
+                ),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "eq_$index",
+        )
+        val playProgress by animateFloatAsState(
+            targetValue = if (isPlaying) 1f else 0f,
+            animationSpec = if (isPlaying) {
+                spring(
+                    dampingRatio = 0.58f + (normalizedIndex * 0.12f),
+                    stiffness = Spring.StiffnessMediumLow,
+                )
+            } else {
+                spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                )
+            },
+            label = "play_$index",
+        )
+        restingFraction + (animatedFraction - restingFraction) * playProgress.coerceAtLeast(0f)
     }
 
     val effectiveBarWidth = if (barWidth == 2.2.dp && barCount >= 7) 2.0.dp else barWidth
