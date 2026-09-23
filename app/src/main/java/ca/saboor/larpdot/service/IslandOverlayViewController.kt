@@ -26,6 +26,7 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
 import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandOverlay
+import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -137,22 +138,24 @@ class IslandOverlayViewController(
             }
 
             setContent {
-                val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
-                val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
-                val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
-                val activeCutout = currentCutoutInfo ?: cutout
+                LarpDotTheme {
+                    val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                    val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+                    val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+                    val activeCutout = currentCutoutInfo ?: cutout
 
-                val compactIsExpanded = if (isExpandedFromTinyDot) isTinyDotHidden else isCompactHidden
+                    val compactIsExpanded = if (isExpandedFromTinyDot) isTinyDotHidden else isCompactHidden
 
-                CompactIslandOverlay(
-                    cutoutInfo = activeCutout,
-                    mediaInfo = mediaTrack,
-                    isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                    isExpanded = compactIsExpanded,
-                    fromTinyDot = isExpandedFromTinyDot,
-                    onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
-                    onFlashlightToggle = { FlashlightController.toggleFlashlight() },
-                )
+                    CompactIslandOverlay(
+                        cutoutInfo = activeCutout,
+                        mediaInfo = mediaTrack,
+                        isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                        isExpanded = compactIsExpanded,
+                        fromTinyDot = isExpandedFromTinyDot,
+                        onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
+                        onFlashlightToggle = { FlashlightController.toggleFlashlight() },
+                    )
+                }
             }
         }
         compOwner.attach(compView)
@@ -169,6 +172,7 @@ class IslandOverlayViewController(
             observeFlashlightState()
             observeCutoutConfig()
             observeMinimizedAlbumArtStyle()
+            OverlayPreferences.isShowMinimizedTitleEnabled(context)
             observeDebugPreference()
             OverlayPreferences.isDebugModeEnabled(context)
             OverlayPreferences.isShowFlashlightIslandEnabled(context)
@@ -196,32 +200,34 @@ class IslandOverlayViewController(
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
             setContent {
-                val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
-                val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
-                val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
-                val activeCutout = currentCutoutInfo ?: cutout
+                LarpDotTheme {
+                    val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                    val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
+                    val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+                    val activeCutout = currentCutoutInfo ?: cutout
 
-                val activeExpandedType by expandedType.collectAsState()
+                    val activeExpandedType by expandedType.collectAsState()
 
-                ExpandedIslandOverlay(
-                    cutoutInfo = activeCutout,
-                    mediaInfo = mediaTrack,
-                    isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                    expandedType = activeExpandedType,
-                    fromTinyDot = isExpandedFromTinyDot,
-                    isExpanded = isIslandExpanded,
-                    startPressScale = 1.08f, // Matches islandScale spring target in CompactIslandOverlay
-                    onCollapse = { collapseOverlay() },
-                    onFirstFrameDrawn = {
-                        if (isIslandExpanded) {
-                            if (!isExpandedFromTinyDot) {
-                                isCompactHidden = true
-                            } else {
-                                isTinyDotHidden = true
+                    ExpandedIslandOverlay(
+                        cutoutInfo = activeCutout,
+                        mediaInfo = mediaTrack,
+                        isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                        expandedType = activeExpandedType,
+                        fromTinyDot = isExpandedFromTinyDot,
+                        isExpanded = isIslandExpanded,
+                        startPressScale = 1.08f,
+                        onCollapse = { collapseOverlay() },
+                        onFirstFrameDrawn = {
+                            if (isIslandExpanded) {
+                                if (!isExpandedFromTinyDot) {
+                                    isCompactHidden = true
+                                } else {
+                                    isTinyDotHidden = true
+                                }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
 
             setOnTouchListener { _, event ->

@@ -106,6 +106,9 @@ object OverlayPreferences {
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
 
+    private val _showMinimizedTitleFlow = MutableStateFlow(false)
+    val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
+
     private val _minimizedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
     val minimizedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _minimizedAlbumArtStyleFlow.asStateFlow()
 
@@ -255,6 +258,21 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_TAP_TO_EXPAND, enabled).apply()
         _tapToExpandFlow.value = enabled
         isTapToExpandInitialized = true
+    }
+
+    fun isShowMinimizedTitleEnabled(context: Context): Boolean {
+        if (!isTitlePrefInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_TITLE, false)
+            _showMinimizedTitleFlow.value = enabled
+            isTitlePrefInitialized = true
+        }
+        return _showMinimizedTitleFlow.value
+    }
+
+    fun setShowMinimizedTitleEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_TITLE, enabled).apply()
+        _showMinimizedTitleFlow.value = enabled
+        isTitlePrefInitialized = true
     }
 
     fun getMinimizedAlbumArtStyle(context: Context): AlbumArtStyle {

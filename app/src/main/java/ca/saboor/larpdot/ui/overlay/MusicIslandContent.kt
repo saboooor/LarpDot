@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -203,6 +204,7 @@ internal fun CompactIslandContent(
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
+    showMinimizedTitle: Boolean = OverlayPreferences.showMinimizedTitleFlow.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
@@ -210,6 +212,8 @@ internal fun CompactIslandContent(
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val materialYouPrimary = MaterialTheme.colorScheme.primary
+    val accentColor = if (mediaInfo.albumArt == null) materialYouPrimary else mediaInfo.dominantColor
     val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
     val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + cutoutDiameterDp).toPx() }
     val glowAlpha by animateFloatAsState(
@@ -343,11 +347,38 @@ internal fun CompactIslandContent(
                     }
                 }
             } else {
-                Spacer(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
+                val placeholderSize = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+                    (cutoutDiameterDp - 8.dp).coerceIn(16.dp, 24.dp)
+                } else {
+                    cutoutDiameterDp.coerceIn(20.dp, 32.dp)
+                }
+                val placeholderShape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+                    nestedAlbumArtShape(nestedShape, nestedRotation)
+                } else {
+                    RoundedCornerShape(6.dp)
+                }
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = if (
+                        albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
+                        albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
+                    ) Alignment.Center else Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(placeholderSize)
+                            .clip(placeholderShape)
+                            .background(materialYouPrimary.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MusicNote,
+                            contentDescription = "Music artwork placeholder",
+                            tint = materialYouPrimary,
+                            modifier = Modifier.size(placeholderSize * 0.58f),
+                        )
+                    }
+                }
             }
             // Center: Symmetrical clearance spacer hugging the hole punch camera
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
@@ -363,7 +394,7 @@ internal fun CompactIslandContent(
                                 Brush.verticalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        mediaInfo.dominantColor.copy(alpha = glowAlpha),
+                                        accentColor.copy(alpha = glowAlpha),
                                     )
                                 )
                             )
@@ -374,7 +405,7 @@ internal fun CompactIslandContent(
                 EqualizerWaveform(
                     isPlaying = mediaInfo.isPlaying,
                     maxHeightDp = 13.5f,
-                    accentColor = mediaInfo.dominantColor,
+                    accentColor = accentColor,
                     barCount = waveformBandCount,
                     barWidth = waveformBarWidth.dp,
                     barSpacing = waveformBarSpacing.dp,
@@ -506,11 +537,38 @@ internal fun CompactIslandContent(
                     }
                 }
             } else {
-                Spacer(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                )
+                val placeholderSize = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+                    (cutoutDiameterDp - 8.dp).coerceIn(16.dp, 24.dp)
+                } else {
+                    cutoutDiameterDp.coerceIn(20.dp, 32.dp)
+                }
+                val placeholderShape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+                    nestedAlbumArtShape(nestedShape, nestedRotation)
+                } else {
+                    RoundedCornerShape(6.dp)
+                }
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentAlignment = if (
+                        albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
+                        albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
+                    ) Alignment.Center else Alignment.CenterEnd,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(placeholderSize)
+                            .clip(placeholderShape)
+                            .background(materialYouPrimary.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MusicNote,
+                            contentDescription = "Music artwork placeholder",
+                            tint = materialYouPrimary,
+                            modifier = Modifier.size(placeholderSize * 0.58f),
+                        )
+                    }
+                }
             }
             // Center: Symmetrical clearance spacer hugging the hole punch camera
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
@@ -535,7 +593,7 @@ internal fun CompactIslandContent(
                                 Brush.horizontalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        mediaInfo.dominantColor.copy(alpha = glowAlpha),
+                                        accentColor.copy(alpha = glowAlpha),
                                     )
                                 )
                             )
@@ -543,15 +601,26 @@ internal fun CompactIslandContent(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                EqualizerWaveform(
-                    isPlaying = mediaInfo.isPlaying,
-                    maxHeightDp = 13.5f,
-                    accentColor = mediaInfo.dominantColor,
-                    barCount = waveformBandCount,
-                    barWidth = waveformBarWidth.dp,
-                    barSpacing = waveformBarSpacing.dp,
-                    modifier = Modifier.offset(x = equalizerShift),
-                )
+                if (showMinimizedTitle && mediaInfo.title.isNotBlank()) {
+                    Text(
+                        text = mediaInfo.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    )
+                } else {
+                    EqualizerWaveform(
+                        isPlaying = mediaInfo.isPlaying,
+                        maxHeightDp = 13.5f,
+                        accentColor = accentColor,
+                        barCount = waveformBandCount,
+                        barWidth = waveformBarWidth.dp,
+                        barSpacing = waveformBarSpacing.dp,
+                        modifier = Modifier.offset(x = equalizerShift),
+                    )
+                }
             }
         }
     }
@@ -584,6 +653,7 @@ internal fun ExpandedIslandContent(
     val context = LocalContext.current
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
+    val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
 
     val progressFraction = if (mediaInfo.durationMs > 0) {
         (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
@@ -634,7 +704,7 @@ internal fun ExpandedIslandContent(
                     onDrawBehind { /* Full background image rendered inside content */ }
                 } else {
                     val dominantTint = if (showDominantGlow) {
-                        mediaInfo.dominantColor.copy(alpha = 0.25f)
+                        accentColor.copy(alpha = 0.25f)
                     } else {
                         Color.Transparent
                     }
@@ -1026,7 +1096,7 @@ internal fun ExpandedIslandContent(
                         EqualizerWaveform(
                             isPlaying = mediaInfo.isPlaying,
                             maxHeightDp = 20f,
-                            accentColor = mediaInfo.dominantColor,
+                            accentColor = accentColor,
                             barCount = waveformBandCount,
                             barWidth = if (waveformBandCount > 5) 3.2.dp else 4.dp,
                             barSpacing = if (waveformBandCount > 5) 2.4.dp else 3.dp,
@@ -1121,8 +1191,8 @@ internal fun ExpandedIslandContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(14.dp),
-                        color = mediaInfo.dominantColor,
-                        trackColor = mediaInfo.dominantColor.copy(alpha = 0.32f),
+                        color = accentColor,
+                        trackColor = accentColor.copy(alpha = 0.32f),
                         amplitude = { if (mediaInfo.isPlaying) 0.5f else 0.15f },
                         wavelength = 28.dp,
                     )
@@ -1265,4 +1335,3 @@ internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     val sec = totalSec % 60
     return String.format("-%d:%02d", min, sec)
 }
-

@@ -97,7 +97,7 @@ fun Modifier.islandFluidProgressBorder(
     shape: Shape,
     strokeWidth: Dp = 0.75.dp,
     trackColor: Color = Color(0x30FFFFFF),
-    progressColor: Color = Color(0xFF00E676),
+    progressColor: Color = Color(0xFFA5C8FF),
 ): Modifier = this.drawWithContent {
     drawContent()
 
@@ -406,4 +406,3 @@ internal fun Modifier.progressiveBlur(
         return this
     }
 }
-

@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -90,6 +91,7 @@ fun CompactIslandOverlay(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val mediaAccentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
     val isDebugMode by OverlayPreferences.isDebugModeFlow.collectAsState()
@@ -141,6 +143,7 @@ fun CompactIslandOverlay(
         val compactCornerRadius = compactPillThickness / 2f
 
         val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+        val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
         val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
         val nestedActiveExtraDp = compactPillThickness + nestedArtSize
         val blendedActiveExtraDp = compactPillThickness * 3
@@ -159,7 +162,8 @@ fun CompactIslandOverlay(
                 else -> 60.dp
             }
         }
-        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + activeExtraDp)
+        val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180.dp else 0.dp
+        val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp))
         val compactHeight = if (isLandscape) (cutoutDiameterDp + activeExtraDp) else compactPillThickness
 
         val currentCornerRadius by animateDpAsState(
@@ -387,7 +391,7 @@ fun CompactIslandOverlay(
                             shape = RoundedCornerShape(currentCornerRadius),
                             strokeWidth = 0.75.dp,
                             trackColor = Color(0x30FFFFFF).copy(alpha = (48f / 255f) * contentAlpha),
-                            progressColor = mediaInfo.dominantColor,
+                            progressColor = mediaAccentColor,
                         )
                     ),
                 shape = RoundedCornerShape(currentCornerRadius),
@@ -414,6 +418,7 @@ fun CompactIslandOverlay(
                                         mediaInfo = mediaInfo,
                                         cutoutDiameterDp = cutoutDiameterDp,
                                         onExpand = { onExpand(IslandType.MEDIA, false) },
+                                        showMinimizedTitle = showMinimizedTitle,
                                     )
                                 } else {
                                     CompactFlashlightContent(
@@ -433,14 +438,14 @@ fun CompactIslandOverlay(
                             modifier = Modifier
                                 .size(dotDiameter)
                                 .clip(CircleShape)
-                                .background(Color(0x4000E676)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size((dotDiameter - 4.dp).coerceAtLeast(12.dp))
                                     .clip(CircleShape)
-                                    .background(Color(0xFF00E676)),
+                                    .background(MaterialTheme.colorScheme.primary),
                             )
                         }
                     }
@@ -579,7 +584,7 @@ fun CompactIslandOverlay(
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
                                     contentDescription = "Music Active",
-                                    tint = mediaInfo.dominantColor.copy(alpha = 0.9f),
+                                    tint = mediaAccentColor.copy(alpha = 0.9f),
                                     modifier = Modifier.size(bubbleIconSize),
                                 )
                             }
@@ -657,6 +662,7 @@ fun ExpandedIslandOverlay(
     startPressScale: Float = 1.0f, // Scale of the compact pill at moment of expansion tap
     modifier: Modifier = Modifier,
 ) {
+    val mediaAccentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
     val screenHeightDp = configuration.screenHeightDp.dp
@@ -813,7 +819,7 @@ fun ExpandedIslandOverlay(
                         shape = containerShape,
                         strokeWidth = 0.75.dp,
                         trackColor = Color(0x30FFFFFF),
-                        progressColor = mediaInfo.dominantColor,
+                        progressColor = mediaAccentColor,
                     )
                 ),
             shape = containerShape,
@@ -857,7 +863,7 @@ fun ExpandedIslandOverlay(
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
                                             contentDescription = "Music Active",
-                                            tint = mediaInfo.dominantColor.copy(alpha = 0.9f),
+                                            tint = mediaAccentColor.copy(alpha = 0.9f),
                                             modifier = Modifier.size(iconSize),
                                         )
                                     }

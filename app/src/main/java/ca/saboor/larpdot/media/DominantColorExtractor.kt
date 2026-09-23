@@ -13,15 +13,18 @@ import kotlin.math.abs
  */
 object DominantColorExtractor {
 
-    val DEFAULT_ACCENT: Color = Color(0xFF00E676) // Vibrant green fallback
+    // Non-Compose fallback matching the app's default dark primary. Compose surfaces replace
+    // this with MaterialTheme.colorScheme.primary so Android 12+ uses the live Material You color.
+    val DEFAULT_ACCENT: Color = Color(0xFFA5C8FF)
 
     /**
      * Extracts the primary dominant color from a bitmap album cover.
-    * If the bitmap is null, black is used; invalid artwork still falls back to a deterministic color.
+     * If the bitmap is null, callers should substitute their current Material color-scheme primary.
+     * The static accent remains a safe fallback for non-Compose callers and invalid artwork.
      */
     fun extractDominantColor(bitmap: Bitmap?, fallbackSeed: Int? = null): Color {
         if (bitmap == null) {
-            return Color.Black
+            return DEFAULT_ACCENT
         }
         val colors = extractColors(bitmap)
         return colors.firstOrNull() ?: fallbackColor(fallbackSeed ?: 42)
@@ -255,4 +258,3 @@ object DominantColorExtractor {
         return bm
     }
 }
-

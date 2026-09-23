@@ -375,6 +375,7 @@ fun MusicScreen(
 ) {
     val context = LocalContext.current
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
     val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
@@ -389,6 +390,7 @@ fun MusicScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowProgressOutlineEnabled(context)
+        OverlayPreferences.isShowMinimizedTitleEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtStyle(context)
         OverlayPreferences.getExpandedAlbumArtStyle(context)
         OverlayPreferences.getMinimizedAlbumArtShape(context)
@@ -654,6 +656,35 @@ fun MusicScreen(
                             checked = showProgressOutline,
                             onCheckedChange = { isChecked ->
                                 OverlayPreferences.setShowProgressOutlineEnabled(context, isChecked)
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Minimized Song Title
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Minimized Song Title",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Show the current song title in the minimized island right wing",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        Switch(
+                            checked = showMinimizedTitle,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
                             },
                         )
                     }
