@@ -63,6 +63,10 @@ object MediaPlaybackState {
         }
     }
 
+    fun attachDirectController(controller: MediaController) {
+        attachController(controller)
+    }
+
     private fun attachController(controller: MediaController) {
         if (activeController?.sessionToken != controller.sessionToken) {
             controllerCallback?.let { activeController?.unregisterCallback(it) }
@@ -193,8 +197,29 @@ object MediaPlaybackState {
     ) {
         val current = _currentTrack.value
         if (current.isSimulated) return
-        val newTitle = title?.takeIf { it.isNotBlank() } ?: current.title
-        val newArtist = artist?.takeIf { it.isNotBlank() } ?: current.artist
+
+        val controllerTitle = current.controller?.metadata?.let {
+            it.getString(MediaMetadata.METADATA_KEY_TITLE) ?: it.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+        }?.takeIf { it.isNotBlank() }
+
+        val controllerArtist = current.controller?.metadata?.let {
+            it.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: it.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+        }?.takeIf { it.isNotBlank() }
+
+        // Canonical MediaController metadata is preferred over notification composite text
+        val newTitle = when {
+            controllerTitle != null -> controllerTitle
+            current.title.isNotBlank() && current.title != "Playing Track" -> current.title
+            !title.isNullOrBlank() -> title
+            else -> current.title
+        }
+
+        val newArtist = when {
+            controllerArtist != null -> controllerArtist
+            current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
+            !artist.isNullOrBlank() -> artist
+            else -> current.artist
+        }
 
         val isSameSong = newTitle.equals(current.title, ignoreCase = true) &&
             newArtist.equals(current.artist, ignoreCase = true)
@@ -214,15 +239,15 @@ object MediaPlaybackState {
             DominantColorExtractor.extractDominantColor(newArt, (newTitle + newArtist).hashCode())
         }
 
+        val resolvedAppName = appName ?: current.appName
         val newPackage = packageName ?: current.playerPackageName
-        val newApp = appName ?: current.appName
 
         if (newTitle == current.title &&
             newArtist == current.artist &&
             newArt == current.albumArt &&
             dominant == current.dominantColor &&
             newPackage == current.playerPackageName &&
-            newApp == current.appName
+            resolvedAppName == current.appName
         ) {
             return
         }
@@ -233,7 +258,7 @@ object MediaPlaybackState {
             albumArt = newArt,
             dominantColor = dominant,
             playerPackageName = newPackage,
-            appName = newApp,
+            appName = resolvedAppName,
         )
     }
 

@@ -65,9 +65,28 @@ class NotificationAccessService : NotificationListenerService() {
                 notif.category == Notification.CATEGORY_TRANSPORT
 
             if (isMedia) {
-                val component = ComponentName(this, NotificationAccessService::class.java)
-                val activeControllers = mediaSessionManager?.getActiveSessions(component)
-                MediaPlaybackState.updateFromControllers(activeControllers)
+                val sessionToken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, android.media.session.MediaSession.Token::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    extras.getParcelable(Notification.EXTRA_MEDIA_SESSION) as? android.media.session.MediaSession.Token
+                }
+
+                if (sessionToken != null) {
+                    try {
+                        val directController = android.media.session.MediaController(this, sessionToken)
+                        MediaPlaybackState.attachDirectController(directController)
+                    } catch (_: Exception) {
+                        val component = ComponentName(this, NotificationAccessService::class.java)
+                        val activeControllers = mediaSessionManager?.getActiveSessions(component)
+                        MediaPlaybackState.updateFromControllers(activeControllers)
+                    }
+                } else {
+                    val component = ComponentName(this, NotificationAccessService::class.java)
+                    val activeControllers = mediaSessionManager?.getActiveSessions(component)
+                    MediaPlaybackState.updateFromControllers(activeControllers)
+                }
+
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
                 val artist = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
 
