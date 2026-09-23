@@ -88,16 +88,29 @@ object MediaPlaybackState {
         val metadata = controller.metadata
         val state = controller.playbackState
 
-        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        val current = _currentTrack.value
+
+        val rawTitle = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
-            ?: "Playing Track"
-        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        val rawArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
-            ?: "Media Player"
-        val albumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        val rawArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: metadata?.description?.iconBitmap
-        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L) ?: 0L
+
+        val title = when {
+            !rawTitle.isNullOrBlank() -> rawTitle
+            current.title.isNotBlank() && current.title != "Playing Track" -> current.title
+            else -> "Playing Track"
+        }
+        val artist = when {
+            !rawArtist.isNullOrBlank() -> rawArtist
+            current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
+            else -> "Media Player"
+        }
+        val albumArt = rawArt ?: current.albumArt
+        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L)
+            ?: current.durationMs.coerceAtLeast(0L)
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
 
         val rawPosition = state?.position ?: 0L
@@ -110,9 +123,16 @@ object MediaPlaybackState {
             rawPosition.coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
         }
 
-        val dominant = DominantColorExtractor.extractDominantColor(albumArt, (title + artist).hashCode())
+        val isSameSong = title.equals(current.title, ignoreCase = true) &&
+            artist.equals(current.artist, ignoreCase = true)
 
-        val wasPlaying = _currentTrack.value.isPlaying
+        val dominant = if (isSameSong && albumArt == current.albumArt && current.dominantColor != DominantColorExtractor.DEFAULT_ACCENT) {
+            current.dominantColor
+        } else {
+            DominantColorExtractor.extractDominantColor(albumArt, (title + artist).hashCode())
+        }
+
+        val wasPlaying = current.isPlaying
         if (isPlaying) {
             musicGraceJob?.cancel()
             musicGraceJob = null
@@ -134,6 +154,19 @@ object MediaPlaybackState {
             _isMusicActive.value = false
         }
 
+        val isIdenticalTrack = title == current.title &&
+            artist == current.artist &&
+            albumArt == current.albumArt &&
+            isPlaying == current.isPlaying &&
+            duration == current.durationMs &&
+            dominant == current.dominantColor &&
+            controller.packageName == current.playerPackageName
+
+        if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - current.positionMs) < 1000L) {
+            checkTickerState(isPlaying)
+            return
+        }
+
         _currentTrack.value = MediaTrackInfo(
             title = title,
             artist = artist,
@@ -144,6 +177,7 @@ object MediaPlaybackState {
             dominantColor = dominant,
             controller = controller,
             playerPackageName = controller.packageName,
+            appName = current.appName,
             isSimulated = false,
         )
 
@@ -159,23 +193,47 @@ object MediaPlaybackState {
     ) {
         val current = _currentTrack.value
         if (current.isSimulated) return
-        val newTitle = title ?: current.title
-        val newArtist = artist ?: current.artist
+        val newTitle = title?.takeIf { it.isNotBlank() } ?: current.title
+        val newArtist = artist?.takeIf { it.isNotBlank() } ?: current.artist
+
+        val isSameSong = newTitle.equals(current.title, ignoreCase = true) &&
+            newArtist.equals(current.artist, ignoreCase = true)
+
         val newArt = when {
+            isSameSong && current.albumArt != null -> current.albumArt
             artwork == null -> current.albumArt
             current.albumArt == null -> artwork
             artwork.width.toLong() * artwork.height >=
                 current.albumArt.width.toLong() * current.albumArt.height -> artwork
             else -> current.albumArt
         }
-        val dominant = DominantColorExtractor.extractDominantColor(newArt, (newTitle + newArtist).hashCode())
+
+        val dominant = if (isSameSong && current.dominantColor != DominantColorExtractor.DEFAULT_ACCENT) {
+            current.dominantColor
+        } else {
+            DominantColorExtractor.extractDominantColor(newArt, (newTitle + newArtist).hashCode())
+        }
+
+        val newPackage = packageName ?: current.playerPackageName
+        val newApp = appName ?: current.appName
+
+        if (newTitle == current.title &&
+            newArtist == current.artist &&
+            newArt == current.albumArt &&
+            dominant == current.dominantColor &&
+            newPackage == current.playerPackageName &&
+            newApp == current.appName
+        ) {
+            return
+        }
+
         _currentTrack.value = current.copy(
             title = newTitle,
             artist = newArtist,
             albumArt = newArt,
             dominantColor = dominant,
-            playerPackageName = packageName ?: current.playerPackageName,
-            appName = appName ?: current.appName,
+            playerPackageName = newPackage,
+            appName = newApp,
         )
     }
 

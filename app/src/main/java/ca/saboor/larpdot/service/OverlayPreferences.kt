@@ -39,6 +39,9 @@ object OverlayPreferences {
     const val DEFAULT_WAVEFORM_BAR_WIDTH = 2.2f   // dp
     private const val KEY_WAVEFORM_BAR_SPACING = "waveform_bar_spacing"
     const val DEFAULT_WAVEFORM_BAR_SPACING = 2.0f // dp
+    private const val KEY_HQ_VISUALIZER_ENABLED = "hq_visualizer_enabled"
+    const val KEY_VISUALIZER_MODE = "visualizer_mode"
+    const val KEY_PREVIEW_AUDIO_SOURCE = "preview_audio_source"
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -157,6 +160,15 @@ object OverlayPreferences {
 
     private val _waveformBarSpacingFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAR_SPACING)
     val waveformBarSpacingFlow: StateFlow<Float> = _waveformBarSpacingFlow.asStateFlow()
+
+    private val _hqVisualizerEnabledFlow = MutableStateFlow(false)
+    val hqVisualizerEnabledFlow: StateFlow<Boolean> = _hqVisualizerEnabledFlow.asStateFlow()
+
+    private val _visualizerModeFlow = MutableStateFlow(VisualizerMode.SIMULATED)
+    val visualizerModeFlow: StateFlow<VisualizerMode> = _visualizerModeFlow.asStateFlow()
+
+    private val _previewAudioSourceFlow = MutableStateFlow(PreviewAudioSource.AUTO)
+    val previewAudioSourceFlow: StateFlow<PreviewAudioSource> = _previewAudioSourceFlow.asStateFlow()
 
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
@@ -554,5 +566,86 @@ object OverlayPreferences {
         getPrefs(context).edit().putFloat(KEY_WAVEFORM_BAR_SPACING, spacingDp).apply()
         _waveformBarSpacingFlow.value = spacingDp
         isWaveformBarSpacingInitialized = true
+    }
+
+    enum class VisualizerMode(val key: String, val title: String, val description: String) {
+        SIMULATED("simulated", "Simulated", "Smooth flowing wave animation"),
+        BPM("bpm", "BPM Beat Sync", "Rhythmic pulse locked to track tempo (zero CPU impact)"),
+        DEVICE_AUDIO("device_audio", "Device Audio", "Live internal audio captured directly from phone"),
+        AUDIO_PREVIEW("audio_preview", "Preview Audio", "Decodes 30s audio offline to extract frequency bands");
+
+        companion object {
+            fun fromKey(key: String?): VisualizerMode {
+                return entries.firstOrNull { it.key == key } ?: SIMULATED
+            }
+        }
+    }
+
+    private var isVisualizerModeInitialized = false
+
+    fun getVisualizerMode(context: Context): VisualizerMode {
+        if (!isVisualizerModeInitialized) {
+            val prefs = getPrefs(context)
+            val modeStr = prefs.getString(KEY_VISUALIZER_MODE, null)
+            val mode = if (modeStr != null) {
+                VisualizerMode.fromKey(modeStr)
+            } else if (prefs.getBoolean(KEY_HQ_VISUALIZER_ENABLED, false)) {
+                VisualizerMode.AUDIO_PREVIEW
+            } else {
+                VisualizerMode.SIMULATED
+            }
+            _visualizerModeFlow.value = mode
+            _hqVisualizerEnabledFlow.value = (mode == VisualizerMode.AUDIO_PREVIEW)
+            isVisualizerModeInitialized = true
+        }
+        return _visualizerModeFlow.value
+    }
+
+    fun setVisualizerMode(context: Context, mode: VisualizerMode) {
+        getPrefs(context).edit()
+            .putString(KEY_VISUALIZER_MODE, mode.key)
+            .putBoolean(KEY_HQ_VISUALIZER_ENABLED, mode == VisualizerMode.AUDIO_PREVIEW)
+            .apply()
+        _visualizerModeFlow.value = mode
+        _hqVisualizerEnabledFlow.value = (mode == VisualizerMode.AUDIO_PREVIEW)
+        isVisualizerModeInitialized = true
+    }
+
+    fun isHqVisualizerEnabled(context: Context): Boolean {
+        return getVisualizerMode(context) == VisualizerMode.AUDIO_PREVIEW
+    }
+
+    fun setHqVisualizerEnabled(context: Context, enabled: Boolean) {
+        setVisualizerMode(context, if (enabled) VisualizerMode.AUDIO_PREVIEW else VisualizerMode.SIMULATED)
+    }
+
+    enum class PreviewAudioSource(val key: String, val title: String, val subtitle: String) {
+        AUTO("auto", "Auto", "Tries Deezer first, falls back to iTunes"),
+        DEEZER("deezer", "Deezer", "Queries Deezer 30s preview catalog"),
+        ITUNES("itunes", "iTunes", "Queries iTunes Search API"),
+        DEVICE("device", "Device (Live)", "Captures internal audio directly from phone");
+
+        companion object {
+            fun fromKey(key: String?): PreviewAudioSource {
+                return entries.firstOrNull { it.key == key } ?: AUTO
+            }
+        }
+    }
+
+    private var isPreviewAudioSourceInitialized = false
+
+    fun getPreviewAudioSource(context: Context): PreviewAudioSource {
+        if (!isPreviewAudioSourceInitialized) {
+            val key = getPrefs(context).getString(KEY_PREVIEW_AUDIO_SOURCE, null)
+            _previewAudioSourceFlow.value = PreviewAudioSource.fromKey(key)
+            isPreviewAudioSourceInitialized = true
+        }
+        return _previewAudioSourceFlow.value
+    }
+
+    fun setPreviewAudioSource(context: Context, source: PreviewAudioSource) {
+        getPrefs(context).edit().putString(KEY_PREVIEW_AUDIO_SOURCE, source.key).apply()
+        _previewAudioSourceFlow.value = source
+        isPreviewAudioSourceInitialized = true
     }
 }

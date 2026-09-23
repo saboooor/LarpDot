@@ -99,6 +99,13 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.BpmVisualizer
+import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
+import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
+import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
+import ca.saboor.larpdot.visualizer.TrackVisualizer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -409,6 +416,7 @@ internal fun CompactIslandContent(
                     barCount = waveformBandCount,
                     barWidth = waveformBarWidth.dp,
                     barSpacing = waveformBarSpacing.dp,
+                    currentPositionMs = mediaInfo.positionMs,
                 )
             }
         }
@@ -619,6 +627,7 @@ internal fun CompactIslandContent(
                         barWidth = waveformBarWidth.dp,
                         barSpacing = waveformBarSpacing.dp,
                         modifier = Modifier.offset(x = equalizerShift),
+                        currentPositionMs = mediaInfo.positionMs,
                     )
                 }
             }
@@ -1102,6 +1111,7 @@ internal fun ExpandedIslandContent(
                             barSpacing = if (waveformBandCount > 5) 2.4.dp else 3.dp,
                             minHeight = 4.dp,
                             barCornerRadius = 2.dp,
+                            currentPositionMs = mediaInfo.positionMs,
                         )
                     }
                     Spacer(Modifier.height(24.dp))
@@ -1230,7 +1240,68 @@ internal fun EqualizerWaveform(
     barSpacing: Dp = 2.dp,
     minHeight: Dp = 2.8.dp,
     barCornerRadius: Dp = barWidth / 2f,
+    currentPositionMs: Long = 0L,
 ) {
+    if (barCount <= 0) return
+
+    val visualizerMode by OverlayPreferences.visualizerModeFlow.collectAsState()
+    val realAmplitudes by AudioPreviewExtractor.currentAmplitudes.collectAsState()
+    val liveAmplitudes by LiveAudioVisualizer.liveAmplitudes.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val isPreviewPlaying by PreviewAudioPlayer.isPlaying.collectAsState()
+    val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
+
+    val effectiveIsPlaying = if (isPreviewPlaying) true else isPlaying
+    val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else currentPositionMs
+
+    if (visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
+        LiveTrackVisualizer(
+            amplitudes = liveAmplitudes,
+            isPlaying = effectiveIsPlaying,
+            accentColor = accentColor,
+            modifier = modifier,
+            barCount = barCount,
+            barWidth = barWidth,
+            barSpacing = barSpacing,
+            maxHeight = maxHeightDp.dp,
+            minHeight = minHeight,
+        )
+        return
+    }
+
+    if ((isPreviewPlaying || visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) &&
+        realAmplitudes != null && realAmplitudes!!.isNotEmpty()
+    ) {
+        TrackVisualizer(
+            amplitudes = realAmplitudes!!,
+            currentPositionMs = effectivePositionMs,
+            isPlaying = effectiveIsPlaying,
+            accentColor = accentColor,
+            modifier = modifier,
+            barCount = barCount,
+            barWidth = barWidth,
+            barSpacing = barSpacing,
+            maxHeight = maxHeightDp.dp,
+            minHeight = minHeight,
+        )
+        return
+    }
+
+    if (visualizerMode == OverlayPreferences.VisualizerMode.BPM) {
+        BpmVisualizer(
+            bpm = currentBpm,
+            currentPositionMs = effectivePositionMs,
+            isPlaying = effectiveIsPlaying,
+            accentColor = accentColor,
+            modifier = modifier,
+            barCount = barCount,
+            barWidth = barWidth,
+            barSpacing = barSpacing,
+            maxHeight = maxHeightDp.dp,
+            minHeight = minHeight,
+        )
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "eq_transition")
 
     // Soft opacity transition: vibrant full color during playback, gently subdued when paused

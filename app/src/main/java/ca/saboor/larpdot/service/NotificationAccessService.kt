@@ -57,10 +57,6 @@ class NotificationAccessService : NotificationListenerService() {
         }
 
         try {
-            val component = ComponentName(this, NotificationAccessService::class.java)
-            val activeControllers = mediaSessionManager?.getActiveSessions(component)
-            MediaPlaybackState.updateFromControllers(activeControllers)
-
             // Extract artwork from media notification extras if available (hilight-studio pattern)
             val notif = sbn.notification ?: return
             val extras = notif.extras ?: return
@@ -69,6 +65,9 @@ class NotificationAccessService : NotificationListenerService() {
                 notif.category == Notification.CATEGORY_TRANSPORT
 
             if (isMedia) {
+                val component = ComponentName(this, NotificationAccessService::class.java)
+                val activeControllers = mediaSessionManager?.getActiveSessions(component)
+                MediaPlaybackState.updateFromControllers(activeControllers)
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
                 val artist = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
 

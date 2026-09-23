@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +58,36 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.app.Activity
+import android.content.Context
+import android.media.projection.MediaProjectionManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.DisposableEffect
+import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.service.AudioCaptureService
+import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.ExtractionState
+import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
+import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
+import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
@@ -387,6 +418,54 @@ fun MusicScreen(
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
+    val visualizerMode by OverlayPreferences.visualizerModeFlow.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val detectedBpmTrack by BpmDetector.detectedTrack.collectAsState()
+    val isBpmDetecting by BpmDetector.isDetecting.collectAsState()
+    val hqVisualizerEnabled by OverlayPreferences.hqVisualizerEnabledFlow.collectAsState()
+    var showHqWarningDialog by remember { mutableStateOf(false) }
+    val extractionState by AudioPreviewExtractor.extractionState.collectAsState()
+    val isPreviewPlaying by PreviewAudioPlayer.isPlaying.collectAsState()
+    val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
+    val previewDurationMs by PreviewAudioPlayer.durationMs.collectAsState()
+    val previewSource by OverlayPreferences.previewAudioSourceFlow.collectAsState()
+    val liveAmplitudes by LiveAudioVisualizer.liveAmplitudes.collectAsState()
+    val isLiveCapturing by LiveAudioVisualizer.isCapturing.collectAsState()
+    val liveErrorMessage by LiveAudioVisualizer.errorMessage.collectAsState()
+    val mediaProjectionManager = remember {
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+    }
+
+    val screenCaptureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.DEVICE_AUDIO)
+            PreviewAudioPlayer.stop()
+            AudioCaptureService.start(context, result.resultCode, result.data!!, waveformBandCount)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            PreviewAudioPlayer.stop()
+        }
+    }
+
+    val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
+
+    LaunchedEffect(nowPlaying.title, nowPlaying.artist, visualizerMode, waveformBandCount, previewSource) {
+        val title = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
+        val artist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
+        if (visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
+            AudioPreviewExtractor.syncTrack(context, title, artist, true, waveformBandCount, previewSource)
+        } else {
+            AudioPreviewExtractor.syncTrack(context, title, artist, false, waveformBandCount, previewSource)
+        }
+        if (visualizerMode == OverlayPreferences.VisualizerMode.BPM) {
+            BpmDetector.syncTrack(title, artist)
+        }
+    }
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isShowProgressOutlineEnabled(context)
@@ -402,6 +481,9 @@ fun MusicScreen(
         OverlayPreferences.getWaveformBandCount(context)
         OverlayPreferences.getWaveformBarWidth(context)
         OverlayPreferences.getWaveformBarSpacing(context)
+        OverlayPreferences.isHqVisualizerEnabled(context)
+        OverlayPreferences.getVisualizerMode(context)
+        OverlayPreferences.getPreviewAudioSource(context)
     }
 
     val minimizedStyles = listOf(
@@ -893,9 +975,523 @@ fun MusicScreen(
                                 valueRange = 0f..8f,
                             )
                         }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        // Visualizer Mode Selector
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = when (visualizerMode) {
+                                    OverlayPreferences.VisualizerMode.SIMULATED -> Icons.Default.GraphicEq
+                                    OverlayPreferences.VisualizerMode.BPM -> Icons.Default.Speed
+                                    OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> Icons.Default.GraphicEq
+                                    OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> Icons.Default.Audiotrack
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Column {
+                                Text(
+                                    text = "Visualizer Mode",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = when (visualizerMode) {
+                                        OverlayPreferences.VisualizerMode.SIMULATED -> "Sinusoidal wave oscillation"
+                                        OverlayPreferences.VisualizerMode.BPM -> "BPM tempo-locked rhythm section (0% CPU)"
+                                        OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> "Real-time internal playback stream directly from phone (0ms latency)"
+                                        OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "30s preview dynamic frequency bands"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        // ButtonGroup for 4 modes
+                        val visualizerModes = listOf(
+                            OverlayPreferences.VisualizerMode.SIMULATED,
+                            OverlayPreferences.VisualizerMode.BPM,
+                            OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
+                            OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
+                        )
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            visualizerModes.forEach { mode ->
+                                toggleableItem(
+                                    checked = visualizerMode == mode,
+                                    label = when (mode) {
+                                        OverlayPreferences.VisualizerMode.SIMULATED -> "Simulated"
+                                        OverlayPreferences.VisualizerMode.BPM -> "BPM"
+                                        OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> "Phone Audio"
+                                        OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "Preview"
+                                    },
+                                    onCheckedChange = {
+                                        if (mode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
+                                            if (visualizerMode != mode) {
+                                                showHqWarningDialog = true
+                                            }
+                                        } else if (mode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
+                                            if (!isLiveCapturing) {
+                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
+                                                if (captureIntent != null) {
+                                                    screenCaptureLauncher.launch(captureIntent)
+                                                }
+                                            } else {
+                                                OverlayPreferences.setVisualizerMode(context, mode)
+                                                PreviewAudioPlayer.stop()
+                                            }
+                                        } else {
+                                            OverlayPreferences.setVisualizerMode(context, mode)
+                                            PreviewAudioPlayer.stop()
+                                            LiveAudioVisualizer.stop(context)
+                                        }
+                                    },
+                                    weight = 1f,
+                                )
+                            }
+                        }
+
+                        // BPM Status Card
+                        AnimatedVisibility(
+                            visible = visualizerMode == OverlayPreferences.VisualizerMode.BPM,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp)),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Speed,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Tempo Beat Sync (${currentBpm.toInt()} BPM)",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(
+                                                text = if (isBpmDetecting) "Detecting track tempo..." else (detectedBpmTrack ?: "Standard tempo active"),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        if (isBpmDetecting) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Synthesizes kick drums on bass bars, snares on center bars, and hi-hats on treble bars in lockstep with the song tempo. Smooth, lightweight, and zero battery drain.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Direct Device Audio (Screen/Audio Capture via MediaProjection) Card
+                        AnimatedVisibility(
+                            visible = visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp)),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.GraphicEq,
+                                            contentDescription = null,
+                                            tint = if (isLiveCapturing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Internal Playback Capture (Digital Loopback)",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(
+                                                text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
+                                                else (liveErrorMessage ?: "Screen/Audio recording permission required"),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (liveErrorMessage != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        if (isLiveCapturing) {
+                                            LiveTrackVisualizer(
+                                                amplitudes = liveAmplitudes,
+                                                isPlaying = true,
+                                                accentColor = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(width = 44.dp, height = 24.dp),
+                                                barCount = waveformBandCount,
+                                            )
+                                        }
+                                    }
+
+                                    if (!isLiveCapturing) {
+                                        Button(
+                                            onClick = {
+                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
+                                                if (captureIntent != null) {
+                                                    screenCaptureLauncher.launch(captureIntent)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Text("Grant Permission & Start Live Capture", modifier = Modifier.padding(start = 8.dp))
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = {
+                                                LiveAudioVisualizer.stop(context)
+                                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.SIMULATED)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                            ),
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Text("Stop Live Capture", modifier = Modifier.padding(start = 8.dp))
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Captures internal digital audio playback (Android 10+) using the system screen/audio recording method. Directly streams from Spotify, YouTube Music, Apple Music, or any app with zero mic noise, zero 30s limit, and 0ms latency.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Song Processing Status & Audio Preview Player
+                        AnimatedVisibility(
+                            visible = visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp)),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    // Preview Source Selector
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(
+                                            text = "Preview Audio Source",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        val previewSources = listOf(
+                                            OverlayPreferences.PreviewAudioSource.AUTO,
+                                            OverlayPreferences.PreviewAudioSource.DEEZER,
+                                            OverlayPreferences.PreviewAudioSource.ITUNES,
+                                            OverlayPreferences.PreviewAudioSource.DEVICE,
+                                        )
+                                        ButtonGroup(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                        ) {
+                                            previewSources.forEach { source ->
+                                                toggleableItem(
+                                                    checked = previewSource == source,
+                                                    label = source.title,
+                                                    onCheckedChange = {
+                                                        if (source == OverlayPreferences.PreviewAudioSource.DEVICE) {
+                                                            if (!isLiveCapturing) {
+                                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
+                                                                if (captureIntent != null) {
+                                                                    screenCaptureLauncher.launch(captureIntent)
+                                                                }
+                                                            } else {
+                                                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.DEVICE_AUDIO)
+                                                                PreviewAudioPlayer.stop()
+                                                            }
+                                                        } else {
+                                                            OverlayPreferences.setPreviewAudioSource(context, source)
+                                                            PreviewAudioPlayer.stop()
+                                                            val curTitle = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
+                                                            val curArtist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
+                                                            AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
+                                                        }
+                                                    },
+                                                    weight = 1f,
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = previewSource.subtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                    )
+                                    when (val state = extractionState) {
+                                        is ExtractionState.Idle -> {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.HourglassEmpty,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp),
+                                                )
+                                                Text(
+                                                    text = "Waiting for song playback to analyze audio...",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                        is ExtractionState.Processing -> {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = "Processing: ${state.trackTitle}",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                    )
+                                                    Text(
+                                                        text = "Downloading 30s preview & decomposing ${state.bandCount} frequency bands offline",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        is ExtractionState.Success -> {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = "Successfully Processed: ${state.trackTitle}",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                    )
+                                                    Text(
+                                                        text = "Synced from ${state.sourceName} • ${state.frameCount} frames • ${state.bandCount} acoustic bands",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                            }
+
+                                            val audioSource = state.audioFilePath ?: state.previewUrl
+                                            if (audioSource != null) {
+                                                HorizontalDivider(
+                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                                )
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.weight(1f),
+                                                    ) {
+                                                        FilledTonalIconButton(
+                                                            onClick = {
+                                                                PreviewAudioPlayer.togglePlayback(context, audioSource)
+                                                            },
+                                                            modifier = Modifier.size(36.dp),
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                                contentDescription = if (isPreviewPlaying) "Pause Preview" else "Play Preview",
+                                                                modifier = Modifier.size(20.dp),
+                                                            )
+                                                        }
+
+                                                        Column {
+                                                            Text(
+                                                                text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                            )
+                                                            Text(
+                                                                text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                        contentDescription = null,
+                                                        tint = if (isPreviewPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                }
+
+                                                LinearProgressIndicator(
+                                                    progress = {
+                                                        if (previewDurationMs > 0) (previewPositionMs.toFloat() / previewDurationMs).coerceIn(0f, 1f) else 0f
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(2.dp)),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                                )
+                                            }
+                                        }
+                                        is ExtractionState.Failed -> {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ErrorOutline,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = "Could not process: ${state.trackTitle}",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                    )
+                                                    Text(
+                                                        text = "${state.reason} • Falling back to simulated waveform",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
+
+    if (showHqWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showHqWarningDialog = false },
+            title = {
+                Text(
+                    text = "Performance Warning",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Text(
+                    text = "Generating audio-accurate visuals decodes raw preview data directly on your device. This process consumes significant CPU power and battery. Lower-end devices may experience temporary lag or device warming.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.AUDIO_PREVIEW)
+                        showHqWarningDialog = false
+                    }
+                ) {
+                    Text(
+                        text = "Enable Anyway",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showHqWarningDialog = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+private fun formatPreviewTime(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
 }

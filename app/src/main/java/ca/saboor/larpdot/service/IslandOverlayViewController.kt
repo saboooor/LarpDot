@@ -186,6 +186,8 @@ class IslandOverlayViewController(
             OverlayPreferences.getExpandedAlbumArtRotation(context)
             OverlayPreferences.isShowDominantColorGlowEnabled(context)
             OverlayPreferences.isShowCameraSwoopEnabled(context)
+            OverlayPreferences.getVisualizerMode(context)
+            OverlayPreferences.getWaveformBandCount(context)
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()

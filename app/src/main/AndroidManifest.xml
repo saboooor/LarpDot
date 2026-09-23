@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Network permissions for preview audio search -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Direct device audio capture for real-time visualizer -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <!-- Overlay over other apps permission -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
@@ -46,6 +56,12 @@
         <service
             android:name=".service.DotOverlayService"
             android:exported="true" />
+
+        <!-- Internal Audio Playback Capture Service (Android 10+ MediaProjection loopback) -->
+        <service
+            android:name=".service.AudioCaptureService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
 
         <!-- Accessibility Service (Displays over Notification Shade and Lock Screen) -->
         <service
