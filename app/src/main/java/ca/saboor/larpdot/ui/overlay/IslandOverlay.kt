@@ -223,14 +223,10 @@ fun CompactIslandOverlay(
         val dragOffsetAnim = remember { Animatable(0f) }
         val maxDragOffsetPx = with(density) { 8.dp.toPx() }
 
-        val showMinimizedTitlePref by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
-        val showMinimizedTitle = showMinimizedTitlePref && activeDisplayType == IslandType.MEDIA
         val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
-        val isTitleActive = showMinimizedTitle && isMediaSessionActive && mediaInfo.title.isNotBlank() && !isExpanded
-        val showTitleText = isTitleActive && isMusicActive
 
         val compactHPx = with(density) { compactHeight.toPx() }
-        val topPaddingPx = with(density) { (if (showMinimizedTitle) 20.dp else 14.dp).toPx() }
+        val topPaddingPx = with(density) { 14.dp.toPx() }
         val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(0f)
         val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
         val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }.coerceAtLeast(0.dp)
@@ -238,13 +234,10 @@ fun CompactIslandOverlay(
         val paddingHorizontalDp = 14.dp
         val minTitleWDp = 180.dp
         val baseWDp = maxOf(compactWidth, currentWidth) + (paddingHorizontalDp * 2)
-        val effectiveBaseWDp = if (showMinimizedTitle) maxOf(baseWDp, minTitleWDp) else baseWDp
-        val pillStartOffset = ((effectiveBaseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
+        val pillStartOffset = ((baseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
 
         val paddingLandscapeDp = 14.dp
-        val topExtraLandscapeDp = if (showMinimizedTitle) 20.dp else 0.dp
-        val landscapeTopOffsetDp = paddingLandscapeDp + topExtraLandscapeDp
-        val pillTopOffsetLandscape = (landscapeTopOffsetDp + (compactHeight - currentHeight) / 2).coerceAtLeast(0.dp)
+        val pillTopOffsetLandscape = (paddingLandscapeDp + (compactHeight - currentHeight) / 2).coerceAtLeast(0.dp)
 
         val mainPillModifier = Modifier
             .pointerInput(isPillActive, isExpanded, mediaInfo.hasMedia) {
@@ -611,54 +604,6 @@ fun CompactIslandOverlay(
             modifier = modifier.fillMaxSize(),
             contentAlignment = if (isLandscape) Alignment.Center else Alignment.TopCenter,
         ) {
-            if (!isLandscape && isTitleActive) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .width(effectiveBaseWDp)
-                        .height(pillTopOffsetDp)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.2.sp,
-                        ),
-                        color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .basicMarquee(iterations = Int.MAX_VALUE)
-                            .graphicsLayer { alpha = pillVisibilityAlpha * contentAlpha },
-                    )
-                }
-            }
-
-            if (isLandscape && isTitleActive) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 60.dp)
-                        .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-                        .graphicsLayer { alpha = pillVisibilityAlpha * contentAlpha },
-                ) {
-                    Text(
-                        text = if (mediaInfo.artist.isNotBlank()) "${mediaInfo.title} · ${mediaInfo.artist}" else mediaInfo.title,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                        color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-                    )
-                }
-            }
-
             val isBubbleVisible = isSplit || bubbleSize > 0.5.dp || bubbleAlpha > 0.01f
 
             if (isLandscape) {

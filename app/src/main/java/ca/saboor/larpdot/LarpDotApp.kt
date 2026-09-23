@@ -65,6 +65,7 @@ fun LarpDotApp() {
 
     var isEnabled by rememberSaveable { mutableStateOf(OverlayPreferences.isOverlayEnabled(context)) }
     var showSetupDialog by remember { mutableStateOf(false) }
+    var musicTabIndex by rememberSaveable { mutableStateOf(0) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
 
@@ -227,6 +228,8 @@ fun LarpDotApp() {
                     )
                     Destination.Music -> MusicScreen(
                         cutoutInfo = cutoutInfo,
+                        selectedTabIndex = musicTabIndex,
+                        onTabSelected = { musicTabIndex = it },
                     )
                     Destination.Flashlight -> FlashlightScreen(
                         cutoutInfo = cutoutInfo,

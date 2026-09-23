@@ -29,6 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +58,8 @@ fun FlashlightIslandPreview(
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
+    var showMinimizedPreview by remember { mutableStateOf(true) }
+    var showExpandedPreview by remember { mutableStateOf(true) }
 
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isSimulated by FlashlightController.isSimulated.collectAsState()
@@ -75,20 +80,49 @@ fun FlashlightIslandPreview(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SectionHeader(
-            title = "Live Island Preview",
-            trailing = {
-                StatusPill(
-                    text = if (isFlashlightOn) "ILLUMINATING" else "IDLE",
-                    active = isFlashlightOn,
-                    pulse = isFlashlightOn,
-                    activeColor = FlashlightAmber,
-                )
-            },
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (showMinimizedPreview) {
+                FilledTonalButton(
+                    onClick = { showMinimizedPreview = false },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Minimized")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showMinimizedPreview = true },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Minimized")
+                }
+            }
+
+            if (showExpandedPreview) {
+                FilledTonalButton(
+                    onClick = { showExpandedPreview = false },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Expanded")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showExpandedPreview = true },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Expanded")
+                }
+            }
+        }
 
         // Compact Pill Live Preview
-        Box(
+        if (showMinimizedPreview) Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -128,7 +162,7 @@ fun FlashlightIslandPreview(
         }
 
         // Expanded Card Live Preview
-        Box(
+        if (showExpandedPreview) Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {

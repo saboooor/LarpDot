@@ -168,7 +168,6 @@ class IslandOverlayViewController(
             observeMediaState()
             observeFlashlightState()
             observeCutoutConfig()
-            observeTitlePreference()
             observeMinimizedAlbumArtStyle()
             observeDebugPreference()
             OverlayPreferences.isDebugModeEnabled(context)
@@ -368,7 +367,6 @@ class IslandOverlayViewController(
         val hasFlashlight = isFlashlightActive
         val isSplit = hasActiveMusic && hasFlashlight
         val showFlashlightInMain = hasFlashlight && !hasActiveMusic
-        val showTitlePref = OverlayPreferences.isShowMinimizedTitleEnabled(context) && hasActiveMusic && !showFlashlightInMain
 
         val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
         val outlineAllowancePx = 2f * density
@@ -408,16 +406,11 @@ class IslandOverlayViewController(
             val pillHPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
             val splitExtraHPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
             val paddingPx = (14f * density).toInt()
-            val topExtraPx = if (showTitlePref) (20f * density).toInt() else 0
             val minTitleWPx = (140f * density).toInt()
             val minLandscapeWPx = (90f * density).toInt()
 
-            targetWidth = if (showTitlePref) {
-                maxOf(pillWPx + (paddingPx * 2), minTitleWPx)
-            } else {
-                maxOf(pillWPx + (paddingPx * 2), minLandscapeWPx)
-            }
-            targetHeight = pillHPx + splitExtraHPx + (paddingPx * 2) + topExtraPx
+            targetWidth = maxOf(pillWPx + (paddingPx * 2), minLandscapeWPx)
+            targetHeight = pillHPx + splitExtraHPx + (paddingPx * 2)
             val orientedCenterX = if (rotation == Surface.ROTATION_270) {
                 maxOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             } else {
@@ -425,24 +418,23 @@ class IslandOverlayViewController(
             }
             posX = (orientedCenterX - targetWidth / 2f).toInt()
             val topAnchor = (cutout.centerY - (pillHPx / 2f)).toInt().coerceAtLeast(0)
-            posY = (topAnchor - paddingPx - topExtraPx).coerceAtLeast(0)
+            posY = (topAnchor - paddingPx).coerceAtLeast(0)
         } else {
             val compactWPx = (cutoutDiameterPx + (compactExtraDp * density)).toInt()
             val compactHPx = compactPillThicknessPx.toInt()
             val splitExtraWPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
             val paddingHorizontalPx = (14f * density).toInt()
             val topAnchor = (cutout.centerY - (compactHPx / 2f)).toInt().coerceAtLeast(0)
-            val topPaddingPx = if (showTitlePref) (20f * density).toInt() else (14f * density).toInt()
+            val topPaddingPx = (14f * density).toInt()
             val bottomPaddingPx = (14f * density).toInt()
             val windowPosY = (topAnchor - topPaddingPx).coerceAtLeast(0)
 
             val minTitleWPx = (180f * density).toInt()
             val baseWPx = compactWPx + (paddingHorizontalPx * 2)
-            val effectiveBaseWPx = if (showTitlePref) maxOf(baseWPx, minTitleWPx) else baseWPx
 
-            targetWidth = effectiveBaseWPx + splitExtraWPx
+            targetWidth = baseWPx + splitExtraWPx
             targetHeight = compactHPx + topPaddingPx + bottomPaddingPx
-            posX = (cutout.centerX - (effectiveBaseWPx / 2f)).toInt()
+            posX = (cutout.centerX - (baseWPx / 2f)).toInt()
             posY = windowPosY
         }
 
@@ -615,14 +607,6 @@ class IslandOverlayViewController(
     private fun observeCutoutConfig() {
         controllerScope.launch {
             OverlayPreferences.cutoutConfigFlow.collectLatest {
-                updateOverlayLayout()
-            }
-        }
-    }
-
-    private fun observeTitlePreference() {
-        controllerScope.launch {
-            OverlayPreferences.showMinimizedTitleFlow.collectLatest {
                 updateOverlayLayout()
             }
         }

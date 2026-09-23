@@ -39,6 +39,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,9 +59,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
+import ca.saboor.larpdot.ui.components.IslandPreview
+import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.overlay.nestedAlbumArtShape
 import kotlin.math.roundToInt
 
@@ -366,10 +369,11 @@ private fun ShapePickerSection(
 @Composable
 fun MusicScreen(
     cutoutInfo: CutoutInfo,
+    selectedTabIndex: Int,
+    onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
@@ -380,9 +384,10 @@ fun MusicScreen(
     val showDominantGlow by OverlayPreferences.showDominantColorGlowFlow.collectAsState()
     val showCameraSwoop by OverlayPreferences.showCameraSwoopFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
+    val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
+    val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
 
     LaunchedEffect(Unit) {
-        OverlayPreferences.isShowMinimizedTitleEnabled(context)
         OverlayPreferences.isShowProgressOutlineEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtStyle(context)
         OverlayPreferences.getExpandedAlbumArtStyle(context)
@@ -393,6 +398,8 @@ fun MusicScreen(
         OverlayPreferences.isShowDominantColorGlowEnabled(context)
         OverlayPreferences.isShowCameraSwoopEnabled(context)
         OverlayPreferences.getWaveformBandCount(context)
+        OverlayPreferences.getWaveformBarWidth(context)
+        OverlayPreferences.getWaveformBarSpacing(context)
     }
 
     val minimizedStyles = listOf(
@@ -414,13 +421,28 @@ fun MusicScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Live Island Preview (both Minimized Pill and Expanded Card)
         item {
-            ExpandedIslandPreview(cutoutInfo = cutoutInfo)
+            IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.MUSIC)
+        }
+
+        item {
+            TabRow(selectedTabIndex = selectedTabIndex) {
+                Tab(
+                    selected = selectedTabIndex == 0,
+                    onClick = { onTabSelected(0) },
+                    text = { Text("Minimized") },
+                )
+                Tab(
+                    selected = selectedTabIndex == 1,
+                    onClick = { onTabSelected(1) },
+                    text = { Text("Expanded") },
+                )
+            }
         }
 
         // Minimized Island Presentation
-        item {
+        if (selectedTabIndex == 0) {
+            item {
             SectionHeader(title = "Minimized Island Art")
             LarpCard {
                 Column(
@@ -493,16 +515,17 @@ fun MusicScreen(
                     }
                 }
             }
-        }
+            }
+        } else {
 
-        // Expanded Island Presentation
-        item {
-            SectionHeader(title = "Expanded Island Art")
-            LarpCard {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+            // Expanded Island Presentation
+            item {
+                SectionHeader(title = "Expanded Island Art")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -583,6 +606,7 @@ fun MusicScreen(
                             },
                         )
                     }
+                    }
                 }
             }
         }
@@ -595,47 +619,6 @@ fun MusicScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    // Show Song Title
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Column {
-                                Text(
-                                    text = "Show Song Title",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "Display track title above minimized island",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = showTitle,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
                     // Progress Outline
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -795,7 +778,9 @@ fun MusicScreen(
                             }
 
                             Text(
-                                text = if (waveformBandCount == OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT) {
+                                text = if (waveformBandCount == 0) {
+                                    "Off"
+                                } else if (waveformBandCount == OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT) {
                                     "5 (Default)"
                                 } else {
                                     "$waveformBandCount Bands"
@@ -806,21 +791,76 @@ fun MusicScreen(
                             )
                         }
 
-                        val bandOptions = listOf(3, 4, 5, 6, 7)
-                        ButtonGroup(
+                        Slider(
+                            value = waveformBandCount.toFloat(),
+                            onValueChange = {
+                                OverlayPreferences.setWaveformBandCount(context, it.roundToInt())
+                            },
+                            valueRange = 0f..30f,
+                            steps = 29,
                             modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        )
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            bandOptions.forEach { count ->
-                                toggleableItem(
-                                    checked = waveformBandCount == count,
-                                    label = "$count",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setWaveformBandCount(context, count)
-                                    },
-                                    weight = 1f,
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Bar Width",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                                Text(
+                                    text = "${"%.1f".format(waveformBarWidth)} dp",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                             }
+                            Slider(
+                                value = waveformBarWidth,
+                                onValueChange = {
+                                    OverlayPreferences.setWaveformBarWidth(
+                                        context,
+                                        (it * 10f).roundToInt() / 10f,
+                                    )
+                                },
+                                valueRange = 0.5f..6f,
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Bar Spacing",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                                Text(
+                                    text = "${"%.1f".format(waveformBarSpacing)} dp",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Slider(
+                                value = waveformBarSpacing,
+                                onValueChange = {
+                                    OverlayPreferences.setWaveformBarSpacing(
+                                        context,
+                                        (it * 10f).roundToInt() / 10f,
+                                    )
+                                },
+                                valueRange = 0f..8f,
+                            )
                         }
                     }
                 }

@@ -1170,7 +1170,7 @@ internal fun EqualizerWaveform(
         label = "eq_alpha",
     )
 
-    val normalizedBarCount = barCount.coerceAtLeast(1)
+    val normalizedBarCount = barCount.coerceAtLeast(0)
     val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
     val heights = (0 until normalizedBarCount).map { index ->
         val normalizedIndex = index.toFloat() / normalizedBarCount.coerceAtLeast(2).toFloat()
@@ -1206,8 +1206,8 @@ internal fun EqualizerWaveform(
         restingFraction + (animatedFraction - restingFraction) * playProgress.coerceAtLeast(0f)
     }
 
-    val effectiveBarWidth = if (barWidth == 2.2.dp && barCount >= 7) 2.0.dp else barWidth
-    val effectiveBarSpacing = if (barSpacing == 2.dp && barCount >= 7) 1.6.dp else barSpacing
+    val effectiveBarWidth = barWidth
+    val effectiveBarSpacing = barSpacing
     val effectiveCornerRadius = if (barCornerRadius == barWidth / 2f) effectiveBarWidth / 2f else barCornerRadius
 
     Row(

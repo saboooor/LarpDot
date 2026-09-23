@@ -51,7 +51,6 @@ import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
@@ -83,11 +82,6 @@ fun HomeScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Live Expanded Island Card Preview
-        item {
-            ExpandedIslandPreview(cutoutInfo = cutoutInfo)
-        }
-
         // Camera Cutout Information & Manual Alignment Card
         item {
             SectionHeader(title = "Cutout Alignment")
@@ -99,65 +93,6 @@ fun HomeScreen(
                     OverlayPreferences.setCutoutConfig(context, newConfig)
                 },
             )
-        }
-
-        // Quick Controls
-        item {
-            val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
-            val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
-
-            SectionHeader(title = "Quick Controls")
-            LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isFlashlightOn) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                                    contentDescription = null,
-                                    tint = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                text = "Flashlight",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = if (isFlashlightOn) {
-                                    if (showFlashlightIsland) "Illuminating · Active in Island" else "Illuminating"
-                                } else {
-                                    "Turned off"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = isFlashlightOn,
-                        onCheckedChange = {
-                            FlashlightController.setTorch(it)
-                        },
-                    )
-                }
-            }
         }
 
         // Island Customization & Interaction Options

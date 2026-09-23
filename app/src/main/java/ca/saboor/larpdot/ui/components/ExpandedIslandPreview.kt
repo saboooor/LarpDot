@@ -32,9 +32,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +57,12 @@ import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.squircleShape
 
+enum class IslandPreviewMode {
+    MINIMIZED,
+    EXPANDED,
+    BOTH,
+}
+
 /**
  * Authentic live preview of the Dynamic Island (both minimized pill and expanded card)
  * directly inside the app, accurately replicating island dimensions, hole-punch alignment,
@@ -63,10 +72,20 @@ import ca.saboor.larpdot.ui.overlay.squircleShape
 fun ExpandedIslandPreview(
     cutoutInfo: CutoutInfo,
     modifier: Modifier = Modifier,
+    previewMode: IslandPreviewMode = IslandPreviewMode.BOTH,
+    showControls: Boolean = true,
+    titleBar: Boolean = false,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
+    var showMinimizedPreview by remember { mutableStateOf(previewMode != IslandPreviewMode.EXPANDED) }
+    var showExpandedPreview by remember { mutableStateOf(previewMode != IslandPreviewMode.MINIMIZED) }
+
+    LaunchedEffect(previewMode) {
+        showMinimizedPreview = previewMode != IslandPreviewMode.EXPANDED
+        showExpandedPreview = previewMode != IslandPreviewMode.MINIMIZED
+    }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
     val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
@@ -127,52 +146,155 @@ fun ExpandedIslandPreview(
     val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
     val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
     val containerShape = squircleShape(expandedCornerRadiusPx, 0.80f)
+    val previewHeight = if (titleBar) 52.dp else 220.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SectionHeader(title = "Live Island Preview")
+        if (showControls) Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (showMinimizedPreview) {
+                FilledTonalButton(
+                    onClick = { showMinimizedPreview = false },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Minimized")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showMinimizedPreview = true },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Minimized")
+                }
+            }
+
+            if (showExpandedPreview) {
+                FilledTonalButton(
+                    onClick = { showExpandedPreview = false },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Expanded")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showExpandedPreview = true },
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Text("Expanded")
+                }
+            }
+        }
 
         // Compact Pill Live Preview
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center,
-        ) {
+        if (showMinimizedPreview) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .width(compactWidth)
+                        .height(compactPillThickness)
+                        .then(
+                            Modifier.islandFluidProgressBorder(
+                                progressFraction = if (showProgressOutline) animatedProgress else 0f,
+                                cornerRadius = compactCornerRadius,
+                                shape = RoundedCornerShape(compactCornerRadius),
+                                strokeWidth = 0.75.dp,
+                                trackColor = Color(0x30FFFFFF),
+                                progressColor = previewTrack.dominantColor,
+                            )
+                        ),
+                    shape = RoundedCornerShape(compactCornerRadius),
+                    color = Color.Black,
+                    shadowElevation = 6.dp,
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompactIslandContent(
+                            mediaInfo = previewTrack,
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            onExpand = {},
+                            albumArtStyle = minimizedStyle,
+                            waveformBandCount = waveformBandCount,
+                        )
+                        // Hardware camera cutout visualizer centered between wings
+                        Box(
+                            modifier = Modifier
+                                .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
+                                .clip(CircleShape)
+                                .background(Color(0xFF0D0D0D))
+                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Expanded Card Live Preview
+        if (showExpandedPreview) {
             Surface(
                 modifier = Modifier
-                    .width(compactWidth)
-                    .height(compactPillThickness)
+                    .fillMaxWidth()
+                    .height(previewHeight)
                     .then(
                         Modifier.islandFluidProgressBorder(
                             progressFraction = if (showProgressOutline) animatedProgress else 0f,
-                            cornerRadius = compactCornerRadius,
-                            shape = RoundedCornerShape(compactCornerRadius),
+                            cornerRadius = expandedCornerRadiusDp,
+                            shape = containerShape,
                             strokeWidth = 0.75.dp,
                             trackColor = Color(0x30FFFFFF),
                             progressColor = previewTrack.dominantColor,
                         )
                     ),
-                shape = RoundedCornerShape(compactCornerRadius),
+                shape = containerShape,
                 color = Color.Black,
-                shadowElevation = 6.dp,
+                shadowElevation = 14.dp,
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(previewHeight),
+                    contentAlignment = Alignment.TopStart,
                 ) {
-                    CompactIslandContent(
+                    ExpandedIslandContent(
                         mediaInfo = previewTrack,
                         cutoutDiameterDp = cutoutDiameterDp,
-                        onExpand = {},
-                        albumArtStyle = minimizedStyle,
+                        isExpanded = true,
+                        onCollapse = { /* In-app preview */ },
+                        cutoutInfo = cutoutInfo,
+                        cardHorizontalMarginDp = 16.dp,
                         waveformBandCount = waveformBandCount,
                     )
-                    // Hardware camera cutout visualizer centered between wings
+
+                    // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
+                    val screenWidthDp = configuration.screenWidthDp.dp
+                    val previewCardWidthDp = screenWidthDp - 32.dp
+                    val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - 16.dp
+                    val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
+                        cutoutDiameterDp / 2f,
+                        previewCardWidthDp - (cutoutDiameterDp / 2f),
+                    )
+                    val punchHoleCenterYDp = 18.dp
+
                     Box(
                         modifier = Modifier
+                            .offset(
+                                x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
+                                y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                            )
                             .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
                             .clip(CircleShape)
                             .background(Color(0xFF0D0D0D))
@@ -180,69 +302,11 @@ fun ExpandedIslandPreview(
                     )
                 }
             }
-        }
-
-        // Expanded Card Live Preview
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .then(
-                    Modifier.islandFluidProgressBorder(
-                        progressFraction = if (showProgressOutline) animatedProgress else 0f,
-                        cornerRadius = expandedCornerRadiusDp,
-                        shape = containerShape,
-                        strokeWidth = 0.75.dp,
-                        trackColor = Color(0x30FFFFFF),
-                        progressColor = previewTrack.dominantColor,
-                    )
-                ),
-            shape = containerShape,
-            color = Color.Black,
-            shadowElevation = 14.dp,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                ExpandedIslandContent(
-                    mediaInfo = previewTrack,
-                    cutoutDiameterDp = cutoutDiameterDp,
-                    isExpanded = true,
-                    onCollapse = { /* In-app preview */ },
-                    cutoutInfo = cutoutInfo,
-                    cardHorizontalMarginDp = 16.dp,
-                    waveformBandCount = waveformBandCount,
-                )
-
-                // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
-                val screenWidthDp = configuration.screenWidthDp.dp
-                val previewCardWidthDp = screenWidthDp - 32.dp
-                val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - 16.dp
-                val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
-                    cutoutDiameterDp / 2f,
-                    previewCardWidthDp - (cutoutDiameterDp / 2f),
-                )
-                val punchHoleCenterYDp = 18.dp
-
-                Box(
-                    modifier = Modifier
-                        .offset(
-                            x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
-                            y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
-                        )
-                        .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
-                        .clip(CircleShape)
-                        .background(Color(0xFF0D0D0D))
-                        .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
-                )
             }
         }
 
         // Action / Permission Controls
-        Row(
+        if (showControls) Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -285,4 +349,3 @@ fun ExpandedIslandPreview(
             }
         }
     }
-}

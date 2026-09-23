@@ -56,7 +56,8 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.ConnectedButtonGroup
-import ca.saboor.larpdot.ui.components.FlashlightIslandPreview
+import ca.saboor.larpdot.ui.components.IslandPreview
+import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
@@ -103,7 +104,7 @@ fun FlashlightScreen(
     ) {
         // 1. Live Island Preview
         item {
-            FlashlightIslandPreview(cutoutInfo = cutoutInfo)
+            IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.FLASHLIGHT)
         }
 
         // 2. Master Controls Card

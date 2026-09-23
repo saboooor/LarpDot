@@ -103,9 +103,6 @@ object OverlayPreferences {
     private val _isEnabledFlow = MutableStateFlow(false)
     val isEnabledFlow: StateFlow<Boolean> = _isEnabledFlow.asStateFlow()
 
-    private val _showMinimizedTitleFlow = MutableStateFlow(true)
-    val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
-
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
 
@@ -243,21 +240,6 @@ object OverlayPreferences {
             .apply()
         _cutoutConfigFlow.value = config
         isCutoutInitialized = true
-    }
-
-    fun isShowMinimizedTitleEnabled(context: Context): Boolean {
-        if (!isTitlePrefInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_TITLE, true)
-            _showMinimizedTitleFlow.value = enabled
-            isTitlePrefInitialized = true
-        }
-        return _showMinimizedTitleFlow.value
-    }
-
-    fun setShowMinimizedTitleEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_TITLE, enabled).apply()
-        _showMinimizedTitleFlow.value = enabled
-        isTitlePrefInitialized = true
     }
 
     fun isTapToExpandEnabled(context: Context): Boolean {
