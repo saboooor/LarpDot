@@ -236,10 +236,10 @@ fun CompactIslandOverlay(
         val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
 
         val compactHPx = with(density) { compactHeight.toPx() }
-        val topPaddingPx = with(density) { 14.dp.toPx() }
         val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(0f)
-        val windowPosY = (topAnchorPx - topPaddingPx).coerceAtLeast(0f)
-        val pillTopOffsetDp = with(density) { (topAnchorPx - windowPosY).toDp() }.coerceAtLeast(0.dp)
+        // The unified draw window starts at the top of the display, so position the compact
+        // surface directly at the camera anchor instead of relative to a compact-only window.
+        val pillTopOffsetDp = with(density) { topAnchorPx.toDp() }.coerceAtLeast(0.dp)
 
 
 
@@ -613,13 +613,11 @@ fun CompactIslandOverlay(
         ) {
             val isBubbleVisible = isSplit || bubbleSize > 0.5.dp || bubbleAlpha > 0.01f
 
-            val splitExtraWDp = if (isSplit) (compactPillThickness + bubbleGap) else 0.dp
-            val baseWDp = (maxWidth - splitExtraWDp).coerceAtLeast(currentWidth)
-            val pillStartOffset = ((baseWDp - currentWidth) / 2).coerceAtLeast(0.dp)
-
-            val splitExtraHDp = if (isSplit) (compactPillThickness + bubbleGap) else 0.dp
-            val baseHDp = (maxHeight - splitExtraHDp).coerceAtLeast(currentHeight)
-            val pillTopOffsetLandscape = ((baseHDp - currentHeight) / 2).coerceAtLeast(0.dp)
+            // Anchor the main pill itself to the camera. The secondary bubble extends to the
+            // side/bottom and must not participate in centering, otherwise its appearance moves
+            // the main island by half the bubble width/height.
+            val pillStartOffset = ((maxWidth - currentWidth) / 2).coerceAtLeast(0.dp)
+            val pillTopOffsetLandscape = ((maxHeight - currentHeight) / 2).coerceAtLeast(0.dp)
 
             if (isLandscape) {
                 Column(
@@ -672,6 +670,8 @@ fun ExpandedIslandOverlay(
     startPressScale: Float = 1.0f, // Scale of the compact pill at moment of expansion tap
     modifier: Modifier = Modifier,
 ) {
+    var keepComposedForExit by remember { mutableStateOf(isExpanded) }
+
     val mediaAccentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
@@ -746,6 +746,7 @@ fun ExpandedIslandOverlay(
 
     LaunchedEffect(isExpanded, fromTinyDot) {
         if (isExpanded) {
+            keepComposedForExit = true
             morphProgress.snapTo(0f)
             withFrameNanos { }
             onFirstFrameDrawn()
@@ -764,8 +765,13 @@ fun ExpandedIslandOverlay(
                     easing = MtIslandExitEasing,
                 ),
             )
+            keepComposedForExit = false
         }
     }
+
+    // Enter on the same frame as the compact surface disappears, and keep drawing until the
+    // reverse morph completes. This replaces the old second-window visibility handoff.
+    if (!isExpanded && !keepComposedForExit) return
 
     val progress = morphProgress.value
     // Clamped to [0,1] for alpha/scale — the spring can overshoot beyond 1.0 freely on size/shape

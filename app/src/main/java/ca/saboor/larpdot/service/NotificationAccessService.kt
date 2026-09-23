@@ -26,6 +26,7 @@ class NotificationAccessService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         try {
+            MediaPlaybackState.initialize(this)
             mediaSessionManager = getSystemService(MediaSessionManager::class.java)
             val component = ComponentName(this, NotificationAccessService::class.java)
             mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, component)
@@ -86,6 +87,20 @@ class NotificationAccessService : NotificationListenerService() {
                     val activeControllers = mediaSessionManager?.getActiveSessions(component)
                     MediaPlaybackState.updateFromControllers(activeControllers)
                 }
+
+                val extraMediaActions = notif.actions.orEmpty().mapNotNull { action ->
+                    val label = action.title?.toString()?.takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
+                    val isExtraControl = listOf(
+                        "favorite", "favourite", "like", "thumb", "shuffle", "repeat", "heart",
+                    ).any { label.contains(it, ignoreCase = true) }
+                    if (isExtraControl && action.actionIntent != null) {
+                        label to action.actionIntent
+                    } else {
+                        null
+                    }
+                }
+                MediaPlaybackState.updateNotificationActions(sbn.packageName, extraMediaActions)
 
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
                 val artist = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()

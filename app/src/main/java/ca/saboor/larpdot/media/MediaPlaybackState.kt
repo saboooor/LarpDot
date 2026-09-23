@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.media
 
+import android.app.PendingIntent
+import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -16,6 +18,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+data class MediaSessionAction(
+    val id: String,
+    val label: String,
+    val active: Boolean = false,
+    val iconName: String? = null,
+    val iconResourceId: Int = 0,
+    val iconPackageName: String? = null,
+    val pendingIntent: PendingIntent? = null,
+)
+
 data class MediaTrackInfo(
     val title: String = "",
     val artist: String = "",
@@ -28,11 +40,32 @@ data class MediaTrackInfo(
     val controller: MediaController? = null,
     val playerPackageName: String? = null,
     val appName: String? = null,
+    val sessionActions: List<MediaSessionAction> = emptyList(),
 ) {
     val hasMedia: Boolean get() = title.isNotBlank() || isPlaying
 }
 
 object MediaPlaybackState {
+    private var applicationContext: Context? = null
+
+    fun initialize(context: Context) {
+        applicationContext = context.applicationContext
+    }
+
+    private fun inferActionActive(label: String, id: String = "", iconName: String? = null): Boolean {
+        val icon = iconName.orEmpty().lowercase()
+        if (listOf("_off", "outline", "unselected").any { it in icon }) return false
+        if (listOf("_on", "favorited", "filled", "selected").any { it in icon }) return true
+
+        val value = "$label $id".lowercase()
+        return when {
+            listOf("add to", "turn on", "enable", "not favorite", "not favourite").any { it in value } -> false
+            listOf("remove from", "unlike", "turn off", "disable", "enabled", "active").any { it in value } -> true
+            ("repeat one" in value || "repeat all" in value) -> true
+            else -> false
+        }
+    }
+
     private val _currentTrack = MutableStateFlow(MediaTrackInfo())
     val currentTrack: StateFlow<MediaTrackInfo> = _currentTrack.asStateFlow()
 
@@ -100,6 +133,7 @@ object MediaPlaybackState {
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
                     refreshFromController()
                 }
+
             }
             controllerCallback = callback
             controller.registerCallback(callback)
@@ -136,6 +170,48 @@ object MediaPlaybackState {
         val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L)
             ?: current.durationMs.coerceAtLeast(0L)
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
+        val playerResources = runCatching {
+            applicationContext?.packageManager?.getResourcesForApplication(controller.packageName)
+        }.getOrNull()
+        val notificationActions = if (controller.packageName == current.playerPackageName) {
+            current.sessionActions.filter { it.pendingIntent != null }
+        } else {
+            emptyList()
+        }
+        val sessionActions = buildList {
+            state?.customActions.orEmpty().forEach { action ->
+                val label = action.name?.toString()?.takeIf { it.isNotBlank() } ?: action.action
+                val iconName = runCatching {
+                    action.icon.takeIf { it != 0 }?.let { icon ->
+                        playerResources?.getResourceEntryName(icon)
+                    }
+                }.getOrNull()
+                val notificationMatch = notificationActions.firstOrNull {
+                    it.label.equals(label, ignoreCase = true) ||
+                            action.action.contains(it.label, ignoreCase = true) ||
+                            it.id.contains(label, ignoreCase = true)
+                }
+                val displayLabel = notificationMatch?.label ?: label
+                add(
+                    MediaSessionAction(
+                        id = action.action,
+                        // Notification labels are intended for display and remain meaningful
+                        // after Media3 replaces them with opaque legacy command identifiers.
+                        label = displayLabel,
+                        active = inferActionActive(displayLabel, action.action, iconName),
+                        iconName = iconName,
+                        iconResourceId = action.icon,
+                        iconPackageName = controller.packageName,
+                        pendingIntent = notificationMatch?.pendingIntent,
+                    )
+                )
+            }
+            notificationActions.forEach { notificationAction ->
+                if (none { it.label.equals(notificationAction.label, ignoreCase = true) }) {
+                    add(notificationAction)
+                }
+            }
+        }.sortedByDescending { it.pendingIntent != null }
 
         val rawPosition = state?.position ?: 0L
         val lastUpdate = state?.lastPositionUpdateTime ?: 0L
@@ -192,7 +268,8 @@ object MediaPlaybackState {
             isPlaying == current.isPlaying &&
             duration == current.durationMs &&
             dominant == current.dominantColor &&
-            controller.packageName == current.playerPackageName
+            controller.packageName == current.playerPackageName &&
+            sessionActions == current.sessionActions
 
         if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - current.positionMs) < 1000L) {
             checkTickerState(isPlaying)
@@ -210,6 +287,7 @@ object MediaPlaybackState {
             controller = controller,
             playerPackageName = controller.packageName,
             appName = current.appName,
+            sessionActions = sessionActions,
             isSimulated = false,
         )
 
@@ -401,6 +479,77 @@ object MediaPlaybackState {
             return
         }
         activeController?.transportControls?.seekTo(positionMs)
+    }
+
+    fun performSessionAction(action: MediaSessionAction) {
+        // Give immediate visual feedback. The next notification/session update replaces this
+        // optimistic value with the player's authoritative state.
+        val current = _currentTrack.value
+        _currentTrack.value = current.copy(
+            sessionActions = current.sessionActions.map {
+                if (it.id == action.id) it.copy(active = !it.active) else it
+            },
+        )
+
+        action.pendingIntent?.let { intent ->
+            try {
+                intent.send()
+                return
+            } catch (_: PendingIntent.CanceledException) {
+                // The notification may have just been replaced; try the live session below.
+            }
+        }
+        val controller = activeController ?: return
+        // Some players put required command arguments in the CustomAction itself. Sending only
+        // the action string (with null extras) makes those buttons appear valid but do nothing.
+        val publishedAction = controller.playbackState?.customActions
+            ?.firstOrNull { it.action == action.id }
+            ?: return
+        // Use the object overload so Media3/compat sessions receive the complete platform action,
+        // including the metadata used to reconstruct a session command.
+        controller.transportControls.sendCustomAction(publishedAction, publishedAction.extras)
+
+        // Most sessions emit a playback-state callback after handling the command. Refresh as a
+        // fallback as well so toggled labels/icons (Favorite -> Remove favorite, etc.) update.
+        playbackScope.launch {
+            delay(150L)
+            if (activeController?.sessionToken == controller.sessionToken) refreshFromController()
+        }
+    }
+
+    fun updateNotificationActions(
+        packageName: String,
+        actions: List<Pair<String, PendingIntent>>,
+    ) {
+        val current = _currentTrack.value
+        if (current.isSimulated || current.playerPackageName != packageName) return
+
+        val notificationActions = actions.mapIndexed { index, (label, intent) ->
+            MediaSessionAction(
+                id = "notification:$packageName:$index:$label",
+                label = label,
+                active = inferActionActive(label),
+                pendingIntent = intent,
+            )
+        }
+        // Keep media-session entries even when a previous notification refresh already attached
+        // a PendingIntent. They carry the authoritative app icon resource and on/off state.
+        val sessionActions = current.sessionActions.filter {
+            it.iconResourceId != 0 || !it.id.startsWith("notification:")
+        }
+        val merged = sessionActions.map { sessionAction ->
+            val match = notificationActions.firstOrNull {
+                it.label.equals(sessionAction.label, ignoreCase = true) ||
+                        sessionAction.id.contains(it.label, ignoreCase = true)
+            }
+            if (match != null) sessionAction.copy(pendingIntent = match.pendingIntent) else sessionAction
+        }.toMutableList()
+        notificationActions.forEach { action ->
+            if (merged.none { it.label.equals(action.label, ignoreCase = true) }) merged += action
+        }
+        _currentTrack.value = current.copy(
+            sessionActions = merged.sortedByDescending { it.pendingIntent != null },
+        )
     }
 
     private fun checkTickerState(isPlaying: Boolean) {

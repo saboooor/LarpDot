@@ -6,6 +6,9 @@ import ca.saboor.larpdot.ui.components.MarqueeText
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -64,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
@@ -71,6 +75,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -475,7 +480,9 @@ internal fun CompactIslandContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 6.dp),
+                                    // Keep nested artwork pinned to the leading edge while the
+                                    // announcement text consumes the newly expanded space.
+                                    .padding(start = 4.dp, end = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
@@ -978,6 +985,29 @@ internal fun CompactIslandContent(
     }
 }
 
+private fun loadMediaSessionActionIcon(
+    context: Context,
+    packageName: String?,
+    resourceId: Int,
+): Bitmap? {
+    if (packageName == null || resourceId == 0) return null
+    return runCatching {
+        val packageContext = context.createPackageContext(packageName, 0)
+        val drawable = packageContext.resources.getDrawable(resourceId, packageContext.theme)
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            drawable.bitmap
+        } else {
+            val width = drawable.intrinsicWidth.takeIf { it > 0 }?.coerceAtMost(128) ?: 64
+            val height = drawable.intrinsicHeight.takeIf { it > 0 }?.coerceAtMost(128) ?: 64
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                val canvas = AndroidCanvas(bitmap)
+                drawable.setBounds(0, 0, width, height)
+                drawable.draw(canvas)
+            }
+        }
+    }.getOrNull()
+}
+
 /**
  * Expanded Dynamic Island card content following mtisland's layout:
  * Top Row: Large rounded album art (54dp) on left, center hole punch clearance, right animated equalizer.
@@ -995,7 +1025,8 @@ internal fun ExpandedIslandContent(
     modifier: Modifier = Modifier,
     cutoutInfo: CutoutInfo? = null,
     cardHorizontalMarginDp: Dp = 14.dp,
-    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
+    albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
+    showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
@@ -1052,7 +1083,9 @@ internal fun ExpandedIslandContent(
             }
             .background(Color.Black)
             .drawWithCache {
-                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND) {
+                if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND ||
+                    albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND
+                ) {
                     onDrawBehind { /* Full background image rendered inside content */ }
                 } else {
                     val dominantTint = if (showDominantGlow) {
@@ -1159,7 +1192,10 @@ internal fun ExpandedIslandContent(
             }
     ) {
         // Background Album Art based on albumArtStyle
-        if (albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND && mediaInfo.albumArt != null) {
+        if ((albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND ||
+                albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND) &&
+            mediaInfo.albumArt != null
+        ) {
             Image(
                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                 contentDescription = "Background album art",
@@ -1170,7 +1206,12 @@ internal fun ExpandedIslandContent(
                         translationY = 22.dp.toPx()
                         scaleX = 1.15f
                         scaleY = 1.15f
-                    },
+                    }
+                    .then(
+                        if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND) {
+                            Modifier.blur(24.dp)
+                        } else Modifier
+                    ),
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.Center,
             )
@@ -1188,7 +1229,7 @@ internal fun ExpandedIslandContent(
                         )
                     )
             )
-        } else if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BASIC_FADED && mediaInfo.albumArt != null) {
+        } else if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED && mediaInfo.albumArt != null) {
             val bitmap = mediaInfo.albumArt.asImageBitmap()
             val side = minOf(bitmap.width, bitmap.height)
             val cropX = (bitmap.width - side) / 2
@@ -1256,7 +1297,7 @@ internal fun ExpandedIslandContent(
                     }
                 }
             }
-        } else if (albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED && mediaInfo.albumArt != null) {
+        } else if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLENDED && mediaInfo.albumArt != null) {
             val bitmap = mediaInfo.albumArt.asImageBitmap()
             val side = minOf(bitmap.width, bitmap.height)
             val cropX = (bitmap.width - side) / 2
@@ -1387,10 +1428,9 @@ internal fun ExpandedIslandContent(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
             ) {
-                // Symmetrical clearance spacer hugging the hole punch camera
-                Spacer(modifier = Modifier.width(cutoutDiameterDp))
+                Spacer(Modifier.height(32.dp))
             }
 
             // Row 2: Track Title & Artist (Left) + Visualizer stacked above Play/Pause Button (Right)
@@ -1400,7 +1440,7 @@ internal fun ExpandedIslandContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED && mediaInfo.albumArt != null) {
+                if (showAlbumArt && mediaInfo.albumArt != null) {
                     Image(
                         bitmap = mediaInfo.albumArt.asImageBitmap(),
                         contentDescription = "Album art",
@@ -1557,6 +1597,32 @@ internal fun ExpandedIslandContent(
                         tint = Color.White,
                         modifier = Modifier.size(24.dp),
                     )
+                }
+
+                mediaInfo.sessionActions
+                    .filter { it.iconResourceId != 0 && it.iconPackageName != null }
+                    .take(3)
+                    .forEach { action ->
+                    val appIcon = remember(action.iconPackageName, action.iconResourceId) {
+                        loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)
+                    }
+                    if (appIcon != null) {
+                        IconButton(
+                            onClick = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                MediaPlaybackState.performSessionAction(action)
+                            },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            val iconTint = if (action.active) accentColor else Color.White.copy(alpha = 0.82f)
+                            Image(
+                                bitmap = appIcon.asImageBitmap(),
+                                contentDescription = action.label,
+                                colorFilter = ColorFilter.tint(iconTint),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

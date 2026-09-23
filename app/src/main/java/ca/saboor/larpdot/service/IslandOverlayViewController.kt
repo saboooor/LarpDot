@@ -17,6 +17,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import ca.saboor.larpdot.cutout.CutoutDetector
@@ -55,8 +58,8 @@ import kotlinx.coroutines.launch
  *    Because touchView has no visual drawing or surface buffer, repositioning/resizing it
  *    creates zero visual artifacts. Outside of touchView, touches pass directly through to the status bar.
  *
- * 3. Dedicated Expanded Island Window (expandedView):
- *    Full-screen width overlay that appears when the island is expanded into a rich card.
+ * Compact and expanded content share this one stable draw window. The expanded surface starts at
+ * the compact surface's bounds and morphs in place, avoiding a cross-window frame handoff.
  */
 class IslandOverlayViewController(
     private val context: Context,
@@ -74,21 +77,13 @@ class IslandOverlayViewController(
     private var touchWindowParams: WindowManager.LayoutParams? = null
     private var touchAdded = false
 
-    // Dedicated Expanded Island Window
-    private var expandedView: ComposeView? = null
-    private var expandedLifecycleOwner: OverlayLifecycleOwner? = null
-    private var expandedWindowParams: WindowManager.LayoutParams? = null
-    private var isExpandedWindowAdded = false
-
     var isOverlayAdded = false
         private set
 
     private var currentCutoutInfo by mutableStateOf<CutoutInfo?>(null)
     private var isIslandExpanded by mutableStateOf(false)
     private var isOverlayMorphing by mutableStateOf(false)
-    private var isCompactHidden by mutableStateOf(false)
     private var isExpandedFromTinyDot by mutableStateOf(false)
-    private var isTinyDotHidden by mutableStateOf(false)
 
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
     val expandedType: StateFlow<IslandType> = _expandedType.asStateFlow()
@@ -157,17 +152,28 @@ class IslandOverlayViewController(
                     val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                     val activeCutout = currentCutoutInfo ?: cutout
 
-                    val compactIsExpanded = if (isExpandedFromTinyDot) isTinyDotHidden else isCompactHidden
+                    val activeExpandedType by expandedType.collectAsState()
 
-                    CompactIslandOverlay(
-                        cutoutInfo = activeCutout,
-                        mediaInfo = mediaTrack,
-                        isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                        isExpanded = compactIsExpanded,
-                        fromTinyDot = isExpandedFromTinyDot,
-                        onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
-                        onFlashlightToggle = { FlashlightController.toggleFlashlight() },
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        CompactIslandOverlay(
+                            cutoutInfo = activeCutout,
+                            mediaInfo = mediaTrack,
+                            isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                            isExpanded = isIslandExpanded,
+                            fromTinyDot = isExpandedFromTinyDot,
+                            onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
+                            onFlashlightToggle = { FlashlightController.toggleFlashlight() },
+                        )
+                        ExpandedIslandOverlay(
+                            cutoutInfo = activeCutout,
+                            mediaInfo = mediaTrack,
+                            isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                            expandedType = activeExpandedType,
+                            fromTinyDot = isExpandedFromTinyDot,
+                            isExpanded = isIslandExpanded,
+                            onCollapse = { collapseOverlay() },
+                        )
+                    }
                 }
             }
         }
@@ -179,6 +185,10 @@ class IslandOverlayViewController(
         val tView = View(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             setOnTouchListener { _, event ->
+                if (event.action == MotionEvent.ACTION_OUTSIDE) {
+                    if (isIslandExpanded) collapseOverlay()
+                    return@setOnTouchListener false
+                }
                 val comp = compactView ?: return@setOnTouchListener false
                 val cParams = compactWindowParams ?: return@setOnTouchListener false
                 val tParams = touchWindowParams ?: return@setOnTouchListener false
@@ -191,7 +201,7 @@ class IslandOverlayViewController(
         }
         touchView = tView
 
-        val compParams = createCompactLayoutParams(cutout)
+        val compParams = createExpandedLayoutParams(cutout)
         compactWindowParams = compParams
 
         try {
@@ -210,6 +220,7 @@ class IslandOverlayViewController(
             OverlayPreferences.getMinimizedAlbumArtStyle(context)
             OverlayPreferences.getMinimizedAlbumArtRotation(context)
             OverlayPreferences.getExpandedAlbumArtRotation(context)
+            OverlayPreferences.isShowExpandedAlbumArtEnabled(context)
             OverlayPreferences.isShowDominantColorGlowEnabled(context)
             OverlayPreferences.isShowCameraSwoopEnabled(context)
             OverlayPreferences.getVisualizerMode(context)
@@ -219,68 +230,6 @@ class IslandOverlayViewController(
             e.printStackTrace()
         }
 
-        // 2. Setup Dedicated Expanded Island View (Full screen width, transparent, click-through background)
-        val expOwner = OverlayLifecycleOwner()
-        expandedLifecycleOwner = expOwner
-
-        val expView = ComposeView(context).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
-            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-
-            setContent {
-                LarpDotTheme {
-                    val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
-                    val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
-                    val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
-                    val activeCutout = currentCutoutInfo ?: cutout
-
-                    val activeExpandedType by expandedType.collectAsState()
-
-                    ExpandedIslandOverlay(
-                        cutoutInfo = activeCutout,
-                        mediaInfo = mediaTrack,
-                        isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                        expandedType = activeExpandedType,
-                        fromTinyDot = isExpandedFromTinyDot,
-                        isExpanded = isIslandExpanded,
-                        startPressScale = 1.08f,
-                        onCollapse = { collapseOverlay() },
-                        onFirstFrameDrawn = {
-                            if (isIslandExpanded) {
-                                if (!isExpandedFromTinyDot) {
-                                    isCompactHidden = true
-                                } else {
-                                    isTinyDotHidden = true
-                                }
-                            }
-                        },
-                    )
-                }
-            }
-
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                    if (isIslandExpanded) {
-                        collapseOverlay()
-                    }
-                    return@setOnTouchListener false
-                }
-                false
-            }
-        }
-        expOwner.attach(expView)
-        expOwner.onCreate()
-        expandedView = expView
-
-        expView.visibility = View.INVISIBLE
-        val expParams = createExpandedLayoutParams(cutout)
-        expandedWindowParams = expParams
-        try {
-            wm.addView(expView, expParams)
-            isExpandedWindowAdded = true
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     fun expandOverlay(type: IslandType = IslandType.MEDIA, fromDot: Boolean = false) {
@@ -297,24 +246,7 @@ class IslandOverlayViewController(
         isIslandExpanded = true
         isOverlayMorphing = true
 
-        removeTouchWindow()
-
-        expandedView?.let { expView ->
-            expView.visibility = View.VISIBLE
-            expandedWindowParams?.let { params ->
-                @Suppress("DEPRECATION")
-                params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-                try {
-                    windowManager?.updateViewLayout(expView, params)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
+        currentCutoutInfo?.let(::layoutTouchWindow)
     }
 
     fun collapseOverlay() {
@@ -323,27 +255,9 @@ class IslandOverlayViewController(
 
         isIslandExpanded = false
         isOverlayMorphing = true
-        isCompactHidden = false
-        isTinyDotHidden = false
 
         collapseJob = controllerScope.launch {
             delay(300L)
-            expandedView?.let { expView ->
-                expView.visibility = View.INVISIBLE
-                expandedWindowParams?.let { params ->
-                    @Suppress("DEPRECATION")
-                    params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    try {
-                        windowManager?.updateViewLayout(expView, params)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
             isExpandedFromTinyDot = false
             isOverlayMorphing = false
             currentCutoutInfo?.let { cutout ->
@@ -576,7 +490,11 @@ class IslandOverlayViewController(
         val pillHPx = if (isLandscape) (cutoutDiameterPx + (landscapeAnnouncementExtraDp * density)).toInt() else compactPillThicknessPx.toInt()
         val splitExtraPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
 
-        val tParams = createTouchLayoutParams(cutout, pillWPx, pillHPx, splitExtraPx, isLandscape, rotation, screenWidth)
+        val tParams = if (isIslandExpanded) {
+            createExpandedTouchLayoutParams()
+        } else {
+            createTouchLayoutParams(cutout, pillWPx, pillHPx, splitExtraPx, isLandscape, rotation, screenWidth)
+        }
         touchWindowParams = tParams
 
         try {
@@ -601,6 +519,29 @@ class IslandOverlayViewController(
             e.printStackTrace()
         }
         touchAdded = false
+    }
+
+    private fun createExpandedTouchLayoutParams(): WindowManager.LayoutParams {
+        val draw = compactWindowParams
+        val density = context.resources.displayMetrics.density
+        return WindowManager.LayoutParams(
+            draw?.width ?: context.resources.displayMetrics.widthPixels,
+            draw?.height ?: (320f * density).toInt(),
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = draw?.x ?: 0
+            y = draw?.y ?: 0
+            windowAnimations = 0
+            applyCutoutMode(this)
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -632,11 +573,9 @@ class IslandOverlayViewController(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
 
-        val flags = if (!isIslandExpanded) {
-            baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        } else {
-            baseFlags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        }
+        // This is the single stable draw surface. Input is always handled by the lightweight
+        // forwarding window, so WindowManager never has to swap or resize a visual surface.
+        val flags = baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
 
         return WindowManager.LayoutParams(
             targetWidth,
@@ -663,7 +602,7 @@ class IslandOverlayViewController(
         val cutout = currentCutoutInfo ?: return
 
         compactView?.let { compView ->
-            val compParams = createCompactLayoutParams(cutout)
+            val compParams = createExpandedLayoutParams(cutout)
             val oldParams = compactWindowParams
             val changed = oldParams == null ||
                     oldParams.x != compParams.x ||
@@ -684,31 +623,13 @@ class IslandOverlayViewController(
         val hasActiveMusic = isMusicActive
         val hasFlashlight = isFlashlightActive
         val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight
-        val shouldShowTouch = !shouldShowDotOnly && !isIslandExpanded && isOverlayAdded && !isCompactHidden
+        val shouldShowTouch = (!shouldShowDotOnly || isIslandExpanded) && isOverlayAdded
         if (shouldShowTouch) {
             layoutTouchWindow(cutout)
         } else {
             removeTouchWindow()
         }
 
-        expandedView?.let { expView ->
-            val expParams = createExpandedLayoutParams(cutout)
-            val oldExpParams = expandedWindowParams
-            val expChanged = oldExpParams == null ||
-                    oldExpParams.x != expParams.x ||
-                    oldExpParams.y != expParams.y ||
-                    oldExpParams.width != expParams.width ||
-                    oldExpParams.height != expParams.height ||
-                    oldExpParams.flags != expParams.flags
-            expandedWindowParams = expParams
-            if (expChanged) {
-                try {
-                    wm.updateViewLayout(expView, expParams)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
     }
 
     private fun observeMediaState() {
@@ -852,8 +773,6 @@ class IslandOverlayViewController(
         isSongAnnouncementActive = false
         isIslandExpanded = false
         isOverlayMorphing = false
-        isCompactHidden = false
-        isTinyDotHidden = false
         isExpandedFromTinyDot = false
 
         removeTouchWindow()
@@ -871,16 +790,5 @@ class IslandOverlayViewController(
             compactView = null
         }
 
-        expandedView?.let { expView ->
-            expandedLifecycleOwner?.onDestroy()
-            expandedLifecycleOwner = null
-            try {
-                windowManager?.removeView(expView)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            expandedView = null
-            isExpandedWindowAdded = false
-        }
     }
 }

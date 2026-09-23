@@ -19,6 +19,7 @@ object OverlayPreferences {
     private const val KEY_ALBUM_ART_STYLE = "album_art_style"
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
     private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
+    private const val KEY_SHOW_EXPANDED_ALBUM_ART = "show_expanded_album_art"
     private const val KEY_NESTED_ALBUM_ART_SHAPE = "nested_album_art_shape"
     private const val KEY_MINIMIZED_ALBUM_ART_SHAPE = "minimized_album_art_shape"
     private const val KEY_EXPANDED_ALBUM_ART_SHAPE = "expanded_album_art_shape"
@@ -52,6 +53,14 @@ object OverlayPreferences {
         BLENDED("Blended"),
         NESTED("Nested"),
         FULL_BACKGROUND("Full Background"),
+    }
+
+    enum class ExpandedBackgroundStyle(val label: String) {
+        NONE("None"),
+        BASIC_FADED("Basic Faded"),
+        BLENDED("Blended"),
+        FULL_BACKGROUND("Full Background"),
+        BLURRED_FULL_BACKGROUND("Blurred Full"),
     }
 
     enum class NestedAlbumArtShape(val label: String) {
@@ -122,8 +131,11 @@ object OverlayPreferences {
     private val _minimizedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
     val minimizedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _minimizedAlbumArtStyleFlow.asStateFlow()
 
-    private val _expandedAlbumArtStyleFlow = MutableStateFlow(AlbumArtStyle.BLENDED)
-    val expandedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = _expandedAlbumArtStyleFlow.asStateFlow()
+    private val _expandedAlbumArtStyleFlow = MutableStateFlow(ExpandedBackgroundStyle.BLENDED)
+    val expandedAlbumArtStyleFlow: StateFlow<ExpandedBackgroundStyle> = _expandedAlbumArtStyleFlow.asStateFlow()
+
+    private val _showExpandedAlbumArtFlow = MutableStateFlow(true)
+    val showExpandedAlbumArtFlow: StateFlow<Boolean> = _showExpandedAlbumArtFlow.asStateFlow()
 
     private val _minimizedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
     val minimizedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _minimizedAlbumArtShapeFlow.asStateFlow()
@@ -203,6 +215,7 @@ object OverlayPreferences {
     private var isTapToExpandInitialized = false
     private var isMinimizedAlbumArtStyleInitialized = false
     private var isExpandedAlbumArtStyleInitialized = false
+    private var isShowExpandedAlbumArtInitialized = false
     private var isMinimizedAlbumArtShapeInitialized = false
     private var isExpandedAlbumArtShapeInitialized = false
     private var isShowProgressOutlineInitialized = false
@@ -231,6 +244,16 @@ object OverlayPreferences {
             "NESTED", "NESTED_ROUNDED_SQUARE" -> AlbumArtStyle.NESTED
             "FULL_BACKGROUND" -> AlbumArtStyle.FULL_BACKGROUND
             else -> AlbumArtStyle.BLENDED
+        }
+    }
+
+    private fun parseExpandedBackgroundStyle(styleName: String?): ExpandedBackgroundStyle {
+        return when (styleName) {
+            "NONE", "NESTED", "NESTED_ROUNDED_SQUARE" -> ExpandedBackgroundStyle.NONE
+            "BASIC_FADED" -> ExpandedBackgroundStyle.BASIC_FADED
+            "FULL_BACKGROUND" -> ExpandedBackgroundStyle.FULL_BACKGROUND
+            "BLURRED_FULL_BACKGROUND" -> ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND
+            else -> ExpandedBackgroundStyle.BLENDED
         }
     }
 
@@ -340,22 +363,36 @@ object OverlayPreferences {
         isMinimizedAlbumArtStyleInitialized = true
     }
 
-    fun getExpandedAlbumArtStyle(context: Context): AlbumArtStyle {
+    fun getExpandedAlbumArtStyle(context: Context): ExpandedBackgroundStyle {
         if (!isExpandedAlbumArtStyleInitialized) {
             val prefs = getPrefs(context)
             val legacy = prefs.getString(KEY_ALBUM_ART_STYLE, null)
-            val styleName = prefs.getString(KEY_EXPANDED_ALBUM_ART_STYLE, legacy ?: AlbumArtStyle.BLENDED.name)
-            val style = parseAlbumArtStyle(styleName)
+            val styleName = prefs.getString(KEY_EXPANDED_ALBUM_ART_STYLE, legacy ?: ExpandedBackgroundStyle.BLENDED.name)
+            val style = parseExpandedBackgroundStyle(styleName)
             _expandedAlbumArtStyleFlow.value = style
             isExpandedAlbumArtStyleInitialized = true
         }
         return _expandedAlbumArtStyleFlow.value
     }
 
-    fun setExpandedAlbumArtStyle(context: Context, style: AlbumArtStyle) {
+    fun setExpandedAlbumArtStyle(context: Context, style: ExpandedBackgroundStyle) {
         getPrefs(context).edit().putString(KEY_EXPANDED_ALBUM_ART_STYLE, style.name).apply()
         _expandedAlbumArtStyleFlow.value = style
         isExpandedAlbumArtStyleInitialized = true
+    }
+
+    fun isShowExpandedAlbumArtEnabled(context: Context): Boolean {
+        if (!isShowExpandedAlbumArtInitialized) {
+            _showExpandedAlbumArtFlow.value = getPrefs(context).getBoolean(KEY_SHOW_EXPANDED_ALBUM_ART, true)
+            isShowExpandedAlbumArtInitialized = true
+        }
+        return _showExpandedAlbumArtFlow.value
+    }
+
+    fun setShowExpandedAlbumArtEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_ALBUM_ART, enabled).apply()
+        _showExpandedAlbumArtFlow.value = enabled
+        isShowExpandedAlbumArtInitialized = true
     }
 
     fun getMinimizedAlbumArtShape(context: Context): NestedAlbumArtShape {

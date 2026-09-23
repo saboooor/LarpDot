@@ -415,6 +415,7 @@ fun MusicScreen(
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
+    val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
     val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
     val minimizedRotation by OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState()
@@ -479,6 +480,7 @@ fun MusicScreen(
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtStyle(context)
         OverlayPreferences.getExpandedAlbumArtStyle(context)
+        OverlayPreferences.isShowExpandedAlbumArtEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtShape(context)
         OverlayPreferences.getExpandedAlbumArtShape(context)
         OverlayPreferences.getMinimizedAlbumArtRotation(context)
@@ -499,12 +501,13 @@ fun MusicScreen(
         OverlayPreferences.AlbumArtStyle.NESTED,
     )
     val expandedStyleRow1 = listOf(
-        OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-        OverlayPreferences.AlbumArtStyle.BLENDED,
+        OverlayPreferences.ExpandedBackgroundStyle.NONE,
+        OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED,
+        OverlayPreferences.ExpandedBackgroundStyle.BLENDED,
     )
     val expandedStyleRow2 = listOf(
-        OverlayPreferences.AlbumArtStyle.NESTED,
-        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+        OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND,
+        OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
     )
 
     LazyColumn(
@@ -630,16 +633,17 @@ fun MusicScreen(
                         )
                         Column {
                             Text(
-                                text = "Expanded Style",
+                                text = "Expanded Background",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
                                 text = when (expandedStyle) {
-                                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear faded background card cover"
-                                    OverlayPreferences.AlbumArtStyle.BLENDED -> "Curved gradient blend with dominant backdrop"
-                                    OverlayPreferences.AlbumArtStyle.NESTED -> "Prominent nested cover beside track title"
-                                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> "Artwork fills the entire island card like Android media player"
+                                    OverlayPreferences.ExpandedBackgroundStyle.NONE -> "Plain black island background"
+                                    OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED -> "Linear faded background card cover"
+                                    OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> "Curved gradient blend with dominant backdrop"
+                                    OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND -> "Artwork fills the entire island card"
+                                    OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> "Blurred artwork fills the entire island card"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -679,14 +683,35 @@ fun MusicScreen(
                         }
                     }
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Show Album Art", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Show the cover beside the track title",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showExpandedAlbumArt,
+                            onCheckedChange = {
+                                OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it)
+                            },
+                        )
+                    }
+
                     AnimatedVisibility(
-                        visible = expandedStyle == OverlayPreferences.AlbumArtStyle.NESTED,
+                        visible = showExpandedAlbumArt,
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
                         ShapePickerSection(
-                            title = "Expanded Shape",
-                            subtitle = "expanded card",
+                            title = "Album Art Shape",
+                            subtitle = "expanded album art",
                             selectedShape = expandedShape,
                             rotationDegrees = expandedRotation,
                             onShapeSelected = {
