@@ -16,7 +16,6 @@ import android.provider.Settings
 import android.util.Log
 import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.service.DotOverlayService
-import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,11 +95,7 @@ object FlashlightController {
     private var lastStrengthUpdateTime = 0L
     private var pendingStrengthJob: Job? = null
     private var pixelLightTurnOffPendingIntent: android.app.PendingIntent? = null
-    @Volatile
-    private var isPixelLightNotificationPresent = false
-
-    @Volatile
-    private var lastLarpDotCommandTime = 0L
+    private var isCameraInUse = false
 
     @Volatile
     private var isUserInteracting = false
@@ -122,19 +117,17 @@ object FlashlightController {
         override fun onCameraUnavailable(cameraId: String) {
             if (cameraId == targetCameraId || targetCameraId == null) {
                 Log.d(TAG, "onCameraUnavailable: Camera $cameraId is now unavailable")
-                handleCameraBecameUnavailable(cameraId)
+                isCameraInUse = true
+                updatePixelLightCameraState()
             }
         }
 
         override fun onCameraAvailable(cameraId: String) {
             if (cameraId == targetCameraId || targetCameraId == null) {
                 Log.d(TAG, "onCameraAvailable: Camera $cameraId is now available")
+                isCameraInUse = false
                 _isAvailable.value = true
-                if (_isPixelLightActive.value) {
-                    Log.i(TAG, "Camera $cameraId available again: PixelLight torch closed")
-                    _isPixelLightActive.value = false
-                    notifyTorchStateChanged(false)
-                }
+                updatePixelLightCameraState()
             }
         }
     }
@@ -143,13 +136,6 @@ object FlashlightController {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
             if (cameraId == targetCameraId || targetCameraId == null) {
                 isStandardTorchOn = enabled
-                if (!enabled && _isPixelLightActive.value) {
-                    val now = SystemClock.uptimeMillis()
-                    val larpDotInitiated = (now - lastLarpDotCommandTime) < 2500L
-                    if (larpDotInitiated) return
-                    val pixelLightInitiated = (now - DotAccessibilityService.lastPixelLightActivityTime) < 2500L
-                    if (pixelLightInitiated) return
-                }
                 if (!_isPixelLightActive.value) {
                     notifyTorchStateChanged(enabled)
                 }
@@ -336,50 +322,22 @@ object FlashlightController {
         }
     }
 
-    fun isPixelLightUsingCamera(): Boolean {
-        if (!shouldUsePixelLight()) return false
-
-        val now = SystemClock.uptimeMillis()
-        val larpDotTriggered = (now - lastLarpDotCommandTime) < 3500L
-        val pixelLightTriggered = (now - DotAccessibilityService.lastPixelLightActivityTime) < 3500L
-        val isPixelLightForeground = DotAccessibilityService.topPackage == PIXELLIGHT_PACKAGE ||
-            ForegroundAppTracker.foregroundPackage.value == PIXELLIGHT_PACKAGE
-
-        return larpDotTriggered || pixelLightTriggered || _isPixelLightActive.value || isPixelLightNotificationPresent || isPixelLightForeground
-    }
-
-    private fun handleCameraBecameUnavailable(cameraId: String) {
-        val isPixelLight = isPixelLightUsingCamera()
-        Log.i(TAG, "handleCameraBecameUnavailable: cam=$cameraId, isPixelLight=$isPixelLight, shouldUsePixelLight=${shouldUsePixelLight()}")
-
+    private fun updatePixelLightCameraState() {
+        val isPixelLight = isCameraInUse
+        if (_isPixelLightActive.value == isPixelLight) return
+        _isPixelLightActive.value = isPixelLight
         if (isPixelLight) {
-            Log.i(TAG, "Camera $cameraId unavailable due to PixelLight. Activating flashlight state.")
-            _isPixelLightActive.value = true
+            Log.i(TAG, "Target camera is in use. Activating PixelLight flashlight state.")
             applyPixelLightStrengths()
             notifyTorchStateChanged(true)
             _isAvailable.value = true
-            return
+        } else {
+            notifyTorchStateChanged(isStandardTorchOn)
+            _isAvailable.value = !isCameraInUse
+            _maxStrength.value = standardMaxStrength
+            _torchStrength.value = standardTorchStrength
+            _isStrengthSupported.value = standardStrengthSupported
         }
-
-        // Camera became unavailable because a regular camera app (e.g. Snapchat, Camera, Instagram) is using the camera.
-        // The flashlight hardware cannot be used while camera sensor is in use.
-        if (!_isPixelLightActive.value) {
-            _isAvailable.value = false
-        }
-    }
-
-    fun onPixelLightActivityTriggered() {
-        val now = SystemClock.uptimeMillis()
-        val larpDotInitiated = (now - lastLarpDotCommandTime) < 1500L
-        if (larpDotInitiated) return
-
-        val target = !_isFlashlightOn.value
-        Log.i(TAG, "External PixelLight activity observed. Toggling state to: $target")
-        _isPixelLightActive.value = target
-        if (target) {
-            applyPixelLightStrengths()
-        }
-        notifyTorchStateChanged(target)
     }
 
     private fun notifyTorchStateChanged(enabled: Boolean) {
@@ -406,8 +364,6 @@ object FlashlightController {
      * Called when a notification from PixelLight is posted or updated.
      */
     fun onPixelLightNotificationPosted(progress: Int, max: Int) {
-        isPixelLightNotificationPresent = true
-        _isPixelLightActive.value = true
         if (max > 0) {
             pixelLightMaxStrength = max
             _maxStrength.value = max
@@ -423,23 +379,13 @@ object FlashlightController {
                 OverlayPreferences.setLastKnownPixelLightStrength(appContext, progress)
             }
         }
-        _isAvailable.value = true
-        notifyTorchStateChanged(true)
     }
 
     /**
      * Called when a notification from PixelLight is removed / cancelled.
      */
     fun onPixelLightNotificationRemoved() {
-        isPixelLightNotificationPresent = false
-        _isPixelLightActive.value = false
         pixelLightTurnOffPendingIntent = null
-        if (!isStandardTorchOn) {
-            notifyTorchStateChanged(false)
-            _maxStrength.value = standardMaxStrength
-            _torchStrength.value = standardTorchStrength
-            _isStrengthSupported.value = standardStrengthSupported
-        }
     }
 
     /**
@@ -463,7 +409,6 @@ object FlashlightController {
         }
 
         if (shouldUsePixelLight()) {
-            lastLarpDotCommandTime = SystemClock.uptimeMillis()
             launchPixelLightToggle()
             return
         }
@@ -484,7 +429,6 @@ object FlashlightController {
         }
 
         if (shouldUsePixelLight()) {
-            lastLarpDotCommandTime = SystemClock.uptimeMillis()
             launchPixelLightSetTorch(enabled)
             return
         }

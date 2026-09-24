@@ -9,7 +9,6 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -47,15 +46,6 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         ForegroundAppTracker.updateFromAccessibility(event)
-        val eventType = event.eventType
-        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val pkg = event.packageName?.toString() ?: return
-            topPackage = pkg
-            if (pkg == FlashlightController.PIXELLIGHT_PACKAGE) {
-                lastPixelLightActivityTime = SystemClock.uptimeMillis()
-                FlashlightController.onPixelLightActivityTriggered()
-            }
-        }
     }
 
     override fun onInterrupt() {
@@ -105,17 +95,15 @@ class DotAccessibilityService : AccessibilityService() {
                 ScreenStateTracker.isDeviceLocked,
                 OverlayPreferences.hideOnLockScreenFlow,
             ) { values ->
-                val isEnabled = values[0]
-                val isTorchOn = values[1]
-                val showTorchIsland = values[2]
-                val isScreenOn = values[3]
-                val hideWhenScreenOff = values[4]
-                val isLocked = values[5]
-                val hideOnLockScreen = values[6]
-                val baseCondition = isEnabled || (isTorchOn && showTorchIsland)
-                val screenAllowed = if (hideWhenScreenOff) isScreenOn else true
-                val lockAllowed = if (hideOnLockScreen) !isLocked else true
-                baseCondition && screenAllowed && lockAllowed
+                OverlayVisibilityPolicy.shouldShowOverlay(
+                    isEnabled = values[0],
+                    isTorchOn = values[1],
+                    showTorchIsland = values[2],
+                    isScreenOn = values[3],
+                    hideWhenScreenOff = values[4],
+                    isLocked = values[5],
+                    hideOnLockScreen = values[6],
+                )
             }.collectLatest { shouldShow ->
                 if (shouldShow) {
                     controller.show()
@@ -125,17 +113,15 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        val initialScreenAllowed = if (OverlayPreferences.isHideWhenScreenOffEnabled(this)) {
-            ScreenStateTracker.isScreenOn.value
-        } else true
-        val initialLockAllowed = if (OverlayPreferences.isHideOnLockScreenEnabled(this)) {
-            !ScreenStateTracker.isDeviceLocked.value
-        } else true
-
-        // If enabled in preferences or flashlight is on upon service start, show immediately if screen allowed
-        val initialShow = (OverlayPreferences.isOverlayEnabled(this) ||
-                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))) &&
-                initialScreenAllowed && initialLockAllowed
+        val initialShow = OverlayVisibilityPolicy.shouldShowOverlay(
+            isEnabled = OverlayPreferences.isOverlayEnabled(this),
+            isTorchOn = FlashlightController.isFlashlightOn.value,
+            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
+            isScreenOn = ScreenStateTracker.isScreenOn.value,
+            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
+            isLocked = ScreenStateTracker.isDeviceLocked.value,
+            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
+        )
         if (initialShow) {
             controller.show()
         }
@@ -181,14 +167,6 @@ class DotAccessibilityService : AccessibilityService() {
 
         private val _isServiceConnected = MutableStateFlow(false)
         val isServiceConnected: StateFlow<Boolean> = _isServiceConnected.asStateFlow()
-
-        @Volatile
-        var topPackage: String? = null
-            private set
-
-        @Volatile
-        var lastPixelLightActivityTime: Long = 0L
-            private set
 
         /**
          * Triggers opening the Android Notification Shade using Accessibility action,

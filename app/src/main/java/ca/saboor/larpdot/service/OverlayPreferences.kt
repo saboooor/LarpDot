@@ -53,6 +53,8 @@ object OverlayPreferences {
     private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
     private const val KEY_HIDE_ON_LOCK_SCREEN = "hide_on_lock_screen"
     private const val KEY_HIDE_MUSIC_WHEN_APP_OPEN = "hide_music_when_app_open"
+    private const val KEY_APP_BLACKLIST_ENABLED = "app_blacklist_enabled"
+    private const val KEY_APP_BLACKLIST = "app_blacklist"
     private const val KEY_SHOW_DOT_RIGHT_SIDE_INFO = "show_dot_right_side_info"
     private const val KEY_NOTIFICATION_ACTIVITIES_ENABLED = "notification_activities_enabled"
     private const val KEY_NOTIFICATION_PROGRESS_ENABLED = "notification_progress_enabled"
@@ -243,6 +245,12 @@ object OverlayPreferences {
 
     private val _hideMusicWhenAppOpenFlow = MutableStateFlow(true)
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = _hideMusicWhenAppOpenFlow.asStateFlow()
+
+    private val _appBlacklistEnabledFlow = MutableStateFlow(true)
+    val appBlacklistEnabledFlow: StateFlow<Boolean> = _appBlacklistEnabledFlow.asStateFlow()
+
+    private val _blacklistedPackagesFlow = MutableStateFlow<Set<String>>(emptySet())
+    val blacklistedPackagesFlow: StateFlow<Set<String>> = _blacklistedPackagesFlow.asStateFlow()
 
     private val _notificationActivitySettingsFlow = MutableStateFlow(NotificationActivitySettings())
     val notificationActivitySettingsFlow: StateFlow<NotificationActivitySettings> =
@@ -1016,5 +1024,65 @@ object OverlayPreferences {
         getPrefs(context).edit().putString(KEY_PREVIEW_AUDIO_SOURCE, source.key).apply()
         _previewAudioSourceFlow.value = source
         isPreviewAudioSourceInitialized = true
+    }
+
+    private var isAppBlacklistInitialized = false
+
+    private fun ensureAppBlacklistInitialized(context: Context) {
+        if (!isAppBlacklistInitialized) {
+            val prefs = getPrefs(context)
+            _appBlacklistEnabledFlow.value = prefs.getBoolean(KEY_APP_BLACKLIST_ENABLED, true)
+            val saved = prefs.getStringSet(KEY_APP_BLACKLIST, emptySet())?.toSet() ?: emptySet()
+            _blacklistedPackagesFlow.value = saved
+            isAppBlacklistInitialized = true
+        }
+    }
+
+    fun isAppBlacklistEnabled(context: Context): Boolean {
+        ensureAppBlacklistInitialized(context)
+        return _appBlacklistEnabledFlow.value
+    }
+
+    fun setAppBlacklistEnabled(context: Context, enabled: Boolean) {
+        ensureAppBlacklistInitialized(context)
+        getPrefs(context).edit().putBoolean(KEY_APP_BLACKLIST_ENABLED, enabled).apply()
+        _appBlacklistEnabledFlow.value = enabled
+    }
+
+    fun getBlacklistedPackages(context: Context): Set<String> {
+        ensureAppBlacklistInitialized(context)
+        return _blacklistedPackagesFlow.value
+    }
+
+    fun setBlacklistedPackages(context: Context, packages: Set<String>) {
+        ensureAppBlacklistInitialized(context)
+        val filtered = packages.filter { it.isNotBlank() && it != context.packageName }.toSet()
+        getPrefs(context).edit().putStringSet(KEY_APP_BLACKLIST, HashSet(filtered)).apply()
+        _blacklistedPackagesFlow.value = filtered
+    }
+
+    fun addBlacklistedPackage(context: Context, packageName: String) {
+        if (packageName.isBlank() || packageName == context.packageName) return
+        ensureAppBlacklistInitialized(context)
+        setBlacklistedPackages(context, _blacklistedPackagesFlow.value + packageName)
+    }
+
+    fun removeBlacklistedPackage(context: Context, packageName: String) {
+        ensureAppBlacklistInitialized(context)
+        setBlacklistedPackages(context, _blacklistedPackagesFlow.value - packageName)
+    }
+
+    fun toggleBlacklistedPackage(context: Context, packageName: String) {
+        if (packageName.isBlank() || packageName == context.packageName) return
+        ensureAppBlacklistInitialized(context)
+        if (_blacklistedPackagesFlow.value.contains(packageName)) {
+            removeBlacklistedPackage(context, packageName)
+        } else {
+            addBlacklistedPackage(context, packageName)
+        }
+    }
+
+    fun clearBlacklistedPackages(context: Context) {
+        setBlacklistedPackages(context, emptySet())
     }
 }

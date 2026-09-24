@@ -18,6 +18,13 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import ca.saboor.larpdot.service.OverlayPreferences
 
 enum class NotificationActivityKind {
     PROGRESS,
@@ -85,9 +92,33 @@ object NotificationActivityState {
     val current: StateFlow<NotificationActivityInfo?> = _current.asStateFlow()
 
     private var settings: NotificationActivitySettings = NotificationActivitySettings()
+    private val scope = CoroutineScope(Dispatchers.Default + Job())
+    private var isBlacklistObserverStarted = false
+
+    fun isPackageBlacklisted(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        val ctx = appContext ?: return false
+        if (!OverlayPreferences.isAppBlacklistEnabled(ctx)) return false
+        return OverlayPreferences.getBlacklistedPackages(ctx).contains(packageName)
+    }
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        if (!isBlacklistObserverStarted) {
+            isBlacklistObserverStarted = true
+            scope.launch {
+                combine(
+                    OverlayPreferences.appBlacklistEnabledFlow,
+                    OverlayPreferences.blacklistedPackagesFlow,
+                ) { enabled, blacklisted ->
+                    enabled to blacklisted
+                }.collectLatest {
+                    synchronized(lock) {
+                        publishBestLocked()
+                    }
+                }
+            }
+        }
     }
 
     fun configure(newSettings: NotificationActivitySettings) {
@@ -101,6 +132,14 @@ object NotificationActivityState {
 
     fun update(context: Context, sbn: StatusBarNotification) {
         appContext = context.applicationContext
+        if (isPackageBlacklisted(sbn.packageName)) {
+            synchronized(lock) {
+                if (activities.remove(sbn.key) != null) {
+                    publishBestLocked()
+                }
+            }
+            return
+        }
         val parsed = parse(context, sbn)
         synchronized(lock) {
             if (parsed == null) {
@@ -186,6 +225,7 @@ object NotificationActivityState {
     private fun publishBestLocked() {
         _current.value = activities.values.asSequence()
             .filter { settings.allows(it.kind) }
+            .filter { !isPackageBlacklisted(it.packageName) }
             .maxWithOrNull(
             compareBy<NotificationActivityInfo> { priority(it.kind) }
                 .thenBy { it.postedAtMillis },

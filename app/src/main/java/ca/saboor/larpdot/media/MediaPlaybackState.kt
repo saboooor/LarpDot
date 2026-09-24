@@ -15,6 +15,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -48,8 +51,33 @@ data class MediaTrackInfo(
 object MediaPlaybackState {
     private var applicationContext: Context? = null
 
+    private var isBlacklistObserverStarted = false
+
+    fun isPackageBlacklisted(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        val context = applicationContext ?: return false
+        if (!OverlayPreferences.isAppBlacklistEnabled(context)) return false
+        return OverlayPreferences.getBlacklistedPackages(context).contains(packageName)
+    }
+
     fun initialize(context: Context) {
         applicationContext = context.applicationContext
+        if (!isBlacklistObserverStarted) {
+            isBlacklistObserverStarted = true
+            playbackScope.launch {
+                combine(
+                    OverlayPreferences.appBlacklistEnabledFlow,
+                    OverlayPreferences.blacklistedPackagesFlow,
+                ) { enabled, blacklisted ->
+                    enabled to blacklisted
+                }.collectLatest { (enabled, blacklisted) ->
+                    val currentPkg = _currentTrack.value.playerPackageName ?: activeController?.packageName
+                    if (enabled && currentPkg != null && blacklisted.contains(currentPkg)) {
+                        clear()
+                    }
+                }
+            }
+        }
     }
 
     private fun inferActionActive(label: String, id: String = "", iconName: String? = null): Boolean {
@@ -105,9 +133,10 @@ object MediaPlaybackState {
     private var progressTickerJob: Job? = null
 
     fun updateFromControllers(controllers: List<MediaController>?) {
-        val playingController = controllers?.firstOrNull {
+        val filtered = controllers?.filter { !isPackageBlacklisted(it.packageName) }
+        val playingController = filtered?.firstOrNull {
             it.playbackState?.state == PlaybackState.STATE_PLAYING
-        } ?: controllers?.firstOrNull()
+        } ?: filtered?.firstOrNull()
 
         if (playingController != null) {
             attachController(playingController)
@@ -117,10 +146,16 @@ object MediaPlaybackState {
     }
 
     fun attachDirectController(controller: MediaController) {
+        if (isPackageBlacklisted(controller.packageName)) {
+            return
+        }
         attachController(controller)
     }
 
     private fun attachController(controller: MediaController) {
+        if (isPackageBlacklisted(controller.packageName)) {
+            return
+        }
         if (activeController?.sessionToken != controller.sessionToken) {
             controllerCallback?.let { activeController?.unregisterCallback(it) }
             activeController = controller
@@ -143,6 +178,10 @@ object MediaPlaybackState {
 
     private fun refreshFromController() {
         val controller = activeController ?: return
+        if (isPackageBlacklisted(controller.packageName)) {
+            clear()
+            return
+        }
         val metadata = controller.metadata
         val state = controller.playbackState
 
@@ -347,6 +386,9 @@ object MediaPlaybackState {
 
         val resolvedAppName = appName ?: current.appName
         val newPackage = packageName ?: current.playerPackageName
+        if (isPackageBlacklisted(newPackage) || isPackageBlacklisted(packageName)) {
+            return
+        }
 
         if (newTitle == current.title &&
             newArtist == current.artist &&

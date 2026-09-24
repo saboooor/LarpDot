@@ -92,11 +92,9 @@ object ForegroundAppTracker {
         }
 
         val pkg = event.packageName?.toString() ?: return
-        val app = appContext
-        val ourPackage = app?.packageName
 
-        // Don't treat our own app, system UI (volume sliders/notification pulls), or keyboard as app switches
-        if (pkg == ourPackage || baseIgnoredPackages.contains(pkg) || isInputMethodPackage(pkg)) {
+        // Don't treat system UI (volume sliders/notification pulls) or keyboard as app switches
+        if (baseIgnoredPackages.contains(pkg) || isInputMethodPackage(pkg)) {
             return
         }
 
@@ -108,9 +106,7 @@ object ForegroundAppTracker {
     fun setForegroundPackage(pkg: String?) {
         val current = _foregroundPackage.value
         if (pkg != null && current != pkg) {
-            val app = appContext
-            val ourPackage = app?.packageName
-            if (pkg == ourPackage || baseIgnoredPackages.contains(pkg) || isInputMethodPackage(pkg)) {
+            if (baseIgnoredPackages.contains(pkg) || isInputMethodPackage(pkg)) {
                 return
             }
             _foregroundPackage.value = pkg

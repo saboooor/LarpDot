@@ -1022,6 +1022,10 @@ fun ExpandedIslandOverlay(
     val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
     val compactCornerRadius = compactPillThickness / 2f
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
+    // The expanded card starts 14dp below the screen top. Keep its content below
+    // the physical camera, including a small gap around the cutout.
+    val expandedCutoutClearanceDp = if (isLandscape) 0.dp else
+        (cutoutCenterYDp + cutoutDiameterDp / 2f + 8.dp - 14.dp).coerceAtLeast(0.dp)
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
@@ -1162,7 +1166,10 @@ fun ExpandedIslandOverlay(
     val currentOffsetX = androidx.compose.ui.unit.lerp(startOffsetX, 0.dp, morphProgress.value)
     val currentOffsetY = androidx.compose.ui.unit.lerp(startOffsetY, 0.dp, morphProgress.value)
     val currentCornerRadius = androidx.compose.ui.unit.lerp(startCorner, expandedCornerRadiusDp, morphProgress.value)
-    val containerShape = RoundedCornerShape(currentCornerRadius)
+    val containerShape = squircleShape(
+        radiusPx = with(density) { currentCornerRadius.toPx() },
+        curvatureFactor = 0.5522848f + (0.8f - 0.5522848f) * morphProgress.value,
+    )
 
     val compactAlpha = (1f - (morphProgress.value / 0.40f)).coerceIn(0f, 1f)
     val expandedAlpha = ((morphProgress.value - 0.45f) / 0.55f).coerceIn(0f, 1f)
@@ -1306,6 +1313,7 @@ fun ExpandedIslandOverlay(
                                     ExpandedNotificationActivityContent(
                                         activity = notificationActivity,
                                         onCollapse = onCollapse,
+                                        topContentInset = expandedCutoutClearanceDp,
                                     )
                                 }
                             }
@@ -1316,6 +1324,7 @@ fun ExpandedIslandOverlay(
                                     onCollapse = onCollapse,
                                     cutoutInfo = cutoutInfo,
                                     cardHorizontalMarginDp = horizontalMarginDp,
+                                    topContentInset = expandedCutoutClearanceDp,
                                 )
                             }
                             IslandType.MEDIA -> {

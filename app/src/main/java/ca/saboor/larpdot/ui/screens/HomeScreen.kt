@@ -21,7 +21,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Remove
@@ -45,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -74,10 +81,23 @@ fun HomeScreen(
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
+    val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
+    val blacklistedPackages by OverlayPreferences.blacklistedPackagesFlow.collectAsState()
+    var showBlacklistScreen by rememberSaveable { mutableStateOf(false) }
+
+    if (showBlacklistScreen) {
+        AppBlacklistScreen(
+            onBack = { showBlacklistScreen = false },
+            modifier = modifier,
+        )
+        return
+    }
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
         OverlayPreferences.isDebugModeEnabled(context)
+        OverlayPreferences.isAppBlacklistEnabled(context)
+        OverlayPreferences.getBlacklistedPackages(context)
         OverlayPreferences.isHideWhenScreenOffEnabled(context)
         OverlayPreferences.isHideOnLockScreenEnabled(context)
         OverlayPreferences.isShowDotRightSideInfoEnabled(context)
@@ -267,6 +287,63 @@ fun HomeScreen(
                         onCheckedChange = { isChecked ->
                             OverlayPreferences.setShowDotRightSideInfoEnabled(context, isChecked)
                         },
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // App Blacklist
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { showBlacklistScreen = true },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "App Blacklist",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            val count = blacklistedPackages.size
+                            val statusText = if (!appBlacklistEnabled) {
+                                "Disabled • All apps allowed"
+                            } else if (count == 0) {
+                                "None ignored • Tap to configure"
+                            } else {
+                                "$count app${if (count == 1) "" else "s"} ignored • Tap to configure"
+                            }
+                            Text(
+                                text = "Ignore media & notifications from selected apps",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = "Configure App Blacklist",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }

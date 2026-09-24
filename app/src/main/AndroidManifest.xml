@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Network permissions for preview audio search -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -15,12 +16,21 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
+    <!-- Package query permission for app blacklist feature -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <!-- Hardware camera flash declaration (optional) -->
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
-    <!-- Package visibility for PixelLight integration -->
+    <!-- Package visibility for PixelLight integration and app listing -->
     <queries>
         <package android:name="com.chiller3.pixellight" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application

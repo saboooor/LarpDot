@@ -367,6 +367,7 @@ internal fun ExpandedNotificationActivityContent(
     activity: NotificationActivityInfo,
     onCollapse: () -> Unit = {},
     modifier: Modifier = Modifier,
+    topContentInset: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val openApp = {
@@ -382,7 +383,7 @@ internal fun ExpandedNotificationActivityContent(
                 indication = null,
                 onClick = openApp,
             )
-            .padding(horizontal = 22.dp, vertical = 18.dp),
+            .padding(start = 22.dp, end = 22.dp, top = maxOf(18.dp, topContentInset), bottom = 18.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

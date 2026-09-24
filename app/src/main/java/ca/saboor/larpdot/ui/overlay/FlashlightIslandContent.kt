@@ -231,6 +231,7 @@ fun ExpandedFlashlightContent(
     modifier: Modifier = Modifier,
     cutoutInfo: CutoutInfo? = null,
     cardHorizontalMarginDp: Dp = 14.dp,
+    topContentInset: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -299,7 +300,7 @@ fun ExpandedFlashlightContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    top = (cutoutDiameterDp - 4.dp).coerceAtLeast(16.dp),
+                    top = maxOf((cutoutDiameterDp - 4.dp).coerceAtLeast(16.dp), topContentInset),
                     bottom = 16.dp,
                 )
                 .pointerInput(Unit) {

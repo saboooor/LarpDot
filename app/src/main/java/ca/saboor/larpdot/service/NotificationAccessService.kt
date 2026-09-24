@@ -28,6 +28,7 @@ class NotificationAccessService : NotificationListenerService() {
         super.onListenerConnected()
         try {
             MediaPlaybackState.initialize(this)
+            NotificationActivityState.initialize(this)
             mediaSessionManager = getSystemService(MediaSessionManager::class.java)
             val component = ComponentName(this, NotificationAccessService::class.java)
             mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, component)
@@ -70,6 +71,9 @@ class NotificationAccessService : NotificationListenerService() {
                 notif.category == Notification.CATEGORY_TRANSPORT
 
             if (isMedia) {
+                if (MediaPlaybackState.isPackageBlacklisted(sbn.packageName)) {
+                    return
+                }
                 val sessionToken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, android.media.session.MediaSession.Token::class.java)
                 } else {

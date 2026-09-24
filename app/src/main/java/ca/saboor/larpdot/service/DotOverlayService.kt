@@ -78,17 +78,15 @@ class DotOverlayService : Service() {
                 ScreenStateTracker.isDeviceLocked,
                 OverlayPreferences.hideOnLockScreenFlow,
             ) { values ->
-                val isEnabled = values[0]
-                val isTorchOn = values[1]
-                val showTorchIsland = values[2]
-                val isScreenOn = values[3]
-                val hideWhenScreenOff = values[4]
-                val isLocked = values[5]
-                val hideOnLockScreen = values[6]
-                val baseCondition = isEnabled || (isTorchOn && showTorchIsland)
-                val screenAllowed = if (hideWhenScreenOff) isScreenOn else true
-                val lockAllowed = if (hideOnLockScreen) !isLocked else true
-                baseCondition && screenAllowed && lockAllowed
+                OverlayVisibilityPolicy.shouldShowOverlay(
+                    isEnabled = values[0],
+                    isTorchOn = values[1],
+                    showTorchIsland = values[2],
+                    isScreenOn = values[3],
+                    hideWhenScreenOff = values[4],
+                    isLocked = values[5],
+                    hideOnLockScreen = values[6],
+                )
             }.collectLatest { shouldShow ->
                 if (shouldShow) {
                     controller.show()
@@ -104,16 +102,15 @@ class DotOverlayService : Service() {
             }
         }
 
-        val initialScreenAllowed = if (OverlayPreferences.isHideWhenScreenOffEnabled(this)) {
-            ScreenStateTracker.isScreenOn.value
-        } else true
-        val initialLockAllowed = if (OverlayPreferences.isHideOnLockScreenEnabled(this)) {
-            !ScreenStateTracker.isDeviceLocked.value
-        } else true
-
-        val initialShow = (OverlayPreferences.isOverlayEnabled(this) ||
-                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))) &&
-                initialScreenAllowed && initialLockAllowed
+        val initialShow = OverlayVisibilityPolicy.shouldShowOverlay(
+            isEnabled = OverlayPreferences.isOverlayEnabled(this),
+            isTorchOn = FlashlightController.isFlashlightOn.value,
+            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
+            isScreenOn = ScreenStateTracker.isScreenOn.value,
+            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
+            isLocked = ScreenStateTracker.isDeviceLocked.value,
+            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
+        )
         if (initialShow) {
             controller.show()
         }
@@ -129,16 +126,15 @@ class DotOverlayService : Service() {
             return START_NOT_STICKY
         }
 
-        val screenAllowed = if (OverlayPreferences.isHideWhenScreenOffEnabled(this)) {
-            ScreenStateTracker.isScreenOn.value
-        } else true
-        val lockAllowed = if (OverlayPreferences.isHideOnLockScreenEnabled(this)) {
-            !ScreenStateTracker.isDeviceLocked.value
-        } else true
-
-        val shouldShow = (OverlayPreferences.isOverlayEnabled(this) ||
-                (FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(this))) &&
-                screenAllowed && lockAllowed
+        val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
+            isEnabled = OverlayPreferences.isOverlayEnabled(this),
+            isTorchOn = FlashlightController.isFlashlightOn.value,
+            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
+            isScreenOn = ScreenStateTracker.isScreenOn.value,
+            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
+            isLocked = ScreenStateTracker.isDeviceLocked.value,
+            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
+        )
         if (shouldShow) {
             overlayController?.show()
         }
