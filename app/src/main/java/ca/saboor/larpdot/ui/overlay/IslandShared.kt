@@ -136,6 +136,9 @@ fun Modifier.islandFluidProgressBorder(
     val halfStroke = strokePx / 2f
     val w = size.width
     val h = size.height
+    // A newly appearing secondary dot can be smaller than the outline for a frame.
+    // Its content may draw, but the border has no valid path until it grows.
+    if (w <= strokePx || h <= strokePx) return@drawWithContent
     val rPx = (cornerRadius.toPx() - halfStroke).coerceIn(0f, (minOf(w, h) / 2f) - halfStroke)
 
     val left = halfStroke

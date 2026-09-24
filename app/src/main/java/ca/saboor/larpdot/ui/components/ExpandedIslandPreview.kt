@@ -159,7 +159,7 @@ fun ExpandedIslandPreview(
         label = "preview_progress",
     )
 
-    // Concentric expanded corner radius matching actual ExpandedIslandOverlay
+    // Concentric expanded corner radius matching the live IslandSurfaceOverlay
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     val topMarginDp = (cutoutCenterYDp - 18.dp).coerceAtLeast(8.dp)

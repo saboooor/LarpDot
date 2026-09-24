@@ -14,12 +14,18 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import ca.saboor.larpdot.cutout.CutoutDetector
@@ -28,7 +34,7 @@ import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
 import ca.saboor.larpdot.ui.overlay.IslandType
-import ca.saboor.larpdot.ui.overlay.ExpandedIslandOverlay
+import ca.saboor.larpdot.ui.overlay.IslandSurfaceOverlay
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.ui.overlay.IslandStack
@@ -68,8 +74,9 @@ import kotlinx.coroutines.launch
  *    Because touchView has no visual drawing or surface buffer, repositioning/resizing it
  *    creates zero visual artifacts. Outside of touchView, touches pass directly through to the status bar.
  *
- * Compact and expanded content share this one stable draw window. The expanded surface starts at
- * the compact surface's bounds and morphs in place, avoiding a cross-window frame handoff.
+ * Each visible island item uses one rendered IslandSurfaceOverlay across compact and expanded
+ * states. CompactIslandOverlay supplies measured bounds and gestures; the selected surface
+ * morphs from those bounds without swapping its rendered surface or draw window.
  */
 class IslandOverlayViewController(
     private val context: Context,
@@ -93,6 +100,14 @@ class IslandOverlayViewController(
     private var currentCutoutInfo by mutableStateOf<CutoutInfo?>(null)
     private var isIslandExpanded by mutableStateOf(false)
     private var isOverlayMorphing by mutableStateOf(false)
+    private var isCompactSurfaceHidden by mutableStateOf(false)
+    private var isSelectedDotFallbackHidden by mutableStateOf(false)
+    private var compactPressScale by mutableFloatStateOf(1f)
+    private var compactSurfaceBounds by mutableStateOf<Rect?>(null)
+    private val secondarySurfaceBounds = mutableStateMapOf<IslandType, Rect>()
+    private val secondarySurfaceScales = mutableStateMapOf<IslandType, Float>()
+    private val secondarySurfaceAlphas = mutableStateMapOf<IslandType, Float>()
+    private var expansionSourceBounds by mutableStateOf<Rect?>(null)
     private var isExpandedFromTinyDot by mutableStateOf(false)
     private var expansionPrimaryType by mutableStateOf(IslandType.MEDIA)
     private var expansionDotIndex by mutableStateOf(0)
@@ -112,7 +127,6 @@ class IslandOverlayViewController(
 
     private var controllerJob = Job()
     private var controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
-    private var collapseJob: Job? = null
     private var lastObservedHasMedia: Boolean? = null
     private var lastObservedIsPlaying: Boolean? = null
 
@@ -170,36 +184,142 @@ class IslandOverlayViewController(
             setContent {
                 LarpDotTheme {
                     val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
+                    val isMusicActiveNow by MediaPlaybackState.isMusicActive.collectAsState()
                     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
                     val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                     val activeCutout = currentCutoutInfo ?: cutout
                     val currentActivity by NotificationActivityState.current.collectAsState()
                     val activeExpandedType by expandedType.collectAsState()
+                    val stack = builtInIslandStack(
+                        music = mediaTrack.hasMedia && isMusicActiveNow,
+                        flashlight = isFlashlightOn && showFlashlightIsland,
+                        activity = currentActivity != null,
+                        activityHasRightWing = hasCompactStatusContent(currentActivity),
+                        activityKind = currentActivity?.kind,
+                    )
+                    val compactType = stack.primary?.content
+                    val secondaryTypes = stack.secondary.map { it.content }
+                    val surfaceType = if ((isIslandExpanded || isOverlayMorphing) && !isExpandedFromTinyDot) {
+                        activeExpandedType
+                    } else {
+                        compactType ?: activeExpandedType
+                    }
+                    LaunchedEffect(compactType) {
+                        if (compactType == null) compactSurfaceBounds = null
+                    }
+                    LaunchedEffect(secondaryTypes) {
+                        secondarySurfaceBounds.keys.toList().forEach { type ->
+                            if (type !in secondaryTypes) {
+                                secondarySurfaceBounds.remove(type)
+                                secondarySurfaceScales.remove(type)
+                                secondarySurfaceAlphas.remove(type)
+                            }
+                        }
+                    }
 
+                    // Compact placeholders own taps and swipes; visible surfaces own the morph.
+                    val surfaceOnTop = isIslandExpanded || isOverlayMorphing
                     Box(Modifier.fillMaxSize()) {
                         CompactIslandOverlay(
+                            modifier = Modifier.zIndex(if (surfaceOnTop) 0f else 3f),
                             cutoutInfo = activeCutout,
                             mediaInfo = mediaTrack,
                             notificationActivity = currentActivity,
                             isFlashlightOn = isFlashlightOn && showFlashlightIsland,
                             isExpanded = isIslandExpanded,
+                            hideExpandedSource = isCompactSurfaceHidden || isSelectedDotFallbackHidden,
+                            renderMainPill = compactSurfaceBounds == null,
+                            renderSecondarySurface = { type ->
+                                type !in secondaryTypes || secondarySurfaceBounds[type] == null
+                            },
                             fromTinyDot = isExpandedFromTinyDot,
-                            onExpand = { type, fromTiny -> expandOverlay(type, fromTiny) },
+                            expandedStackType = activeExpandedType,
+                            onExpand = { type, fromTiny, bounds -> expandOverlay(type, fromTiny, bounds) },
+                            onCompactBoundsChanged = { bounds ->
+                                if (compactSurfaceBounds != bounds) compactSurfaceBounds = bounds
+                            },
+                            onCompactScaleChanged = { scale ->
+                                if (compactPressScale != scale) compactPressScale = scale
+                            },
+                            onSecondaryBoundsChanged = { type, bounds ->
+                                if (type in secondaryTypes && secondarySurfaceBounds[type] != bounds) {
+                                    secondarySurfaceBounds[type] = bounds
+                                }
+                            },
+                            onSecondaryScaleChanged = { type, scale ->
+                                if (type in secondaryTypes && secondarySurfaceScales[type] != scale) {
+                                    secondarySurfaceScales[type] = scale
+                                }
+                            },
+                            onSecondaryAlphaChanged = { type, alpha ->
+                                if (type in secondaryTypes && secondarySurfaceAlphas[type] != alpha) {
+                                    secondarySurfaceAlphas[type] = alpha
+                                }
+                            },
                             onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                         )
-                        ExpandedIslandOverlay(
+                        IslandSurfaceOverlay(
+                            modifier = Modifier.zIndex(1f),
                             cutoutInfo = activeCutout,
                             mediaInfo = mediaTrack,
                             notificationActivity = currentActivity,
                             isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                            expandedType = activeExpandedType,
+                            expandedType = surfaceType,
                             stackPrimaryType = expansionPrimaryType,
                             stackDotIndex = expansionDotIndex,
                             stackDotCount = expansionDotCount,
-                            fromTinyDot = isExpandedFromTinyDot,
-                            isExpanded = isIslandExpanded,
+                            fromTinyDot = false,
+                            isExpanded = isIslandExpanded && !isExpandedFromTinyDot,
+                            isCompactVisible = compactType != null && compactSurfaceBounds != null,
                             onCollapse = { collapseOverlay() },
+                            onFirstFrameDrawn = {
+                                if (isIslandExpanded) isCompactSurfaceHidden = true
+                            },
+                            onExitFinished = { finishCollapse() },
+                            sourceBounds = if ((isIslandExpanded || isOverlayMorphing) && !isExpandedFromTinyDot) {
+                                expansionSourceBounds ?: compactSurfaceBounds
+                            } else {
+                                compactSurfaceBounds
+                            },
+                            compactPressScale = compactPressScale,
                         )
+                        val dotSurfaces = buildList {
+                            addAll(secondaryTypes)
+                            if (isExpandedFromTinyDot && (isIslandExpanded || isOverlayMorphing) &&
+                                activeExpandedType !in this
+                            ) add(activeExpandedType)
+                        }
+                        dotSurfaces.forEach { type ->
+                            key(type) {
+                                val selected = isExpandedFromTinyDot && activeExpandedType == type
+                                val bounds = secondarySurfaceBounds[type]
+                                IslandSurfaceOverlay(
+                                    modifier = Modifier.zIndex(2f),
+                                    cutoutInfo = activeCutout,
+                                    mediaInfo = mediaTrack,
+                                    notificationActivity = currentActivity,
+                                    isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                                    expandedType = type,
+                                    stackPrimaryType = expansionPrimaryType,
+                                    stackDotIndex = expansionDotIndex,
+                                    stackDotCount = expansionDotCount,
+                                    fromTinyDot = true,
+                                    isSecondarySurface = true,
+                                    isExpanded = isIslandExpanded && selected,
+                                    isCompactVisible = type in secondaryTypes && bounds != null && !isCompactSurfaceHidden,
+                                    compactOpacity = secondarySurfaceAlphas[type] ?: 1f,
+                                    onCollapse = { collapseOverlay() },
+                                    onFirstFrameDrawn = {
+                                        if (selected && isIslandExpanded) isSelectedDotFallbackHidden = true
+                                    },
+                                    onExitFinished = { if (selected) finishCollapse() },
+                                    sourceBounds = if (selected && (isIslandExpanded || isOverlayMorphing)) {
+                                        expansionSourceBounds ?: bounds
+                                    } else bounds,
+                                    compactPressScale = secondarySurfaceScales[type] ?: 1f,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -263,9 +383,8 @@ class IslandOverlayViewController(
 
     }
 
-    fun expandOverlay(type: IslandType = IslandType.MEDIA, fromDot: Boolean = false) {
+    fun expandOverlay(type: IslandType = IslandType.MEDIA, fromDot: Boolean = false, sourceBounds: Rect? = null) {
         if (!isOverlayAdded || isOverlayMorphing || isIslandExpanded) return
-        collapseJob?.cancel()
 
         MediaPlaybackState.dismissSongAnnouncement()
         announcementHideJob?.cancel()
@@ -279,6 +398,7 @@ class IslandOverlayViewController(
         expansionDotIndex = if (dotIdx >= 0) dotIdx else 0
 
         _expandedType.value = type
+        expansionSourceBounds = sourceBounds
         isExpandedFromTinyDot = fromDot
         isIslandExpanded = true
         isOverlayMorphing = true
@@ -288,22 +408,21 @@ class IslandOverlayViewController(
 
     fun collapseOverlay() {
         if (!isOverlayAdded || !isIslandExpanded) return
-        collapseJob?.cancel()
 
         isIslandExpanded = false
         isOverlayMorphing = true
+    }
 
-        collapseJob = controllerScope.launch {
-            delay(300L)
-            isExpandedFromTinyDot = false
-            isOverlayMorphing = false
-            currentCutoutInfo?.let { cutout ->
-                val hasMusic = isMusicActive
-                val hasFlash = isFlashlightActive
-                val hasActivity = isNotificationActivityActive
-                if (hasMusic || hasFlash || hasActivity) {
-                    layoutTouchWindow(cutout)
-                }
+    private fun finishCollapse() {
+        if (!isOverlayAdded || isIslandExpanded || !isOverlayMorphing) return
+        isCompactSurfaceHidden = false
+        isSelectedDotFallbackHidden = false
+        isExpandedFromTinyDot = false
+        isOverlayMorphing = false
+        expansionSourceBounds = null
+        currentCutoutInfo?.let { cutout ->
+            if (isMusicActive || isFlashlightActive || isNotificationActivityActive) {
+                layoutTouchWindow(cutout)
             }
         }
     }
@@ -572,7 +691,7 @@ class IslandOverlayViewController(
         val landscapeAnnouncementExtraDp = if (isSongAnnouncementActive) 140f else activeExtraDp
         val pillHPx = if (isLandscape) (cutoutDiameterPx + (landscapeAnnouncementExtraDp * density)).toInt() else compactPillThicknessPx.toInt()
 
-        val tParams = if (isIslandExpanded) {
+        val tParams = if (isIslandExpanded || isOverlayMorphing) {
             createExpandedTouchLayoutParams()
         } else {
             createTouchLayoutParams(cutout, pillWPx, pillHPx, leftExtentPx, rightExtentPx, isLandscape, rotation, screenWidth)
@@ -706,7 +825,7 @@ class IslandOverlayViewController(
         val hasFlashlight = isFlashlightActive
         val hasActivity = isNotificationActivityActive
         val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight && !hasActivity
-        val shouldShowTouch = (!shouldShowDotOnly || isIslandExpanded) && isOverlayAdded
+        val shouldShowTouch = (!shouldShowDotOnly || isIslandExpanded || isOverlayMorphing) && isOverlayAdded
         if (shouldShowTouch) {
             layoutTouchWindow(cutout)
         } else {
@@ -867,8 +986,6 @@ class IslandOverlayViewController(
         if (!isOverlayAdded) return
         isOverlayAdded = false
         controllerJob.cancel()
-        collapseJob?.cancel()
-        collapseJob = null
         flashlightHideJob?.cancel()
         flashlightHideJob = null
         announcementHideJob?.cancel()
@@ -876,6 +993,14 @@ class IslandOverlayViewController(
         isSongAnnouncementActive = false
         isIslandExpanded = false
         isOverlayMorphing = false
+        isCompactSurfaceHidden = false
+        isSelectedDotFallbackHidden = false
+        compactPressScale = 1f
+        compactSurfaceBounds = null
+        secondarySurfaceBounds.clear()
+        secondarySurfaceScales.clear()
+        secondarySurfaceAlphas.clear()
+        expansionSourceBounds = null
         isExpandedFromTinyDot = false
 
         removeTouchWindow()

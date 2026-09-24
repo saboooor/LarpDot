@@ -1,93 +1,58 @@
 # LarpDot
 
-A modern, production-ready Android template app powered by **Jetpack Compose**, targeting **Android 17 (API 37)**, built with the latest 2026 Android toolchain and Google's **Material 3 Expressive** design system.
+LarpDot is an Android app that adds a customizable Dynamic Island style overlay around the front camera cutout. It shows music playback, ongoing notification activities, and flashlight status in a floating pill or compact dots.
 
----
+## Features
 
-## Tech Stack & Versions
+- **Camera cutout alignment:** Detect the cutout and adjust the overlay's size and position manually.
+- **Music island:** Show playback information and controls, customize album art and player layout, and choose a visualizer mode (BPM, device audio, or audio preview).
+- **Live activities:** Turn supported ongoing notifications, including progress, navigation, calls, and timers, into island activities.
+- **Flashlight island:** Control the torch and show its status in the island. Optional [PixelLight](https://github.com/chenxiaolong/PixelLight) integration is available when that app is installed.
+- **Display controls:** Configure tap behavior, lock screen and screen off visibility, and an app blacklist.
 
-- **Android Gradle Plugin (AGP)**: `9.3.2`
-- **Kotlin**: `2.4.10`
-- **Compose Compiler Plugin**: `2.4.10`
-- **Gradle**: `9.7.1` (Wrapper included)
-- **Compile SDK**: `37` (Android 17)
-- **Target SDK**: `37`
-- **Min SDK**: `26` (Android 8.0 Oreo)
-- **Jetpack Compose BOM**: `2026.09.00`
-- **Material 3 Expressive**: `1.5.0-alpha28`
-- **AndroidX Core KTX**: `1.19.0`
-- **AndroidX Activity Compose**: `1.13.0`
-- **AndroidX Lifecycle Compose**: `2.11.0`
+The app is built with Kotlin, Jetpack Compose, and Material 3 Expressive. It supports Android 8.0 (API 26) and newer.
 
----
+## Getting started
 
-## Native Android Look & Feel Highlights
+1. Install Android Studio, JDK 17, and the Android SDK platform for API 37.
+2. Open the repository root in Android Studio, or build from the command line:
 
-- **Dynamic Color (Monet)**: Real-time wallpaper extraction and color adaptation on Android 12+ (`dynamicDarkColorScheme` / `dynamicLightColorScheme`).
-- **Material 3 Expressive Theme**: Built on `MaterialExpressiveTheme` and `MotionScheme.expressive()`.
-- **Tonal Container Surface Hierarchy**: Explicit use of container tones (`surfaceContainerLowest`, `surfaceContainerLow`, `surfaceContainer`, `surfaceContainerHigh`, `surfaceContainerHighest`).
-- **Strict Card Styling Rules**:
-  - **Neutral / Surface cards**: Zero border outlines. Surfaces rely strictly on tonal elevation for clean system dark-mode aesthetics.
-  - **Featured / Themed cards**: Subtle glowing borders with alpha accents (`accentColor.copy(alpha = 0.35f)`).
-- **Tactile Spring Physics**: Responsive bounce squash on touch press (`expressivePressEffect`).
-- **Material 3 Connected Button Groups**: Unified multi-segment controls with icons, proper edge radiuses (`connectedLeadingButtonShapes`, `connectedMiddleButtonShapes`, `connectedTrailingButtonShapes`), and accessible semantics.
-- **Wavy Progress Indicators**: Modern `LinearWavyProgressIndicator` for telemetry and progress scrubbers.
-- **ShortNavigationBar**: Compact, fluid bottom bar navigation with crossfade tab transitions.
+   ```bash
+   ./gradlew assembleDebug
+   ```
 
----
+3. Install the debug build on a connected device or emulator:
 
-## Project Structure
+   ```bash
+   ./gradlew installDebug
+   ```
 
-```text
-LarpDot/
-├── app/
-│   ├── build.gradle.kts          # Module configuration with Compose & dependencies
-│   └── src/
-│       └── main/
-│           ├── AndroidManifest.xml
-│           ├── java/ca/saboor/larpdot/
-│           │   ├── MainActivity.kt        # Edge-to-edge entry point
-│           │   ├── LarpDotApp.kt          # Scaffold & ShortNavigationBar
-│           │   ├── navigation/
-│           │   │   └── Destination.kt     # Enum of primary tabs & icons
-│           │   ├── ui/
-│           │   │   ├── theme/
-│           │   │   │   ├── Theme.kt       # MaterialExpressiveTheme & ColorSchemes
-│           │   │   │   └── Type.kt        # Expressive typography scale
-│           │   │   ├── components/
-│           │   │   │   └── Widgets.kt     # Reusable native M3 primitives (LarpCard, AccentCard, etc.)
-│           │   │   └── screens/
-│           │   │       └── HomeScreen.kt  # Clean empty canvas ready for app content
-│           └── res/
-│               └── values/
-│                   ├── strings.xml
-│                   └── themes.xml         # Edge-to-edge framework style
-├── DESIGN_GUIDELINES.md          # Architectural rules & design specifications
-├── build.gradle.kts              # Root build script
-├── settings.gradle.kts           # Root settings & repository management
-├── gradle.properties             # JVM arguments & AndroidX flags
-├── gradlew                       # Gradle wrapper script
-└── gradlew.bat                   # Windows wrapper script
-```
+   The APK is also available at `app/build/outputs/apk/debug/app-debug.apk`.
 
----
+4. Open LarpDot, tap **Setup**, grant the access needed for the features you want, and switch on the overlay in the top bar.
 
-## Building and Running
+The overlay works best on a device with a front camera cutout. Use **Home → Cutout Alignment** if the automatic position needs adjustment.
 
-### Build Debug APK:
+## Permissions and feature access
+
+| Access | Used for |
+| --- | --- |
+| Display over other apps | Shows the island above other apps using the standard overlay service. |
+| Notification access | Reads media and ongoing notification state for music and live activities. |
+| Accessibility service | Allows the island to appear over the notification shade and lock screen. It can also manage the overlay in place of the standard overlay service. |
+| Audio capture consent | Requested when starting the device audio visualizer; Android's MediaProjection prompt grants a live capture session. This mode requires Android 10 or newer. |
+| Internet | Fetches optional 30 second music previews from Deezer or iTunes for the audio preview visualizer. |
+
+The setup screen links to the Android settings for notification, overlay, and accessibility access. The flashlight feature requires a device with a camera flash; PixelLight is optional.
+
+## Development
+
+Run local unit tests with:
+
 ```bash
-./gradlew assembleDebug
-```
-The resulting APK is generated at:
-`app/build/outputs/apk/debug/app-debug.apk`
-
-### Install on Connected Device / Emulator:
-```bash
-./gradlew installDebug
+./gradlew testDebugUnitTest
 ```
 
-### Run Tests:
-```bash
-./gradlew test
-```
+The main code is in `app/src/main/java/ca/saboor/larpdot/`: `ui/screens/` contains the settings screens, `ui/overlay/` renders the island, and `service/` handles overlay, notification, accessibility, and audio capture services. Build configuration is in `app/build.gradle.kts`.
 
+Release signing uses `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` environment variables configured in the app's Gradle build file.
