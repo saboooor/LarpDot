@@ -144,20 +144,6 @@ fun MediaPlayer(
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (!hasNotificationAccess) {
-                    FilledTonalButton(
-                        onClick = {
-                            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = CircleShape
-                    ) {
-                        Icon(Icons.Default.Notifications, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Grant Notification Access for Music", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-
                 // Row 1: Header (Music Note Icon & "This phone" Output Switcher Chip)
                 Row(
                     Modifier.fillMaxWidth(),
@@ -175,34 +161,6 @@ fun MediaPlayer(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Quick simulation toggle chip
-                        Surface(
-                            onClick = {
-                                MediaPlaybackState.setSimulatedPlayback(!nowPlaying.isSimulated)
-                            },
-                            shape = CircleShape,
-                            color = if (nowPlaying.isSimulated) nowPlaying.dominantColor.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.16f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (nowPlaying.isSimulated) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = if (nowPlaying.isSimulated) nowPlaying.dominantColor else Color.White,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = if (nowPlaying.isSimulated) "Simulating" else "Simulate",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (nowPlaying.isSimulated) nowPlaying.dominantColor else Color.White
-                                )
-                            }
-                        }
-
                         // "This phone" output switcher chip
                         Surface(
                             shape = CircleShape,
@@ -252,7 +210,7 @@ fun MediaPlayer(
                         )
                         Spacer(Modifier.height(3.dp))
                         MarqueeText(
-                            text = nowPlaying.artist.ifEmpty { "Play music in Spotify or tap Simulate" },
+                            text = nowPlaying.artist.ifEmpty { "Play music in a media app" },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.80f),
                         )
@@ -260,13 +218,7 @@ fun MediaPlayer(
 
                     // Native Android 13/14 rounded square Play/Pause button
                     Surface(
-                        onClick = {
-                            if (!nowPlaying.hasMedia && !nowPlaying.isSimulated) {
-                                MediaPlaybackState.setSimulatedPlayback(true)
-                            } else {
-                                MediaPlaybackState.togglePlayPause()
-                            }
-                        },
+                        onClick = { MediaPlaybackState.togglePlayPause() },
                         shape = RoundedCornerShape(18.dp),
                         color = Color.White.copy(alpha = 0.94f),
                         modifier = Modifier.size(54.dp)

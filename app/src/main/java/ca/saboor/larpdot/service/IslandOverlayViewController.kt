@@ -29,6 +29,16 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
 import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandOverlay
+import ca.saboor.larpdot.notification.NotificationActivityKind
+import ca.saboor.larpdot.notification.NotificationActivityState
+import ca.saboor.larpdot.ui.overlay.IslandStack
+import ca.saboor.larpdot.ui.overlay.builtInIslandStack
+import ca.saboor.larpdot.ui.overlay.hasCompactStatusContent
+import ca.saboor.larpdot.ui.overlay.compactStatusFallback
+import ca.saboor.larpdot.ui.overlay.stackedPillWidth
+import ca.saboor.larpdot.ui.overlay.stackedPillWidthWithExtents
+import ca.saboor.larpdot.ui.overlay.secondaryItemWidthDp
+import ca.saboor.larpdot.ui.overlay.getFlashlightPercentText
 import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +94,18 @@ class IslandOverlayViewController(
     private var isIslandExpanded by mutableStateOf(false)
     private var isOverlayMorphing by mutableStateOf(false)
     private var isExpandedFromTinyDot by mutableStateOf(false)
+    private var expansionPrimaryType by mutableStateOf(IslandType.MEDIA)
+    private var expansionDotIndex by mutableStateOf(0)
+    private var expansionDotCount by mutableStateOf(0)
+    private var isNotificationActivityActive = false
+
+    private fun currentStack(): IslandStack<IslandType> = builtInIslandStack(
+        music = isMusicActive && MediaPlaybackState.currentTrack.value.hasMedia,
+        flashlight = isFlashlightActive && OverlayPreferences.showFlashlightIslandFlow.value,
+        activity = isNotificationActivityActive && NotificationActivityState.current.value != null,
+        activityHasRightWing = hasCompactStatusContent(NotificationActivityState.current.value),
+        activityKind = NotificationActivityState.current.value?.kind,
+    )
 
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
     val expandedType: StateFlow<IslandType> = _expandedType.asStateFlow()
@@ -151,13 +173,14 @@ class IslandOverlayViewController(
                     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
                     val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                     val activeCutout = currentCutoutInfo ?: cutout
-
+                    val currentActivity by NotificationActivityState.current.collectAsState()
                     val activeExpandedType by expandedType.collectAsState()
 
                     Box(Modifier.fillMaxSize()) {
                         CompactIslandOverlay(
                             cutoutInfo = activeCutout,
                             mediaInfo = mediaTrack,
+                            notificationActivity = currentActivity,
                             isFlashlightOn = isFlashlightOn && showFlashlightIsland,
                             isExpanded = isIslandExpanded,
                             fromTinyDot = isExpandedFromTinyDot,
@@ -167,8 +190,12 @@ class IslandOverlayViewController(
                         ExpandedIslandOverlay(
                             cutoutInfo = activeCutout,
                             mediaInfo = mediaTrack,
+                            notificationActivity = currentActivity,
                             isFlashlightOn = isFlashlightOn && showFlashlightIsland,
                             expandedType = activeExpandedType,
+                            stackPrimaryType = expansionPrimaryType,
+                            stackDotIndex = expansionDotIndex,
+                            stackDotCount = expansionDotCount,
                             fromTinyDot = isExpandedFromTinyDot,
                             isExpanded = isIslandExpanded,
                             onCollapse = { collapseOverlay() },
@@ -209,11 +236,13 @@ class IslandOverlayViewController(
             isOverlayAdded = true
             observeMediaState()
             observeFlashlightState()
+            observeNotificationActivityState()
             observeCutoutConfig()
             observeMinimizedAlbumArtStyle()
             OverlayPreferences.isShowMinimizedTitleEnabled(context)
             OverlayPreferences.isShowSongAnnouncementEnabled(context)
             observeDebugPreference()
+            observeDotRightSideInfoPreference()
             OverlayPreferences.isDebugModeEnabled(context)
             OverlayPreferences.isShowFlashlightIslandEnabled(context)
             OverlayPreferences.isFlashlightTapToToggleEnabled(context)
@@ -221,8 +250,10 @@ class IslandOverlayViewController(
             OverlayPreferences.getMinimizedAlbumArtRotation(context)
             OverlayPreferences.getExpandedAlbumArtRotation(context)
             OverlayPreferences.isShowExpandedAlbumArtEnabled(context)
-            OverlayPreferences.isShowDominantColorGlowEnabled(context)
-            OverlayPreferences.isShowCameraSwoopEnabled(context)
+            OverlayPreferences.isShowMinimizedDominantColorGlowEnabled(context)
+            OverlayPreferences.isShowExpandedDominantColorGlowEnabled(context)
+            OverlayPreferences.getExpandedAlbumArtStyle(context)
+            OverlayPreferences.getExpandedPlayerLayout(context)
             OverlayPreferences.getVisualizerMode(context)
             OverlayPreferences.getWaveformBandCount(context)
             updateOverlayLayout()
@@ -240,6 +271,12 @@ class IslandOverlayViewController(
         announcementHideJob?.cancel()
         announcementHideJob = null
         isSongAnnouncementActive = false
+
+        val stack = currentStack()
+        expansionPrimaryType = stack.primary?.content ?: type
+        expansionDotCount = stack.secondary.size
+        val dotIdx = stack.secondary.indexOfFirst { it.content == type }
+        expansionDotIndex = if (dotIdx >= 0) dotIdx else 0
 
         _expandedType.value = type
         isExpandedFromTinyDot = fromDot
@@ -263,7 +300,8 @@ class IslandOverlayViewController(
             currentCutoutInfo?.let { cutout ->
                 val hasMusic = isMusicActive
                 val hasFlash = isFlashlightActive
-                if (hasMusic || hasFlash) {
+                val hasActivity = isNotificationActivityActive
+                if (hasMusic || hasFlash || hasActivity) {
                     layoutTouchWindow(cutout)
                 }
             }
@@ -379,7 +417,8 @@ class IslandOverlayViewController(
         cutout: CutoutInfo,
         pillWidthPx: Int,
         pillHeightPx: Int,
-        splitExtraPx: Int,
+        leftExtentPx: Int,
+        rightExtentPx: Int,
         isLandscape: Boolean,
         rotation: Int,
         screenWidth: Int,
@@ -393,7 +432,7 @@ class IslandOverlayViewController(
         val posY: Int
 
         if (isLandscape) {
-            val totalHPx = pillHeightPx + splitExtraPx
+            val totalHPx = pillHeightPx + leftExtentPx + rightExtentPx
             touchWidth = pillWidthPx + (touchPad * 2)
             touchHeight = totalHPx + (touchPad * 2)
             val orientedCenterX = if (rotation == Surface.ROTATION_270) {
@@ -402,13 +441,14 @@ class IslandOverlayViewController(
                 minOf(cutout.centerX, screenWidth.toFloat() - cutout.centerX)
             }
             posX = (orientedCenterX - touchWidth / 2f).toInt()
-            val topAnchor = (cutout.centerY - (pillHeightPx / 2f)).toInt().coerceAtLeast(0)
+            val topAnchor = (cutout.centerY - (pillHeightPx / 2f) - leftExtentPx).toInt().coerceAtLeast(0)
             posY = (topAnchor - touchPad).coerceAtLeast(0)
         } else {
-            val totalWPx = pillWidthPx + splitExtraPx
+            val totalWPx = pillWidthPx + leftExtentPx + rightExtentPx
             touchWidth = totalWPx + (touchPad * 2)
             touchHeight = pillHeightPx + (touchPad * 2)
-            posX = (cutout.centerX - (pillWidthPx / 2f) - touchPad).toInt()
+            val leftAnchor = cutout.centerX - (pillWidthPx / 2f) - leftExtentPx
+            posX = (leftAnchor - touchPad).toInt()
             val topAnchor = (cutout.centerY - (pillHeightPx / 2f)).toInt().coerceAtLeast(0)
             posY = (topAnchor - touchPad).coerceAtLeast(0)
         }
@@ -451,49 +491,91 @@ class IslandOverlayViewController(
         display?.getRealMetrics(realMetrics)
         val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
 
-        val hasActiveMusic = isMusicActive
-        val hasFlashlight = isFlashlightActive
-        val showFlashlightInMain = hasFlashlight && !hasActiveMusic
-        val isSplit = hasActiveMusic && hasFlashlight
+        val stack = currentStack()
+        val dotCount = stack.secondary.size
 
         val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
         val outlineAllowancePx = 2f * density
         val compactPillThicknessPx = cutoutDiameterPx + (outlineAllowancePx * 2f)
         val compactPillThicknessDp = compactPillThicknessPx / density
+
+        val isMiniPill = OverlayPreferences.showDotRightSideInfoFlow.value
+        val secondaryTypes = stack.secondary.map { it.content }
+        val leftType = if (secondaryTypes.size == 2) secondaryTypes[0] else null
+        val rightType = if (secondaryTypes.size == 2) secondaryTypes[1] else secondaryTypes.firstOrNull()
+
+        val currentActivity = NotificationActivityState.current.value
+        val activityStatus = currentActivity?.let { compactStatusFallback(it) }
+        val flashlightStatus = getFlashlightPercentText(
+            FlashlightController.torchStrength.value,
+            FlashlightController.maxStrength.value,
+        )
+
+        val leftWidthDp = if (leftType != null) {
+            secondaryItemWidthDp(
+                type = leftType,
+                thicknessDp = compactPillThicknessDp,
+                isMiniPill = isMiniPill,
+                hasMedia = isMusicActive,
+                flashlightStatus = flashlightStatus,
+                activityStatus = activityStatus,
+            )
+        } else 0f
+
+        val rightWidthDp = if (rightType != null) {
+            secondaryItemWidthDp(
+                type = rightType,
+                thicknessDp = compactPillThicknessDp,
+                isMiniPill = isMiniPill,
+                hasMedia = isMusicActive,
+                flashlightStatus = flashlightStatus,
+                activityStatus = activityStatus,
+            )
+        } else 0f
+
+        val leftExtentPx = if (leftType != null) ((leftWidthDp + 8f) * density).toInt() else 0
+        val rightExtentPx = if (rightType != null) ((rightWidthDp + 8f) * density).toInt() else 0
+
         val nestedArtSizeDp = (compactPillThicknessDp - 12f).coerceIn(16f, 24f)
         val nestedExtraDp = compactPillThicknessDp + nestedArtSizeDp
         val blendedExtraDp = compactPillThicknessDp * 3f
 
         val minimizedStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.value
         val showMinimizedTitle = OverlayPreferences.showMinimizedTitleFlow.value
-        val titleExtraDp = if (showMinimizedTitle && hasActiveMusic) 180f else 0f
+        val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180f else 0f
         val announcementExtraDp = 210f
 
-        val activeExtraDp = if (showFlashlightInMain) {
-            48f
-        } else if (hasActiveMusic) {
-            val baseExtra = when (minimizedStyle) {
-                OverlayPreferences.AlbumArtStyle.BLENDED -> blendedExtraDp
-                OverlayPreferences.AlbumArtStyle.NESTED -> nestedExtraDp
-                else -> 60f
+        val activityExtraDp = if (currentActivity == null || activityStatus.isNullOrEmpty()) 48f else 80f
+
+        val activeExtraDp = when (stack.primary?.content) {
+            IslandType.NOTIFICATION_ACTIVITY -> activityExtraDp
+            IslandType.FLASHLIGHT -> 48f
+            IslandType.MEDIA -> {
+                val baseExtra = when (minimizedStyle) {
+                    OverlayPreferences.AlbumArtStyle.BLENDED -> blendedExtraDp
+                    OverlayPreferences.AlbumArtStyle.NESTED -> nestedExtraDp
+                    else -> 60f
+                }
+                val musicExtra = maxOf(baseExtra, titleExtraDp)
+                if (isSongAnnouncementActive) maxOf(musicExtra, announcementExtraDp) else musicExtra
             }
-            val musicExtra = maxOf(baseExtra, titleExtraDp)
-            if (isSongAnnouncementActive) maxOf(musicExtra, announcementExtraDp) else musicExtra
-        } else if (hasFlashlight) {
-            48f
-        } else {
-            0f
+            null -> 0f
         }
 
-        val pillWPx = if (isLandscape) compactPillThicknessPx.toInt() else (cutoutDiameterPx + (activeExtraDp * density)).toInt()
+        val pillWPx = if (isLandscape) compactPillThicknessPx.toInt() else (stackedPillWidthWithExtents(
+            cutoutDiameterPx / density + activeExtraDp,
+            compactPillThicknessDp,
+            if (leftType != null) leftWidthDp + 8f else 0f,
+            if (rightType != null) rightWidthDp + 8f else 0f,
+            screenWidth / density,
+        ) * density).toInt()
         val landscapeAnnouncementExtraDp = if (isSongAnnouncementActive) 140f else activeExtraDp
         val pillHPx = if (isLandscape) (cutoutDiameterPx + (landscapeAnnouncementExtraDp * density)).toInt() else compactPillThicknessPx.toInt()
-        val splitExtraPx = if (isSplit) (compactPillThicknessPx + (8f * density)).toInt() else 0
 
         val tParams = if (isIslandExpanded) {
             createExpandedTouchLayoutParams()
         } else {
-            createTouchLayoutParams(cutout, pillWPx, pillHPx, splitExtraPx, isLandscape, rotation, screenWidth)
+            createTouchLayoutParams(cutout, pillWPx, pillHPx, leftExtentPx, rightExtentPx, isLandscape, rotation, screenWidth)
         }
         touchWindowParams = tParams
 
@@ -526,7 +608,7 @@ class IslandOverlayViewController(
         val density = context.resources.displayMetrics.density
         return WindowManager.LayoutParams(
             draw?.width ?: context.resources.displayMetrics.widthPixels,
-            draw?.height ?: (320f * density).toInt(),
+            draw?.height ?: (460f * density).toInt(),
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -565,7 +647,7 @@ class IslandOverlayViewController(
         } else {
             screenWidth
         }
-        val targetHeight = (320f * density).toInt()
+        val targetHeight = (460f * density).toInt()
 
         @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -622,7 +704,8 @@ class IslandOverlayViewController(
 
         val hasActiveMusic = isMusicActive
         val hasFlashlight = isFlashlightActive
-        val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight
+        val hasActivity = isNotificationActivityActive
+        val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight && !hasActivity
         val shouldShowTouch = (!shouldShowDotOnly || isIslandExpanded) && isOverlayAdded
         if (shouldShowTouch) {
             layoutTouchWindow(cutout)
@@ -683,6 +766,18 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun observeNotificationActivityState() {
+        controllerScope.launch {
+            NotificationActivityState.current.collectLatest { activity ->
+                isNotificationActivityActive = activity != null
+                if (activity == null && isIslandExpanded && _expandedType.value == IslandType.NOTIFICATION_ACTIVITY) {
+                    collapseOverlay()
+                }
+                updateOverlayLayout()
+            }
+        }
+    }
+
     private fun observeFlashlightState() {
         controllerScope.launch {
             FlashlightController.isFlashlightOn.collectLatest { isOn ->
@@ -727,6 +822,14 @@ class IslandOverlayViewController(
     private fun observeMinimizedAlbumArtStyle() {
         controllerScope.launch {
             OverlayPreferences.minimizedAlbumArtStyleFlow.collectLatest {
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeDotRightSideInfoPreference() {
+        controllerScope.launch {
+            OverlayPreferences.showDotRightSideInfoFlow.collectLatest {
                 updateOverlayLayout()
             }
         }

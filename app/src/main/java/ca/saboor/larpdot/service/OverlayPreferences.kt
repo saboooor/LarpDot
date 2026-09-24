@@ -2,6 +2,8 @@ package ca.saboor.larpdot.service
 
 import android.content.Context
 import android.content.SharedPreferences
+import ca.saboor.larpdot.notification.NotificationActivitySettings
+import ca.saboor.larpdot.notification.NotificationActivityState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,13 +22,26 @@ object OverlayPreferences {
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
     private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
     private const val KEY_SHOW_EXPANDED_ALBUM_ART = "show_expanded_album_art"
+    private const val KEY_EXPANDED_PLAYER_LAYOUT = "expanded_player_layout"
+    private const val KEY_SHOW_PROGRESS_SQUIGGLES = "show_progress_squiggles"
+    private const val KEY_SHOW_MINIMIZED_VISUALIZER = "show_minimized_visualizer"
+    private const val KEY_SHOW_EXPANDED_TRACK_INFO = "show_expanded_track_info"
+    private const val KEY_SHOW_EXPANDED_PROGRESS = "show_expanded_progress"
+    private const val KEY_SHOW_EXPANDED_MAIN_CONTROLS = "show_expanded_main_controls"
+    private const val KEY_SHOW_EXPANDED_APP_ACTIONS = "show_expanded_app_actions"
+    private const val KEY_SHOW_EXPANDED_VISUALIZER = "show_expanded_visualizer"
     private const val KEY_NESTED_ALBUM_ART_SHAPE = "nested_album_art_shape"
     private const val KEY_MINIMIZED_ALBUM_ART_SHAPE = "minimized_album_art_shape"
     private const val KEY_EXPANDED_ALBUM_ART_SHAPE = "expanded_album_art_shape"
     private const val KEY_SHOW_PROGRESS_OUTLINE = "show_progress_outline"
+    private const val KEY_SHOW_MINIMIZED_PROGRESS_OUTLINE = "show_minimized_progress_outline"
+    private const val KEY_SHOW_EXPANDED_PROGRESS_OUTLINE = "show_expanded_progress_outline"
     private const val KEY_MINIMIZED_ALBUM_ART_ROTATION = "minimized_album_art_rotation"
     private const val KEY_EXPANDED_ALBUM_ART_ROTATION = "expanded_album_art_rotation"
     private const val KEY_SHOW_DOMINANT_COLOR_GLOW = "show_dominant_color_glow"
+    private const val KEY_SHOW_MINIMIZED_DOMINANT_COLOR_GLOW = "show_minimized_dominant_color_glow"
+    private const val KEY_SHOW_EXPANDED_DOMINANT_COLOR_GLOW = "show_expanded_dominant_color_glow"
+    private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
     private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
@@ -38,6 +53,12 @@ object OverlayPreferences {
     private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
     private const val KEY_HIDE_ON_LOCK_SCREEN = "hide_on_lock_screen"
     private const val KEY_HIDE_MUSIC_WHEN_APP_OPEN = "hide_music_when_app_open"
+    private const val KEY_SHOW_DOT_RIGHT_SIDE_INFO = "show_dot_right_side_info"
+    private const val KEY_NOTIFICATION_ACTIVITIES_ENABLED = "notification_activities_enabled"
+    private const val KEY_NOTIFICATION_PROGRESS_ENABLED = "notification_progress_enabled"
+    private const val KEY_NOTIFICATION_NAVIGATION_ENABLED = "notification_navigation_enabled"
+    private const val KEY_NOTIFICATION_CALLS_ENABLED = "notification_calls_enabled"
+    private const val KEY_NOTIFICATION_TIMERS_ENABLED = "notification_timers_enabled"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
     const val DEFAULT_WAVEFORM_BAND_COUNT = 5
     private const val KEY_WAVEFORM_BAR_WIDTH = "waveform_bar_width"
@@ -47,6 +68,13 @@ object OverlayPreferences {
     private const val KEY_HQ_VISUALIZER_ENABLED = "hq_visualizer_enabled"
     const val KEY_VISUALIZER_MODE = "visualizer_mode"
     const val KEY_PREVIEW_AUDIO_SOURCE = "preview_audio_source"
+
+    enum class CameraCoverStyle(val label: String, val description: String) {
+        NONE("None", "Leave the camera cutout uncovered"),
+        SWOOP("Swoop", "A wide, curved fade from the top edge"),
+        GRADIENT("Gradient", "Black at the camera, fading smoothly to transparent at the bottom of the island"),
+        CANOPY("Canopy", "A broad curved cover with a long, soft fade below the camera"),
+    }
 
     enum class AlbumArtStyle(val label: String) {
         BASIC_FADED("Basic Faded"),
@@ -62,6 +90,20 @@ object OverlayPreferences {
         FULL_BACKGROUND("Full Background"),
         BLURRED_FULL_BACKGROUND("Blurred Full"),
     }
+
+    enum class ExpandedPlayerLayout(val label: String) {
+        ANDROID_MEDIA_CONTROLS("Android Media Controls"),
+        MATERIAL_3_EXPRESSIVE("Material 3 Expressive"),
+        IPHONE("iPhone"),
+    }
+
+    data class ExpandedElementVisibility(
+        val trackInfo: Boolean = true,
+        val progress: Boolean = true,
+        val mainControls: Boolean = true,
+        val appActions: Boolean = true,
+        val visualizer: Boolean = true,
+    )
 
     enum class NestedAlbumArtShape(val label: String) {
         ROUNDED_SQUARE("Square"),
@@ -137,14 +179,30 @@ object OverlayPreferences {
     private val _showExpandedAlbumArtFlow = MutableStateFlow(true)
     val showExpandedAlbumArtFlow: StateFlow<Boolean> = _showExpandedAlbumArtFlow.asStateFlow()
 
+    private val _expandedPlayerLayoutFlow = MutableStateFlow(ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS)
+    val expandedPlayerLayoutFlow: StateFlow<ExpandedPlayerLayout> = _expandedPlayerLayoutFlow.asStateFlow()
+
+    private val _showProgressSquigglesFlow = MutableStateFlow(true)
+    val showProgressSquigglesFlow: StateFlow<Boolean> = _showProgressSquigglesFlow.asStateFlow()
+
+    private val _showMinimizedVisualizerFlow = MutableStateFlow(true)
+    val showMinimizedVisualizerFlow: StateFlow<Boolean> = _showMinimizedVisualizerFlow.asStateFlow()
+
+    private val _expandedElementVisibilityFlow = MutableStateFlow(ExpandedElementVisibility())
+    val expandedElementVisibilityFlow: StateFlow<ExpandedElementVisibility> = _expandedElementVisibilityFlow.asStateFlow()
+
     private val _minimizedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
     val minimizedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _minimizedAlbumArtShapeFlow.asStateFlow()
 
     private val _expandedAlbumArtShapeFlow = MutableStateFlow(NestedAlbumArtShape.ROUNDED_SQUARE)
     val expandedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = _expandedAlbumArtShapeFlow.asStateFlow()
 
-    private val _showProgressOutlineFlow = MutableStateFlow(true)
-    val showProgressOutlineFlow: StateFlow<Boolean> = _showProgressOutlineFlow.asStateFlow()
+    private val _showMinimizedProgressOutlineFlow = MutableStateFlow(true)
+    val showMinimizedProgressOutlineFlow: StateFlow<Boolean> = _showMinimizedProgressOutlineFlow.asStateFlow()
+    val showProgressOutlineFlow: StateFlow<Boolean> get() = _showMinimizedProgressOutlineFlow.asStateFlow()
+
+    private val _showExpandedProgressOutlineFlow = MutableStateFlow(true)
+    val showExpandedProgressOutlineFlow: StateFlow<Boolean> = _showExpandedProgressOutlineFlow.asStateFlow()
 
     private val _minimizedAlbumArtRotationFlow = MutableStateFlow(0f)
     val minimizedAlbumArtRotationFlow: StateFlow<Float> = _minimizedAlbumArtRotationFlow.asStateFlow()
@@ -152,13 +210,19 @@ object OverlayPreferences {
     private val _expandedAlbumArtRotationFlow = MutableStateFlow(0f)
     val expandedAlbumArtRotationFlow: StateFlow<Float> = _expandedAlbumArtRotationFlow.asStateFlow()
 
-    private val _showDominantColorGlowFlow = MutableStateFlow(true)
-    val showDominantColorGlowFlow: StateFlow<Boolean> = _showDominantColorGlowFlow.asStateFlow()
+    private val _showMinimizedDominantColorGlowFlow = MutableStateFlow(true)
+    val showMinimizedDominantColorGlowFlow: StateFlow<Boolean> = _showMinimizedDominantColorGlowFlow.asStateFlow()
 
-    private val _showCameraSwoopFlow = MutableStateFlow(true)
-    val showCameraSwoopFlow: StateFlow<Boolean> = _showCameraSwoopFlow.asStateFlow()
+    private val _showExpandedDominantColorGlowFlow = MutableStateFlow(true)
+    val showExpandedDominantColorGlowFlow: StateFlow<Boolean> = _showExpandedDominantColorGlowFlow.asStateFlow()
+
+    private val _cameraCoverStyleFlow = MutableStateFlow(CameraCoverStyle.SWOOP)
+    val cameraCoverStyleFlow: StateFlow<CameraCoverStyle> = _cameraCoverStyleFlow.asStateFlow()
 
     private val _showFlashlightIslandFlow = MutableStateFlow(true)
+    private val _showDotRightSideInfoFlow = MutableStateFlow(false)
+    val showDotRightSideInfoFlow: StateFlow<Boolean> = _showDotRightSideInfoFlow.asStateFlow()
+
     val showFlashlightIslandFlow: StateFlow<Boolean> = _showFlashlightIslandFlow.asStateFlow()
 
     private val _flashlightTapToToggleFlow = MutableStateFlow(true)
@@ -179,6 +243,10 @@ object OverlayPreferences {
 
     private val _hideMusicWhenAppOpenFlow = MutableStateFlow(true)
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = _hideMusicWhenAppOpenFlow.asStateFlow()
+
+    private val _notificationActivitySettingsFlow = MutableStateFlow(NotificationActivitySettings())
+    val notificationActivitySettingsFlow: StateFlow<NotificationActivitySettings> =
+        _notificationActivitySettingsFlow.asStateFlow()
 
     private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
     val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
@@ -216,20 +284,28 @@ object OverlayPreferences {
     private var isMinimizedAlbumArtStyleInitialized = false
     private var isExpandedAlbumArtStyleInitialized = false
     private var isShowExpandedAlbumArtInitialized = false
+    private var isExpandedPlayerLayoutInitialized = false
+    private var isShowProgressSquigglesInitialized = false
+    private var isShowMinimizedVisualizerInitialized = false
+    private var isExpandedElementVisibilityInitialized = false
     private var isMinimizedAlbumArtShapeInitialized = false
     private var isExpandedAlbumArtShapeInitialized = false
-    private var isShowProgressOutlineInitialized = false
+    private var isShowMinimizedProgressOutlineInitialized = false
+    private var isShowExpandedProgressOutlineInitialized = false
     private var isMinimizedAlbumArtRotationInitialized = false
     private var isExpandedAlbumArtRotationInitialized = false
-    private var isShowDominantColorGlowInitialized = false
-    private var isShowCameraSwoopInitialized = false
+    private var isShowMinimizedDominantColorGlowInitialized = false
+    private var isShowExpandedDominantColorGlowInitialized = false
+    private var isCameraCoverStyleInitialized = false
     private var isShowFlashlightIslandInitialized = false
+    private var isShowDotRightSideInfoInitialized = false
     private var isFlashlightTapToToggleInitialized = false
     private var isUsePixelLightInitialized = false
     private var isDebugModeInitialized = false
     private var isHideWhenScreenOffInitialized = false
     private var isHideOnLockScreenInitialized = false
     private var isHideMusicWhenAppOpenInitialized = false
+    private var isNotificationActivitySettingsInitialized = false
     private var isWaveformBandCountInitialized = false
     private var isWaveformBarWidthInitialized = false
     private var isWaveformBarSpacingInitialized = false
@@ -395,6 +471,81 @@ object OverlayPreferences {
         isShowExpandedAlbumArtInitialized = true
     }
 
+    fun getExpandedPlayerLayout(context: Context): ExpandedPlayerLayout {
+        if (!isExpandedPlayerLayoutInitialized) {
+            val stored = getPrefs(context).getString(
+                KEY_EXPANDED_PLAYER_LAYOUT,
+                ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS.name,
+            )
+            _expandedPlayerLayoutFlow.value = runCatching {
+                ExpandedPlayerLayout.valueOf(stored.orEmpty())
+            }.getOrDefault(ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS)
+            isExpandedPlayerLayoutInitialized = true
+        }
+        return _expandedPlayerLayoutFlow.value
+    }
+
+    fun setExpandedPlayerLayout(context: Context, layout: ExpandedPlayerLayout) {
+        getPrefs(context).edit().putString(KEY_EXPANDED_PLAYER_LAYOUT, layout.name).apply()
+        _expandedPlayerLayoutFlow.value = layout
+        isExpandedPlayerLayoutInitialized = true
+    }
+
+    fun isShowProgressSquigglesEnabled(context: Context): Boolean {
+        if (!isShowProgressSquigglesInitialized) {
+            _showProgressSquigglesFlow.value = getPrefs(context).getBoolean(KEY_SHOW_PROGRESS_SQUIGGLES, true)
+            isShowProgressSquigglesInitialized = true
+        }
+        return _showProgressSquigglesFlow.value
+    }
+
+    fun setShowProgressSquigglesEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_PROGRESS_SQUIGGLES, enabled).apply()
+        _showProgressSquigglesFlow.value = enabled
+        isShowProgressSquigglesInitialized = true
+    }
+
+    fun isShowMinimizedVisualizerEnabled(context: Context): Boolean {
+        if (!isShowMinimizedVisualizerInitialized) {
+            _showMinimizedVisualizerFlow.value = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_VISUALIZER, true)
+            isShowMinimizedVisualizerInitialized = true
+        }
+        return _showMinimizedVisualizerFlow.value
+    }
+
+    fun setShowMinimizedVisualizerEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_VISUALIZER, enabled).apply()
+        _showMinimizedVisualizerFlow.value = enabled
+        isShowMinimizedVisualizerInitialized = true
+    }
+
+    fun getExpandedElementVisibility(context: Context): ExpandedElementVisibility {
+        if (!isExpandedElementVisibilityInitialized) {
+            val prefs = getPrefs(context)
+            _expandedElementVisibilityFlow.value = ExpandedElementVisibility(
+                trackInfo = prefs.getBoolean(KEY_SHOW_EXPANDED_TRACK_INFO, true),
+                progress = prefs.getBoolean(KEY_SHOW_EXPANDED_PROGRESS, true),
+                mainControls = prefs.getBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, true),
+                appActions = prefs.getBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, true),
+                visualizer = prefs.getBoolean(KEY_SHOW_EXPANDED_VISUALIZER, true),
+            )
+            isExpandedElementVisibilityInitialized = true
+        }
+        return _expandedElementVisibilityFlow.value
+    }
+
+    fun setExpandedElementVisibility(context: Context, visibility: ExpandedElementVisibility) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_SHOW_EXPANDED_TRACK_INFO, visibility.trackInfo)
+            .putBoolean(KEY_SHOW_EXPANDED_PROGRESS, visibility.progress)
+            .putBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, visibility.mainControls)
+            .putBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, visibility.appActions)
+            .putBoolean(KEY_SHOW_EXPANDED_VISUALIZER, visibility.visualizer)
+            .apply()
+        _expandedElementVisibilityFlow.value = visibility
+        isExpandedElementVisibilityInitialized = true
+    }
+
     fun getMinimizedAlbumArtShape(context: Context): NestedAlbumArtShape {
         if (!isMinimizedAlbumArtShapeInitialized) {
             val prefs = getPrefs(context)
@@ -431,19 +582,42 @@ object OverlayPreferences {
         isExpandedAlbumArtShapeInitialized = true
     }
 
-    fun isShowProgressOutlineEnabled(context: Context): Boolean {
-        if (!isShowProgressOutlineInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_SHOW_PROGRESS_OUTLINE, true)
-            _showProgressOutlineFlow.value = enabled
-            isShowProgressOutlineInitialized = true
+    fun isShowMinimizedProgressOutlineEnabled(context: Context): Boolean {
+        if (!isShowMinimizedProgressOutlineInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(
+                KEY_SHOW_MINIMIZED_PROGRESS_OUTLINE,
+                prefs.getBoolean(KEY_SHOW_PROGRESS_OUTLINE, true),
+            )
+            _showMinimizedProgressOutlineFlow.value = enabled
+            isShowMinimizedProgressOutlineInitialized = true
         }
-        return _showProgressOutlineFlow.value
+        return _showMinimizedProgressOutlineFlow.value
     }
 
-    fun setShowProgressOutlineEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_PROGRESS_OUTLINE, enabled).apply()
-        _showProgressOutlineFlow.value = enabled
-        isShowProgressOutlineInitialized = true
+    fun setShowMinimizedProgressOutlineEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_PROGRESS_OUTLINE, enabled).apply()
+        _showMinimizedProgressOutlineFlow.value = enabled
+        isShowMinimizedProgressOutlineInitialized = true
+    }
+
+    fun isShowExpandedProgressOutlineEnabled(context: Context): Boolean {
+        if (!isShowExpandedProgressOutlineInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(
+                KEY_SHOW_EXPANDED_PROGRESS_OUTLINE,
+                prefs.getBoolean(KEY_SHOW_PROGRESS_OUTLINE, true),
+            )
+            _showExpandedProgressOutlineFlow.value = enabled
+            isShowExpandedProgressOutlineInitialized = true
+        }
+        return _showExpandedProgressOutlineFlow.value
+    }
+
+    fun setShowExpandedProgressOutlineEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_PROGRESS_OUTLINE, enabled).apply()
+        _showExpandedProgressOutlineFlow.value = enabled
+        isShowExpandedProgressOutlineInitialized = true
     }
 
     fun getMinimizedAlbumArtRotation(context: Context): Float {
@@ -476,34 +650,81 @@ object OverlayPreferences {
         isExpandedAlbumArtRotationInitialized = true
     }
 
-    fun isShowDominantColorGlowEnabled(context: Context): Boolean {
-        if (!isShowDominantColorGlowInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, true)
-            _showDominantColorGlowFlow.value = enabled
-            isShowDominantColorGlowInitialized = true
+    fun isShowMinimizedDominantColorGlowEnabled(context: Context): Boolean {
+        if (!isShowMinimizedDominantColorGlowInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(
+                KEY_SHOW_MINIMIZED_DOMINANT_COLOR_GLOW,
+                prefs.getBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, true),
+            )
+            _showMinimizedDominantColorGlowFlow.value = enabled
+            isShowMinimizedDominantColorGlowInitialized = true
         }
-        return _showDominantColorGlowFlow.value
+        return _showMinimizedDominantColorGlowFlow.value
     }
 
-    fun setShowDominantColorGlowEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, enabled).apply()
-        _showDominantColorGlowFlow.value = enabled
-        isShowDominantColorGlowInitialized = true
+    fun setShowMinimizedDominantColorGlowEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_DOMINANT_COLOR_GLOW, enabled).apply()
+        _showMinimizedDominantColorGlowFlow.value = enabled
+        isShowMinimizedDominantColorGlowInitialized = true
     }
 
-    fun isShowCameraSwoopEnabled(context: Context): Boolean {
-        if (!isShowCameraSwoopInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_SHOW_CAMERA_SWOOP, true)
-            _showCameraSwoopFlow.value = enabled
-            isShowCameraSwoopInitialized = true
+    fun isShowExpandedDominantColorGlowEnabled(context: Context): Boolean {
+        if (!isShowExpandedDominantColorGlowInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(
+                KEY_SHOW_EXPANDED_DOMINANT_COLOR_GLOW,
+                prefs.getBoolean(KEY_SHOW_DOMINANT_COLOR_GLOW, true),
+            )
+            _showExpandedDominantColorGlowFlow.value = enabled
+            isShowExpandedDominantColorGlowInitialized = true
         }
-        return _showCameraSwoopFlow.value
+        return _showExpandedDominantColorGlowFlow.value
     }
 
-    fun setShowCameraSwoopEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_CAMERA_SWOOP, enabled).apply()
-        _showCameraSwoopFlow.value = enabled
-        isShowCameraSwoopInitialized = true
+    fun setShowExpandedDominantColorGlowEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_DOMINANT_COLOR_GLOW, enabled).apply()
+        _showExpandedDominantColorGlowFlow.value = enabled
+        isShowExpandedDominantColorGlowInitialized = true
+    }
+
+    fun getCameraCoverStyle(context: Context): CameraCoverStyle {
+        if (!isCameraCoverStyleInitialized) {
+            val prefs = getPrefs(context)
+            val fallback = if (prefs.getBoolean(KEY_SHOW_CAMERA_SWOOP, true)) {
+                CameraCoverStyle.SWOOP
+            } else CameraCoverStyle.NONE
+            _cameraCoverStyleFlow.value = prefs.getString(KEY_CAMERA_COVER_STYLE, null)?.let { saved ->
+                when (saved) {
+                    "HALO", "CURTAIN" -> CameraCoverStyle.GRADIENT
+                    "CAPSULE" -> CameraCoverStyle.CANOPY
+                    else -> CameraCoverStyle.entries.firstOrNull { it.name == saved }
+                }
+            } ?: fallback
+            isCameraCoverStyleInitialized = true
+        }
+        return _cameraCoverStyleFlow.value
+    }
+
+    fun setCameraCoverStyle(context: Context, style: CameraCoverStyle) {
+        getPrefs(context).edit().putString(KEY_CAMERA_COVER_STYLE, style.name).apply()
+        _cameraCoverStyleFlow.value = style
+        isCameraCoverStyleInitialized = true
+    }
+
+    fun isShowDotRightSideInfoEnabled(context: Context): Boolean {
+        if (!isShowDotRightSideInfoInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_SHOW_DOT_RIGHT_SIDE_INFO, false)
+            _showDotRightSideInfoFlow.value = enabled
+            isShowDotRightSideInfoInitialized = true
+        }
+        return _showDotRightSideInfoFlow.value
+    }
+
+    fun setShowDotRightSideInfoEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_DOT_RIGHT_SIDE_INFO, enabled).apply()
+        _showDotRightSideInfoFlow.value = enabled
+        isShowDotRightSideInfoInitialized = true
     }
 
     fun isShowFlashlightIslandEnabled(context: Context): Boolean {
@@ -638,6 +859,37 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_HIDE_MUSIC_WHEN_APP_OPEN, enabled).apply()
         _hideMusicWhenAppOpenFlow.value = enabled
         isHideMusicWhenAppOpenInitialized = true
+    }
+
+    fun getNotificationActivitySettings(context: Context): NotificationActivitySettings {
+        if (!isNotificationActivitySettingsInitialized) {
+            val prefs = getPrefs(context)
+            _notificationActivitySettingsFlow.value = NotificationActivitySettings(
+                enabled = prefs.getBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, true),
+                progress = prefs.getBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, true),
+                navigation = prefs.getBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, true),
+                calls = prefs.getBoolean(KEY_NOTIFICATION_CALLS_ENABLED, true),
+                timers = prefs.getBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, true),
+            )
+            isNotificationActivitySettingsInitialized = true
+        }
+        return _notificationActivitySettingsFlow.value.also(NotificationActivityState::configure)
+    }
+
+    fun setNotificationActivitySettings(
+        context: Context,
+        settings: NotificationActivitySettings,
+    ) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, settings.enabled)
+            .putBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, settings.progress)
+            .putBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, settings.navigation)
+            .putBoolean(KEY_NOTIFICATION_CALLS_ENABLED, settings.calls)
+            .putBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, settings.timers)
+            .apply()
+        _notificationActivitySettingsFlow.value = settings
+        isNotificationActivitySettingsInitialized = true
+        NotificationActivityState.configure(settings)
     }
 
     fun getWaveformBandCount(context: Context): Int {

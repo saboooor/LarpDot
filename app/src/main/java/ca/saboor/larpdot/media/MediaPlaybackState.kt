@@ -592,41 +592,6 @@ object MediaPlaybackState {
         }
     }
 
-    fun setSimulatedPlayback(enabled: Boolean) {
-        progressTickerJob?.cancel()
-        progressTickerJob = null
-
-        if (enabled) {
-            val sampleArt = DominantColorExtractor.createSampleArtwork("Starboy")
-            val dominant = DominantColorExtractor.extractDominantColor(sampleArt)
-
-            musicGraceJob?.cancel()
-            musicGraceJob = null
-            lastPlayTime = SystemClock.uptimeMillis()
-            lastPauseTime = 0L
-            _isMusicActive.value = true
-
-            lastAnnouncedTrackKey = "Starboy_The Weeknd"
-            _currentTrack.value = MediaTrackInfo(
-                title = "Starboy",
-                artist = "The Weeknd",
-                albumArt = sampleArt,
-                isPlaying = true,
-                positionMs = 65000L,
-                durationMs = 230000L,
-                dominantColor = dominant,
-                isSimulated = true,
-                playerPackageName = "com.spotify.music",
-                appName = "Spotify",
-            )
-
-            triggerSongAnnouncement()
-            checkTickerState(true)
-        } else {
-            clear()
-        }
-    }
-
     fun clear() {
         dismissSongAnnouncement()
         lastAnnouncedTrackKey = ""

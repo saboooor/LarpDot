@@ -190,11 +190,6 @@ class DotAccessibilityService : AccessibilityService() {
         var lastPixelLightActivityTime: Long = 0L
             private set
 
-        fun isCameraAppInForeground(): Boolean {
-            val pkg = ForegroundAppTracker.foregroundPackage.value ?: topPackage ?: instance?.rootInActiveWindow?.packageName?.toString() ?: return false
-            return FlashlightController.isKnownCameraPackage(pkg)
-        }
-
         /**
          * Triggers opening the Android Notification Shade using Accessibility action,
          * or fallback via StatusBarManager reflection.

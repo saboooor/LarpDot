@@ -266,7 +266,7 @@ private fun AnnouncementAlbumArt(
             bitmap = albumArt.asImageBitmap(),
             contentDescription = null,
             modifier = modifier
-                .size((cutoutDiameterDp - 8.dp).coerceIn(20.dp, 32.dp))
+                .size((cutoutDiameterDp - 8.dp).coerceIn(18.dp, 26.dp))
                 .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
             contentScale = ContentScale.Crop,
         )
@@ -394,8 +394,9 @@ internal fun CompactIslandContent(
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
-    showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
+    showDominantGlow: Boolean = OverlayPreferences.showMinimizedDominantColorGlowFlow.collectAsState().value,
     showMinimizedTitle: Boolean = OverlayPreferences.showMinimizedTitleFlow.collectAsState().value,
+    showVisualizer: Boolean = OverlayPreferences.showMinimizedVisualizerFlow.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
@@ -480,11 +481,9 @@ internal fun CompactIslandContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    // Keep nested artwork pinned to the leading edge while the
-                                    // announcement text consumes the newly expanded space.
-                                    .padding(start = 4.dp, end = 6.dp),
+                                    .padding(start = 3.dp, end = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
                             ) {
                                 AnnouncementAlbumArt(
                                     mediaInfo = mediaInfo,
@@ -503,7 +502,7 @@ internal fun CompactIslandContent(
                                     ),
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Center,
-                                    fadeWidth = 8.dp,
+                                    fadeWidth = 6.dp,
                                     initialDelayMillis = 600,
                                     repeatDelayMillis = 1000,
                                     velocity = 35.dp,
@@ -533,9 +532,9 @@ internal fun CompactIslandContent(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 6.dp),
+                                    .padding(start = 6.dp, end = 2.dp),
                                 textAlign = TextAlign.Center,
-                                fadeWidth = 8.dp,
+                                fadeWidth = 6.dp,
                                 initialDelayMillis = 600,
                                 repeatDelayMillis = 1000,
                                 velocity = 35.dp,
@@ -561,7 +560,7 @@ internal fun CompactIslandContent(
                                     )
                                 } else Modifier
                             )
-                            .padding(start = 6.dp, end = 12.dp),
+                            .padding(start = 2.dp, end = 6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         MarqueeText(
@@ -569,7 +568,7 @@ internal fun CompactIslandContent(
                             color = accentColor.copy(alpha = 0.95f),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                             textAlign = TextAlign.Center,
-                            fadeWidth = 8.dp,
+                            fadeWidth = 6.dp,
                             initialDelayMillis = 600,
                             repeatDelayMillis = 1000,
                             velocity = 35.dp,
@@ -758,15 +757,17 @@ internal fun CompactIslandContent(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                EqualizerWaveform(
-                    isPlaying = mediaInfo.isPlaying,
-                    maxHeightDp = 13.5f,
-                    accentColor = accentColor,
-                    barCount = waveformBandCount,
-                    barWidth = waveformBarWidth.dp,
-                    barSpacing = waveformBarSpacing.dp,
-                    currentPositionMs = mediaInfo.positionMs,
-                )
+                if (showVisualizer) {
+                    EqualizerWaveform(
+                        isPlaying = mediaInfo.isPlaying,
+                        maxHeightDp = 13.5f,
+                        accentColor = accentColor,
+                        barCount = waveformBandCount,
+                        barWidth = waveformBarWidth.dp,
+                        barSpacing = waveformBarSpacing.dp,
+                        currentPositionMs = mediaInfo.positionMs,
+                    )
+                }
             }
         }
     } else {
@@ -966,7 +967,7 @@ internal fun CompactIslandContent(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         fadeWidth = 6.dp,
                     )
-                } else {
+                } else if (showVisualizer) {
                     EqualizerWaveform(
                         isPlaying = mediaInfo.isPlaying,
                         maxHeightDp = 13.5f,
@@ -1027,16 +1028,29 @@ internal fun ExpandedIslandContent(
     cardHorizontalMarginDp: Dp = 14.dp,
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
+    playerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.expandedPlayerLayoutFlow.collectAsState().value,
+    showProgressSquiggles: Boolean = OverlayPreferences.showProgressSquigglesFlow.collectAsState().value,
+    elementVisibility: OverlayPreferences.ExpandedElementVisibility = OverlayPreferences.expandedElementVisibilityFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
-    showDominantGlow: Boolean = OverlayPreferences.showDominantColorGlowFlow.collectAsState().value,
-    showCameraSwoop: Boolean = OverlayPreferences.showCameraSwoopFlow.collectAsState().value,
+    showDominantGlow: Boolean = OverlayPreferences.showExpandedDominantColorGlowFlow.collectAsState().value,
+    cameraCoverStyle: OverlayPreferences.CameraCoverStyle = OverlayPreferences.cameraCoverStyleFlow.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
     val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
+    val albumArtPlaybackScale by animateFloatAsState(
+        targetValue = if (mediaInfo.isPlaying) 1f else 0.86f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "album_art_playback_scale",
+    )
+    val albumArtPlaybackAlpha by animateFloatAsState(
+        targetValue = if (mediaInfo.isPlaying) 1f else 0.55f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "album_art_playback_alpha",
+    )
 
     val progressFraction = if (mediaInfo.durationMs > 0) {
         (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
@@ -1391,34 +1405,14 @@ internal fun ExpandedIslandContent(
                 }
             }
         }
-        // Organic scoop-shaped black fade: perfectly symmetrical around the camera hole punch,
-        // raised snug under the camera cutout with an ultra-smooth wide fade.
-        if (showCameraSwoop) {
-            val dotXPx = with(density) { dotCenterXDp.toPx() }
-            val dotYPx = with(density) { dotCenterYDp.toPx() }
-            val dotRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + 3.dp).toPx() }
-            val scoopDepthPx = with(density) { (dotCenterYDp + (cutoutDiameterDp / 2f) - 2.dp).toPx() }
-            val fadeWidthPx = with(density) { 72.dp.toPx() }
+        CameraCover(
+            style = cameraCoverStyle,
+            centerX = dotCenterXDp,
+            centerY = dotCenterYDp,
+            diameter = cutoutDiameterDp,
+        )
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val scoopShader = remember { android.graphics.RuntimeShader(ORGANIC_SCOOP_FADE_SHADER) }
-                val scoopBrush = remember(scoopShader) { androidx.compose.ui.graphics.ShaderBrush(scoopShader) }
-
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val halfWidthPx = minOf(dotXPx, size.width - dotXPx) * 0.75f
-                    scoopShader.setFloatUniform("uSize", size.width, size.height)
-                    scoopShader.setFloatUniform("uDotCenter", dotXPx, dotYPx)
-                    scoopShader.setFloatUniform("uDotRadius", dotRadiusPx)
-                    scoopShader.setFloatUniform("uScoopDepth", scoopDepthPx)
-                    scoopShader.setFloatUniform("uFadeWidth", fadeWidthPx)
-                    scoopShader.setFloatUniform("uHalfWidth", halfWidthPx)
-
-                    drawRect(brush = scoopBrush)
-                }
-            }
-        }
-
-        Column(
+        if (playerLayout == OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS) Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
@@ -1445,14 +1439,19 @@ internal fun ExpandedIslandContent(
                         bitmap = mediaInfo.albumArt.asImageBitmap(),
                         contentDescription = "Album art",
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(56.dp)
+                            .graphicsLayer {
+                                scaleX = albumArtPlaybackScale
+                                scaleY = albumArtPlaybackScale
+                                alpha = albumArtPlaybackAlpha
+                            }
                             .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(14.dp))
                 }
 
-                Column(
+                if (elementVisibility.trackInfo) Column(
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 16.dp)
@@ -1472,11 +1471,11 @@ internal fun ExpandedIslandContent(
                 }
 
                 // Controls Column: 5-bar visualizer in a fixed container stacked directly above the Play/Pause button
-                Column(
+                if (elementVisibility.visualizer || elementVisibility.mainControls) Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Box(
+                    if (elementVisibility.visualizer) Box(
                         modifier = Modifier
                             .height(20.dp),
                         contentAlignment = Alignment.Center,
@@ -1493,16 +1492,10 @@ internal fun ExpandedIslandContent(
                             currentPositionMs = mediaInfo.positionMs,
                         )
                     }
-                    Spacer(Modifier.height(24.dp))
+                    if (elementVisibility.visualizer && elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
                     // Native Android 13/14 M3 wide pill Play/Pause button
-                    Surface(
-                        onClick = {
-                            if (!mediaInfo.hasMedia && !mediaInfo.isSimulated) {
-                                MediaPlaybackState.setSimulatedPlayback(true)
-                            } else {
-                                MediaPlaybackState.togglePlayPause()
-                            }
-                        },
+                    if (elementVisibility.mainControls) Surface(
+                        onClick = { MediaPlaybackState.togglePlayPause() },
                         shape = RoundedCornerShape(20.dp),
                         color = Color.White.copy(alpha = 0.94f),
                         modifier = Modifier
@@ -1523,11 +1516,11 @@ internal fun ExpandedIslandContent(
             }
 
             // Row 3: Scrubber Line with M3 Expressive Wavy Indicator & Full Action Controls
-            Row(
+            if (elementVisibility.progress || elementVisibility.mainControls || elementVisibility.appActions) Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
+                if (elementVisibility.mainControls) IconButton(
                     onClick = { MediaPlaybackState.skipPrevious() },
                     modifier = Modifier.size(36.dp),
                 ) {
@@ -1539,7 +1532,7 @@ internal fun ExpandedIslandContent(
                     )
                 }
 
-                Box(
+                if (elementVisibility.progress) Box(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 4.dp)
@@ -1582,12 +1575,12 @@ internal fun ExpandedIslandContent(
                             .height(14.dp),
                         color = accentColor,
                         trackColor = accentColor.copy(alpha = 0.32f),
-                        amplitude = { if (mediaInfo.isPlaying) 0.5f else 0.15f },
+                        amplitude = { if (showProgressSquiggles) if (mediaInfo.isPlaying) 0.5f else 0.15f else 0f },
                         wavelength = 28.dp,
                     )
                 }
 
-                IconButton(
+                if (elementVisibility.mainControls) IconButton(
                     onClick = { MediaPlaybackState.skipNext() },
                     modifier = Modifier.size(36.dp),
                 ) {
@@ -1599,7 +1592,7 @@ internal fun ExpandedIslandContent(
                     )
                 }
 
-                mediaInfo.sessionActions
+                if (elementVisibility.appActions) mediaInfo.sessionActions
                     .filter { it.iconResourceId != 0 && it.iconPackageName != null }
                     .take(3)
                     .forEach { action ->
@@ -1623,6 +1616,375 @@ internal fun ExpandedIslandContent(
                             )
                         }
                     }
+                }
+            }
+        } else if (playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE) {
+            val materialSessionActions = mediaInfo.sessionActions
+                .filter { it.iconResourceId != 0 && it.iconPackageName != null }
+                .take(3)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 20.dp, end = 20.dp, top = 34.dp, bottom = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+            ) {
+                if (showAlbumArt && mediaInfo.albumArt != null) {
+                    Image(
+                        bitmap = mediaInfo.albumArt.asImageBitmap(),
+                        contentDescription = "Album art",
+                        modifier = Modifier
+                            .size(140.dp)
+                            .graphicsLayer {
+                                scaleX = albumArtPlaybackScale
+                                scaleY = albumArtPlaybackScale
+                                alpha = albumArtPlaybackAlpha
+                            }
+                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation))
+                            .clickable { openPlayerApp(context, mediaInfo) },
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+
+                if (elementVisibility.trackInfo || elementVisibility.visualizer) Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { openPlayerApp(context, mediaInfo) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (elementVisibility.trackInfo) Column(modifier = Modifier.weight(1f)) {
+                        MarqueeText(
+                            text = mediaInfo.title.ifEmpty { "No Media Playing" },
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        MarqueeText(
+                            text = mediaInfo.artist,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.72f),
+                            textAlign = TextAlign.Start,
+                        )
+                    }
+                    if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
+                    if (elementVisibility.visualizer) Box(
+                        modifier = Modifier
+                            .size(width = 72.dp, height = 20.dp)
+                            .padding(end = 14.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        EqualizerWaveform(
+                            isPlaying = mediaInfo.isPlaying,
+                            maxHeightDp = 20f,
+                            accentColor = accentColor,
+                            barCount = waveformBandCount,
+                            barWidth = if (waveformBandCount > 5) 2.8.dp else 3.5.dp,
+                            barSpacing = if (waveformBandCount > 5) 2.dp else 2.5.dp,
+                            minHeight = 3.dp,
+                            currentPositionMs = mediaInfo.positionMs,
+                        )
+                    }
+                }
+
+                if (elementVisibility.progress) Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .pointerInput(mediaInfo.durationMs) {
+                            detectTapGestures { offset ->
+                                if (mediaInfo.durationMs > 0) {
+                                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                    MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
+                                }
+                            }
+                        }
+                        .pointerInput(mediaInfo.durationMs) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset ->
+                                    isDragging = true
+                                    dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                },
+                                onDragEnd = {
+                                    if (mediaInfo.durationMs > 0) {
+                                        MediaPlaybackState.seekTo((dragFraction * mediaInfo.durationMs).toLong())
+                                    }
+                                    isDragging = false
+                                },
+                                onDragCancel = {
+                                    isDragging = false
+                                },
+                                onHorizontalDrag = { change, _ ->
+                                    change.consume()
+                                    dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                },
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LinearWavyProgressIndicator(
+                        progress = { activeFraction },
+                        modifier = Modifier.fillMaxWidth().height(12.dp),
+                        color = accentColor,
+                        trackColor = Color.White.copy(alpha = 0.18f),
+                        amplitude = { if (showProgressSquiggles) if (mediaInfo.isPlaying) 0.55f else 0.12f else 0f },
+                        wavelength = 24.dp,
+                    )
+                }
+
+                if (elementVisibility.mainControls) Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Surface(
+                        onClick = { MediaPlaybackState.skipPrevious() },
+                        modifier = Modifier.size(width = 60.dp, height = 50.dp),
+                        shape = RoundedCornerShape(
+                            topStart = 25.dp,
+                            bottomStart = 25.dp,
+                            topEnd = 8.dp,
+                            bottomEnd = 8.dp,
+                        ),
+                        color = Color.White.copy(alpha = 0.14f),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.SkipPrevious,
+                                "Previous track",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                    Surface(
+                        onClick = { MediaPlaybackState.togglePlayPause() },
+                        modifier = Modifier.size(width = 68.dp, height = 56.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = accentColor,
+                        shadowElevation = 2.dp,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                                tint = Color.Black,
+                                modifier = Modifier.size(31.dp),
+                            )
+                        }
+                    }
+                    Surface(
+                        onClick = { MediaPlaybackState.skipNext() },
+                        modifier = Modifier.size(width = 60.dp, height = 50.dp),
+                        shape = RoundedCornerShape(
+                            topStart = 8.dp,
+                            bottomStart = 8.dp,
+                            topEnd = 25.dp,
+                            bottomEnd = 25.dp,
+                        ),
+                        color = Color.White.copy(alpha = 0.14f),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.SkipNext,
+                                "Next track",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                }
+
+                if (elementVisibility.appActions && materialSessionActions.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        materialSessionActions.forEach { action ->
+                        val appIcon = remember(action.iconPackageName, action.iconResourceId) {
+                            loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)
+                        }
+                        if (appIcon != null) {
+                            IconButton(
+                                onClick = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    MediaPlaybackState.performSessionAction(action)
+                                },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Image(
+                                    bitmap = appIcon.asImageBitmap(),
+                                    contentDescription = action.label,
+                                    colorFilter = ColorFilter.tint(
+                                        if (action.active) accentColor else Color.White.copy(alpha = 0.82f)
+                                    ),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Spacer(Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (showAlbumArt && mediaInfo.albumArt != null) {
+                        Image(
+                            bitmap = mediaInfo.albumArt.asImageBitmap(),
+                            contentDescription = "Album art",
+                            modifier = Modifier
+                                .size(64.dp)
+                                .graphicsLayer {
+                                    scaleX = albumArtPlaybackScale
+                                    scaleY = albumArtPlaybackScale
+                                    alpha = albumArtPlaybackAlpha
+                                }
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    if (elementVisibility.trackInfo) Column(
+                        modifier = Modifier.weight(1f).clickable { openPlayerApp(context, mediaInfo) },
+                    ) {
+                        MarqueeText(
+                            text = mediaInfo.title.ifEmpty { "No Media Playing" },
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        MarqueeText(
+                            text = mediaInfo.artist,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.62f),
+                        )
+                    }
+                    if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
+                    if (elementVisibility.visualizer) Box(
+                        modifier = Modifier
+                            .size(width = 72.dp, height = 20.dp)
+                            .padding(end = 14.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        EqualizerWaveform(
+                            isPlaying = mediaInfo.isPlaying,
+                            maxHeightDp = 20f,
+                            accentColor = accentColor,
+                            barCount = waveformBandCount,
+                            barWidth = if (waveformBandCount > 5) 2.8.dp else 3.5.dp,
+                            barSpacing = if (waveformBandCount > 5) 2.dp else 2.5.dp,
+                            minHeight = 3.dp,
+                            currentPositionMs = mediaInfo.positionMs,
+                        )
+                    }
+                }
+
+                if (elementVisibility.progress) Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = formatTime(mediaInfo.positionMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.55f),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(18.dp)
+                            .pointerInput(mediaInfo.durationMs) {
+                                detectTapGestures { offset ->
+                                    if (mediaInfo.durationMs > 0) {
+                                        MediaPlaybackState.seekTo(
+                                            ((offset.x / size.width).coerceIn(0f, 1f) * mediaInfo.durationMs).toLong()
+                                        )
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        LinearWavyProgressIndicator(
+                            progress = { activeFraction },
+                            modifier = Modifier.fillMaxWidth().height(5.dp),
+                            color = Color.White,
+                            trackColor = Color.White.copy(alpha = 0.22f),
+                            amplitude = {
+                                if (showProgressSquiggles) {
+                                    if (mediaInfo.isPlaying) 0.45f else 0.1f
+                                } else {
+                                    0f
+                                }
+                            },
+                            wavelength = 24.dp,
+                        )
+                    }
+                    Text(
+                        text = formatRemainingTime(mediaInfo.positionMs, mediaInfo.durationMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.55f),
+                    )
+                }
+
+                if (elementVisibility.mainControls || elementVisibility.appActions) Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (elementVisibility.mainControls) Row(
+                        modifier = Modifier.align(Alignment.Center),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconButton(onClick = { MediaPlaybackState.skipPrevious() }, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Default.SkipPrevious, "Previous track", tint = Color.White, modifier = Modifier.size(25.dp))
+                        }
+                        IconButton(
+                            onClick = { MediaPlaybackState.togglePlayPause() },
+                            modifier = Modifier.size(46.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
+                        IconButton(onClick = { MediaPlaybackState.skipNext() }, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Default.SkipNext, "Next track", tint = Color.White, modifier = Modifier.size(25.dp))
+                        }
+                    }
+
+                    if (elementVisibility.appActions) mediaInfo.sessionActions
+                        .filter { it.iconResourceId != 0 && it.iconPackageName != null }
+                        .take(2)
+                        .forEachIndexed { index, action ->
+                            val appIcon = remember(action.iconPackageName, action.iconResourceId) {
+                                loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)
+                            }
+                            if (appIcon != null) {
+                                IconButton(
+                                    onClick = { MediaPlaybackState.performSessionAction(action) },
+                                    modifier = Modifier
+                                        .align(if (index == 0) Alignment.CenterStart else Alignment.CenterEnd)
+                                        .size(38.dp),
+                                ) {
+                                    Image(
+                                        bitmap = appIcon.asImageBitmap(),
+                                        contentDescription = action.label,
+                                        colorFilter = ColorFilter.tint(
+                                            if (action.active) accentColor else Color.White.copy(alpha = 0.72f)
+                                        ),
+                                        modifier = Modifier.size(19.dp),
+                                    )
+                                }
+                            }
+                        }
                 }
             }
         }

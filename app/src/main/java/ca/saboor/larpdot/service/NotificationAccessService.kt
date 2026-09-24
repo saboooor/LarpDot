@@ -11,6 +11,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.notification.NotificationActivityState
 
 /**
  * Service to listen for system notifications, active media sessions, and PixelLight state
@@ -35,6 +36,7 @@ class NotificationAccessService : NotificationListenerService() {
 
             // Check if PixelLight is currently active
             checkActivePixelLight()
+            activeNotifications?.forEach { NotificationActivityState.update(this, it) }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -43,6 +45,8 @@ class NotificationAccessService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         if (sbn == null) return
+
+        NotificationActivityState.update(this, sbn)
 
         // Intercept PixelLight torch notification
         if (sbn.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
@@ -156,6 +160,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
+        sbn?.key?.let(NotificationActivityState::remove)
         if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
             android.util.Log.i("NotificationAccessService", "PixelLight notification removed")
             FlashlightController.onPixelLightNotificationRemoved()
@@ -170,6 +175,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?, rankingMap: RankingMap?, reason: Int) {
         super.onNotificationRemoved(sbn, rankingMap, reason)
+        sbn?.key?.let(NotificationActivityState::remove)
         if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
             android.util.Log.i("NotificationAccessService", "PixelLight notification removed (reason=$reason)")
             FlashlightController.onPixelLightNotificationRemoved()
@@ -195,6 +201,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        NotificationActivityState.clear()
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
         } catch (_: Exception) {}

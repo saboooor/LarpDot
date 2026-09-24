@@ -16,6 +16,7 @@ class LarpDotApplication : Application() {
         OverlayPreferences.isHideWhenScreenOffEnabled(this)
         OverlayPreferences.isHideOnLockScreenEnabled(this)
         OverlayPreferences.isHideMusicWhenAppOpenEnabled(this)
+        OverlayPreferences.getNotificationActivitySettings(this)
         FlashlightController.init(this)
     }
 }

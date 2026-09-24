@@ -40,6 +40,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +74,8 @@ private enum class FlashlightTapMode(val label: String, val icon: ImageVector) {
 @Composable
 fun FlashlightScreen(
     cutoutInfo: CutoutInfo,
+    selectedTabIndex: Int,
+    onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -81,7 +85,6 @@ fun FlashlightScreen(
     val isStrengthSupported by FlashlightController.isStrengthSupported.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    val isSimulated by FlashlightController.isSimulated.collectAsState()
     val isPixelLightInstalled by FlashlightController.isPixelLightInstalled.collectAsState()
     val isPixelLightActive by FlashlightController.isPixelLightActive.collectAsState()
     val usePixelLight by OverlayPreferences.usePixelLightFlow.collectAsState()
@@ -107,8 +110,28 @@ fun FlashlightScreen(
             IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.FLASHLIGHT)
         }
 
-        // 2. Master Controls Card
         item {
+            TabRow(selectedTabIndex = selectedTabIndex) {
+                Tab(
+                    selected = selectedTabIndex == 0,
+                    onClick = { onTabSelected(0) },
+                    text = { Text("Minimized") },
+                )
+                Tab(
+                    selected = selectedTabIndex == 1,
+                    onClick = { onTabSelected(1) },
+                    text = { Text("Expanded") },
+                )
+                Tab(
+                    selected = selectedTabIndex == 2,
+                    onClick = { onTabSelected(2) },
+                    text = { Text("Overview") },
+                )
+            }
+        }
+
+        // 2. Master Controls Card
+        if (selectedTabIndex == 1) item {
             SectionHeader(title = "Master Controls")
             LarpCard {
                 // Power Toggle Row
@@ -242,7 +265,7 @@ fun FlashlightScreen(
         }
 
         // 3. Dynamic Island Behavior Card
-        item {
+        if (selectedTabIndex == 0) item {
             SectionHeader(title = "Dynamic Island Integration")
             LarpCard {
                 // Show in Island switch
@@ -331,7 +354,7 @@ fun FlashlightScreen(
         }
 
         // PixelLight Integration Card
-        item {
+        if (selectedTabIndex == 2) item {
             SectionHeader(title = "PixelLight Engine")
             LarpCard {
                 Row(
@@ -434,49 +457,9 @@ fun FlashlightScreen(
         }
 
         // 4. Hardware & Diagnostics Card
-        item {
+        if (selectedTabIndex == 2) item {
             SectionHeader(title = "Hardware & Diagnostics")
             LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Science,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Simulation Mode",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Emulate torch hardware for testing and previews",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = isSimulated,
-                        onCheckedChange = {
-                            FlashlightController.setSimulated(it)
-                        },
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),

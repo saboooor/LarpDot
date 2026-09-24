@@ -1,6 +1,9 @@
 package ca.saboor.larpdot.ui.overlay
 
 import android.graphics.RenderEffect
+import android.graphics.Typeface
+import android.text.TextPaint
+import ca.saboor.larpdot.service.OverlayPreferences
 import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.compose.animation.core.CubicBezierEasing
@@ -40,6 +43,34 @@ val MtIslandStandard = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
 enum class IslandType {
     MEDIA,
     FLASHLIGHT,
+    NOTIFICATION_ACTIVITY,
+}
+
+fun secondaryItemWidthDp(
+    type: IslandType,
+    thicknessDp: Float,
+    isMiniPill: Boolean,
+    hasMedia: Boolean,
+    flashlightStatus: String,
+    activityStatus: String?,
+): Float {
+    if (!isMiniPill) return thicknessDp
+    return when (type) {
+        IslandType.MEDIA -> {
+            if (hasMedia) thicknessDp + 28f else thicknessDp
+        }
+        IslandType.FLASHLIGHT -> {
+            if (flashlightStatus.isNotBlank()) thicknessDp + 24f else thicknessDp
+        }
+        IslandType.NOTIFICATION_ACTIVITY -> {
+            if (!activityStatus.isNullOrBlank()) {
+                val extra = if (activityStatus.length > 4) 34f else 24f
+                thicknessDp + extra
+            } else {
+                thicknessDp
+            }
+        }
+    }
 }
 
 internal fun squircleShape(radiusPx: Float, curvatureFactor: Float = 0.8f) = GenericShape { size, _ ->
@@ -404,4 +435,68 @@ internal fun Modifier.progressiveBlur(
     } else {
         return this
     }
+}
+
+
+/**
+ * Calculates the dynamic horizontal expansion (in dp) for a song announcement.
+ * When both title and artist texts are short, the island expands only as much as needed
+ * to display them comfortably without excessive empty black space. When texts are longer,
+ * it smoothly expands up to the standard 210dp cap.
+ */
+fun calculateAnnouncementExtraDp(
+    title: String,
+    artist: String,
+    cutoutDiameterDp: Float,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    density: Float,
+): Float {
+    val safeDensity = if (density > 0f) density else 1f
+    val effectiveTitle = title.ifBlank { "Playing Track" }
+    val effectiveArtist = artist.ifBlank { "Media Player" }
+
+    val (titleWidthDp, artistWidthDp) = try {
+        val titleTypeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Typeface.create(Typeface.DEFAULT, 600, false)
+        } else {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+        val titlePaint = TextPaint().apply {
+            textSize = 11.5f * safeDensity
+            typeface = titleTypeface
+        }
+        val tW = titlePaint.measureText(effectiveTitle) / safeDensity
+
+        val artistPaint = TextPaint().apply {
+            textSize = 11.5f * safeDensity
+            typeface = Typeface.DEFAULT
+        }
+        val aW = artistPaint.measureText(effectiveArtist) / safeDensity
+        Pair(tW, aW)
+    } catch (_: Throwable) {
+        // Robust fallback for JVM unit tests where android.jar methods are stubbed
+        Pair(effectiveTitle.length * 6.2f, effectiveArtist.length * 5.6f)
+    }
+
+    val leftNonTextDp = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+        val nestedArtSizeDp = (cutoutDiameterDp - 8f).coerceIn(18f, 26f)
+        // start 3dp (outer) + nested art + spacing 3dp + end 2dp (inner) = 8dp + art
+        nestedArtSizeDp + 8f
+    } else {
+        // start 6dp (outer) + end 2dp (inner) = 8dp
+        8f
+    }
+
+    // Right wing: start 2dp (inner) + end 6dp (outer) = 8dp
+    val rightNonTextDp = 8f
+
+    val leftNeededDp = leftNonTextDp + titleWidthDp
+    val rightNeededDp = rightNonTextDp + artistWidthDp
+
+    // Symmetrical wings around the physical cutout
+    val wingWidthDp = maxOf(leftNeededDp, rightNeededDp)
+    val calculatedExtraDp = wingWidthDp * 2f
+
+    // Ultra-compact: as tight as possible around the text, capped at 210dp
+    return calculatedExtraDp.coerceIn(24f, 210f)
 }

@@ -12,11 +12,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.service.DotOverlayService
+import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +96,8 @@ object FlashlightController {
     private var lastStrengthUpdateTime = 0L
     private var pendingStrengthJob: Job? = null
     private var pixelLightTurnOffPendingIntent: android.app.PendingIntent? = null
+    @Volatile
+    private var isPixelLightNotificationPresent = false
 
     @Volatile
     private var lastLarpDotCommandTime = 0L
@@ -104,23 +106,6 @@ object FlashlightController {
     private var isUserInteracting = false
     @Volatile
     private var lastUserSetStrengthTime = 0L
-
-    private val knownCameraPackages = hashSetOf(
-        "com.google.android.GoogleCamera",
-        "com.android.camera",
-        "com.android.camera2",
-        "org.codeaurora.snapcam",
-        "net.sourceforge.opencamera",
-        "com.rawcam.app",
-        "com.sec.android.app.camera",
-        "com.samsung.android.camera",
-        "com.oppo.camera",
-        "com.oneplus.camera",
-        "com.huawei.camera",
-        "com.motorola.camera",
-        "com.motorola.camera2",
-        "com.motorola.camera3"
-    )
 
     fun setUserInteracting(interacting: Boolean) {
         isUserInteracting = interacting
@@ -351,26 +336,33 @@ object FlashlightController {
         }
     }
 
-    private fun handleCameraBecameUnavailable(cameraId: String) {
+    fun isPixelLightUsingCamera(): Boolean {
+        if (!shouldUsePixelLight()) return false
+
         val now = SystemClock.uptimeMillis()
-        val larpDotTriggered = (now - lastLarpDotCommandTime) < 3000L
-        val pixelLightTriggered = (now - DotAccessibilityService.lastPixelLightActivityTime) < 3000L
-        val isCameraApp = DotAccessibilityService.isCameraAppInForeground()
+        val larpDotTriggered = (now - lastLarpDotCommandTime) < 3500L
+        val pixelLightTriggered = (now - DotAccessibilityService.lastPixelLightActivityTime) < 3500L
+        val isPixelLightForeground = DotAccessibilityService.topPackage == PIXELLIGHT_PACKAGE ||
+            ForegroundAppTracker.foregroundPackage.value == PIXELLIGHT_PACKAGE
 
-        Log.i(TAG, "handleCameraBecameUnavailable: cam=$cameraId, larpDotTriggered=$larpDotTriggered, " +
-                "pixelLightTriggered=$pixelLightTriggered, isCameraApp=$isCameraApp, shouldUsePixelLight=${shouldUsePixelLight()}")
+        return larpDotTriggered || pixelLightTriggered || _isPixelLightActive.value || isPixelLightNotificationPresent || isPixelLightForeground
+    }
 
-        if (shouldUsePixelLight()) {
-            if (larpDotTriggered || pixelLightTriggered || !isCameraApp) {
-                Log.i(TAG, "Camera $cameraId unavailable due to PixelLight. Activating flashlight state.")
-                _isPixelLightActive.value = true
-                applyPixelLightStrengths()
-                notifyTorchStateChanged(true)
-                _isAvailable.value = true
-                return
-            }
+    private fun handleCameraBecameUnavailable(cameraId: String) {
+        val isPixelLight = isPixelLightUsingCamera()
+        Log.i(TAG, "handleCameraBecameUnavailable: cam=$cameraId, isPixelLight=$isPixelLight, shouldUsePixelLight=${shouldUsePixelLight()}")
+
+        if (isPixelLight) {
+            Log.i(TAG, "Camera $cameraId unavailable due to PixelLight. Activating flashlight state.")
+            _isPixelLightActive.value = true
+            applyPixelLightStrengths()
+            notifyTorchStateChanged(true)
+            _isAvailable.value = true
+            return
         }
 
+        // Camera became unavailable because a regular camera app (e.g. Snapchat, Camera, Instagram) is using the camera.
+        // The flashlight hardware cannot be used while camera sensor is in use.
         if (!_isPixelLightActive.value) {
             _isAvailable.value = false
         }
@@ -388,31 +380,6 @@ object FlashlightController {
             applyPixelLightStrengths()
         }
         notifyTorchStateChanged(target)
-    }
-
-    fun isKnownCameraPackage(packageName: String?): Boolean {
-        if (packageName == null) return false
-        if (packageName == PIXELLIGHT_PACKAGE || packageName == "com.android.systemui" || packageName == appContext?.packageName) {
-            return false
-        }
-        if (knownCameraPackages.contains(packageName)) return true
-        if (packageName.endsWith(".camera") || packageName.contains(".camera.") || packageName.contains(".cam.")) {
-            knownCameraPackages.add(packageName)
-            return true
-        }
-
-        val context = appContext ?: return false
-        try {
-            val pm = context.packageManager
-            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).setPackage(packageName)
-            val list = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            if (list.isNotEmpty()) {
-                knownCameraPackages.add(packageName)
-                return true
-            }
-        } catch (_: Exception) {}
-
-        return false
     }
 
     private fun notifyTorchStateChanged(enabled: Boolean) {
@@ -439,6 +406,7 @@ object FlashlightController {
      * Called when a notification from PixelLight is posted or updated.
      */
     fun onPixelLightNotificationPosted(progress: Int, max: Int) {
+        isPixelLightNotificationPresent = true
         _isPixelLightActive.value = true
         if (max > 0) {
             pixelLightMaxStrength = max
@@ -463,6 +431,7 @@ object FlashlightController {
      * Called when a notification from PixelLight is removed / cancelled.
      */
     fun onPixelLightNotificationRemoved() {
+        isPixelLightNotificationPresent = false
         _isPixelLightActive.value = false
         pixelLightTurnOffPendingIntent = null
         if (!isStandardTorchOn) {

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,8 +54,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlin.math.abs
@@ -69,6 +73,29 @@ val FlashlightAmberLight = Color(0xFFFFD54F)
 val FlashlightAmberDark = Color(0xFFFF8F00)
 
 /**
+ * Calculates the flashlight brightness percentage string, formatted as "X%".
+ * If torch strength is variable (maxStrength > 1), computes (torchStrength / maxStrength * 100)%.
+ * If torch is binary (maxStrength <= 1), returns "100%".
+ */
+fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int): String {
+    val percent = if (maxStrength > 1) {
+        (torchStrength.toFloat() / maxStrength * 100).roundToInt().coerceIn(1, 100)
+    } else {
+        100
+    }
+    return "$percent%"
+}
+
+@Composable
+fun rememberCompactFlashlightStatus(): String {
+    val torchStrength by FlashlightController.torchStrength.collectAsState()
+    val maxStrength by FlashlightController.maxStrength.collectAsState()
+    return remember(torchStrength, maxStrength) {
+        getFlashlightPercentText(torchStrength, maxStrength)
+    }
+}
+
+/**
  * Minimized pill content when Flashlight is active:
  * Symmetrically aligned capsule keeping the camera cutout centered.
  */
@@ -79,6 +106,7 @@ fun CompactFlashlightContent(
     onFlashlightToggle: () -> Unit = {},
     modifier: Modifier = Modifier,
     isLandscape: Boolean = false,
+    status: String = rememberCompactFlashlightStatus(),
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -90,7 +118,30 @@ fun CompactFlashlightContent(
         ),
         label = "pulse_alpha",
     )
-    val torchIconSize = (cutoutDiameterDp - 6.dp).coerceIn(14.dp, 20.dp)
+
+    val icon = @Composable {
+        Icon(
+            imageVector = Icons.Default.FlashlightOn,
+            contentDescription = "Flashlight Active",
+            tint = Color.White.copy(alpha = pulseAlpha),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+
+    val isPercentage = status.contains('%')
+    val formattedStatus = remember(status) { formatCompactStatus(status) }
+
+    val summary = @Composable {
+        Text(
+            text = formattedStatus,
+            color = Color.White,
+            fontSize = if (isPercentage) 10.5.sp else 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+        )
+    }
 
     if (isLandscape) {
         Column(
@@ -102,22 +153,33 @@ fun CompactFlashlightContent(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.BottomCenter,
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 2.dp),
+                contentAlignment = Alignment.TopCenter,
             ) {
-                Icon(
-                    imageVector = Icons.Default.FlashlightOn,
-                    contentDescription = "Flashlight Active",
-                    tint = Color.White.copy(alpha = pulseAlpha),
-                    modifier = Modifier.size(torchIconSize),
-                )
+                icon()
             }
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
-            Spacer(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-            )
+                    .padding(top = 2.dp, bottom = 8.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                if (status.isNotEmpty()) {
+                    Text(
+                        text = formattedStatus,
+                        color = Color.White,
+                        fontSize = if (isPercentage) 9.5.sp else 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Visible,
+                        modifier = Modifier.verticalActivityLabel(),
+                    )
+                }
+            }
         }
     } else {
         Row(
@@ -129,22 +191,24 @@ fun CompactFlashlightContent(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight(),
-                contentAlignment = Alignment.CenterEnd,
+                    .fillMaxHeight()
+                    .padding(start = 10.dp, end = 4.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
-                Icon(
-                    imageVector = Icons.Default.FlashlightOn,
-                    contentDescription = "Flashlight Active",
-                    tint = Color.White.copy(alpha = pulseAlpha),
-                    modifier = Modifier.size(torchIconSize),
-                )
+                icon()
             }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
-            Spacer(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-            )
+                    .padding(start = 4.dp, end = 10.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                if (status.isNotEmpty()) {
+                    summary()
+                }
+            }
         }
     }
 }

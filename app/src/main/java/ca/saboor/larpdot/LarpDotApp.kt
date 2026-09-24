@@ -52,6 +52,7 @@ import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.screens.FlashlightScreen
 import ca.saboor.larpdot.ui.screens.HomeScreen
+import ca.saboor.larpdot.ui.screens.LiveActivitiesScreen
 import ca.saboor.larpdot.ui.screens.MusicScreen
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -66,6 +67,7 @@ fun LarpDotApp() {
     var isEnabled by rememberSaveable { mutableStateOf(OverlayPreferences.isOverlayEnabled(context)) }
     var showSetupDialog by remember { mutableStateOf(false) }
     var musicTabIndex by rememberSaveable { mutableStateOf(0) }
+    var flashlightTabIndex by rememberSaveable { mutableStateOf(0) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
 
@@ -231,8 +233,11 @@ fun LarpDotApp() {
                         selectedTabIndex = musicTabIndex,
                         onTabSelected = { musicTabIndex = it },
                     )
+                    Destination.LiveActivities -> LiveActivitiesScreen()
                     Destination.Flashlight -> FlashlightScreen(
                         cutoutInfo = cutoutInfo,
+                        selectedTabIndex = flashlightTabIndex,
+                        onTabSelected = { flashlightTabIndex = it },
                     )
                 }
             }

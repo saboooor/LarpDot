@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
@@ -72,12 +73,14 @@ fun HomeScreen(
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
+    val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
         OverlayPreferences.isDebugModeEnabled(context)
         OverlayPreferences.isHideWhenScreenOffEnabled(context)
         OverlayPreferences.isHideOnLockScreenEnabled(context)
+        OverlayPreferences.isShowDotRightSideInfoEnabled(context)
         FlashlightController.init(context)
     }
 
@@ -222,6 +225,47 @@ fun HomeScreen(
                         checked = hideOnLockScreen,
                         onCheckedChange = { isChecked ->
                             OverlayPreferences.setHideOnLockScreenEnabled(context, isChecked)
+                        },
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // Show Right Side Info on Dots (Mini Pill)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreHoriz,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Show Right Side Info on Dots",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Show info alongside icons on secondary dots, making them mini pills",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = showDotRightSideInfo,
+                        onCheckedChange = { isChecked ->
+                            OverlayPreferences.setShowDotRightSideInfoEnabled(context, isChecked)
                         },
                     )
                 }

@@ -409,19 +409,25 @@ fun MusicScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
+    val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
+    val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
+    val showProgressSquiggles by OverlayPreferences.showProgressSquigglesFlow.collectAsState()
+    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
     val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
     val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
     val minimizedRotation by OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState()
     val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
-    val showDominantGlow by OverlayPreferences.showDominantColorGlowFlow.collectAsState()
-    val showCameraSwoop by OverlayPreferences.showCameraSwoopFlow.collectAsState()
+    val showMinimizedDominantGlow by OverlayPreferences.showMinimizedDominantColorGlowFlow.collectAsState()
+    val showExpandedDominantGlow by OverlayPreferences.showExpandedDominantColorGlowFlow.collectAsState()
+    val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
@@ -475,18 +481,24 @@ fun MusicScreen(
     }
 
     LaunchedEffect(Unit) {
-        OverlayPreferences.isShowProgressOutlineEnabled(context)
+        OverlayPreferences.isShowMinimizedProgressOutlineEnabled(context)
+        OverlayPreferences.isShowExpandedProgressOutlineEnabled(context)
         OverlayPreferences.isHideMusicWhenAppOpenEnabled(context)
         OverlayPreferences.isShowMinimizedTitleEnabled(context)
         OverlayPreferences.getMinimizedAlbumArtStyle(context)
         OverlayPreferences.getExpandedAlbumArtStyle(context)
         OverlayPreferences.isShowExpandedAlbumArtEnabled(context)
+        OverlayPreferences.getExpandedPlayerLayout(context)
+        OverlayPreferences.isShowProgressSquigglesEnabled(context)
+        OverlayPreferences.isShowMinimizedVisualizerEnabled(context)
+        OverlayPreferences.getExpandedElementVisibility(context)
         OverlayPreferences.getMinimizedAlbumArtShape(context)
         OverlayPreferences.getExpandedAlbumArtShape(context)
         OverlayPreferences.getMinimizedAlbumArtRotation(context)
         OverlayPreferences.getExpandedAlbumArtRotation(context)
-        OverlayPreferences.isShowDominantColorGlowEnabled(context)
-        OverlayPreferences.isShowCameraSwoopEnabled(context)
+        OverlayPreferences.isShowMinimizedDominantColorGlowEnabled(context)
+        OverlayPreferences.isShowExpandedDominantColorGlowEnabled(context)
+        OverlayPreferences.getCameraCoverStyle(context)
         OverlayPreferences.getWaveformBandCount(context)
         OverlayPreferences.getWaveformBarWidth(context)
         OverlayPreferences.getWaveformBarSpacing(context)
@@ -530,6 +542,11 @@ fun MusicScreen(
                     selected = selectedTabIndex == 1,
                     onClick = { onTabSelected(1) },
                     text = { Text("Expanded") },
+                )
+                Tab(
+                    selected = selectedTabIndex == 2,
+                    onClick = { onTabSelected(2) },
+                    text = { Text("Overview") },
                 )
             }
         }
@@ -610,7 +627,7 @@ fun MusicScreen(
                 }
             }
             }
-        } else {
+        } else if (selectedTabIndex == 1) {
 
             // Expanded Island Presentation
             item {
@@ -725,8 +742,179 @@ fun MusicScreen(
                     }
                 }
             }
+
+            item {
+                SectionHeader(title = "Player Layout")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = when (expandedPlayerLayout) {
+                                OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS ->
+                                    "Familiar Android media controls with a prominent play button"
+                                OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE ->
+                                    "Expressive shapes, connected controls, and a compact hierarchy"
+                                OverlayPreferences.ExpandedPlayerLayout.IPHONE ->
+                                    "Artwork-first layout with centered Apple-style playback controls"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            OverlayPreferences.ExpandedPlayerLayout.entries.forEach { layout ->
+                                toggleableItem(
+                                    checked = expandedPlayerLayout == layout,
+                                    label = layout.label,
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedPlayerLayout(context, layout)
+                                    },
+                                    weight = 1f,
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Progress Squiggles", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Animate the progress bar with a wavy line",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = showProgressSquiggles,
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowProgressSquigglesEnabled(context, it)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                SectionHeader(title = "Expanded Cutout")
+                LarpCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Camera Cover",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = cameraCoverStyle.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            OverlayPreferences.CameraCoverStyle.entries.forEach { style ->
+                                toggleableItem(
+                                    checked = cameraCoverStyle == style,
+                                    label = style.label,
+                                    onCheckedChange = { OverlayPreferences.setCameraCoverStyle(context, style) },
+                                    weight = 1f,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
+        if (selectedTabIndex != 2) item {
+            SectionHeader(title = if (selectedTabIndex == 0) "Minimized Elements" else "Expanded Elements")
+            LarpCard {
+                val visibilityOptions: List<Triple<String, Boolean, (Boolean) -> Unit>> =
+                    if (selectedTabIndex == 0) {
+                        listOf(
+                            Triple("Song Title", showMinimizedTitle) { enabled ->
+                                OverlayPreferences.setShowMinimizedTitleEnabled(context, enabled)
+                            },
+                            Triple("Song Change Announcement", showSongAnnouncement) { enabled ->
+                                OverlayPreferences.setShowSongAnnouncementEnabled(context, enabled)
+                            },
+                            Triple("Visualizer", showMinimizedVisualizer) { enabled ->
+                                OverlayPreferences.setShowMinimizedVisualizerEnabled(context, enabled)
+                            },
+                            Triple("Progress Outline", showMinimizedProgressOutline) { enabled ->
+                                OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, enabled)
+                            },
+                            Triple("Dominant Color Glow", showMinimizedDominantGlow) { enabled ->
+                                OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, enabled)
+                            },
+                        )
+                    } else {
+                        listOf(
+                            Triple("Track Information", expandedElementVisibility.trackInfo) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(trackInfo = enabled),
+                                )
+                            },
+                            Triple("Visualizer", expandedElementVisibility.visualizer) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(visualizer = enabled),
+                                )
+                            },
+                            Triple("Progress Bar", expandedElementVisibility.progress) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(progress = enabled),
+                                )
+                            },
+                            Triple("Main Player Controls", expandedElementVisibility.mainControls) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(mainControls = enabled),
+                                )
+                            },
+                            Triple("App Action Buttons", expandedElementVisibility.appActions) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(appActions = enabled),
+                                )
+                            },
+                            Triple("Progress Outline", showExpandedProgressOutline) { enabled ->
+                                OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, enabled)
+                            },
+                            Triple("Dominant Color Glow", showExpandedDominantGlow) { enabled ->
+                                OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, enabled)
+                            },
+                        )
+                    }
+
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    visibilityOptions.forEachIndexed { index, (label, checked, onCheckedChange) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(label, style = MaterialTheme.typography.titleMedium)
+                            Switch(checked = checked, onCheckedChange = onCheckedChange)
+                        }
+                        if (index < visibilityOptions.lastIndex) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (selectedTabIndex == 2) {
         // Display Options Card
         item {
             SectionHeader(title = "Display Options")
@@ -735,47 +923,6 @@ fun MusicScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    // Progress Outline
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Column {
-                                Text(
-                                    text = "Progress Outline",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "Draw fluid perimeter progress ring around island",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = showProgressOutline,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowProgressOutlineEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
                     // Hide in Music App
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -804,162 +951,6 @@ fun MusicScreen(
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Minimized Song Title
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Minimized Song Title",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Show the current song title in the minimized island right wing",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        Switch(
-                            checked = showMinimizedTitle,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowMinimizedTitleEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Song Change Announcement
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Song Change Announcement",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "When a new song plays, display the title on the left and artist on the right",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        Switch(
-                            checked = showSongAnnouncement,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowSongAnnouncementEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    if (showSongAnnouncement) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        OutlinedButton(
-                            onClick = {
-                                MediaPlaybackState.triggerSongAnnouncement(3600L)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Preview Announcement Pill")
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Dominant Color Glow
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Flare,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Column {
-                                Text(
-                                    text = "Dominant Color Glow",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "Ambient dominant color glow on the right wing and card backdrop",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = showDominantGlow,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowDominantColorGlowEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Camera Swoop Cutout Cover
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Column {
-                                Text(
-                                    text = "Camera Swoop Cover",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "Smooth organic swoop shader over camera cutout on expanded card",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = showCameraSwoop,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setShowCameraSwoopEnabled(context, isChecked)
-                            },
-                        )
-                    }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
@@ -1551,6 +1542,7 @@ fun MusicScreen(
                     }
                 }
             }
+        }
         }
     }
 

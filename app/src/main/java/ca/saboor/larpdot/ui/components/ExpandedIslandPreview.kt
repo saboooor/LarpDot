@@ -53,6 +53,7 @@ import ca.saboor.larpdot.media.DominantColorExtractor
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.overlay.calculateAnnouncementExtraDp
 import ca.saboor.larpdot.ui.overlay.CompactIslandContent
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
@@ -89,7 +90,7 @@ fun ExpandedIslandPreview(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
-    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val showProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
@@ -111,7 +112,7 @@ fun ExpandedIslandPreview(
             positionMs = 64000L,
             durationMs = 230000L,
             dominantColor = DominantColorExtractor.extractDominantColor(sampleArt),
-            isSimulated = true,
+            isSimulated = false,
         )
     }
 
@@ -130,8 +131,18 @@ fun ExpandedIslandPreview(
         OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
         else -> 60.dp
     }
-    val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
-    val targetCompactWidth = cutoutDiameterDp + maxOf(compactExtraDp, announcementExtraDp)
+    val announcementExtraDp = if (isAnnouncing) {
+        remember(previewTrack.title, previewTrack.artist, cutoutDiameterDp, minimizedStyle, density.density) {
+            calculateAnnouncementExtraDp(
+                title = previewTrack.title,
+                artist = previewTrack.artist,
+                cutoutDiameterDp = cutoutDiameterDp.value,
+                albumArtStyle = minimizedStyle,
+                density = density.density,
+            ).dp
+        }
+    } else 0.dp
+    val targetCompactWidth = cutoutDiameterDp + (if (isAnnouncing) announcementExtraDp else compactExtraDp)
     val animatedCompactWidth by animateDpAsState(
         targetValue = targetCompactWidth,
         animationSpec = tween(durationMillis = 280),
@@ -154,15 +165,44 @@ fun ExpandedIslandPreview(
     val topMarginDp = (cutoutCenterYDp - 18.dp).coerceAtLeast(8.dp)
     val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
     val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
+    val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
+    val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
+    val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
+    val usesVerticalMediaLayout = expandedPlayerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
+    val hasExtraMediaButtons = expandedElementVisibility.appActions && previewTrack.sessionActions.any {
+        it.iconResourceId != 0 && it.iconPackageName != null
+    }
+
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val previewCardWidth = if (usesVerticalMediaLayout) {
+        minOf(screenWidthDp - 88.dp, 248.dp)
+    } else {
+        screenWidthDp - 32.dp
+    }
+    val previewHeight = if (titleBar) {
+        52.dp
+    } else if (usesVerticalMediaLayout) {
+        val hasAlbumArt = showExpandedAlbumArt && previewTrack.albumArt != null
+        val materialHeight = when {
+            hasAlbumArt && hasExtraMediaButtons -> 420.dp
+            hasAlbumArt -> 340.dp
+            hasExtraMediaButtons -> 280.dp
+            else -> 200.dp
+        }
+        materialHeight
+    } else {
+        220.dp
+    }
+    val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
+
     val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
     val containerShape = squircleShape(expandedCornerRadiusPx, 0.80f)
-    val previewHeight = if (titleBar) 52.dp else 220.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (showControls) Row(
+        if (showControls && !hasNotificationAccess) Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -258,7 +298,8 @@ fun ExpandedIslandPreview(
         if (showExpandedPreview) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(previewCardWidth)
+                    .align(Alignment.CenterHorizontally)
                     .height(previewHeight)
                     .then(
                         Modifier.islandFluidProgressBorder(
@@ -275,9 +316,7 @@ fun ExpandedIslandPreview(
                 shadowElevation = 14.dp,
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(previewHeight),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.TopStart,
                 ) {
                     ExpandedIslandContent(
@@ -286,14 +325,13 @@ fun ExpandedIslandPreview(
                         isExpanded = true,
                         onCollapse = { /* In-app preview */ },
                         cutoutInfo = cutoutInfo,
-                        cardHorizontalMarginDp = 16.dp,
+                        cardHorizontalMarginDp = previewHorizontalMarginDp,
                         waveformBandCount = waveformBandCount,
                     )
 
                     // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
-                    val screenWidthDp = configuration.screenWidthDp.dp
-                    val previewCardWidthDp = screenWidthDp - 32.dp
-                    val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - 16.dp
+                    val previewCardWidthDp = previewCardWidth
+                    val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - previewHorizontalMarginDp
                     val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
                         cutoutDiameterDp / 2f,
                         previewCardWidthDp - (cutoutDiameterDp / 2f),
@@ -316,47 +354,4 @@ fun ExpandedIslandPreview(
             }
         }
 
-        // Action / Permission Controls
-        if (showControls) Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (!hasNotificationAccess) {
-                FilledTonalButton(
-                    onClick = {
-                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                ) {
-                    Icon(Icons.Default.Notifications, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Grant Access", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
-            OutlinedButton(
-                onClick = {
-                    if (nowPlaying.isSimulated) {
-                        MediaPlaybackState.setSimulatedPlayback(false)
-                    } else {
-                        MediaPlaybackState.setSimulatedPlayback(true)
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                shape = CircleShape,
-            ) {
-                Icon(
-                    imageVector = if (nowPlaying.isSimulated) Icons.Default.Stop else Icons.Default.MusicNote,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = if (nowPlaying.isSimulated) "Stop Demo" else "Simulate Playback",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
     }

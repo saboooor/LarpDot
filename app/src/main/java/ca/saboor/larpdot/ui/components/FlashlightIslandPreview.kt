@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.ui.overlay.CompactFlashlightContent
+import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
+import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import ca.saboor.larpdot.ui.overlay.squircleShape
@@ -65,7 +67,8 @@ fun FlashlightIslandPreview(
     val isSimulated by FlashlightController.isSimulated.collectAsState()
 
     val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
-    val compactExtraDp = 48.dp
+    val flashlightStatus = rememberCompactFlashlightStatus()
+    val compactExtraDp = rememberCompactStatusExtraDp(flashlightStatus)
     val compactWidth = cutoutDiameterDp + compactExtraDp
 
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
@@ -148,6 +151,7 @@ fun FlashlightIslandPreview(
                         cutoutDiameterDp = cutoutDiameterDp,
                         onExpand = {},
                         onFlashlightToggle = { FlashlightController.toggleFlashlight() },
+                        status = flashlightStatus,
                     )
                     // Hardware camera cutout visualizer centered between wings
                     Box(
