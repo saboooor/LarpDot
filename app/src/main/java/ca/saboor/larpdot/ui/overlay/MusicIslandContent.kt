@@ -401,6 +401,7 @@ internal fun CompactIslandContent(
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
+    trailingWingFraction: Float = 0.5f,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -473,7 +474,7 @@ internal fun CompactIslandContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1f - trailingWingFraction)
                             .fillMaxHeight(),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -546,7 +547,7 @@ internal fun CompactIslandContent(
 
                     Box(
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(trailingWingFraction)
                             .fillMaxHeight()
                             .then(
                                 if (showDominantGlow) {
@@ -772,6 +773,7 @@ internal fun CompactIslandContent(
         }
     } else {
         // Portrait Mode: Horizontal Dynamic Island Pill
+        val leadingWingFraction = 1f - trailingWingFraction
         Row(
             modifier = modifier
                 .fillMaxSize()
@@ -787,7 +789,7 @@ internal fun CompactIslandContent(
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
                         Box(
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(leadingWingFraction)
                                 .fillMaxHeight(),
                             contentAlignment = Alignment.CenterEnd,
                         ) {
@@ -804,7 +806,7 @@ internal fun CompactIslandContent(
                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
                         Box(
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(leadingWingFraction)
                                 .fillMaxHeight(),
                             contentAlignment = Alignment.CenterEnd,
                         ) {
@@ -837,7 +839,7 @@ internal fun CompactIslandContent(
                     OverlayPreferences.AlbumArtStyle.BLENDED -> {
                         Row(
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(leadingWingFraction)
                                 .fillMaxHeight(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Start,
@@ -906,7 +908,7 @@ internal fun CompactIslandContent(
                     RoundedCornerShape(6.dp)
                 }
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    modifier = Modifier.weight(leadingWingFraction).fillMaxHeight(),
                     contentAlignment = if (
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
@@ -943,7 +945,7 @@ internal fun CompactIslandContent(
             ) 0.dp else -(compactPillThickness / if (waveformBandCount >= 6) 16f else 8f)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(trailingWingFraction)
                     .fillMaxHeight()
                     .then(
                         if (showDominantGlow) {

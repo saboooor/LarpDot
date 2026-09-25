@@ -45,6 +45,7 @@ import ca.saboor.larpdot.ui.overlay.stackedPillWidth
 import ca.saboor.larpdot.ui.overlay.stackedPillWidthWithExtents
 import ca.saboor.larpdot.ui.overlay.secondaryItemWidthDp
 import ca.saboor.larpdot.ui.overlay.secondaryBubbleThicknessDp
+import ca.saboor.larpdot.ui.overlay.compactMediaWings
 import ca.saboor.larpdot.ui.overlay.getFlashlightPercentText
 import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
@@ -381,6 +382,7 @@ class IslandOverlayViewController(
             observeNotificationActivityState()
             observeCutoutConfig()
             observeMinimizedAlbumArtStyle()
+            observeCompactMediaGeometry()
             observeDebugPreference()
             observeBubblePreferences()
             OverlayPreferences.isDebugModeEnabled(context)
@@ -549,6 +551,7 @@ class IslandOverlayViewController(
         pillHeightPx: Int,
         leftExtentPx: Int,
         rightExtentPx: Int,
+        pillCenterBiasPx: Int,
         isLandscape: Boolean,
         rotation: Int,
         screenWidth: Int,
@@ -577,7 +580,7 @@ class IslandOverlayViewController(
             val totalWPx = pillWidthPx + leftExtentPx + rightExtentPx
             touchWidth = totalWPx + (touchPad * 2)
             touchHeight = pillHeightPx + (touchPad * 2)
-            val leftAnchor = cutout.centerX - (pillWidthPx / 2f) - leftExtentPx
+            val leftAnchor = cutout.centerX - (pillWidthPx / 2f) - pillCenterBiasPx - leftExtentPx
             posX = (leftAnchor - touchPad).toInt()
             val topAnchor = (cutout.centerY - (pillHeightPx / 2f)).toInt().coerceAtLeast(0)
             posY = (topAnchor - touchPad).coerceAtLeast(0)
@@ -697,7 +700,28 @@ class IslandOverlayViewController(
             null -> 0f
         }
 
-        val pillWPx = if (isLandscape) compactPillThicknessPx.toInt() else (stackedPillWidthWithExtents(
+        val mediaWings = if (!isLandscape && stack.primary?.content == IslandType.MEDIA) {
+            val showVisualizer = OverlayPreferences.showMinimizedVisualizerFlow.value
+            val visualizerWidthDp = if (showVisualizer) {
+                val count = OverlayPreferences.waveformBandCountFlow.value
+                count * OverlayPreferences.waveformBarWidthFlow.value +
+                    (count - 1).coerceAtLeast(0) * OverlayPreferences.waveformBarSpacingFlow.value
+            } else 0f
+            compactMediaWings(
+                extraWidthDp = activeExtraDp,
+                hasTrailingBubble = rightType != null,
+                showTitle = showMinimizedTitle && isMusicActive,
+                announcing = isSongAnnouncementActive,
+                visualizerWidthDp = visualizerWidthDp,
+                announcementText = MediaPlaybackState.currentTrack.value.artist.ifBlank { "Media Player" },
+            )
+        } else null
+        val pillCenterBiasPx = if (mediaWings != null) {
+            ((mediaWings.leadingDp - mediaWings.trailingDp) * density / 2f).toInt()
+        } else 0
+        val pillWPx = if (isLandscape) compactPillThicknessPx.toInt() else if (mediaWings != null) {
+            ((cutoutDiameterPx / density + mediaWings.widthDp) * density).toInt()
+        } else (stackedPillWidthWithExtents(
             cutoutDiameterPx / density + activeExtraDp,
             compactPillThicknessDp,
             if (leftType != null) leftWidthDp + bubbleSpacingDp else 0f,
@@ -710,7 +734,7 @@ class IslandOverlayViewController(
         val tParams = if (isIslandExpanded || isOverlayMorphing) {
             createExpandedTouchLayoutParams()
         } else {
-            createTouchLayoutParams(cutout, pillWPx, pillHPx, leftExtentPx, rightExtentPx, isLandscape, rotation, screenWidth)
+            createTouchLayoutParams(cutout, pillWPx, pillHPx, leftExtentPx, rightExtentPx, pillCenterBiasPx, isLandscape, rotation, screenWidth)
         }
         val oldParams = touchWindowParams
         val geometryChanged = oldParams == null || oldParams.width != tParams.width ||
@@ -962,6 +986,20 @@ class IslandOverlayViewController(
     private fun observeMinimizedAlbumArtStyle() {
         controllerScope.launch {
             OverlayPreferences.minimizedAlbumArtStyleFlow.collectLatest {
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeCompactMediaGeometry() {
+        controllerScope.launch {
+            combine(
+                OverlayPreferences.showMinimizedTitleFlow,
+                OverlayPreferences.showMinimizedVisualizerFlow,
+                OverlayPreferences.waveformBandCountFlow,
+                OverlayPreferences.waveformBarWidthFlow,
+                OverlayPreferences.waveformBarSpacingFlow,
+            ) { _, _, _, _, _ -> Unit }.collectLatest {
                 updateOverlayLayout()
             }
         }

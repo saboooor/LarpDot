@@ -180,4 +180,29 @@ class IslandStackTest {
         assertTrue(180f - halfPill - leftExtent >= 0f)
         assertTrue(180f + halfPill + rightExtent <= availableWidth)
     }
+
+    @Test fun compactMediaReclaimsOnlyUnusedTrailingWing() {
+        val wings = compactMediaWings(
+            extraWidthDp = 120f,
+            hasTrailingBubble = true,
+            showTitle = false,
+            announcing = false,
+            visualizerWidthDp = 19f,
+        )
+        assertEquals(60f, wings.leadingDp, 0.001f)
+        assertEquals(33f, wings.trailingDp, 0.001f)
+        assertEquals(93f, wings.widthDp, 0.001f)
+        assertEquals(33f / 93f, wings.trailingFraction, 0.001f)
+    }
+
+    @Test fun compactMediaKeepsSymmetryForTitleAnnouncementAndWideVisualizer() {
+        val withoutBubble = compactMediaWings(120f, false, false, false, 19f)
+        val withTitle = compactMediaWings(120f, true, true, false, 19f)
+        val announcement = compactMediaWings(120f, true, false, true, 19f)
+        val wideVisualizer = compactMediaWings(120f, true, false, false, 70f)
+        listOf(withoutBubble, withTitle, announcement, wideVisualizer).forEach { wings ->
+            assertEquals(60f, wings.leadingDp, 0.001f)
+            assertEquals(60f, wings.trailingDp, 0.001f)
+        }
+    }
 }

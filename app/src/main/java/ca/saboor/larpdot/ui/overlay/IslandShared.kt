@@ -71,6 +71,31 @@ enum class IslandType {
 fun secondaryBubbleThicknessDp(mainThicknessDp: Float, smaller: Boolean): Float =
     if (smaller) mainThicknessDp * 0.8f else mainThicknessDp
 
+data class CompactMediaWings(val leadingDp: Float, val trailingDp: Float) {
+    val widthDp: Float get() = leadingDp + trailingDp
+    val trailingFraction: Float get() = if (widthDp > 0f) trailingDp / widthDp else 0.5f
+}
+
+/** Keep the artwork wing while reclaiming unused equalizer space for a trailing bubble. */
+fun compactMediaWings(
+    extraWidthDp: Float,
+    hasTrailingBubble: Boolean,
+    showTitle: Boolean,
+    announcing: Boolean,
+    visualizerWidthDp: Float,
+    announcementText: String = "",
+): CompactMediaWings {
+    val leading = (extraWidthDp / 2f).coerceAtLeast(0f)
+    val minimumTrailing = maxOf(28f, visualizerWidthDp + 14f)
+    val trailing = when {
+        !hasTrailingBubble -> leading
+        announcing -> minOf(leading, maxOf(64f, announcementText.length * 6.5f + 16f))
+        showTitle -> leading
+        else -> minOf(leading, minimumTrailing)
+    }
+    return CompactMediaWings(leading, trailing)
+}
+
 fun secondaryItemWidthDp(
     type: IslandType,
     thicknessDp: Float,

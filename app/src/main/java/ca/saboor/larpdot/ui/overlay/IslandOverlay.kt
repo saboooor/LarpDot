@@ -197,6 +197,10 @@ fun CompactIslandOverlay(
 
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
+    val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
+    val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
@@ -229,7 +233,20 @@ fun CompactIslandOverlay(
     }
     val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180.dp else 0.dp
     val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
-    val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp, announcementExtraDp))
+    val visualizerWidthDp = if (showMinimizedVisualizer) {
+        waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
+    } else 0f
+    val mediaWings = compactMediaWings(
+        extraWidthDp = maxOf(activeExtraDp, titleExtraDp, announcementExtraDp).value,
+        hasTrailingBubble = !isLandscape && rightSecondaryType != null,
+        showTitle = showMinimizedTitle && isMusicActive,
+        announcing = isAnnouncing,
+        visualizerWidthDp = visualizerWidthDp,
+        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
+    )
+    val compactWidth = if (isLandscape) compactPillThickness else if (activeDisplayType == IslandType.MEDIA) {
+        cutoutDiameterDp + mediaWings.widthDp.dp
+    } else cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp, announcementExtraDp)
     val compactHeight = if (isLandscape) (cutoutDiameterDp + maxOf(activeExtraDp, if (isAnnouncing) 140.dp else 0.dp)) else compactPillThickness
 
     val currentCornerRadius by animateDpAsState(
@@ -582,6 +599,7 @@ fun CompactIslandOverlay(
                                         onExpand = { requestExpand(IslandType.MEDIA, false) },
                                         showMinimizedTitle = showMinimizedTitle,
                                         isSongAnnouncement = isAnnouncing,
+                                        trailingWingFraction = mediaWings.trailingFraction,
                                     )
                                 }
                                 IslandType.FLASHLIGHT -> {
@@ -965,10 +983,11 @@ fun CompactIslandOverlay(
         val isLeftBubbleVisible = hasLeftBubble || leftBubbleWidth > 0.5.dp || leftBubbleHeight > 0.5.dp || leftBubbleAlpha > 0.01f
         val isRightBubbleVisible = hasRightBubble || rightBubbleWidth > 0.5.dp || rightBubbleHeight > 0.5.dp || rightBubbleAlpha > 0.01f
 
-        // Anchor the main pill itself to the camera. When there are 2 tiny dots/mini-pills, one sits on the
-        // left and one sits on the right. When there is 1, it sits on the right.
-        // Symmetrically offsetting the container keeps the main island centered on the camera.
-        val pillStartOffset = ((maxWidth - currentWidth) / 2).coerceAtLeast(0.dp)
+        // Keep the camera spacer anchored while the trailing media wing yields unused space to a bubble.
+        val mediaBias = if (activeDisplayType == IslandType.MEDIA) {
+            (currentWidth - cutoutDiameterDp).coerceAtLeast(0.dp) * (0.5f - mediaWings.trailingFraction)
+        } else 0.dp
+        val pillStartOffset = ((maxWidth - currentWidth) / 2 - mediaBias).coerceAtLeast(0.dp)
         val pillTopOffsetLandscape = ((maxHeight - currentHeight) / 2).coerceAtLeast(0.dp)
 
         if (isLandscape) {
@@ -1316,6 +1335,13 @@ fun IslandSurfaceOverlay(
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
+    val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
+    val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
+    val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
+    val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val compactExtraDp = when {
         expandedType == IslandType.FLASHLIGHT -> 48.dp
@@ -1323,7 +1349,26 @@ fun IslandSurfaceOverlay(
         minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
         else -> 60.dp
     }
-    val compactWidth = if (isLandscape) compactPillThickness else (cutoutDiameterDp + compactExtraDp)
+    val announcementActive = isSongAnnouncement && showSongAnnouncement
+    val mediaExtraDp = maxOf(
+        compactExtraDp,
+        if (showMinimizedTitle) 180.dp else 0.dp,
+        if (announcementActive) 210.dp else 0.dp,
+    )
+    val visualizerWidthDp = if (showMinimizedVisualizer) {
+        waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
+    } else 0f
+    val mediaWings = compactMediaWings(
+        extraWidthDp = mediaExtraDp.value,
+        hasTrailingBubble = !isLandscape && hasBubbleAfter,
+        showTitle = showMinimizedTitle,
+        announcing = announcementActive,
+        visualizerWidthDp = visualizerWidthDp,
+        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
+    )
+    val compactWidth = if (isLandscape) compactPillThickness else if (expandedType == IslandType.MEDIA) {
+        cutoutDiameterDp + mediaWings.widthDp.dp
+    } else cutoutDiameterDp + compactExtraDp
     val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else compactPillThickness
     val showProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val showCompactProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
@@ -1332,9 +1377,6 @@ fun IslandSurfaceOverlay(
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxTorchStrength by FlashlightController.maxStrength.collectAsState()
     val flashlightFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxTorchStrength) else 0f
-    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
-    val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
-    val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
@@ -1396,15 +1438,17 @@ fun IslandSurfaceOverlay(
     val dotWidth = if (isLandscape) secondaryBubbleThickness else secondaryItemWidth
     val dotHeight = if (isLandscape) secondaryItemWidth else secondaryBubbleThickness
     val compactBubbleGap = bubbleGap(bubbleStyle)
+    val leadingWing = if (expandedType == IslandType.MEDIA && !isLandscape) mediaWings.leadingDp.dp else (compactWidth - cutoutDiameterDp) / 2f
+    val trailingWing = if (expandedType == IslandType.MEDIA && !isLandscape) mediaWings.trailingDp.dp else (compactWidth - cutoutDiameterDp) / 2f
 
     val bubbleOffsetXDp = if (isLandscape) {
         cutoutOffsetX
     } else if (stackDotCount == 2 && stackDotIndex == 0) {
         // Left dot
-        cutoutOffsetX - (compactWidth / 2f) - (secondaryItemWidth / 2f) - compactBubbleGap
+        cutoutOffsetX - cutoutDiameterDp / 2f - leadingWing - secondaryItemWidth / 2f - compactBubbleGap
     } else {
         // Right dot (or single dot)
-        cutoutOffsetX + (compactWidth / 2f) + (secondaryItemWidth / 2f) + compactBubbleGap
+        cutoutOffsetX + cutoutDiameterDp / 2f + trailingWing + secondaryItemWidth / 2f + compactBubbleGap
     }
 
     val bubbleOffsetYDp = if (!isLandscape) {
@@ -1423,7 +1467,7 @@ fun IslandSurfaceOverlay(
         ?: if (fromTinyDot) dotHeight else compactHeight * startPressScale
     val startOffsetX = sourceBounds?.let {
         with(density) { (it.center.x - drawWindowWidthPx / 2f).toDp() }
-    } ?: if (fromTinyDot) bubbleOffsetXDp else cutoutOffsetX
+    } ?: if (fromTinyDot) bubbleOffsetXDp else cutoutOffsetX + (trailingWing - leadingWing) / 2f
     val startOffsetY = sourceBounds?.let { with(density) { it.top.toDp() } - 14.dp }
         ?: if (fromTinyDot) bubbleOffsetYDp else cutoutCenterYDp - startHeight / 2f - 14.dp
     val startCorner = sourceBounds?.let { minOf(startWidth, startHeight) / 2f }
@@ -1597,6 +1641,7 @@ fun IslandSurfaceOverlay(
                                 onExpand = {},
                                 showMinimizedTitle = showMinimizedTitle,
                                 isSongAnnouncement = isSongAnnouncement && showSongAnnouncement,
+                                trailingWingFraction = mediaWings.trailingFraction,
                             )
                         }
                     }
