@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -31,6 +32,27 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.intellij.lang.annotations.Language
 
+/** The small corners face the adjacent bubble, as in a Material 3 button group. */
+internal fun groupedIslandShape(
+    radius: Dp,
+    before: Boolean,
+    after: Boolean,
+    isLandscape: Boolean,
+): RoundedCornerShape {
+    val inner = (radius * 0.3f).coerceAtMost(6.dp)
+    return if (isLandscape) RoundedCornerShape(
+        topStart = if (before) inner else radius,
+        topEnd = if (before) inner else radius,
+        bottomEnd = if (after) inner else radius,
+        bottomStart = if (after) inner else radius,
+    ) else RoundedCornerShape(
+        topStart = if (before) inner else radius,
+        topEnd = if (after) inner else radius,
+        bottomEnd = if (after) inner else radius,
+        bottomStart = if (before) inner else radius,
+    )
+}
+
 /**
  * Authentic cubic-bezier spring and ease curves extracted directly from com.pryshedko.mtisland
  * (zl0.java, jc1.java, f92.java).
@@ -45,6 +67,9 @@ enum class IslandType {
     FLASHLIGHT,
     NOTIFICATION_ACTIVITY,
 }
+
+fun secondaryBubbleThicknessDp(mainThicknessDp: Float, smaller: Boolean): Float =
+    if (smaller) mainThicknessDp * 0.8f else mainThicknessDp
 
 fun secondaryItemWidthDp(
     type: IslandType,
@@ -73,45 +98,55 @@ fun secondaryItemWidthDp(
     }
 }
 
-internal fun squircleShape(radiusPx: Float, curvatureFactor: Float = 0.8f) = GenericShape { size, _ ->
+internal fun squircleShape(
+    radiusPx: Float,
+    curvatureFactor: Float = 0.8f,
+    topLeftRadiusPx: Float = radiusPx,
+    topRightRadiusPx: Float = radiusPx,
+    bottomRightRadiusPx: Float = radiusPx,
+    bottomLeftRadiusPx: Float = radiusPx,
+) = GenericShape { size, _ ->
     val radius = radiusPx.coerceAtMost(minOf(size.width, size.height) / 2f)
-    val controlDistance = radius * curvatureFactor
+    val topLeft = topLeftRadiusPx.coerceIn(0f, radius)
+    val topRight = topRightRadiusPx.coerceIn(0f, radius)
+    val bottomRight = bottomRightRadiusPx.coerceIn(0f, radius)
+    val bottomLeft = bottomLeftRadiusPx.coerceIn(0f, radius)
 
-    moveTo(radius, 0f)
-    lineTo(size.width - radius, 0f)
+    moveTo(topLeft, 0f)
+    lineTo(size.width - topRight, 0f)
     cubicTo(
-        size.width - radius + controlDistance,
+        size.width - topRight + topRight * curvatureFactor,
         0f,
         size.width,
-        radius - controlDistance,
+        topRight - topRight * curvatureFactor,
         size.width,
-        radius,
+        topRight,
     )
-    lineTo(size.width, size.height - radius)
+    lineTo(size.width, size.height - bottomRight)
     cubicTo(
         size.width,
-        size.height - radius + controlDistance,
-        size.width - radius + controlDistance,
+        size.height - bottomRight + bottomRight * curvatureFactor,
+        size.width - bottomRight + bottomRight * curvatureFactor,
         size.height,
-        size.width - radius,
+        size.width - bottomRight,
         size.height,
     )
-    lineTo(radius, size.height)
+    lineTo(bottomLeft, size.height)
     cubicTo(
-        radius - controlDistance,
+        bottomLeft - bottomLeft * curvatureFactor,
         size.height,
         0f,
-        size.height - radius + controlDistance,
+        size.height - bottomLeft + bottomLeft * curvatureFactor,
         0f,
-        size.height - radius,
+        size.height - bottomLeft,
     )
-    lineTo(0f, radius)
+    lineTo(0f, topLeft)
     cubicTo(
         0f,
-        radius - controlDistance,
-        radius - controlDistance,
+        topLeft - topLeft * curvatureFactor,
+        topLeft - topLeft * curvatureFactor,
         0f,
-        radius,
+        topLeft,
         0f,
     )
     close()
@@ -155,14 +190,9 @@ fun Modifier.islandFluidProgressBorder(
             color = trackColor,
             style = Stroke(width = strokePx),
         )
-        is Outline.Rounded -> drawRoundRect(
+        is Outline.Rounded -> drawPath(
+            path = Path().apply { addRoundRect(outline.roundRect) },
             color = trackColor,
-            topLeft = Offset(outline.roundRect.left + halfStroke, outline.roundRect.top + halfStroke),
-            size = Size(outline.roundRect.width - strokePx, outline.roundRect.height - strokePx),
-            cornerRadius = CornerRadius(
-                (outline.roundRect.topLeftCornerRadius.x - halfStroke).coerceAtLeast(0f),
-                (outline.roundRect.topLeftCornerRadius.y - halfStroke).coerceAtLeast(0f),
-            ),
             style = Stroke(width = strokePx),
         )
         is Outline.Rectangle -> drawRect(

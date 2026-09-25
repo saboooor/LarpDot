@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,9 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -67,6 +71,7 @@ import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
     cutoutInfo: CutoutInfo,
@@ -78,6 +83,8 @@ fun HomeScreen(
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
+    val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
+    val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
@@ -95,6 +102,8 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
+        OverlayPreferences.getBubbleStyle(context)
+        OverlayPreferences.areSmallerBubblesEnabled(context)
         OverlayPreferences.isDebugModeEnabled(context)
         OverlayPreferences.isAppBlacklistEnabled(context)
         OverlayPreferences.getBlacklistedPackages(context)
@@ -129,6 +138,71 @@ fun HomeScreen(
         item {
             SectionHeader(title = "Island Customization")
             LarpCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Bubble Style",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Shape of the island and nearby bubbles",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ButtonGroup(
+                        modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    ) {
+                        OverlayPreferences.BubbleStyle.entries.forEach { style ->
+                            toggleableItem(
+                                checked = bubbleStyle == style,
+                                label = style.label,
+                                onCheckedChange = { OverlayPreferences.setBubbleStyle(context, style) },
+                                weight = 1f,
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BubbleChart,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Smaller Bubbles",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Reduce secondary bubble thickness by 20%",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = smallerBubbles,
+                        onCheckedChange = { OverlayPreferences.setSmallerBubblesEnabled(context, it) },
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

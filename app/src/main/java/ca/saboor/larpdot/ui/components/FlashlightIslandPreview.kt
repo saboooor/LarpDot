@@ -49,7 +49,6 @@ import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
-import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import ca.saboor.larpdot.ui.overlay.squircleShape
 
 /**
@@ -151,7 +150,7 @@ fun FlashlightIslandPreview(
                         cornerRadius = compactCornerRadius,
                         shape = RoundedCornerShape(compactCornerRadius),
                         trackColor = if (showMinimizedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                        progressColor = FlashlightAmber,
+                        progressColor = Color.White,
                     ),
                 shape = RoundedCornerShape(compactCornerRadius),
                 color = Color.Black,
@@ -193,7 +192,7 @@ fun FlashlightIslandPreview(
                         cornerRadius = expandedCornerRadiusDp,
                         shape = containerShape,
                         trackColor = if (showExpandedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                        progressColor = FlashlightAmber,
+                        progressColor = Color.White,
                     ),
                 shape = containerShape,
                 color = Color.Black,

@@ -18,6 +18,8 @@ object OverlayPreferences {
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
     private const val KEY_SHOW_SONG_ANNOUNCEMENT = "show_song_announcement"
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
+    private const val KEY_BUBBLE_STYLE = "bubble_style"
+    private const val KEY_SMALLER_BUBBLES = "smaller_bubbles"
     private const val KEY_ALBUM_ART_STYLE = "album_art_style"
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
     private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
@@ -78,6 +80,11 @@ object OverlayPreferences {
         SWOOP("Swoop", "A wide, curved fade from the top edge"),
         GRADIENT("Gradient", "Black at the camera, fading smoothly to transparent at the bottom of the island"),
         CANOPY("Canopy", "A broad curved cover with a long, soft fade below the camera"),
+    }
+
+    enum class BubbleStyle(val label: String) {
+        IPHONE("iPhone"),
+        MATERIAL_3("Material 3"),
     }
 
     enum class AlbumArtStyle(val label: String) {
@@ -167,6 +174,12 @@ object OverlayPreferences {
 
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
+
+    private val _bubbleStyleFlow = MutableStateFlow(BubbleStyle.IPHONE)
+    val bubbleStyleFlow: StateFlow<BubbleStyle> = _bubbleStyleFlow.asStateFlow()
+
+    private val _smallerBubblesFlow = MutableStateFlow(false)
+    val smallerBubblesFlow: StateFlow<Boolean> = _smallerBubblesFlow.asStateFlow()
 
     private val _showMinimizedTitleFlow = MutableStateFlow(false)
     val showMinimizedTitleFlow: StateFlow<Boolean> = _showMinimizedTitleFlow.asStateFlow()
@@ -296,6 +309,8 @@ object OverlayPreferences {
     private var isTitlePrefInitialized = false
     private var isSongAnnouncementInitialized = false
     private var isTapToExpandInitialized = false
+    private var isBubbleStyleInitialized = false
+    private var isSmallerBubblesInitialized = false
     private var isMinimizedAlbumArtStyleInitialized = false
     private var isExpandedAlbumArtStyleInitialized = false
     private var isShowExpandedAlbumArtInitialized = false
@@ -428,6 +443,35 @@ object OverlayPreferences {
             isTapToExpandInitialized = true
         }
         return _tapToExpandFlow.value
+    }
+
+    fun getBubbleStyle(context: Context): BubbleStyle {
+        if (!isBubbleStyleInitialized) {
+            val saved = getPrefs(context).getString(KEY_BUBBLE_STYLE, null)
+            _bubbleStyleFlow.value = BubbleStyle.entries.firstOrNull { it.name == saved } ?: BubbleStyle.IPHONE
+            isBubbleStyleInitialized = true
+        }
+        return _bubbleStyleFlow.value
+    }
+
+    fun setBubbleStyle(context: Context, style: BubbleStyle) {
+        getPrefs(context).edit().putString(KEY_BUBBLE_STYLE, style.name).apply()
+        _bubbleStyleFlow.value = style
+        isBubbleStyleInitialized = true
+    }
+
+    fun areSmallerBubblesEnabled(context: Context): Boolean {
+        if (!isSmallerBubblesInitialized) {
+            _smallerBubblesFlow.value = getPrefs(context).getBoolean(KEY_SMALLER_BUBBLES, false)
+            isSmallerBubblesInitialized = true
+        }
+        return _smallerBubblesFlow.value
+    }
+
+    fun setSmallerBubblesEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SMALLER_BUBBLES, enabled).apply()
+        _smallerBubblesFlow.value = enabled
+        isSmallerBubblesInitialized = true
     }
 
     fun setTapToExpandEnabled(context: Context, enabled: Boolean) {

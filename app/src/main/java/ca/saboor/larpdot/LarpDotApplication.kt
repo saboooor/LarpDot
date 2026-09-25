@@ -16,6 +16,8 @@ class LarpDotApplication : Application() {
         MediaPlaybackState.initialize(this)
         NotificationActivityState.initialize(this)
         OverlayPreferences.isOverlayEnabled(this)
+        OverlayPreferences.getBubbleStyle(this)
+        OverlayPreferences.areSmallerBubblesEnabled(this)
         OverlayPreferences.isShowFlashlightIslandEnabled(this)
         OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(this)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(this)

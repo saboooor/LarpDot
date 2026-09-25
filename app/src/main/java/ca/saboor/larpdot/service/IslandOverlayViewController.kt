@@ -44,6 +44,7 @@ import ca.saboor.larpdot.ui.overlay.compactStatusFallback
 import ca.saboor.larpdot.ui.overlay.stackedPillWidth
 import ca.saboor.larpdot.ui.overlay.stackedPillWidthWithExtents
 import ca.saboor.larpdot.ui.overlay.secondaryItemWidthDp
+import ca.saboor.larpdot.ui.overlay.secondaryBubbleThicknessDp
 import ca.saboor.larpdot.ui.overlay.getFlashlightPercentText
 import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
@@ -280,6 +281,8 @@ class IslandOverlayViewController(
                             stackDotIndex = expansionDotIndex,
                             stackDotCount = expansionDotCount,
                             fromTinyDot = false,
+                            hasBubbleBefore = secondaryTypes.size == 2,
+                            hasBubbleAfter = secondaryTypes.isNotEmpty(),
                             isExpanded = isIslandExpanded && !isExpandedFromTinyDot,
                             isCompactVisible = compactType != null && compactSurfaceBounds != null,
                             onCollapse = { collapseOverlay() },
@@ -317,6 +320,12 @@ class IslandOverlayViewController(
                                     stackDotCount = expansionDotCount,
                                     fromTinyDot = true,
                                     isSecondarySurface = true,
+                                    hasBubbleBefore = if (selected) {
+                                        !(expansionDotCount == 2 && expansionDotIndex == 0)
+                                    } else !(secondaryTypes.size == 2 && secondaryTypes.firstOrNull() == type),
+                                    hasBubbleAfter = if (selected) {
+                                        expansionDotCount == 2 && expansionDotIndex == 0
+                                    } else secondaryTypes.size == 2 && secondaryTypes.firstOrNull() == type,
                                     isExpanded = isIslandExpanded && selected,
                                     isCompactVisible = type in secondaryTypes && bounds != null && !isCompactSurfaceHidden,
                                     compactOpacity = secondarySurfaceAlphas[type] ?: 1f,
@@ -373,7 +382,7 @@ class IslandOverlayViewController(
             observeCutoutConfig()
             observeMinimizedAlbumArtStyle()
             observeDebugPreference()
-            observeDotRightSideInfoPreference()
+            observeBubblePreferences()
             OverlayPreferences.isDebugModeEnabled(context)
             OverlayPreferences.isShowFlashlightIslandEnabled(context)
             OverlayPreferences.isFlashlightTapToToggleEnabled(context)
@@ -621,6 +630,11 @@ class IslandOverlayViewController(
         val compactPillThicknessDp = compactPillThicknessPx / density
 
         val isMiniPill = OverlayPreferences.showDotRightSideInfoFlow.value
+        val bubbleThicknessDp = secondaryBubbleThicknessDp(
+            compactPillThicknessDp,
+            OverlayPreferences.smallerBubblesFlow.value,
+        )
+        val bubbleSpacingDp = if (OverlayPreferences.bubbleStyleFlow.value == OverlayPreferences.BubbleStyle.MATERIAL_3) 4f else 8f
         val secondaryTypes = stack.secondary.map { it.content }
         val leftType = if (secondaryTypes.size == 2) secondaryTypes[0] else null
         val rightType = if (secondaryTypes.size == 2) secondaryTypes[1] else secondaryTypes.firstOrNull()
@@ -635,7 +649,7 @@ class IslandOverlayViewController(
         val leftWidthDp = if (leftType != null) {
             secondaryItemWidthDp(
                 type = leftType,
-                thicknessDp = compactPillThicknessDp,
+                thicknessDp = bubbleThicknessDp,
                 isMiniPill = isMiniPill,
                 hasMedia = isMusicActive,
                 flashlightStatus = flashlightStatus,
@@ -646,7 +660,7 @@ class IslandOverlayViewController(
         val rightWidthDp = if (rightType != null) {
             secondaryItemWidthDp(
                 type = rightType,
-                thicknessDp = compactPillThicknessDp,
+                thicknessDp = bubbleThicknessDp,
                 isMiniPill = isMiniPill,
                 hasMedia = isMusicActive,
                 flashlightStatus = flashlightStatus,
@@ -654,8 +668,8 @@ class IslandOverlayViewController(
             )
         } else 0f
 
-        val leftExtentPx = if (leftType != null) ((leftWidthDp + 8f) * density).toInt() else 0
-        val rightExtentPx = if (rightType != null) ((rightWidthDp + 8f) * density).toInt() else 0
+        val leftExtentPx = if (leftType != null) ((leftWidthDp + bubbleSpacingDp) * density).toInt() else 0
+        val rightExtentPx = if (rightType != null) ((rightWidthDp + bubbleSpacingDp) * density).toInt() else 0
 
         val nestedArtSizeDp = (compactPillThicknessDp - 12f).coerceIn(16f, 24f)
         val nestedExtraDp = compactPillThicknessDp + nestedArtSizeDp
@@ -686,8 +700,8 @@ class IslandOverlayViewController(
         val pillWPx = if (isLandscape) compactPillThicknessPx.toInt() else (stackedPillWidthWithExtents(
             cutoutDiameterPx / density + activeExtraDp,
             compactPillThicknessDp,
-            if (leftType != null) leftWidthDp + 8f else 0f,
-            if (rightType != null) rightWidthDp + 8f else 0f,
+            if (leftType != null) leftWidthDp + bubbleSpacingDp else 0f,
+            if (rightType != null) rightWidthDp + bubbleSpacingDp else 0f,
             screenWidth / density,
         ) * density).toInt()
         val landscapeAnnouncementExtraDp = if (isSongAnnouncementActive) 140f else activeExtraDp
@@ -953,9 +967,13 @@ class IslandOverlayViewController(
         }
     }
 
-    private fun observeDotRightSideInfoPreference() {
+    private fun observeBubblePreferences() {
         controllerScope.launch {
-            OverlayPreferences.showDotRightSideInfoFlow.collectLatest {
+            combine(
+                OverlayPreferences.showDotRightSideInfoFlow,
+                OverlayPreferences.smallerBubblesFlow,
+                OverlayPreferences.bubbleStyleFlow,
+            ) { _, _, _ -> Unit }.collectLatest {
                 updateOverlayLayout()
             }
         }
