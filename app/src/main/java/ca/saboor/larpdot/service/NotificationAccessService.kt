@@ -20,6 +20,13 @@ import ca.saboor.larpdot.notification.NotificationActivityState
 class NotificationAccessService : NotificationListenerService() {
     private var mediaSessionManager: MediaSessionManager? = null
 
+    private fun isMediaNotification(notification: Notification): Boolean {
+        val extras = notification.extras ?: return false
+        return extras.containsKey(Notification.EXTRA_MEDIA_SESSION) ||
+            extras.getString(Notification.EXTRA_TEMPLATE)?.contains("MediaStyle") == true ||
+            notification.category == Notification.CATEGORY_TRANSPORT
+    }
+
     private val sessionsChangedListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
         MediaPlaybackState.updateFromControllers(controllers)
     }
@@ -66,11 +73,7 @@ class NotificationAccessService : NotificationListenerService() {
             // Extract artwork from media notification extras if available (hilight-studio pattern)
             val notif = sbn.notification ?: return
             val extras = notif.extras ?: return
-            val isMedia = extras.containsKey(Notification.EXTRA_MEDIA_SESSION) ||
-                extras.getString(Notification.EXTRA_TEMPLATE)?.contains("MediaStyle") == true ||
-                notif.category == Notification.CATEGORY_TRANSPORT
-
-            if (isMedia) {
+            if (isMediaNotification(notif)) {
                 if (MediaPlaybackState.isPackageBlacklisted(sbn.packageName)) {
                     return
                 }
@@ -164,26 +167,26 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
+        handleNotificationRemoved(sbn)
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?, rankingMap: RankingMap?, reason: Int) {
+        handleNotificationRemoved(sbn)
+    }
+
+    private fun handleNotificationRemoved(sbn: StatusBarNotification?) {
         sbn?.key?.let(NotificationActivityState::remove)
         if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
             android.util.Log.i("NotificationAccessService", "PixelLight notification removed")
             FlashlightController.onPixelLightNotificationRemoved()
         }
 
+        if (sbn?.notification?.let(::isMediaNotification) != true) return
         try {
             val component = ComponentName(this, NotificationAccessService::class.java)
             val activeControllers = mediaSessionManager?.getActiveSessions(component)
             MediaPlaybackState.updateFromControllers(activeControllers)
         } catch (_: Exception) {}
-    }
-
-    override fun onNotificationRemoved(sbn: StatusBarNotification?, rankingMap: RankingMap?, reason: Int) {
-        super.onNotificationRemoved(sbn, rankingMap, reason)
-        sbn?.key?.let(NotificationActivityState::remove)
-        if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
-            android.util.Log.i("NotificationAccessService", "PixelLight notification removed (reason=$reason)")
-            FlashlightController.onPixelLightNotificationRemoved()
-        }
     }
 
     private fun checkActivePixelLight() {

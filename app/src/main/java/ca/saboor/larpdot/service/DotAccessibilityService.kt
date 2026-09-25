@@ -2,12 +2,9 @@ package ca.saboor.larpdot.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
@@ -21,7 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -32,16 +29,9 @@ import kotlinx.coroutines.launch
 class DotAccessibilityService : AccessibilityService() {
     private var overlayController: IslandOverlayViewController? = null
     private var serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private var serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    private val flashlightReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT") {
-                FlashlightController.toggleFlashlight()
-            }
-        }
-    }
-    private var isReceiverRegistered = false
+    private val flashlightBroadcast = FlashlightBroadcastRegistration()
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
@@ -53,6 +43,9 @@ class DotAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        serviceJob.cancel()
+        serviceJob = Job()
+        serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
         instance = this
         _isServiceConnected.value = true
 
@@ -68,15 +61,7 @@ class DotAccessibilityService : AccessibilityService() {
         // Stop standard fallback overlay if it was running
         DotOverlayService.stop(this)
 
-        if (!isReceiverRegistered) {
-            val filter = IntentFilter("ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(flashlightReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(flashlightReceiver, filter)
-            }
-            isReceiverRegistered = true
-        }
+        flashlightBroadcast.register(this)
 
         val controller = IslandOverlayViewController(
             context = this,
@@ -86,25 +71,7 @@ class DotAccessibilityService : AccessibilityService() {
 
         // Reactively display or hide based on user toggle, screen on/off, lock screen, and active flashlight state
         serviceScope.launch {
-            combine(
-                OverlayPreferences.isEnabledFlow,
-                FlashlightController.isFlashlightOn,
-                OverlayPreferences.showFlashlightIslandFlow,
-                ScreenStateTracker.isScreenOn,
-                OverlayPreferences.hideWhenScreenOffFlow,
-                ScreenStateTracker.isDeviceLocked,
-                OverlayPreferences.hideOnLockScreenFlow,
-            ) { values ->
-                OverlayVisibilityPolicy.shouldShowOverlay(
-                    isEnabled = values[0],
-                    isTorchOn = values[1],
-                    showTorchIsland = values[2],
-                    isScreenOn = values[3],
-                    hideWhenScreenOff = values[4],
-                    isLocked = values[5],
-                    hideOnLockScreen = values[6],
-                )
-            }.collectLatest { shouldShow ->
+            OverlayVisibilityPolicy.visibilityFlow().distinctUntilChanged().collectLatest { shouldShow ->
                 if (shouldShow) {
                     controller.show()
                 } else {
@@ -113,18 +80,6 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        val initialShow = OverlayVisibilityPolicy.shouldShowOverlay(
-            isEnabled = OverlayPreferences.isOverlayEnabled(this),
-            isTorchOn = FlashlightController.isFlashlightOn.value,
-            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
-            isScreenOn = ScreenStateTracker.isScreenOn.value,
-            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
-            isLocked = ScreenStateTracker.isDeviceLocked.value,
-            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
-        )
-        if (initialShow) {
-            controller.show()
-        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -133,14 +88,10 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        serviceJob.cancel()
         if (instance == this) instance = null
         _isServiceConnected.value = false
-        if (isReceiverRegistered) {
-            try {
-                unregisterReceiver(flashlightReceiver)
-            } catch (_: Exception) {}
-            isReceiverRegistered = false
-        }
+        flashlightBroadcast.unregister(this)
         overlayController?.destroy()
         overlayController = null
         return super.onUnbind(intent)
@@ -149,12 +100,7 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         if (instance == this) instance = null
         _isServiceConnected.value = false
-        if (isReceiverRegistered) {
-            try {
-                unregisterReceiver(flashlightReceiver)
-            } catch (_: Exception) {}
-            isReceiverRegistered = false
-        }
+        flashlightBroadcast.unregister(this)
         serviceJob.cancel()
         overlayController?.destroy()
         overlayController = null

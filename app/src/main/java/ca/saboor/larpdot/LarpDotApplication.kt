@@ -17,6 +17,8 @@ class LarpDotApplication : Application() {
         NotificationActivityState.initialize(this)
         OverlayPreferences.isOverlayEnabled(this)
         OverlayPreferences.isShowFlashlightIslandEnabled(this)
+        OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(this)
+        OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(this)
         OverlayPreferences.isHideWhenScreenOffEnabled(this)
         OverlayPreferences.isHideOnLockScreenEnabled(this)
         OverlayPreferences.isHideMusicWhenAppOpenEnabled(this)

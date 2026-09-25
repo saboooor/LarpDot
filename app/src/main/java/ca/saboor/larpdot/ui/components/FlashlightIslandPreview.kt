@@ -42,7 +42,10 @@ import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactFlashlightContent
+import ca.saboor.larpdot.ui.overlay.getFlashlightStrengthFraction
+import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
@@ -65,6 +68,11 @@ fun FlashlightIslandPreview(
 
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isSimulated by FlashlightController.isSimulated.collectAsState()
+    val torchStrength by FlashlightController.torchStrength.collectAsState()
+    val maxStrength by FlashlightController.maxStrength.collectAsState()
+    val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
+    val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
+    val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
 
     val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
     val flashlightStatus = rememberCompactFlashlightStatus()
@@ -138,7 +146,13 @@ fun FlashlightIslandPreview(
                 modifier = Modifier
                     .width(compactWidth)
                     .height(compactHeight)
-                    .border(0.75.dp, Color(0x30FFFFFF), RoundedCornerShape(compactCornerRadius)),
+                    .islandFluidProgressBorder(
+                        progressFraction = if (showMinimizedOutline) strengthFraction else 0f,
+                        cornerRadius = compactCornerRadius,
+                        shape = RoundedCornerShape(compactCornerRadius),
+                        trackColor = if (showMinimizedOutline) Color(0x30FFFFFF) else Color.Transparent,
+                        progressColor = FlashlightAmber,
+                    ),
                 shape = RoundedCornerShape(compactCornerRadius),
                 color = Color.Black,
                 shadowElevation = 6.dp,
@@ -174,7 +188,13 @@ fun FlashlightIslandPreview(
                 modifier = Modifier
                     .width(220.dp)
                     .height(290.dp)
-                    .border(0.75.dp, Color(0x30FFFFFF), containerShape),
+                    .islandFluidProgressBorder(
+                        progressFraction = if (showExpandedOutline) strengthFraction else 0f,
+                        cornerRadius = expandedCornerRadiusDp,
+                        shape = containerShape,
+                        trackColor = if (showExpandedOutline) Color(0x30FFFFFF) else Color.Transparent,
+                        progressColor = FlashlightAmber,
+                    ),
                 shape = containerShape,
                 color = Color.Black,
                 shadowElevation = 14.dp,

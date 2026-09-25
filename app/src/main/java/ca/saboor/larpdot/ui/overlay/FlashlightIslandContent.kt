@@ -86,6 +86,10 @@ fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int): String {
     return "$percent%"
 }
 
+/** Strength as a perimeter fraction; binary flashlights show a full outline when on. */
+fun getFlashlightStrengthFraction(torchStrength: Int, maxStrength: Int): Float =
+    if (maxStrength > 1) torchStrength.coerceIn(1, maxStrength).toFloat() / maxStrength else 1f
+
 @Composable
 fun rememberCompactFlashlightStatus(): String {
     val torchStrength by FlashlightController.torchStrength.collectAsState()

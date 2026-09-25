@@ -4,6 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class FlashlightIslandContentTest {
+    @Test
+    fun strengthFractionMatchesVariableAndBinaryTorchLevels() {
+        assertEquals(0.5f, getFlashlightStrengthFraction(5, 10), 0.0001f)
+        assertEquals(0.1f, getFlashlightStrengthFraction(1, 10), 0.0001f)
+        assertEquals(1f, getFlashlightStrengthFraction(20, 10), 0.0001f)
+        assertEquals(1f, getFlashlightStrengthFraction(1, 1), 0.0001f)
+    }
+
 
     @Test
     fun getFlashlightPercentTextReturns100PercentForBinaryTorch() {

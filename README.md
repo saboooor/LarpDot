@@ -7,7 +7,7 @@ LarpDot is an Android app that adds a customizable Dynamic Island style overlay 
 - **Camera cutout alignment:** Detect the cutout and adjust the overlay's size and position manually.
 - **Music island:** Show playback information and controls, customize album art and player layout, and choose a visualizer mode (BPM, device audio, or audio preview).
 - **Live activities:** Turn supported ongoing notifications, including progress, navigation, calls, and timers, into island activities.
-- **Flashlight island:** Control the torch and show its status in the island. Optional [PixelLight](https://github.com/chenxiaolong/PixelLight) integration is available when that app is installed.
+- **Flashlight island:** Control the torch and show its status in the island. Swipe right or left on the compact pill or dot, then hold to step through supported brightness levels. Moving farther makes the steps repeat faster and change more levels at once. Optional strength outlines show brightness around the compact island and expanded card. [PixelLight](https://github.com/chenxiaolong/PixelLight) integration is available when that app is installed.
 - **Display controls:** Configure tap behavior, lock screen and screen off visibility, and an app blacklist.
 
 The app is built with Kotlin, Jetpack Compose, and Material 3 Expressive. It supports Android 8.0 (API 26) and newer.

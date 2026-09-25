@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.collectLatest
 import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class MediaSessionAction(
     val id: String,
@@ -131,6 +132,35 @@ object MediaPlaybackState {
 
     private val playbackScope = CoroutineScope(Dispatchers.Main)
     private var progressTickerJob: Job? = null
+    private var dominantColorJob: Job? = null
+    private var pendingColorArtwork: Bitmap? = null
+    private var cachedColorArtwork: Bitmap? = null
+    private var cachedArtworkColor = DominantColorExtractor.DEFAULT_ACCENT
+
+    private fun colorForArtwork(artwork: Bitmap?, current: MediaTrackInfo): Color {
+        if (artwork == null) return DominantColorExtractor.DEFAULT_ACCENT
+        if (artwork === cachedColorArtwork) return cachedArtworkColor
+        val previousColor = current.dominantColor
+            .takeUnless { it == DominantColorExtractor.DEFAULT_ACCENT }
+            ?: cachedArtworkColor
+        if (artwork !== pendingColorArtwork || dominantColorJob?.isActive != true) {
+            dominantColorJob?.cancel()
+            pendingColorArtwork = artwork
+            dominantColorJob = playbackScope.launch {
+                val color = withContext(Dispatchers.Default) {
+                    DominantColorExtractor.extractDominantColor(artwork)
+                }
+                cachedColorArtwork = artwork
+                cachedArtworkColor = color
+                pendingColorArtwork = null
+                val latest = _currentTrack.value
+                if (latest.albumArt === artwork) {
+                    _currentTrack.value = latest.copy(dominantColor = color)
+                }
+            }
+        }
+        return previousColor
+    }
 
     fun updateFromControllers(controllers: List<MediaController>?) {
         val filtered = controllers?.filter { !isPackageBlacklisted(it.packageName) }
@@ -262,14 +292,7 @@ object MediaPlaybackState {
             rawPosition.coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
         }
 
-        val isSameSong = title.equals(current.title, ignoreCase = true) &&
-            artist.equals(current.artist, ignoreCase = true)
-
-        val dominant = if (isSameSong && albumArt == current.albumArt && current.dominantColor != DominantColorExtractor.DEFAULT_ACCENT) {
-            current.dominantColor
-        } else {
-            DominantColorExtractor.extractDominantColor(albumArt, (title + artist).hashCode())
-        }
+        val dominant = colorForArtwork(albumArt, current)
 
         val trackKey = "${title}_${artist}".trim()
         val wasMusicActive = _isMusicActive.value
@@ -378,11 +401,7 @@ object MediaPlaybackState {
             else -> current.albumArt
         }
 
-        val dominant = if (isSameSong && current.dominantColor != DominantColorExtractor.DEFAULT_ACCENT) {
-            current.dominantColor
-        } else {
-            DominantColorExtractor.extractDominantColor(newArt, (newTitle + newArtist).hashCode())
-        }
+        val dominant = colorForArtwork(newArt, current)
 
         val resolvedAppName = appName ?: current.appName
         val newPackage = packageName ?: current.playerPackageName
@@ -606,13 +625,17 @@ object MediaPlaybackState {
     private fun startProgressTicker() {
         if (progressTickerJob?.isActive == true) return
         progressTickerJob = playbackScope.launch {
+            var previousTick = SystemClock.elapsedRealtime()
             while (isActive) {
-                delay(50L) // 20 updates per second for ultra-fluid song progress & visualizers
+                delay(100L) // Progress is visual state; avoid rebuilding the full track 20 times a second.
+                val now = SystemClock.elapsedRealtime()
+                val elapsedMs = (now - previousTick).coerceAtLeast(0L)
+                previousTick = now
                 val current = _currentTrack.value
                 if (!current.isPlaying || current.durationMs <= 0L) continue
 
                 if (current.isSimulated) {
-                    val nextPos = (current.positionMs + 50L).let {
+                    val nextPos = (current.positionMs + elapsedMs).let {
                         if (it > current.durationMs) 0L else it
                     }
                     _currentTrack.value = current.copy(positionMs = nextPos)
@@ -635,6 +658,9 @@ object MediaPlaybackState {
     }
 
     fun clear() {
+        dominantColorJob?.cancel()
+        dominantColorJob = null
+        pendingColorArtwork = null
         dismissSongAnnouncement()
         lastAnnouncedTrackKey = ""
         musicGraceJob?.cancel()

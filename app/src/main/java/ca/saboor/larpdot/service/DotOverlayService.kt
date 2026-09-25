@@ -1,10 +1,8 @@
 package ca.saboor.larpdot.service
 
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
@@ -14,7 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -26,14 +24,7 @@ class DotOverlayService : Service() {
     private var serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    private val flashlightReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT") {
-                FlashlightController.toggleFlashlight()
-            }
-        }
-    }
-    private var isReceiverRegistered = false
+    private val flashlightBroadcast = FlashlightBroadcastRegistration()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -48,15 +39,7 @@ class DotOverlayService : Service() {
         ScreenStateTracker.init(this)
         ForegroundAppTracker.init(this)
 
-        if (!isReceiverRegistered) {
-            val filter = IntentFilter("ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(flashlightReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(flashlightReceiver, filter)
-            }
-            isReceiverRegistered = true
-        }
+        flashlightBroadcast.register(this)
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -69,25 +52,7 @@ class DotOverlayService : Service() {
         overlayController = controller
 
         serviceScope.launch {
-            combine(
-                OverlayPreferences.isEnabledFlow,
-                FlashlightController.isFlashlightOn,
-                OverlayPreferences.showFlashlightIslandFlow,
-                ScreenStateTracker.isScreenOn,
-                OverlayPreferences.hideWhenScreenOffFlow,
-                ScreenStateTracker.isDeviceLocked,
-                OverlayPreferences.hideOnLockScreenFlow,
-            ) { values ->
-                OverlayVisibilityPolicy.shouldShowOverlay(
-                    isEnabled = values[0],
-                    isTorchOn = values[1],
-                    showTorchIsland = values[2],
-                    isScreenOn = values[3],
-                    hideWhenScreenOff = values[4],
-                    isLocked = values[5],
-                    hideOnLockScreen = values[6],
-                )
-            }.collectLatest { shouldShow ->
+            OverlayVisibilityPolicy.visibilityFlow().distinctUntilChanged().collectLatest { shouldShow ->
                 if (shouldShow) {
                     controller.show()
                 } else {
@@ -102,18 +67,6 @@ class DotOverlayService : Service() {
             }
         }
 
-        val initialShow = OverlayVisibilityPolicy.shouldShowOverlay(
-            isEnabled = OverlayPreferences.isOverlayEnabled(this),
-            isTorchOn = FlashlightController.isFlashlightOn.value,
-            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
-            isScreenOn = ScreenStateTracker.isScreenOn.value,
-            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
-            isLocked = ScreenStateTracker.isDeviceLocked.value,
-            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
-        )
-        if (initialShow) {
-            controller.show()
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -147,12 +100,7 @@ class DotOverlayService : Service() {
     }
 
     override fun onDestroy() {
-        if (isReceiverRegistered) {
-            try {
-                unregisterReceiver(flashlightReceiver)
-            } catch (_: Exception) {}
-            isReceiverRegistered = false
-        }
+        flashlightBroadcast.unregister(this)
         serviceJob.cancel()
         overlayController?.destroy()
         overlayController = null

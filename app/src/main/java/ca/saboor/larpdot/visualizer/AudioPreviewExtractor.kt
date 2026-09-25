@@ -6,8 +6,11 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.PowerManager
 import android.util.Log
+import android.util.LruCache
 import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,6 +31,7 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.exp
 import kotlin.math.sqrt
@@ -85,8 +89,24 @@ object AudioPreviewExtractor {
     private const val CACHE_MAGIC = 0x4D424133
     const val DEFAULT_BAND_COUNT = OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT
 
-    private val memoryCache = ConcurrentHashMap<String, FloatArray>()
-    private val failedCache = ConcurrentHashMap<String, String>()
+    private const val MAX_DISK_CACHE_BYTES = 80L * 1024L * 1024L
+    private const val FAILURE_RETRY_MS = 30L * 60L * 1000L
+    private val memoryCache = object : LruCache<String, FloatArray>(4 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: FloatArray): Int = value.size * Float.SIZE_BYTES
+    }
+    private val failedCache = ConcurrentHashMap<String, Pair<String, Long>>()
+
+    private fun cachedFailure(key: String): String? {
+        val entry = failedCache[key] ?: return null
+        if (System.currentTimeMillis() - entry.second < FAILURE_RETRY_MS) return entry.first
+        failedCache.remove(key, entry)
+        return null
+    }
+
+    private fun rememberFailure(key: String, reason: String) {
+        if (failedCache.size >= 128) failedCache.clear()
+        failedCache[key] = reason to System.currentTimeMillis()
+    }
 
     private val _currentAmplitudes = MutableStateFlow<FloatArray?>(null)
     val currentAmplitudes: StateFlow<FloatArray?> = _currentAmplitudes.asStateFlow()
@@ -143,7 +163,7 @@ object AudioPreviewExtractor {
             if (_currentAmplitudes.value != null || activeJob?.isActive == true) {
                 return
             }
-            val failedReason = failedCache[cacheKey]
+            val failedReason = cachedFailure(cacheKey)
             if (failedReason != null) {
                 if (_extractionState.value !is ExtractionState.Failed) {
                     _extractionState.value = ExtractionState.Failed(title, failedReason)
@@ -157,7 +177,7 @@ object AudioPreviewExtractor {
         val audioPath = if (audioFile.exists() && audioFile.length() > 0) audioFile.absolutePath else null
 
         // Check in-memory cache first for instant 0ms restoration
-        val inMemory = memoryCache[cacheKey]
+        val inMemory = memoryCache.get(cacheKey)
         if (inMemory != null) {
             lastKey = trackKey
             lastBandCount = safeBands
@@ -177,7 +197,7 @@ object AudioPreviewExtractor {
         }
 
         // Check failure cache to avoid spamming network for non-existent previews
-        val failedReason = failedCache[cacheKey]
+        val failedReason = cachedFailure(cacheKey)
         if (failedReason != null) {
             lastKey = trackKey
             lastBandCount = safeBands
@@ -216,7 +236,7 @@ object AudioPreviewExtractor {
                 Log.w(TAG, "Failed to extract audio preview: ${e.message}")
                 if (isActive) {
                     val reason = e.message ?: "Processing error"
-                    failedCache[cacheKey] = reason
+                    rememberFailure(cacheKey, reason)
                     _currentAmplitudes.value = null
                     _extractionState.value = ExtractionState.Failed(title, reason)
                 }
@@ -244,7 +264,8 @@ object AudioPreviewExtractor {
         if (cacheFile.exists() && cacheFile.length() > 0) {
             val cachedData = readDiskCache(cacheFile, bandCount)
             if (cachedData != null && cachedData.isNotEmpty()) {
-                memoryCache[cacheKey] = cachedData
+                cacheFile.setLastModified(System.currentTimeMillis())
+                memoryCache.put(cacheKey, cachedData)
                 val audioPath = if (audioFile.exists() && audioFile.length() > 0) audioFile.absolutePath else null
                 _extractionState.value = ExtractionState.Success(
                     trackTitle = title,
@@ -273,20 +294,23 @@ object AudioPreviewExtractor {
                 null
             }
         }
+        currentCoroutineContext().ensureActive()
 
         if (!audioFile.exists() || audioFile.length() == 0L) {
             if (previewUrl == null) {
                 val reason = "No 30-second preview found on ${previewSource.title}"
-                failedCache[cacheKey] = reason
+                rememberFailure(cacheKey, reason)
                 _extractionState.value = ExtractionState.Failed(title, reason)
                 return null
             }
 
             try {
                 downloadToFile(previewUrl, audioFile)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val reason = e.message ?: "Download failed"
-                failedCache[cacheKey] = reason
+                rememberFailure(cacheKey, reason)
                 _extractionState.value = ExtractionState.Failed(title, reason)
                 return null
             }
@@ -294,19 +318,20 @@ object AudioPreviewExtractor {
 
         if (!audioFile.exists() || audioFile.length() == 0L) {
             val reason = "Audio preview unavailable"
-            failedCache[cacheKey] = reason
+            rememberFailure(cacheKey, reason)
             _extractionState.value = ExtractionState.Failed(title, reason)
             return null
         }
 
         // Decode raw audio and perform dynamic N-band frequency separation on Dispatchers.Default
         val extracted = withContext(Dispatchers.Default) {
-            decodeAudioToDynamicBandsRms(audioFile, targetFps, bandCount)
+            decodeAudioToDynamicBandsRms(audioFile, targetFps, bandCount, currentCoroutineContext()[Job])
         }
 
         if (extracted != null && extracted.isNotEmpty()) {
             writeDiskCache(cacheFile, extracted, bandCount)
-            memoryCache[cacheKey] = extracted
+            memoryCache.put(cacheKey, extracted)
+            trimDiskCache(cacheFolder, setOf(audioFile, cacheFile))
             failedCache.remove(cacheKey)
             _extractionState.value = ExtractionState.Success(
                 trackTitle = title,
@@ -321,7 +346,7 @@ object AudioPreviewExtractor {
             return extracted
         } else {
             val reason = "Failed to decode audio track"
-            failedCache[cacheKey] = reason
+            rememberFailure(cacheKey, reason)
             _extractionState.value = ExtractionState.Failed(title, reason)
         }
 
@@ -344,8 +369,11 @@ object AudioPreviewExtractor {
             connection.setRequestProperty("User-Agent", "LarpDot/1.0")
             connection.instanceFollowRedirects = true
 
-            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-            connection.disconnect()
+            val responseText = try {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } finally {
+                connection.disconnect()
+            }
 
             val json = JSONObject(responseText)
             val data = json.optJSONArray("data")
@@ -370,8 +398,11 @@ object AudioPreviewExtractor {
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = true
 
-            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-            connection.disconnect()
+            val responseText = try {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } finally {
+                connection.disconnect()
+            }
 
             val json = JSONObject(responseText)
             val results = json.optJSONArray("results")
@@ -406,7 +437,7 @@ object AudioPreviewExtractor {
         }
     }
 
-    private fun downloadToFile(urlString: String, destination: File) {
+    private suspend fun downloadToFile(urlString: String, destination: File) {
         val url = URL(urlString)
         val connection = url.openConnection() as HttpURLConnection
         connection.connectTimeout = 6000
@@ -414,19 +445,32 @@ object AudioPreviewExtractor {
         connection.requestMethod = "GET"
         connection.instanceFollowRedirects = true
 
-        connection.inputStream.use { input ->
-            FileOutputStream(destination).use { output ->
-                input.copyTo(output)
+        val partial = File(destination.parentFile, "${destination.name}.partial")
+        try {
+            connection.inputStream.use { input ->
+                FileOutputStream(partial).use { output ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                    }
+                }
             }
+            currentCoroutineContext().ensureActive()
+            if (!partial.renameTo(destination)) error("Could not save audio preview")
+        } finally {
+            connection.disconnect()
+            partial.delete()
         }
-        connection.disconnect()
     }
 
     /**
      * Decodes 16-bit PCM audio and separates exactly [numBands] frequency bands
      * using a 2nd-order cascaded IIR crossover filterbank.
      */
-    private fun decodeAudioToDynamicBandsRms(audioFile: File, fps: Int, numBands: Int): FloatArray? {
+    private fun decodeAudioToDynamicBandsRms(audioFile: File, fps: Int, numBands: Int, job: Job?): FloatArray? {
         val safeBands = numBands.coerceIn(1, 32)
         val numCutoffs = (safeBands - 1).coerceAtLeast(1)
 
@@ -507,6 +551,7 @@ object AudioPreviewExtractor {
             val timeoutUs = 8000L
 
             while (!isCodecEOS) {
+                job?.ensureActive()
                 if (!isExtractorEOS) {
                     val inputIndex = codec.dequeueInputBuffer(timeoutUs)
                     if (inputIndex >= 0) {
@@ -639,6 +684,8 @@ object AudioPreviewExtractor {
 
             return finalAmplitudes
 
+        } catch (e: CancellationException) {
+            throw e
         } catch (oom: OutOfMemoryError) {
             Log.e(TAG, "OutOfMemoryError during audio decode: ${oom.message}")
             return null
@@ -697,9 +744,24 @@ object AudioPreviewExtractor {
         }
     }
 
+    private fun trimDiskCache(folder: File, protectedFiles: Set<File>) {
+        val files = folder.listFiles()?.sortedBy { it.lastModified() } ?: return
+        var total = files.sumOf { it.length() }
+        for (file in files) {
+            if (total <= MAX_DISK_CACHE_BYTES) break
+            if (file in protectedFiles) continue
+            val length = file.length()
+            if (file.delete()) total -= length
+        }
+    }
+
     private fun sanitizeKey(title: String, artist: String): String {
-        return (title.trim().lowercase() + "_" + artist.trim().lowercase())
+        val identity = title.trim().lowercase() + "\u0000" + artist.trim().lowercase()
+        val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
+            .take(8).joinToString("") { "%02x".format(it) }
+        val readable = (title.trim().lowercase() + "_" + artist.trim().lowercase())
             .replace(Regex("[^a-z0-9_]"), "_")
             .take(64)
+        return "${readable}_$digest"
     }
 }

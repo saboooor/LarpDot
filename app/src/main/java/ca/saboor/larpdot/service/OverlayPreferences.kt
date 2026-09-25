@@ -44,6 +44,8 @@ object OverlayPreferences {
     private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
+    private const val KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE = "show_minimized_flashlight_outline"
+    private const val KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE = "show_expanded_flashlight_outline"
     private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
     private const val KEY_USE_PIXELLIGHT = "use_pixellight"
     private const val KEY_PIXELLIGHT_MAX_STRENGTH = "pixellight_max_strength"
@@ -227,6 +229,11 @@ object OverlayPreferences {
 
     val showFlashlightIslandFlow: StateFlow<Boolean> = _showFlashlightIslandFlow.asStateFlow()
 
+    private val _showMinimizedFlashlightOutlineFlow = MutableStateFlow(true)
+    val showMinimizedFlashlightOutlineFlow: StateFlow<Boolean> = _showMinimizedFlashlightOutlineFlow.asStateFlow()
+    private val _showExpandedFlashlightOutlineFlow = MutableStateFlow(true)
+    val showExpandedFlashlightOutlineFlow: StateFlow<Boolean> = _showExpandedFlashlightOutlineFlow.asStateFlow()
+
     private val _flashlightTapToToggleFlow = MutableStateFlow(true)
     val flashlightTapToToggleFlow: StateFlow<Boolean> = _flashlightTapToToggleFlow.asStateFlow()
 
@@ -306,6 +313,8 @@ object OverlayPreferences {
     private var isShowExpandedDominantColorGlowInitialized = false
     private var isCameraCoverStyleInitialized = false
     private var isShowFlashlightIslandInitialized = false
+    private var isShowMinimizedFlashlightOutlineInitialized = false
+    private var isShowExpandedFlashlightOutlineInitialized = false
     private var isShowDotRightSideInfoInitialized = false
     private var isFlashlightTapToToggleInitialized = false
     private var isUsePixelLightInitialized = false
@@ -320,6 +329,34 @@ object OverlayPreferences {
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    fun initializeMusicSettings(context: Context) {
+        isShowMinimizedProgressOutlineEnabled(context)
+        isShowExpandedProgressOutlineEnabled(context)
+        isHideMusicWhenAppOpenEnabled(context)
+        isShowMinimizedTitleEnabled(context)
+        isShowSongAnnouncementEnabled(context)
+        getMinimizedAlbumArtStyle(context)
+        getExpandedAlbumArtStyle(context)
+        isShowExpandedAlbumArtEnabled(context)
+        getExpandedPlayerLayout(context)
+        isShowProgressSquigglesEnabled(context)
+        isShowMinimizedVisualizerEnabled(context)
+        getExpandedElementVisibility(context)
+        getMinimizedAlbumArtShape(context)
+        getExpandedAlbumArtShape(context)
+        getMinimizedAlbumArtRotation(context)
+        getExpandedAlbumArtRotation(context)
+        isShowMinimizedDominantColorGlowEnabled(context)
+        isShowExpandedDominantColorGlowEnabled(context)
+        getCameraCoverStyle(context)
+        getWaveformBandCount(context)
+        getWaveformBarWidth(context)
+        getWaveformBarSpacing(context)
+        isHqVisualizerEnabled(context)
+        getVisualizerMode(context)
+        getPreviewAudioSource(context)
     }
 
     private fun parseAlbumArtStyle(styleName: String?): AlbumArtStyle {
@@ -748,6 +785,34 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_FLASHLIGHT_ISLAND, enabled).apply()
         _showFlashlightIslandFlow.value = enabled
         isShowFlashlightIslandInitialized = true
+    }
+
+    fun isShowMinimizedFlashlightOutlineEnabled(context: Context): Boolean {
+        if (!isShowMinimizedFlashlightOutlineInitialized) {
+            _showMinimizedFlashlightOutlineFlow.value = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE, true)
+            isShowMinimizedFlashlightOutlineInitialized = true
+        }
+        return _showMinimizedFlashlightOutlineFlow.value
+    }
+
+    fun setShowMinimizedFlashlightOutlineEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE, enabled).apply()
+        _showMinimizedFlashlightOutlineFlow.value = enabled
+        isShowMinimizedFlashlightOutlineInitialized = true
+    }
+
+    fun isShowExpandedFlashlightOutlineEnabled(context: Context): Boolean {
+        if (!isShowExpandedFlashlightOutlineInitialized) {
+            _showExpandedFlashlightOutlineFlow.value = getPrefs(context).getBoolean(KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE, true)
+            isShowExpandedFlashlightOutlineInitialized = true
+        }
+        return _showExpandedFlashlightOutlineFlow.value
+    }
+
+    fun setShowExpandedFlashlightOutlineEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE, enabled).apply()
+        _showExpandedFlashlightOutlineFlow.value = enabled
+        isShowExpandedFlashlightOutlineInitialized = true
     }
 
     fun isFlashlightTapToToggleEnabled(context: Context): Boolean {

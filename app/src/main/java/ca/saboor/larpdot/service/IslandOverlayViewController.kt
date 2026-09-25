@@ -103,9 +103,11 @@ class IslandOverlayViewController(
     private var isCompactSurfaceHidden by mutableStateOf(false)
     private var isSelectedDotFallbackHidden by mutableStateOf(false)
     private var compactPressScale by mutableFloatStateOf(1f)
+    private var compactStretch by mutableFloatStateOf(0f)
     private var compactSurfaceBounds by mutableStateOf<Rect?>(null)
     private val secondarySurfaceBounds = mutableStateMapOf<IslandType, Rect>()
     private val secondarySurfaceScales = mutableStateMapOf<IslandType, Float>()
+    private val secondarySurfaceStretches = mutableStateMapOf<IslandType, Float>()
     private val secondarySurfaceAlphas = mutableStateMapOf<IslandType, Float>()
     private var expansionSourceBounds by mutableStateOf<Rect?>(null)
     private var isExpandedFromTinyDot by mutableStateOf(false)
@@ -212,6 +214,7 @@ class IslandOverlayViewController(
                             if (type !in secondaryTypes) {
                                 secondarySurfaceBounds.remove(type)
                                 secondarySurfaceScales.remove(type)
+                                secondarySurfaceStretches.remove(type)
                                 secondarySurfaceAlphas.remove(type)
                             }
                         }
@@ -241,6 +244,9 @@ class IslandOverlayViewController(
                             onCompactScaleChanged = { scale ->
                                 if (compactPressScale != scale) compactPressScale = scale
                             },
+                            onCompactStretchChanged = { stretch ->
+                                if (compactStretch != stretch) compactStretch = stretch
+                            },
                             onSecondaryBoundsChanged = { type, bounds ->
                                 if (type in secondaryTypes && secondarySurfaceBounds[type] != bounds) {
                                     secondarySurfaceBounds[type] = bounds
@@ -249,6 +255,11 @@ class IslandOverlayViewController(
                             onSecondaryScaleChanged = { type, scale ->
                                 if (type in secondaryTypes && secondarySurfaceScales[type] != scale) {
                                     secondarySurfaceScales[type] = scale
+                                }
+                            },
+                            onSecondaryStretchChanged = { type, stretch ->
+                                if (type in secondaryTypes && secondarySurfaceStretches[type] != stretch) {
+                                    secondarySurfaceStretches[type] = stretch
                                 }
                             },
                             onSecondaryAlphaChanged = { type, alpha ->
@@ -282,6 +293,7 @@ class IslandOverlayViewController(
                                 compactSurfaceBounds
                             },
                             compactPressScale = compactPressScale,
+                            compactStretch = compactStretch,
                         )
                         val dotSurfaces = buildList {
                             addAll(secondaryTypes)
@@ -317,6 +329,7 @@ class IslandOverlayViewController(
                                         expansionSourceBounds ?: bounds
                                     } else bounds,
                                     compactPressScale = secondarySurfaceScales[type] ?: 1f,
+                                    compactStretch = secondarySurfaceStretches[type] ?: 0f,
                                 )
                             }
                         }
@@ -359,23 +372,12 @@ class IslandOverlayViewController(
             observeNotificationActivityState()
             observeCutoutConfig()
             observeMinimizedAlbumArtStyle()
-            OverlayPreferences.isShowMinimizedTitleEnabled(context)
-            OverlayPreferences.isShowSongAnnouncementEnabled(context)
             observeDebugPreference()
             observeDotRightSideInfoPreference()
             OverlayPreferences.isDebugModeEnabled(context)
             OverlayPreferences.isShowFlashlightIslandEnabled(context)
             OverlayPreferences.isFlashlightTapToToggleEnabled(context)
-            OverlayPreferences.getMinimizedAlbumArtStyle(context)
-            OverlayPreferences.getMinimizedAlbumArtRotation(context)
-            OverlayPreferences.getExpandedAlbumArtRotation(context)
-            OverlayPreferences.isShowExpandedAlbumArtEnabled(context)
-            OverlayPreferences.isShowMinimizedDominantColorGlowEnabled(context)
-            OverlayPreferences.isShowExpandedDominantColorGlowEnabled(context)
-            OverlayPreferences.getExpandedAlbumArtStyle(context)
-            OverlayPreferences.getExpandedPlayerLayout(context)
-            OverlayPreferences.getVisualizerMode(context)
-            OverlayPreferences.getWaveformBandCount(context)
+            OverlayPreferences.initializeMusicSettings(context)
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -696,12 +698,17 @@ class IslandOverlayViewController(
         } else {
             createTouchLayoutParams(cutout, pillWPx, pillHPx, leftExtentPx, rightExtentPx, isLandscape, rotation, screenWidth)
         }
+        val oldParams = touchWindowParams
+        val geometryChanged = oldParams == null || oldParams.width != tParams.width ||
+                oldParams.height != tParams.height || oldParams.x != tParams.x ||
+                oldParams.y != tParams.y || oldParams.flags != tParams.flags ||
+                oldParams.gravity != tParams.gravity
         touchWindowParams = tParams
 
         try {
-            if (touchAdded) {
+            if (touchAdded && geometryChanged) {
                 wm.updateViewLayout(view, tParams)
-            } else {
+            } else if (!touchAdded) {
                 wm.addView(view, tParams)
                 touchAdded = true
             }
@@ -856,8 +863,8 @@ class IslandOverlayViewController(
                     if (!hasMedia && !hasFlashlight && isIslandExpanded) {
                         collapseOverlay()
                     }
+                    updateOverlayLayout()
                 }
-                updateOverlayLayout()
             }
         }
         controllerScope.launch {
@@ -996,9 +1003,11 @@ class IslandOverlayViewController(
         isCompactSurfaceHidden = false
         isSelectedDotFallbackHidden = false
         compactPressScale = 1f
+        compactStretch = 0f
         compactSurfaceBounds = null
         secondarySurfaceBounds.clear()
         secondarySurfaceScales.clear()
+        secondarySurfaceStretches.clear()
         secondarySurfaceAlphas.clear()
         expansionSourceBounds = null
         isExpandedFromTinyDot = false

@@ -90,12 +90,16 @@ fun FlashlightScreen(
     val usePixelLight by OverlayPreferences.usePixelLightFlow.collectAsState()
 
     val showInIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+    val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
+    val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val tapToToggle by OverlayPreferences.flashlightTapToToggleFlow.collectAsState()
 
     LaunchedEffect(Unit) {
         FlashlightController.init(context)
         FlashlightController.checkPixelLightInstallation(context)
         OverlayPreferences.isShowFlashlightIslandEnabled(context)
+        OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context)
+        OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)
         OverlayPreferences.isFlashlightTapToToggleEnabled(context)
         OverlayPreferences.isUsePixelLightEnabled(context)
     }
@@ -309,6 +313,27 @@ fun FlashlightScreen(
 
                 Spacer(Modifier.height(10.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Strength Outline", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Show torch brightness around the compact island",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = showMinimizedOutline,
+                        onCheckedChange = { OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it) },
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
                 // Compact Pill Tap Interaction Mode
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -345,9 +370,33 @@ fun FlashlightScreen(
                     )
 
                     Text(
-                        text = "Tap or long-press expands the island card directly to adjust brightness or toggle power.",
+                        text = "Swipe right on the flashlight island to raise brightness, or left to lower it. Hold to keep stepping; move farther for faster, larger steps. Tap or long-press to open the island card or toggle power.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        if (selectedTabIndex == 1) item {
+            SectionHeader(title = "Expanded Appearance")
+            LarpCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Strength Outline", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Show torch brightness around the expanded card",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = showExpandedOutline,
+                        onCheckedChange = { OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, it) },
                     )
                 }
             }
