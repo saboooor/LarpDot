@@ -47,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -661,10 +662,16 @@ private fun CutoutSliderRow(
                 Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
             }
 
+            val sliderState = remember(valueRange) {
+                SliderState(
+                    value = value,
+                    trackRange = valueRange,
+                )
+            }
+            sliderState.value = value
             Slider(
-                value = value,
+                state = sliderState,
                 onValueChange = onValueChange,
-                valueRange = valueRange,
                 modifier = Modifier.weight(1f),
             )
 

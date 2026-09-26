@@ -37,16 +37,18 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -115,7 +117,7 @@ fun FlashlightScreen(
         }
 
         item {
-            TabRow(selectedTabIndex = selectedTabIndex) {
+            PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { onTabSelected(0) },
@@ -221,13 +223,19 @@ fun FlashlightScreen(
                             )
                         }
 
+                        val sliderState = remember(maxStrength) {
+                            SliderState(
+                                value = torchStrength.toFloat(),
+                                steps = maxStrength - 2,
+                                trackRange = 1f..maxStrength.toFloat(),
+                            )
+                        }
+                        sliderState.value = torchStrength.toFloat()
                         Slider(
-                            value = torchStrength.toFloat(),
+                            state = sliderState,
                             onValueChange = { newLevel ->
                                 FlashlightController.setStrength(newLevel.roundToInt())
                             },
-                            valueRange = 1f..maxStrength.toFloat(),
-                            steps = maxStrength - 2,
                             colors = SliderDefaults.colors(
                                 thumbColor = MaterialTheme.colorScheme.primary,
                                 activeTrackColor = MaterialTheme.colorScheme.primary,

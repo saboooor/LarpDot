@@ -9,6 +9,7 @@ import android.media.session.MediaSessionManager
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import androidx.core.os.BundleCompat
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.notification.NotificationActivityState
@@ -77,12 +78,11 @@ class NotificationAccessService : NotificationListenerService() {
                 if (MediaPlaybackState.isPackageBlacklisted(sbn.packageName)) {
                     return
                 }
-                val sessionToken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, android.media.session.MediaSession.Token::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    extras.getParcelable(Notification.EXTRA_MEDIA_SESSION) as? android.media.session.MediaSession.Token
-                }
+                val sessionToken = BundleCompat.getParcelable(
+                    extras,
+                    Notification.EXTRA_MEDIA_SESSION,
+                    android.media.session.MediaSession.Token::class.java,
+                )
 
                 if (sessionToken != null) {
                     try {
@@ -116,14 +116,15 @@ class NotificationAccessService : NotificationListenerService() {
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
                 val artist = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
 
-                var artwork: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    extras.getParcelable(Notification.EXTRA_PICTURE, Bitmap::class.java)
-                        ?: extras.getParcelable(Notification.EXTRA_LARGE_ICON_BIG, Bitmap::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    (extras.getParcelable(Notification.EXTRA_PICTURE) as? Bitmap)
-                        ?: (extras.getParcelable(Notification.EXTRA_LARGE_ICON_BIG) as? Bitmap)
-                }
+                var artwork: Bitmap? = BundleCompat.getParcelable(
+                    extras,
+                    Notification.EXTRA_PICTURE,
+                    Bitmap::class.java,
+                ) ?: BundleCompat.getParcelable(
+                    extras,
+                    Notification.EXTRA_LARGE_ICON_BIG,
+                    Bitmap::class.java,
+                )
 
                 if (artwork == null) {
                     val largeIcon = notif.getLargeIcon()

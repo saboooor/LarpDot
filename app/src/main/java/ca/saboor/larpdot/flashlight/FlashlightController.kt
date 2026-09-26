@@ -192,7 +192,6 @@ object FlashlightController {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.packageManager.getPackageInfo(PIXELLIGHT_PACKAGE, PackageManager.PackageInfoFlags.of(0))
             } else {
-                @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(PIXELLIGHT_PACKAGE, 0)
             }
             true

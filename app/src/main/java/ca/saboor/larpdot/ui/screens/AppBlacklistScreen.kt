@@ -109,7 +109,6 @@ fun AppBlacklistScreen(
             val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.queryIntentActivities(mainIntent, PackageManager.ResolveInfoFlags.of(0L))
             } else {
-                @Suppress("DEPRECATION")
                 pm.queryIntentActivities(mainIntent, 0)
             }
 

@@ -41,12 +41,7 @@ class DotOverlayService : Service() {
 
         flashlightBroadcast.register(this)
 
-        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+        val overlayType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
         val controller = IslandOverlayViewController(this, overlayType)
         overlayController = controller

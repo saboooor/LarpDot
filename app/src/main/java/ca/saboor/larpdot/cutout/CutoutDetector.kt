@@ -5,7 +5,6 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.hardware.display.DisplayManager
 import android.os.Build
-import android.util.DisplayMetrics
 import android.view.Display
 import android.view.DisplayCutout
 import android.view.RoundedCorner
@@ -58,7 +57,6 @@ object CutoutDetector {
     /**
      * Automatically locates the physical camera hole punch cutout from device hardware.
      */
-    @Suppress("DEPRECATION")
     fun detectHardwareCutout(context: Context): CutoutInfo {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
         val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -68,10 +66,10 @@ object CutoutDetector {
                 displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
             }
         } else {
-            (context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.defaultDisplay
-        } ?: displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+            displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+        }
 
-        val displayContext = if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+        val displayContext = if (display != null) {
             try {
                 context.createDisplayContext(display)
             } catch (_: Exception) {
@@ -81,22 +79,20 @@ object CutoutDetector {
             context
         }
 
-        val realMetrics = DisplayMetrics()
-        val screenWidth: Float
-        val screenHeight: Float
-        val density: Float
-
-        if (display != null) {
-            display.getRealMetrics(realMetrics)
-            screenWidth = realMetrics.widthPixels.toFloat()
-            screenHeight = realMetrics.heightPixels.toFloat()
-            density = realMetrics.density
+        val (screenWidth, screenHeight) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wm = displayContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            val bounds = wm?.currentWindowMetrics?.bounds
+            if (bounds != null) {
+                Pair(bounds.width().toFloat(), bounds.height().toFloat())
+            } else {
+                val dm = displayContext.resources.displayMetrics
+                Pair(dm.widthPixels.toFloat(), dm.heightPixels.toFloat())
+            }
         } else {
             val dm = displayContext.resources.displayMetrics
-            screenWidth = dm.widthPixels.toFloat()
-            screenHeight = dm.heightPixels.toFloat()
-            density = dm.density
+            Pair(dm.widthPixels.toFloat(), dm.heightPixels.toFloat())
         }
+        val density = displayContext.resources.displayMetrics.density
 
         val rotation = display?.rotation ?: Surface.ROTATION_0
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 || screenWidth > screenHeight
@@ -129,22 +125,11 @@ object CutoutDetector {
                     displayWm?.currentWindowMetrics?.windowInsets?.displayCutout
                 } catch (_: Exception) {
                     null
-                } ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    display?.cutout
-                } else {
-                    display?.let {
-                        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                        wm?.defaultDisplay?.cutout
-                    }
-                }
+                } ?: display?.cutout
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                display?.cutout ?: run {
-                    val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                    wm?.defaultDisplay?.cutout
-                }
+                display?.cutout
             } else {
-                val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                wm?.defaultDisplay?.cutout
+                null
             }
 
             if (cutout != null) {

@@ -21,6 +21,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.core.content.IntentCompat
 import ca.saboor.larpdot.MainActivity
 import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
 import kotlinx.coroutines.CoroutineScope
@@ -64,11 +65,8 @@ class AudioCaptureService : Service() {
         }
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-        val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent?.getParcelableExtra(EXTRA_RESULT_DATA)
+        val resultData: Intent? = intent?.let {
+            IntentCompat.getParcelableExtra(it, EXTRA_RESULT_DATA, Intent::class.java)
         }
         val bandCount = intent?.getIntExtra(EXTRA_BAND_COUNT, 5) ?: 5
 

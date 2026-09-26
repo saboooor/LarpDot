@@ -25,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -319,10 +320,17 @@ internal fun ShapePickerSection(
                 )
             }
 
+            val currentRotation = (((rotationDegrees % 360f) + 360f) % 360f)
+            val rotationSliderState = remember {
+                SliderState(
+                    value = currentRotation,
+                    trackRange = 0f..360f,
+                )
+            }
+            rotationSliderState.value = currentRotation
             Slider(
-                value = (((rotationDegrees % 360f) + 360f) % 360f),
+                state = rotationSliderState,
                 onValueChange = { onRotationChanged(it.roundToInt().toFloat()) },
-                valueRange = 0f..360f,
                 modifier = Modifier.weight(1f),
             )
 

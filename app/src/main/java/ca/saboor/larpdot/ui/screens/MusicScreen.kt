@@ -29,11 +29,12 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -201,7 +202,7 @@ fun MusicScreen(
         }
 
         item {
-            TabRow(selectedTabIndex = selectedTabIndex) {
+            PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { onTabSelected(0) },
@@ -883,13 +884,19 @@ fun MusicScreen(
                             )
                         }
 
+                        val bandSliderState = remember {
+                            SliderState(
+                                value = waveformBandCount.toFloat(),
+                                steps = 29,
+                                trackRange = 0f..30f,
+                            )
+                        }
+                        bandSliderState.value = waveformBandCount.toFloat()
                         Slider(
-                            value = waveformBandCount.toFloat(),
+                            state = bandSliderState,
                             onValueChange = {
                                 OverlayPreferences.setWaveformBandCount(context, it.roundToInt())
                             },
-                            valueRange = 0f..30f,
-                            steps = 29,
                             modifier = Modifier.fillMaxWidth(),
                         )
 
@@ -912,15 +919,21 @@ fun MusicScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                             }
+                            val widthSliderState = remember {
+                                SliderState(
+                                    value = waveformBarWidth,
+                                    trackRange = 0.5f..6f,
+                                )
+                            }
+                            widthSliderState.value = waveformBarWidth
                             Slider(
-                                value = waveformBarWidth,
+                                state = widthSliderState,
                                 onValueChange = {
                                     OverlayPreferences.setWaveformBarWidth(
                                         context,
                                         (it * 10f).roundToInt() / 10f,
                                     )
                                 },
-                                valueRange = 0.5f..6f,
                             )
                         }
 
@@ -943,15 +956,21 @@ fun MusicScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                             }
+                            val spacingSliderState = remember {
+                                SliderState(
+                                    value = waveformBarSpacing,
+                                    trackRange = 0f..8f,
+                                )
+                            }
+                            spacingSliderState.value = waveformBarSpacing
                             Slider(
-                                value = waveformBarSpacing,
+                                state = spacingSliderState,
                                 onValueChange = {
                                     OverlayPreferences.setWaveformBarSpacing(
                                         context,
                                         (it * 10f).roundToInt() / 10f,
                                     )
                                 },
-                                valueRange = 0f..8f,
                             )
                         }
 

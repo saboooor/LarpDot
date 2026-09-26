@@ -5,7 +5,6 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.os.Build
 import android.util.Log
 import ca.saboor.larpdot.media.MediaPlaybackState
 import kotlinx.coroutines.CoroutineScope
@@ -153,32 +152,23 @@ object PreviewAudioPlayer {
         return try {
             val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
             audioManager = am
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .build()
-                    )
-                    .setOnAudioFocusChangeListener { focusChange ->
-                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
-                            focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
-                        ) {
-                            pause()
-                        }
+            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener { focusChange ->
+                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+                        focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+                    ) {
+                        pause()
                     }
-                    .build()
-                audioFocusRequest = focusRequest
-                am.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            } else {
-                @Suppress("DEPRECATION")
-                am.requestAudioFocus(
-                    null,
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT,
-                ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            }
+                }
+                .build()
+            audioFocusRequest = focusRequest
+            am.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         } catch (e: Exception) {
             Log.w(TAG, "Failed requesting audio focus: ${e.message}")
             false
@@ -188,13 +178,8 @@ object PreviewAudioPlayer {
     private fun abandonAudioFocus() {
         try {
             val am = audioManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
-                audioFocusRequest = null
-            } else {
-                @Suppress("DEPRECATION")
-                am.abandonAudioFocus(null)
-            }
+            audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
         } catch (_: Exception) {}
     }
 

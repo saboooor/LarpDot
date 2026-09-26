@@ -440,16 +440,18 @@ class IslandOverlayViewController(
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun createCompactLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
         val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
-        val realMetrics = DisplayMetrics()
-        display?.getRealMetrics(realMetrics)
 
         val dm = context.resources.displayMetrics
         val density = dm.density
-        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
+        val screenWidth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            wm?.currentWindowMetrics?.bounds?.width() ?: dm.widthPixels
+        } else {
+            dm.widthPixels
+        }
         val rotation = display?.rotation ?: Surface.ROTATION_0
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
                 context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -520,11 +522,9 @@ class IslandOverlayViewController(
             posY = windowPosY
         }
 
-        @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
         // compactView is purely for drawing and never blocks touches directly;
         // touches are intercepted and routed by touchView
@@ -586,12 +586,10 @@ class IslandOverlayViewController(
             posY = (topAnchor - touchPad).coerceAtLeast(0)
         }
 
-        @Suppress("DEPRECATION")
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
         return WindowManager.LayoutParams(
             touchWidth,
@@ -620,9 +618,12 @@ class IslandOverlayViewController(
 
         val dm = context.resources.displayMetrics
         val density = dm.density
-        val realMetrics = DisplayMetrics()
-        display?.getRealMetrics(realMetrics)
-        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
+        val screenWidth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wmInstance = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            wmInstance?.currentWindowMetrics?.bounds?.width() ?: dm.widthPixels
+        } else {
+            dm.widthPixels
+        }
 
         val stack = currentStack()
         val dotCount = stack.secondary.size
@@ -778,8 +779,7 @@ class IslandOverlayViewController(
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -790,34 +790,39 @@ class IslandOverlayViewController(
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun createExpandedLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
         val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
-        val realMetrics = DisplayMetrics()
-        display?.getRealMetrics(realMetrics)
 
         val dm = context.resources.displayMetrics
         val density = dm.density
-        val screenWidth = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else dm.widthPixels
+        val (screenWidth, screenHeight) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            val bounds = wm?.currentWindowMetrics?.bounds
+            if (bounds != null) {
+                Pair(bounds.width(), bounds.height())
+            } else {
+                Pair(dm.widthPixels, dm.heightPixels)
+            }
+        } else {
+            Pair(dm.widthPixels, dm.heightPixels)
+        }
         val rotation = display?.rotation ?: Surface.ROTATION_0
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270 ||
                 context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
         val targetWidth = if (isLandscape) {
-            val minDim = minOf(realMetrics.widthPixels, realMetrics.heightPixels)
-            val maxDim = maxOf(realMetrics.widthPixels, realMetrics.heightPixels)
+            val minDim = minOf(screenWidth, screenHeight)
+            val maxDim = maxOf(screenWidth, screenHeight)
             if (screenWidth == minDim) minDim else maxDim
         } else {
             screenWidth
         }
         val targetHeight = (460f * density).toInt()
 
-        @Suppress("DEPRECATION")
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
         // This is the single stable draw surface. Input is always handled by the lightweight
         // forwarding window, so WindowManager never has to swap or resize a visual surface.
