@@ -86,6 +86,8 @@ import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.rememberBpmPulse
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -205,6 +207,15 @@ fun CompactIslandOverlay(
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val isAnnouncing = isSongAnnouncement && showSongAnnouncement && isMusicActive
+    val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val isBpmResolved by BpmDetector.isResolved.collectAsState()
+    val bpmPulseState = rememberBpmPulse(
+        bpm = if (isBpmResolved) currentBpm else null,
+        currentPositionMs = mediaInfo.positionMs,
+        isPlaying = mediaInfo.isPlaying,
+        enabled = pulseEntireIsland && isMusicActive,
+    )
 
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val nestedActiveExtraDp = compactPillThickness + nestedArtSize
@@ -548,8 +559,14 @@ fun CompactIslandOverlay(
                     val stretchMag = dragOffsetAnim.value / maxDragOffsetPx
                     val maxStretch = 0.18f
                     val isSwiping = kotlin.math.abs(stretchMag) > 0.01f
-                    scaleX = (1f + kotlin.math.abs(stretchMag) * maxStretch) * islandScale
-                    scaleY = islandScale
+                    val pulse = bpmPulseState.value
+                    val pulseScale = if (pulseEntireIsland && isMusicActive && mediaInfo.isPlaying && activeDisplayType == IslandType.MEDIA && pulse > 0f) {
+                        1f + (0.035f * pulse)
+                    } else {
+                        1f
+                    }
+                    scaleX = (1f + kotlin.math.abs(stretchMag) * maxStretch) * islandScale * pulseScale
+                    scaleY = islandScale * pulseScale
                     transformOrigin = if (isSwiping) {
                         if (stretchMag >= 0f) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
                     } else {
@@ -936,9 +953,15 @@ fun CompactIslandOverlay(
             return
         }
 
+        val pulse = bpmPulseState.value
+        val secondaryPulseScale = if (pulseEntireIsland && isMusicActive && mediaInfo.isPlaying && type == IslandType.MEDIA && pulse > 0f) {
+            1f + (0.035f * pulse)
+        } else {
+            1f
+        }
         Surface(
             modifier = bubbleModifier
-                .scale(pressScale * bubbleScale)
+                .scale(pressScale * bubbleScale * secondaryPulseScale)
                 .graphicsLayer {
                     alpha = effectiveAlpha
                     clip = true
@@ -1342,6 +1365,15 @@ fun IslandSurfaceOverlay(
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
+    val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val isBpmResolved by BpmDetector.isResolved.collectAsState()
+    val bpmPulseState = rememberBpmPulse(
+        bpm = if (isBpmResolved) currentBpm else null,
+        currentPositionMs = mediaInfo.positionMs,
+        isPlaying = mediaInfo.isPlaying,
+        enabled = pulseEntireIsland && expandedType == IslandType.MEDIA,
+    )
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val compactExtraDp = when {
         expandedType == IslandType.FLASHLIGHT -> 48.dp
@@ -1560,8 +1592,17 @@ fun IslandSurfaceOverlay(
                 .graphicsLayer {
                     val pressScale = 1f + (compactPressScale - 1f) * (1f - morphProgress.value).coerceIn(0f, 1f)
                     val stretch = compactStretch * (1f - morphProgress.value).coerceIn(0f, 1f)
-                    scaleX = pressScale * (1f + kotlin.math.abs(stretch) * if (isSecondarySurface) 0.22f else 0.18f)
-                    scaleY = pressScale
+                    val pulse = bpmPulseState.value
+                    val islandPulseScale = if (pulseEntireIsland && mediaInfo.isPlaying && expandedType == IslandType.MEDIA && pulse > 0f) {
+                        val pulseMagnitude = 0.035f - (0.015f * morphProgress.value)
+                        1f + (pulseMagnitude * pulse)
+                    } else {
+                        1f
+                    }
+                    val totalScaleX = pressScale * (1f + kotlin.math.abs(stretch) * if (isSecondarySurface) 0.22f else 0.18f) * islandPulseScale
+                    val totalScaleY = pressScale * islandPulseScale
+                    scaleX = totalScaleX
+                    scaleY = totalScaleY
                     transformOrigin = when {
                         stretch > 0.01f -> TransformOrigin(0f, 0.5f)
                         stretch < -0.01f -> TransformOrigin(1f, 0.5f)

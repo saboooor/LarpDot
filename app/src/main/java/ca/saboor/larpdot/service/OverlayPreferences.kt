@@ -32,6 +32,7 @@ object OverlayPreferences {
     private const val KEY_SHOW_EXPANDED_MAIN_CONTROLS = "show_expanded_main_controls"
     private const val KEY_SHOW_EXPANDED_APP_ACTIONS = "show_expanded_app_actions"
     private const val KEY_SHOW_EXPANDED_VISUALIZER = "show_expanded_visualizer"
+    private const val KEY_SHOW_EXPANDED_BPM = "show_expanded_bpm"
     private const val KEY_NESTED_ALBUM_ART_SHAPE = "nested_album_art_shape"
     private const val KEY_MINIMIZED_ALBUM_ART_SHAPE = "minimized_album_art_shape"
     private const val KEY_EXPANDED_ALBUM_ART_SHAPE = "expanded_album_art_shape"
@@ -43,6 +44,12 @@ object OverlayPreferences {
     private const val KEY_SHOW_DOMINANT_COLOR_GLOW = "show_dominant_color_glow"
     private const val KEY_SHOW_MINIMIZED_DOMINANT_COLOR_GLOW = "show_minimized_dominant_color_glow"
     private const val KEY_SHOW_EXPANDED_DOMINANT_COLOR_GLOW = "show_expanded_dominant_color_glow"
+    private const val KEY_EXPANDED_GLOW_LEFT = "expanded_glow_left"
+    private const val KEY_EXPANDED_GLOW_RIGHT = "expanded_glow_right"
+    private const val KEY_EXPANDED_GLOW_BOTTOM = "expanded_glow_bottom"
+    private const val KEY_EXPANDED_GLOW_TOP = "expanded_glow_top"
+    private const val KEY_BPM_PULSE_ENABLED = "bpm_pulse_enabled"
+    private const val KEY_PULSE_ENTIRE_ISLAND_ENABLED = "pulse_entire_island_enabled"
     private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
@@ -114,6 +121,14 @@ object OverlayPreferences {
         val mainControls: Boolean = true,
         val appActions: Boolean = true,
         val visualizer: Boolean = true,
+        val bpm: Boolean = true,
+    )
+
+    data class ExpandedGlowSides(
+        val left: Boolean = false,
+        val right: Boolean = true,
+        val bottom: Boolean = true,
+        val top: Boolean = false,
     )
 
     enum class NestedAlbumArtShape(val label: String) {
@@ -233,6 +248,15 @@ object OverlayPreferences {
     private val _showExpandedDominantColorGlowFlow = MutableStateFlow(true)
     val showExpandedDominantColorGlowFlow: StateFlow<Boolean> = _showExpandedDominantColorGlowFlow.asStateFlow()
 
+    private val _expandedGlowSidesFlow = MutableStateFlow(ExpandedGlowSides())
+    val expandedGlowSidesFlow: StateFlow<ExpandedGlowSides> = _expandedGlowSidesFlow.asStateFlow()
+
+    private val _bpmPulseEnabledFlow = MutableStateFlow(true)
+    val bpmPulseEnabledFlow: StateFlow<Boolean> = _bpmPulseEnabledFlow.asStateFlow()
+
+    private val _pulseEntireIslandEnabledFlow = MutableStateFlow(false)
+    val pulseEntireIslandEnabledFlow: StateFlow<Boolean> = _pulseEntireIslandEnabledFlow.asStateFlow()
+
     private val _cameraCoverStyleFlow = MutableStateFlow(CameraCoverStyle.SWOOP)
     val cameraCoverStyleFlow: StateFlow<CameraCoverStyle> = _cameraCoverStyleFlow.asStateFlow()
 
@@ -326,6 +350,9 @@ object OverlayPreferences {
     private var isExpandedAlbumArtRotationInitialized = false
     private var isShowMinimizedDominantColorGlowInitialized = false
     private var isShowExpandedDominantColorGlowInitialized = false
+    private var isExpandedGlowSidesInitialized = false
+    private var isBpmPulseEnabledInitialized = false
+    private var isPulseEntireIslandEnabledInitialized = false
     private var isCameraCoverStyleInitialized = false
     private var isShowFlashlightIslandInitialized = false
     private var isShowMinimizedFlashlightOutlineInitialized = false
@@ -365,6 +392,9 @@ object OverlayPreferences {
         getExpandedAlbumArtRotation(context)
         isShowMinimizedDominantColorGlowEnabled(context)
         isShowExpandedDominantColorGlowEnabled(context)
+        getExpandedGlowSides(context)
+        isBpmPulseEnabled(context)
+        isPulseEntireIslandEnabled(context)
         getCameraCoverStyle(context)
         getWaveformBandCount(context)
         getWaveformBarWidth(context)
@@ -617,6 +647,7 @@ object OverlayPreferences {
                 mainControls = prefs.getBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, true),
                 appActions = prefs.getBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, true),
                 visualizer = prefs.getBoolean(KEY_SHOW_EXPANDED_VISUALIZER, true),
+                bpm = prefs.getBoolean(KEY_SHOW_EXPANDED_BPM, true),
             )
             isExpandedElementVisibilityInitialized = true
         }
@@ -630,6 +661,7 @@ object OverlayPreferences {
             .putBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, visibility.mainControls)
             .putBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, visibility.appActions)
             .putBoolean(KEY_SHOW_EXPANDED_VISUALIZER, visibility.visualizer)
+            .putBoolean(KEY_SHOW_EXPANDED_BPM, visibility.bpm)
             .apply()
         _expandedElementVisibilityFlow.value = visibility
         isExpandedElementVisibilityInitialized = true
@@ -775,6 +807,64 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_DOMINANT_COLOR_GLOW, enabled).apply()
         _showExpandedDominantColorGlowFlow.value = enabled
         isShowExpandedDominantColorGlowInitialized = true
+    }
+
+    fun getExpandedGlowSides(context: Context): ExpandedGlowSides {
+        if (!isExpandedGlowSidesInitialized) {
+            val prefs = getPrefs(context)
+            val sides = ExpandedGlowSides(
+                left = prefs.getBoolean(KEY_EXPANDED_GLOW_LEFT, false),
+                right = prefs.getBoolean(KEY_EXPANDED_GLOW_RIGHT, true),
+                bottom = prefs.getBoolean(KEY_EXPANDED_GLOW_BOTTOM, true),
+                top = prefs.getBoolean(KEY_EXPANDED_GLOW_TOP, false),
+            )
+            _expandedGlowSidesFlow.value = sides
+            isExpandedGlowSidesInitialized = true
+        }
+        return _expandedGlowSidesFlow.value
+    }
+
+    fun setExpandedGlowSides(context: Context, sides: ExpandedGlowSides) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_EXPANDED_GLOW_LEFT, sides.left)
+            .putBoolean(KEY_EXPANDED_GLOW_RIGHT, sides.right)
+            .putBoolean(KEY_EXPANDED_GLOW_BOTTOM, sides.bottom)
+            .putBoolean(KEY_EXPANDED_GLOW_TOP, sides.top)
+            .apply()
+        _expandedGlowSidesFlow.value = sides
+        isExpandedGlowSidesInitialized = true
+    }
+
+    fun isBpmPulseEnabled(context: Context): Boolean {
+        if (!isBpmPulseEnabledInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(KEY_BPM_PULSE_ENABLED, true)
+            _bpmPulseEnabledFlow.value = enabled
+            isBpmPulseEnabledInitialized = true
+        }
+        return _bpmPulseEnabledFlow.value
+    }
+
+    fun setBpmPulseEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_BPM_PULSE_ENABLED, enabled).apply()
+        _bpmPulseEnabledFlow.value = enabled
+        isBpmPulseEnabledInitialized = true
+    }
+
+    fun isPulseEntireIslandEnabled(context: Context): Boolean {
+        if (!isPulseEntireIslandEnabledInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(KEY_PULSE_ENTIRE_ISLAND_ENABLED, false)
+            _pulseEntireIslandEnabledFlow.value = enabled
+            isPulseEntireIslandEnabledInitialized = true
+        }
+        return _pulseEntireIslandEnabledFlow.value
+    }
+
+    fun setPulseEntireIslandEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_PULSE_ENTIRE_ISLAND_ENABLED, enabled).apply()
+        _pulseEntireIslandEnabledFlow.value = enabled
+        isPulseEntireIslandEnabledInitialized = true
     }
 
     fun getCameraCoverStyle(context: Context): CameraCoverStyle {

@@ -48,6 +48,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.rememberBpmPulse
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.DominantColorExtractor
 import ca.saboor.larpdot.media.MediaPlaybackState
@@ -118,6 +121,15 @@ fun ExpandedIslandPreview(
 
     // Always display realistic media so styles, shapes, blur, and waveforms are immediately visible
     val previewTrack = if (nowPlaying.hasMedia) nowPlaying else sampleTrack
+    val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val isBpmResolved by BpmDetector.isResolved.collectAsState()
+    val bpmPulseState = rememberBpmPulse(
+        bpm = if (isBpmResolved) currentBpm else (if (!nowPlaying.hasMedia) 120f else null),
+        currentPositionMs = previewTrack.positionMs,
+        isPlaying = previewTrack.isPlaying,
+        enabled = pulseEntireIsland,
+    )
 
     val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
     val outlineAllowanceDp = 2.dp
@@ -255,6 +267,14 @@ fun ExpandedIslandPreview(
                     modifier = Modifier
                         .width(animatedCompactWidth)
                         .height(compactPillThickness)
+                        .graphicsLayer {
+                            val pulse = bpmPulseState.value
+                            if (pulseEntireIsland && previewTrack.isPlaying && pulse > 0f) {
+                                val scale = 1f + (0.035f * pulse)
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                        }
                         .then(
                             Modifier.islandFluidProgressBorder(
                                 progressFraction = if (showProgressOutline) animatedProgress else 0f,
@@ -301,6 +321,14 @@ fun ExpandedIslandPreview(
                     .width(previewCardWidth)
                     .align(Alignment.CenterHorizontally)
                     .height(previewHeight)
+                    .graphicsLayer {
+                        val pulse = bpmPulseState.value
+                        if (pulseEntireIsland && previewTrack.isPlaying && pulse > 0f) {
+                            val scale = 1f + (0.02f * pulse)
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                    }
                     .then(
                         Modifier.islandFluidProgressBorder(
                             progressFraction = if (showProgressOutline) animatedProgress else 0f,

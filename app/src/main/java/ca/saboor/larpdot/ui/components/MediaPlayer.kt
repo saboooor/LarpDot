@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.visualizer.BpmChip
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.rememberBpmPulse
 
 /**
  * Authentic Android native media player notification card,
@@ -71,6 +76,15 @@ fun MediaPlayer(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
+    val bpmPulseEnabled by OverlayPreferences.bpmPulseEnabledFlow.collectAsState()
+    val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val bpmPulseState = rememberBpmPulse(
+        bpm = currentBpm,
+        currentPositionMs = nowPlaying.positionMs,
+        isPlaying = nowPlaying.isPlaying,
+        enabled = bpmPulseEnabled,
+    )
     val albumArt = nowPlaying.albumArt
     val progress = if (nowPlaying.durationMs > 0) {
         (nowPlaying.positionMs.toFloat() / nowPlaying.durationMs).coerceIn(0f, 1f)
@@ -161,6 +175,9 @@ fun MediaPlayer(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (expandedElementVisibility.bpm && currentBpm != null) {
+                            BpmChip(bpm = currentBpm)
+                        }
                         // "This phone" output switcher chip
                         Surface(
                             shape = CircleShape,
@@ -221,7 +238,15 @@ fun MediaPlayer(
                         onClick = { MediaPlaybackState.togglePlayPause() },
                         shape = RoundedCornerShape(18.dp),
                         color = Color.White.copy(alpha = 0.94f),
-                        modifier = Modifier.size(54.dp)
+                        modifier = Modifier
+                            .size(54.dp)
+                            .graphicsLayer {
+                                if (bpmPulseEnabled && nowPlaying.isPlaying) {
+                                    val scale = 1f + (0.08f * bpmPulseState.value)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                            }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(

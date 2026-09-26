@@ -114,13 +114,18 @@ fun MusicScreen(
     val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
     val showMinimizedDominantGlow by OverlayPreferences.showMinimizedDominantColorGlowFlow.collectAsState()
     val showExpandedDominantGlow by OverlayPreferences.showExpandedDominantColorGlowFlow.collectAsState()
+    val expandedGlowSides by OverlayPreferences.expandedGlowSidesFlow.collectAsState()
+    val bpmPulseEnabled by OverlayPreferences.bpmPulseEnabledFlow.collectAsState()
+    val pulseEntireIslandEnabled by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
     val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
     val visualizerMode by OverlayPreferences.visualizerModeFlow.collectAsState()
     val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val isBpmResolved by BpmDetector.isResolved.collectAsState()
     val detectedBpmTrack by BpmDetector.detectedTrack.collectAsState()
+    val detectedSource by BpmDetector.detectedSource.collectAsState()
     val isBpmDetecting by BpmDetector.isDetecting.collectAsState()
     val hqVisualizerEnabled by OverlayPreferences.hqVisualizerEnabledFlow.collectAsState()
     var showHqWarningDialog by remember { mutableStateOf(false) }
@@ -154,7 +159,7 @@ fun MusicScreen(
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
 
-    LaunchedEffect(nowPlaying.title, nowPlaying.artist, visualizerMode, waveformBandCount, previewSource) {
+    LaunchedEffect(nowPlaying.title, nowPlaying.artist, visualizerMode, waveformBandCount, previewSource, bpmPulseEnabled, pulseEntireIslandEnabled) {
         val title = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
         val artist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
         if (visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
@@ -162,7 +167,7 @@ fun MusicScreen(
         } else {
             AudioPreviewExtractor.syncTrack(context, title, artist, false, waveformBandCount, previewSource)
         }
-        if (visualizerMode == OverlayPreferences.VisualizerMode.BPM) {
+        if (visualizerMode == OverlayPreferences.VisualizerMode.BPM || bpmPulseEnabled || pulseEntireIslandEnabled) {
             BpmDetector.syncTrack(title, artist)
         }
     }
@@ -403,6 +408,92 @@ fun MusicScreen(
                             },
                         )
                     }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Dominant Color Glow", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Ambient colored edge glow adapted from artwork",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showExpandedDominantGlow,
+                            onCheckedChange = {
+                                OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, it)
+                            },
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = showExpandedDominantGlow,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Glow Sides",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                toggleableItem(
+                                    checked = expandedGlowSides.left,
+                                    label = "Left",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(left = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.right,
+                                    label = "Right",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(right = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.bottom,
+                                    label = "Bottom",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(bottom = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.top,
+                                    label = "Top",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(top = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                            }
+                        }
+                    }
                     }
                 }
             }
@@ -518,6 +609,12 @@ fun MusicScreen(
                             Triple("Dominant Color Glow", showMinimizedDominantGlow) { enabled ->
                                 OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, enabled)
                             },
+                            Triple("Pulse with BPM", bpmPulseEnabled) { enabled ->
+                                OverlayPreferences.setBpmPulseEnabled(context, enabled)
+                            },
+                            Triple("Pulse Entire Island", pulseEntireIslandEnabled) { enabled ->
+                                OverlayPreferences.setPulseEntireIslandEnabled(context, enabled)
+                            },
                         )
                     } else {
                         listOf(
@@ -551,11 +648,23 @@ fun MusicScreen(
                                     expandedElementVisibility.copy(appActions = enabled),
                                 )
                             },
+                            Triple("BPM", expandedElementVisibility.bpm) { enabled ->
+                                OverlayPreferences.setExpandedElementVisibility(
+                                    context,
+                                    expandedElementVisibility.copy(bpm = enabled),
+                                )
+                            },
                             Triple("Progress Outline", showExpandedProgressOutline) { enabled ->
                                 OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, enabled)
                             },
                             Triple("Dominant Color Glow", showExpandedDominantGlow) { enabled ->
                                 OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, enabled)
+                            },
+                            Triple("Pulse with BPM", bpmPulseEnabled) { enabled ->
+                                OverlayPreferences.setBpmPulseEnabled(context, enabled)
+                            },
+                            Triple("Pulse Entire Island", pulseEntireIslandEnabled) { enabled ->
+                                OverlayPreferences.setPulseEntireIslandEnabled(context, enabled)
                             },
                         )
                     }
@@ -569,6 +678,57 @@ fun MusicScreen(
                         ) {
                             Text(label, style = MaterialTheme.typography.titleMedium)
                             Switch(checked = checked, onCheckedChange = onCheckedChange)
+                        }
+                        if (selectedTabIndex == 1 && label == "Dominant Color Glow" && checked) {
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                toggleableItem(
+                                    checked = expandedGlowSides.left,
+                                    label = "Left",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(left = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.right,
+                                    label = "Right",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(right = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.bottom,
+                                    label = "Bottom",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(bottom = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                                toggleableItem(
+                                    checked = expandedGlowSides.top,
+                                    label = "Top",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setExpandedGlowSides(
+                                            context,
+                                            expandedGlowSides.copy(top = it),
+                                        )
+                                    },
+                                    weight = 1f,
+                                )
+                            }
                         }
                         if (index < visibilityOptions.lastIndex) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -615,6 +775,62 @@ fun MusicScreen(
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Pulse with BPM
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Pulse with BPM",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Rhythmically pulse the dominant color overlay and play/pause button to the track tempo",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        Switch(
+                            checked = bpmPulseEnabled,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setBpmPulseEnabled(context, isChecked)
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Pulse Entire Island
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Pulse Entire Island",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Rhythmically pulse the scale of the entire Dynamic Island to the track tempo",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        Switch(
+                            checked = pulseEntireIslandEnabled,
+                            onCheckedChange = { isChecked ->
+                                OverlayPreferences.setPulseEntireIslandEnabled(context, isChecked)
+                            },
+                        )
+                    }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
@@ -853,12 +1069,21 @@ fun MusicScreen(
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Tempo Beat Sync (${currentBpm.toInt()} BPM)",
+                                                text = if (isBpmResolved && currentBpm != null) {
+                                                    "Tempo Beat Sync (${currentBpm!!.toInt()} BPM)"
+                                                } else {
+                                                    "Tempo Beat Sync (No BPM)"
+                                                },
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.SemiBold,
                                             )
                                             Text(
-                                                text = if (isBpmDetecting) "Detecting track tempo..." else (detectedBpmTrack ?: "Standard tempo active"),
+                                                text = when {
+                                                    isBpmDetecting -> "Detecting track tempo..."
+                                                    isBpmResolved && detectedSource != null -> "${detectedBpmTrack ?: "Track"} • Verified via $detectedSource"
+                                                    isBpmResolved && currentBpm != null -> "${detectedBpmTrack ?: "Track"} • ${currentBpm!!.toInt()} BPM"
+                                                    else -> "BPM could not be resolved (pulsing inactive)"
+                                                },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )

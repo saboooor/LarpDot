@@ -9,11 +9,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -22,7 +25,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
 
@@ -38,7 +56,7 @@ import kotlin.math.sin
  */
 @Composable
 fun BpmVisualizer(
-    bpm: Float,
+    bpm: Float?,
     currentPositionMs: Long,
     isPlaying: Boolean,
     accentColor: Color,
@@ -55,6 +73,9 @@ fun BpmVisualizer(
     val maxHeightPx = with(density) { maxHeight.toPx() }
     val minHeightPx = with(density) { minHeight.toPx() }
     val heightSpanPx = maxHeightPx - minHeightPx
+
+    val hasResolvedBpm = bpm != null && bpm > 0f
+    val isBpmActive = isPlaying && hasResolvedBpm
 
     // Staggered acoustic musical ceilings
     val weights = remember(barCount) {
@@ -76,8 +97,8 @@ fun BpmVisualizer(
 
     // Playback state spring transition
     val playProgress by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
+        targetValue = if (isBpmActive) 1f else 0f,
+        animationSpec = if (isBpmActive) {
             spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
         } else {
             spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
@@ -86,15 +107,15 @@ fun BpmVisualizer(
     )
 
     val playAlpha by animateFloatAsState(
-        targetValue = if (isPlaying) 1.0f else 0.45f,
+        targetValue = if (isBpmActive) 1.0f else 0.45f,
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "bpm_alpha",
     )
 
     // Hardware frame clock
     var vsyncClock by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
+    LaunchedEffect(isBpmActive) {
+        while (isBpmActive) {
             withFrameNanos { nanos -> vsyncClock = nanos }
         }
     }
@@ -102,9 +123,11 @@ fun BpmVisualizer(
     var lastReportedPos by remember { mutableLongStateOf(currentPositionMs) }
     var lastReportedTime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
 
-    if (currentPositionMs != lastReportedPos) {
+    val nowAnchor = SystemClock.elapsedRealtime()
+    val expectedAnchorMs = lastReportedPos + if (isPlaying) (nowAnchor - lastReportedTime) else 0L
+    if (abs(currentPositionMs - expectedAnchorMs) > 600L) {
         lastReportedPos = currentPositionMs
-        lastReportedTime = SystemClock.elapsedRealtime()
+        lastReportedTime = nowAnchor
     }
 
     // Ballistic smoothing buffer dynamically sized to barCount
@@ -112,14 +135,14 @@ fun BpmVisualizer(
     val ballisticHeights = remember(safeCount) { FloatArray(safeCount) }
     val cornerRadiusPx = barWidthPx / 2f
 
-    val safeBpm = bpm.toDouble().coerceIn(60.0, 240.0)
+    val safeBpm = (bpm ?: 0f).toDouble().coerceIn(60.0, 240.0)
     val beatDurationMs = 60_000.0 / safeBpm
 
     Canvas(modifier = modifier) {
         val _tick = vsyncClock
 
         val now = SystemClock.elapsedRealtime()
-        val elapsed = if (isPlaying) (now - lastReportedTime).coerceIn(0L, 1000L) else 0L
+        val elapsed = if (isPlaying) (now - lastReportedTime).coerceAtLeast(0L) else 0L
         val exactMs = (lastReportedPos + elapsed).coerceAtLeast(0L)
 
         val currentBeatExact = exactMs.toDouble() / beatDurationMs
@@ -201,7 +224,7 @@ fun BpmVisualizer(
 
 @Composable
 fun BpmVisualizer(
-    bpm: Int,
+    bpm: Int?,
     currentPositionMs: Long,
     isPlaying: Boolean,
     accentColor: Color,
@@ -212,7 +235,7 @@ fun BpmVisualizer(
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
 ) = BpmVisualizer(
-    bpm = bpm.toFloat(),
+    bpm = bpm?.toFloat(),
     currentPositionMs = currentPositionMs,
     isPlaying = isPlaying,
     accentColor = accentColor,
@@ -223,3 +246,104 @@ fun BpmVisualizer(
     maxHeight = maxHeight,
     minHeight = minHeight,
 )
+
+/**
+ * Remembers a real-time 0f..1f beat pulse state synchronized to the track's BPM.
+ * At the onset of each musical beat, the pulse surges to 1.0 and smoothly decays.
+ * Returns 0f when paused, disabled, or when BPM is unresolved (null / <= 0).
+ */
+@Composable
+fun rememberBpmPulse(
+    bpm: Float?,
+    currentPositionMs: Long,
+    isPlaying: Boolean,
+    enabled: Boolean = true,
+): State<Float> {
+    val pulseState = remember { mutableFloatStateOf(0f) }
+
+    var lastReportedPos by remember { mutableLongStateOf(currentPositionMs) }
+    var lastReportedTime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+
+    val nowAnchor = SystemClock.elapsedRealtime()
+    val expectedAnchorMs = lastReportedPos + if (isPlaying) (nowAnchor - lastReportedTime) else 0L
+    if (abs(currentPositionMs - expectedAnchorMs) > 600L) {
+        lastReportedPos = currentPositionMs
+        lastReportedTime = nowAnchor
+    }
+
+    LaunchedEffect(isPlaying, enabled, bpm) {
+        if (!isPlaying || !enabled || bpm == null || bpm <= 0f) {
+            pulseState.floatValue = 0f
+            return@LaunchedEffect
+        }
+        lastReportedPos = currentPositionMs
+        lastReportedTime = SystemClock.elapsedRealtime()
+
+        val safeBpm = bpm.toDouble().coerceIn(60.0, 240.0)
+        val beatDurationMs = 60_000.0 / safeBpm
+
+        while (isActive && isPlaying && enabled) {
+            withFrameNanos {
+                val now = SystemClock.elapsedRealtime()
+                val elapsed = (now - lastReportedTime).coerceAtLeast(0L)
+                val exactMs = (lastReportedPos + elapsed).coerceAtLeast(0L)
+
+                val currentBeatExact = exactMs.toDouble() / beatDurationMs
+                val beatIndex = currentBeatExact.toInt()
+                val beatPhase = (currentBeatExact - beatIndex).coerceIn(0.0, 1.0)
+                val measureBeat = ((beatIndex % 4) + 4) % 4
+
+                // Downbeats get full punch, other beats keep a solid musical pulse
+                val beatAccent = when (measureBeat) {
+                    0 -> 1.0
+                    2 -> 0.92
+                    else -> 0.84
+                }
+                pulseState.floatValue = (beatAccent * exp(-5.0 * beatPhase)).toFloat().coerceIn(0f, 1f)
+            }
+        }
+        pulseState.floatValue = 0f
+    }
+
+    return pulseState
+}
+
+/**
+ * Elegant, compact BPM Pill badge for display in expanded music player cards.
+ * Renders a tempo icon and the track's verified BPM.
+ * Automatically hides when BPM is unresolved (null or <= 0).
+ */
+@Composable
+fun BpmChip(
+    bpm: Float?,
+    modifier: Modifier = Modifier,
+    containerColor: Color = Color.White.copy(alpha = 0.16f),
+    contentColor: Color = Color.White.copy(alpha = 0.95f),
+) {
+    if (bpm == null || bpm <= 0f) return
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        modifier = modifier,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Speed,
+                contentDescription = null,
+                tint = contentColor.copy(alpha = 0.88f),
+                modifier = Modifier.size(12.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "${bpm.toInt()} BPM",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = contentColor,
+            )
+        }
+    }
+}
+

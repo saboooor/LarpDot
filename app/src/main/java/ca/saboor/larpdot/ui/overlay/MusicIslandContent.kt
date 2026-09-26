@@ -57,6 +57,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -108,8 +109,10 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
+import ca.saboor.larpdot.visualizer.BpmChip
 import ca.saboor.larpdot.visualizer.BpmDetector
 import ca.saboor.larpdot.visualizer.BpmVisualizer
+import ca.saboor.larpdot.visualizer.rememberBpmPulse
 import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
 import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
 import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
@@ -400,6 +403,7 @@ internal fun CompactIslandContent(
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
+    bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
     trailingWingFraction: Float = 0.5f,
 ) {
@@ -414,6 +418,19 @@ internal fun CompactIslandContent(
         targetValue = if (mediaInfo.isPlaying) 0.28f else 0.08f,
         animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
         label = "compact_glow_alpha",
+    )
+
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
+        if (mediaInfo.title.isNotBlank()) {
+            BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
+        }
+    }
+    val bpmPulseState = rememberBpmPulse(
+        bpm = currentBpm,
+        currentPositionMs = mediaInfo.positionMs,
+        isPlaying = mediaInfo.isPlaying,
+        enabled = bpmPulseEnabled,
     )
 
     Crossfade(
@@ -551,14 +568,22 @@ internal fun CompactIslandContent(
                             .fillMaxHeight()
                             .then(
                                 if (showDominantGlow) {
-                                    Modifier.background(
-                                        Brush.horizontalGradient(
+                                    Modifier.drawWithCache {
+                                        val gradient = Brush.horizontalGradient(
                                             listOf(
                                                 Color.Transparent,
-                                                accentColor.copy(alpha = glowAlpha),
+                                                accentColor,
                                             )
                                         )
-                                    )
+                                        onDrawBehind {
+                                            val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                                0.16f + (0.22f * bpmPulseState.value)
+                                            } else {
+                                                glowAlpha
+                                            }
+                                            drawRect(brush = gradient, alpha = alpha)
+                                        }
+                                    }
                                 } else Modifier
                             )
                             .padding(start = 2.dp, end = 6.dp),
@@ -746,14 +771,22 @@ internal fun CompactIslandContent(
                     .fillMaxWidth()
                     .then(
                         if (showDominantGlow) {
-                            Modifier.background(
-                                Brush.verticalGradient(
+                            Modifier.drawWithCache {
+                                val gradient = Brush.verticalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        accentColor.copy(alpha = glowAlpha),
+                                        accentColor,
                                     )
                                 )
-                            )
+                                onDrawBehind {
+                                    val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                        0.16f + (0.22f * bpmPulseState.value)
+                                    } else {
+                                        glowAlpha
+                                    }
+                                    drawRect(brush = gradient, alpha = alpha)
+                                }
+                            }
                         } else Modifier
                     ),
                 contentAlignment = Alignment.Center,
@@ -949,14 +982,22 @@ internal fun CompactIslandContent(
                     .fillMaxHeight()
                     .then(
                         if (showDominantGlow) {
-                            Modifier.background(
-                                Brush.horizontalGradient(
+                            Modifier.drawWithCache {
+                                val gradient = Brush.horizontalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        accentColor.copy(alpha = glowAlpha),
+                                        accentColor,
                                     )
                                 )
-                            )
+                                onDrawBehind {
+                                    val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                        0.16f + (0.22f * bpmPulseState.value)
+                                    } else {
+                                        glowAlpha
+                                    }
+                                    drawRect(brush = gradient, alpha = alpha)
+                                }
+                            }
                         } else Modifier
                     ),
                 contentAlignment = Alignment.Center,
@@ -1036,13 +1077,29 @@ internal fun ExpandedIslandContent(
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showExpandedDominantColorGlowFlow.collectAsState().value,
+    glowSides: OverlayPreferences.ExpandedGlowSides = OverlayPreferences.expandedGlowSidesFlow.collectAsState().value,
     cameraCoverStyle: OverlayPreferences.CameraCoverStyle = OverlayPreferences.cameraCoverStyleFlow.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
+    bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
     val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
+
+    val currentBpm by BpmDetector.currentBpm.collectAsState()
+    LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
+        if (mediaInfo.title.isNotBlank()) {
+            BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
+        }
+    }
+    val bpmPulseState = rememberBpmPulse(
+        bpm = currentBpm,
+        currentPositionMs = mediaInfo.positionMs,
+        isPlaying = mediaInfo.isPlaying,
+        enabled = bpmPulseEnabled,
+    )
+
     val albumArtPlaybackScale by animateFloatAsState(
         targetValue = if (mediaInfo.isPlaying) 1f else 0.86f,
         animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
@@ -1098,35 +1155,6 @@ internal fun ExpandedIslandContent(
                 }
             }
             .background(Color.Black)
-            .drawWithCache {
-                if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND ||
-                    albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND
-                ) {
-                    onDrawBehind { /* Full background image rendered inside content */ }
-                } else {
-                    val dominantTint = if (showDominantGlow) {
-                        accentColor.copy(alpha = 0.25f)
-                    } else {
-                        Color.Transparent
-                    }
-                    val rightGradient = Brush.horizontalGradient(
-                        colorStops = arrayOf(
-                            0.60f to Color.Transparent,
-                            1.00f to dominantTint,
-                        )
-                    )
-                    val bottomGradient = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.40f to Color.Transparent,
-                            1.00f to dominantTint,
-                        )
-                    )
-                    onDrawBehind {
-                        drawRect(rightGradient)
-                        drawRect(bottomGradient)
-                    }
-                }
-            }
             .pointerInput(mediaInfo.hasMedia) {
                 var totalDragX = 0f
                 var totalDragY = 0f
@@ -1252,64 +1280,131 @@ internal fun ExpandedIslandContent(
             val cropY = (bitmap.height - side) / 2
             val eighth = side / 8
 
-            val realArtHeight = 190.dp
-            val topReflectionHeight = 30.dp
-            val totalArtWidth = realArtHeight
-            val topSeamPx = with(density) { topReflectionHeight.toPx() }
+            val isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(totalArtWidth)
-                    .graphicsLayer {
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                colorStops = arrayOf(
-                                    0.00f to Color.White.copy(alpha = 0.65f),
-                                    1.00f to Color.Transparent,
-                                )
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
-            ) {
-                // Unified Canvas containing Real Art + Top Reflection with progressive blur
-                Canvas(
+            if (isVertical) {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .progressiveBlur(
-                            direction = 3,
-                            maxBlurDp = 48.dp,
-                            topSeamPx = topSeamPx,
-                            rightSeamPx = 99999f,
-                        ),
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.Transparent,
+                                        0.20f to Color.Transparent,
+                                        0.50f to Color.White.copy(alpha = 0.30f),
+                                        0.80f to Color.White.copy(alpha = 0.65f),
+                                        1.00f to Color.White.copy(alpha = 0.70f),
+                                    )
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
                 ) {
-                    val realArtW = size.width
-                    val realArtH = with(density) { realArtHeight.toPx() }
-                    val topRefH = topSeamPx
+                    Canvas(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        val artW = size.width
+                        val artSide = artW
+                        val topSpace = size.height - artSide
 
-                    // 1. Primary Album Art (1:1 square, completely uncut and visible below camera swoop)
-                    drawImage(
-                        image = bitmap,
-                        srcOffset = IntOffset(cropX, cropY),
-                        srcSize = IntSize(side, side),
-                        dstOffset = IntOffset(0, topRefH.roundToInt()),
-                        dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
-                    )
+                        if (topSpace <= 0f) {
+                            val visibleFraction = (size.height / artSide).coerceIn(0f, 1f)
+                            val visibleSrcHeight = (side * visibleFraction).roundToInt()
+                            val srcY = cropY + (side - visibleSrcHeight)
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, srcY),
+                                srcSize = IntSize(side, visibleSrcHeight),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(artW.roundToInt(), size.height.roundToInt()),
+                            )
+                        } else {
+                            // Primary Album Art anchored at bottom
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, cropY),
+                                srcSize = IntSize(side, side),
+                                dstOffset = IntOffset(0, topSpace.roundToInt()),
+                                dstSize = IntSize(artW.roundToInt(), artSide.roundToInt()),
+                            )
+                            // Flipped Top Reflection filling space above real art
+                            scale(scaleX = 1f, scaleY = -1f, pivot = Offset(artW / 2f, topSpace / 2f)) {
+                                drawImage(
+                                    image = bitmap,
+                                    srcOffset = IntOffset(cropX, cropY),
+                                    srcSize = IntSize(side, eighth),
+                                    dstOffset = IntOffset.Zero,
+                                    dstSize = IntSize(artW.roundToInt(), topSpace.roundToInt()),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                val realArtHeight = 190.dp
+                val topReflectionHeight = 30.dp
+                val totalArtWidth = realArtHeight
+                val topSeamPx = with(density) { topReflectionHeight.toPx() }
 
-                    // 2. Flipped 1/8 Top Reflection that absorbs the camera swoop cover
-                    scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(totalArtWidth)
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.White.copy(alpha = 0.65f),
+                                        1.00f to Color.Transparent,
+                                    )
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                ) {
+                    // Unified Canvas containing Real Art + Top Reflection with progressive blur
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .progressiveBlur(
+                                direction = 3,
+                                maxBlurDp = 48.dp,
+                                topSeamPx = topSeamPx,
+                                rightSeamPx = 99999f,
+                            ),
+                    ) {
+                        val realArtW = size.width
+                        val realArtH = with(density) { realArtHeight.toPx() }
+                        val topRefH = topSeamPx
+
+                        // 1. Primary Album Art (1:1 square, completely uncut and visible below camera swoop)
                         drawImage(
                             image = bitmap,
                             srcOffset = IntOffset(cropX, cropY),
-                            srcSize = IntSize(side, eighth),
-                            dstOffset = IntOffset.Zero,
-                            dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                            srcSize = IntSize(side, side),
+                            dstOffset = IntOffset(0, topRefH.roundToInt()),
+                            dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
                         )
+
+                        // 2. Flipped 1/8 Top Reflection that absorbs the camera swoop cover
+                        scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, cropY),
+                                srcSize = IntSize(side, eighth),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                            )
+                        }
                     }
                 }
             }
@@ -1320,89 +1415,164 @@ internal fun ExpandedIslandContent(
             val cropY = (bitmap.height - side) / 2
             val eighth = side / 8
 
-            val realArtHeight = 190.dp
-            val topReflectionHeight = 30.dp
-            val rightReflectionWidth = realArtHeight * 0.5f
-            val totalArtWidth = realArtHeight + rightReflectionWidth
-            val topSeamPx = with(density) { topReflectionHeight.toPx() }
-            val rightSeamPx = with(density) { realArtHeight.toPx() }
+            val isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(totalArtWidth)
-                    .graphicsLayer {
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        // Dark scrim over expanded album art so text is clear and readable
-                        drawRect(Color.Black.copy(alpha = 0.35f))
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                listOf(Color.White, Color.Transparent)
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
-            ) {
-                // Unified Canvas containing Real Art + Top/Right/Corner Reflections
-                // With 2D progressive blur that leaks into the top and right edges of the main album art!
-                Canvas(
+            if (isVertical) {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .progressiveBlur(
-                            direction = 3,
-                            maxBlurDp = 48.dp,
-                            topSeamPx = topSeamPx,
-                            rightSeamPx = rightSeamPx,
-                        ),
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            // Dark scrim over expanded album art so text is clear and readable
+                            drawRect(Color.Black.copy(alpha = 0.35f))
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.Transparent,
+                                        0.20f to Color.Transparent,
+                                        0.50f to Color.White.copy(alpha = 0.45f),
+                                        0.80f to Color.White.copy(alpha = 0.85f),
+                                        1.00f to Color.White,
+                                    )
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
                 ) {
-                    val realArtW = rightSeamPx
-                    val realArtH = rightSeamPx
-                    val topRefH = topSeamPx
-                    val rightRefW = size.width - realArtW
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .progressiveBlur(
+                                direction = 2,
+                                maxBlurDp = 40.dp,
+                                startFraction = 0.20f,
+                            ),
+                    ) {
+                        val artW = size.width
+                        val artSide = artW
+                        val topSpace = size.height - artSide
 
-                    // 1. Primary Album Art (1:1 square, completely uncut and visible!)
-                    drawImage(
-                        image = bitmap,
-                        srcOffset = IntOffset(cropX, cropY),
-                        srcSize = IntSize(side, side),
-                        dstOffset = IntOffset(0, topRefH.roundToInt()),
-                        dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
-                    )
+                        if (topSpace <= 0f) {
+                            val visibleFraction = (size.height / artSide).coerceIn(0f, 1f)
+                            val visibleSrcHeight = (side * visibleFraction).roundToInt()
+                            val srcY = cropY + (side - visibleSrcHeight)
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, srcY),
+                                srcSize = IntSize(side, visibleSrcHeight),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(artW.roundToInt(), size.height.roundToInt()),
+                            )
+                        } else {
+                            // Primary Album Art anchored at bottom
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, cropY),
+                                srcSize = IntSize(side, side),
+                                dstOffset = IntOffset(0, topSpace.roundToInt()),
+                                dstSize = IntSize(artW.roundToInt(), artSide.roundToInt()),
+                            )
+                            // Flipped Top Reflection filling space above real art
+                            scale(scaleX = 1f, scaleY = -1f, pivot = Offset(artW / 2f, topSpace / 2f)) {
+                                drawImage(
+                                    image = bitmap,
+                                    srcOffset = IntOffset(cropX, cropY),
+                                    srcSize = IntSize(side, eighth),
+                                    dstOffset = IntOffset.Zero,
+                                    dstSize = IntSize(artW.roundToInt(), topSpace.roundToInt()),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                val realArtHeight = 190.dp
+                val topReflectionHeight = 30.dp
+                val rightReflectionWidth = realArtHeight * 0.5f
+                val totalArtWidth = realArtHeight + rightReflectionWidth
+                val topSeamPx = with(density) { topReflectionHeight.toPx() }
+                val rightSeamPx = with(density) { realArtHeight.toPx() }
 
-                    // 2. Flipped 1/8 Top Reflection
-                    scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(totalArtWidth)
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            // Dark scrim over expanded album art so text is clear and readable
+                            drawRect(Color.Black.copy(alpha = 0.35f))
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    listOf(Color.White, Color.Transparent)
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                ) {
+                    // Unified Canvas containing Real Art + Top/Right/Corner Reflections
+                    // With 2D progressive blur that leaks into the top and right edges of the main album art!
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .progressiveBlur(
+                                direction = 3,
+                                maxBlurDp = 48.dp,
+                                topSeamPx = topSeamPx,
+                                rightSeamPx = rightSeamPx,
+                            ),
+                    ) {
+                        val realArtW = rightSeamPx
+                        val realArtH = rightSeamPx
+                        val topRefH = topSeamPx
+                        val rightRefW = size.width - realArtW
+
+                        // 1. Primary Album Art (1:1 square, completely uncut and visible!)
                         drawImage(
                             image = bitmap,
                             srcOffset = IntOffset(cropX, cropY),
-                            srcSize = IntSize(side, eighth),
-                            dstOffset = IntOffset.Zero,
-                            dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                            srcSize = IntSize(side, side),
+                            dstOffset = IntOffset(0, topRefH.roundToInt()),
+                            dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
                         )
-                    }
 
-                    // 3. Flipped 1/8 Right Reflection
-                    scale(scaleX = -1f, scaleY = 1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH + realArtH / 2f)) {
-                        drawImage(
-                            image = bitmap,
-                            srcOffset = IntOffset(cropX + side - eighth, cropY),
-                            srcSize = IntSize(eighth, side),
-                            dstOffset = IntOffset(realArtW.roundToInt(), topRefH.roundToInt()),
-                            dstSize = IntSize(rightRefW.roundToInt(), realArtH.roundToInt()),
-                        )
-                    }
+                        // 2. Flipped 1/8 Top Reflection
+                        scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX, cropY),
+                                srcSize = IntSize(side, eighth),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+                            )
+                        }
 
-                    // 4. Flipped 1/8 Corner Reflection
-                    scale(scaleX = -1f, scaleY = -1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH / 2f)) {
-                        drawImage(
-                            image = bitmap,
-                            srcOffset = IntOffset(cropX + side - eighth, cropY),
-                            srcSize = IntSize(eighth, eighth),
-                            dstOffset = IntOffset(realArtW.roundToInt(), 0),
-                            dstSize = IntSize(rightRefW.roundToInt(), topRefH.roundToInt()),
-                        )
+                        // 3. Flipped 1/8 Right Reflection
+                        scale(scaleX = -1f, scaleY = 1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH + realArtH / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX + side - eighth, cropY),
+                                srcSize = IntSize(eighth, side),
+                                dstOffset = IntOffset(realArtW.roundToInt(), topRefH.roundToInt()),
+                                dstSize = IntSize(rightRefW.roundToInt(), realArtH.roundToInt()),
+                            )
+                        }
+
+                        // 4. Flipped 1/8 Corner Reflection
+                        scale(scaleX = -1f, scaleY = -1f, pivot = Offset(realArtW + rightRefW / 2f, topRefH / 2f)) {
+                            drawImage(
+                                image = bitmap,
+                                srcOffset = IntOffset(cropX + side - eighth, cropY),
+                                srcSize = IntSize(eighth, eighth),
+                                dstOffset = IntOffset(realArtW.roundToInt(), 0),
+                                dstSize = IntSize(rightRefW.roundToInt(), topRefH.roundToInt()),
+                            )
+                        }
                     }
                 }
             }
@@ -1414,6 +1584,52 @@ internal fun ExpandedIslandContent(
             diameter = cutoutDiameterDp,
         )
 
+        // Dominant Color Glow layer (rendered on top of background art, behind player content)
+        if (showDominantGlow && (glowSides.left || glowSides.right || glowSides.bottom || glowSides.top)) {
+            val pulse = bpmPulseState.value
+            val glowAlpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                0.16f + (0.22f * pulse)
+            } else {
+                0.25f
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithCache {
+                        val leftGradient = Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.00f to accentColor,
+                                0.40f to Color.Transparent,
+                            )
+                        )
+                        val rightGradient = Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.60f to Color.Transparent,
+                                1.00f to accentColor,
+                            )
+                        )
+                        val bottomGradient = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.40f to Color.Transparent,
+                                1.00f to accentColor,
+                            )
+                        )
+                        val topGradient = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.00f to accentColor,
+                                0.40f to Color.Transparent,
+                            )
+                        )
+                        onDrawBehind {
+                            if (glowSides.left) drawRect(leftGradient, alpha = glowAlpha)
+                            if (glowSides.right) drawRect(rightGradient, alpha = glowAlpha)
+                            if (glowSides.bottom) drawRect(bottomGradient, alpha = glowAlpha)
+                            if (glowSides.top) drawRect(topGradient, alpha = glowAlpha)
+                        }
+                    }
+            )
+        }
+
         if (playerLayout == OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS) Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1422,11 +1638,15 @@ internal fun ExpandedIslandContent(
         ) {
             // Row 1: Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End,
             ) {
-                Spacer(Modifier.height(32.dp))
+                if (elementVisibility.bpm && currentBpm != null) {
+                    BpmChip(bpm = currentBpm)
+                }
             }
 
             // Row 2: Track Title & Artist (Left) + Visualizer stacked above Play/Pause Button (Right)
@@ -1502,7 +1722,14 @@ internal fun ExpandedIslandContent(
                         color = Color.White.copy(alpha = 0.94f),
                         modifier = Modifier
                             .width(64.dp)
-                            .height(46.dp),
+                            .height(46.dp)
+                            .graphicsLayer {
+                                if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                    val scale = 1f + (0.08f * bpmPulseState.value)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                            },
                         shadowElevation = 2.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -1662,12 +1889,19 @@ internal fun ExpandedIslandContent(
                             textAlign = TextAlign.Start,
                         )
                         Spacer(Modifier.height(2.dp))
-                        MarqueeText(
-                            text = mediaInfo.artist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.72f),
-                            textAlign = TextAlign.Start,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            MarqueeText(
+                                text = mediaInfo.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.72f),
+                                textAlign = TextAlign.Start,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (elementVisibility.bpm && currentBpm != null) {
+                                Spacer(Modifier.width(6.dp))
+                                BpmChip(bpm = currentBpm)
+                            }
+                        }
                     }
                     if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
                     if (elementVisibility.visualizer) Box(
@@ -1760,7 +1994,15 @@ internal fun ExpandedIslandContent(
                     }
                     Surface(
                         onClick = { MediaPlaybackState.togglePlayPause() },
-                        modifier = Modifier.size(width = 68.dp, height = 56.dp),
+                        modifier = Modifier
+                            .size(width = 68.dp, height = 56.dp)
+                            .graphicsLayer {
+                                if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                    val scale = 1f + (0.08f * bpmPulseState.value)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                            },
                         shape = RoundedCornerShape(10.dp),
                         color = accentColor,
                         shadowElevation = 2.dp,
@@ -1861,11 +2103,18 @@ internal fun ExpandedIslandContent(
                             color = Color.White,
                         )
                         Spacer(Modifier.height(3.dp))
-                        MarqueeText(
-                            text = mediaInfo.artist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.62f),
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            MarqueeText(
+                                text = mediaInfo.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.62f),
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (elementVisibility.bpm && currentBpm != null) {
+                                Spacer(Modifier.width(6.dp))
+                                BpmChip(bpm = currentBpm)
+                            }
+                        }
                     }
                     if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
                     if (elementVisibility.visualizer) Box(
@@ -1948,7 +2197,15 @@ internal fun ExpandedIslandContent(
                         }
                         IconButton(
                             onClick = { MediaPlaybackState.togglePlayPause() },
-                            modifier = Modifier.size(46.dp),
+                            modifier = Modifier
+                                .size(46.dp)
+                                .graphicsLayer {
+                                    if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                        val scale = 1f + (0.08f * bpmPulseState.value)
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                                },
                         ) {
                             Icon(
                                 imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
