@@ -44,6 +44,7 @@ import ca.saboor.larpdot.ui.overlay.compactStatusFallback
 import ca.saboor.larpdot.ui.overlay.stackedPillWidth
 import ca.saboor.larpdot.ui.overlay.stackedPillWidthWithExtents
 import ca.saboor.larpdot.ui.overlay.secondaryItemWidthDp
+import ca.saboor.larpdot.ui.overlay.calculateAnnouncementExtraDp
 import ca.saboor.larpdot.ui.overlay.secondaryBubbleThicknessDp
 import ca.saboor.larpdot.ui.overlay.compactMediaWings
 import ca.saboor.larpdot.ui.overlay.getFlashlightPercentText
@@ -682,7 +683,16 @@ class IslandOverlayViewController(
         val minimizedStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.value
         val showMinimizedTitle = OverlayPreferences.showMinimizedTitleFlow.value
         val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180f else 0f
-        val announcementExtraDp = 210f
+        val track = MediaPlaybackState.currentTrack.value
+        val announcementExtraDp = if (isSongAnnouncementActive && !isLandscape) {
+            calculateAnnouncementExtraDp(
+                title = track.title,
+                artist = track.artist,
+                cutoutDiameterDp = cutoutDiameterPx / density,
+                albumArtStyle = minimizedStyle,
+                density = density,
+            )
+        } else 0f
 
         val activityExtraDp = if (currentActivity == null || activityStatus.isNullOrEmpty()) 48f else 80f
 
@@ -696,7 +706,7 @@ class IslandOverlayViewController(
                     else -> 60f
                 }
                 val musicExtra = maxOf(baseExtra, titleExtraDp)
-                if (isSongAnnouncementActive) maxOf(musicExtra, announcementExtraDp) else musicExtra
+                if (isSongAnnouncementActive && !isLandscape) announcementExtraDp else musicExtra
             }
             null -> 0f
         }
@@ -714,7 +724,6 @@ class IslandOverlayViewController(
                 showTitle = showMinimizedTitle && isMusicActive,
                 announcing = isSongAnnouncementActive,
                 visualizerWidthDp = visualizerWidthDp,
-                announcementText = MediaPlaybackState.currentTrack.value.artist.ifBlank { "Media Player" },
             )
         } else null
         val pillCenterBiasPx = if (mediaWings != null) {

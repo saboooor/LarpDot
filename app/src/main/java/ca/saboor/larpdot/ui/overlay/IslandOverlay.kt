@@ -243,17 +243,28 @@ fun CompactIslandOverlay(
         }
     }
     val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180.dp else 0.dp
-    val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
+    val announcementExtraDp = if (isAnnouncing && !isLandscape) {
+        remember(mediaInfo.title, mediaInfo.artist, cutoutDiameterDp, minimizedStyle, density.density) {
+            calculateAnnouncementExtraDp(
+                title = mediaInfo.title,
+                artist = mediaInfo.artist,
+                cutoutDiameterDp = cutoutDiameterDp.value,
+                albumArtStyle = minimizedStyle,
+                density = density.density,
+            ).dp
+        }
+    } else 0.dp
+    val mediaExtraDp = if (isAnnouncing && !isLandscape) announcementExtraDp
+        else maxOf(activeExtraDp, titleExtraDp)
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
     val mediaWings = compactMediaWings(
-        extraWidthDp = maxOf(activeExtraDp, titleExtraDp, announcementExtraDp).value,
+        extraWidthDp = mediaExtraDp.value,
         hasTrailingBubble = !isLandscape && rightSecondaryType != null,
         showTitle = showMinimizedTitle && isMusicActive,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
-        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
     val compactWidth = if (isLandscape) compactPillThickness else if (activeDisplayType == IslandType.MEDIA) {
         cutoutDiameterDp + mediaWings.widthDp.dp
@@ -1382,11 +1393,17 @@ fun IslandSurfaceOverlay(
         else -> 60.dp
     }
     val announcementActive = isSongAnnouncement && showSongAnnouncement
-    val mediaExtraDp = maxOf(
-        compactExtraDp,
-        if (showMinimizedTitle) 180.dp else 0.dp,
-        if (announcementActive) 210.dp else 0.dp,
-    )
+    val mediaExtraDp = if (announcementActive && !isLandscape) {
+        remember(mediaInfo.title, mediaInfo.artist, cutoutDiameterDp, minimizedStyle, density.density) {
+            calculateAnnouncementExtraDp(
+                title = mediaInfo.title,
+                artist = mediaInfo.artist,
+                cutoutDiameterDp = cutoutDiameterDp.value,
+                albumArtStyle = minimizedStyle,
+                density = density.density,
+            ).dp
+        }
+    } else maxOf(compactExtraDp, if (showMinimizedTitle) 180.dp else 0.dp)
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
@@ -1396,7 +1413,6 @@ fun IslandSurfaceOverlay(
         showTitle = showMinimizedTitle,
         announcing = announcementActive,
         visualizerWidthDp = visualizerWidthDp,
-        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
     val compactWidth = if (isLandscape) compactPillThickness else if (expandedType == IslandType.MEDIA) {
         cutoutDiameterDp + mediaWings.widthDp.dp

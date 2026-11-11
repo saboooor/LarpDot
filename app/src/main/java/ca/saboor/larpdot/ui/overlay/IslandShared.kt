@@ -83,13 +83,12 @@ fun compactMediaWings(
     showTitle: Boolean,
     announcing: Boolean,
     visualizerWidthDp: Float,
-    announcementText: String = "",
 ): CompactMediaWings {
     val leading = (extraWidthDp / 2f).coerceAtLeast(0f)
     val minimumTrailing = maxOf(28f, visualizerWidthDp + 14f)
     val trailing = when {
         !hasTrailingBubble -> leading
-        announcing -> minOf(leading, maxOf(64f, announcementText.length * 6.5f + 16f))
+        announcing -> leading
         showTitle -> leading
         else -> minOf(leading, minimumTrailing)
     }
