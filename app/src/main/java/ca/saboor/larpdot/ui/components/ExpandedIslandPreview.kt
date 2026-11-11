@@ -132,8 +132,8 @@ fun ExpandedIslandPreview(
     )
 
     val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+    // The camera spans the full thickness; padding belongs to the wing content.
+    val compactPillThickness = cutoutDiameterDp
     val compactCornerRadius = compactPillThickness / 2f
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val nestedActiveExtraDp = compactPillThickness + nestedArtSize
@@ -304,7 +304,7 @@ fun ExpandedIslandPreview(
                         // Hardware camera cutout visualizer centered between wings
                         Box(
                             modifier = Modifier
-                                .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
+                                .size(cutoutDiameterDp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF0D0D0D))
                                 .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
@@ -372,7 +372,7 @@ fun ExpandedIslandPreview(
                                 x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
                                 y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
                             )
-                            .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
+                            .size(cutoutDiameterDp)
                             .clip(CircleShape)
                             .background(Color(0xFF0D0D0D))
                             .border(0.75.dp, Color(0x28FFFFFF), CircleShape),

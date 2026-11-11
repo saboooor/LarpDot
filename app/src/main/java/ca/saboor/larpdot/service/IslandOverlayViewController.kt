@@ -461,8 +461,8 @@ class IslandOverlayViewController(
         val showFlashlightInMain = hasFlashlight && !hasActiveMusic
 
         val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
-        val outlineAllowancePx = 2f * density
-        val compactPillThicknessPx = cutoutDiameterPx + (outlineAllowancePx * 2f)
+        // Match the edge-to-edge camera thickness used by the Compose island.
+        val compactPillThicknessPx = cutoutDiameterPx
         val compactPillThicknessDp = compactPillThicknessPx / density
         val nestedArtSizeDp = (compactPillThicknessDp - 12f).coerceIn(16f, 24f)
         val nestedExtraDp = compactPillThicknessDp + nestedArtSizeDp
@@ -629,8 +629,8 @@ class IslandOverlayViewController(
         val dotCount = stack.secondary.size
 
         val cutoutDiameterPx = (if (cutout.radiusPx > 0f) cutout.radiusPx * 2f else 24f * density).coerceIn(16f * density, 36f * density)
-        val outlineAllowancePx = 2f * density
-        val compactPillThicknessPx = cutoutDiameterPx + (outlineAllowancePx * 2f)
+        // Match the edge-to-edge camera thickness used by the Compose island.
+        val compactPillThicknessPx = cutoutDiameterPx
         val compactPillThicknessDp = compactPillThicknessPx / density
 
         val isMiniPill = OverlayPreferences.showDotRightSideInfoFlow.value

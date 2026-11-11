@@ -138,8 +138,8 @@ fun FlashlightIslandPreview(
                 .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val outlineAllowanceDp = 2.dp
-            val compactHeight = cutoutDiameterDp + (outlineAllowanceDp * 2)
+            // The camera spans the full thickness; padding belongs to the wing content.
+            val compactHeight = cutoutDiameterDp
             val compactCornerRadius = compactHeight / 2f
             Surface(
                 modifier = Modifier
@@ -169,7 +169,7 @@ fun FlashlightIslandPreview(
                     // Hardware camera cutout visualizer centered between wings
                     Box(
                         modifier = Modifier
-                            .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
+                            .size(cutoutDiameterDp)
                             .clip(CircleShape)
                             .background(Color(0xFF0D0D0D))
                             .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
@@ -226,7 +226,7 @@ fun FlashlightIslandPreview(
                             x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
                             y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
                         )
-                        .size((cutoutDiameterDp - 4.dp).coerceAtLeast(10.dp))
+                        .size(cutoutDiameterDp)
                         .clip(CircleShape)
                         .background(Color(0xFF0D0D0D))
                         .border(0.75.dp, Color(0x28FFFFFF), CircleShape),

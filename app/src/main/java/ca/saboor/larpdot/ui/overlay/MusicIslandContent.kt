@@ -615,8 +615,8 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        val outlineAllowanceDp = 2.dp
-                        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+                        // The camera spans the full thickness; padding belongs to the wing content.
+                        val compactPillThickness = cutoutDiameterDp
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
                         Box(
                             modifier = Modifier
@@ -817,8 +817,8 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        val outlineAllowanceDp = 2.dp
-                        val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+                        // The camera spans the full thickness; padding belongs to the wing content.
+                        val compactPillThickness = cutoutDiameterDp
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
                         Box(
                             modifier = Modifier
@@ -970,8 +970,8 @@ internal fun CompactIslandContent(
             // Compact styles (NESTED, BASIC_FADED, no-art) have a narrow right wing (~30dp) with a
             // ~14dp rounded corner on the right — shift the waveform left by cornerRadius/2 so it
             // sits optically centered in the visible straight area rather than close to the edge.
-            val outlineAllowanceDp = 2.dp
-            val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+            // The camera spans the full thickness; padding belongs to the wing content.
+            val compactPillThickness = cutoutDiameterDp
             val equalizerShift = if (
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND

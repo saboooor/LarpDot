@@ -191,8 +191,8 @@ fun CompactIslandOverlay(
     val cutoutDiameterDp = with(density) {
         if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
     }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+    // The camera spans the full thickness; padding belongs to the wing content.
+    val compactPillThickness = cutoutDiameterDp
     val compactCornerRadius = compactPillThickness / 2f
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val secondaryDotSize = secondaryBubbleThicknessDp(compactPillThickness.value, smallerBubbles).dp
@@ -1344,8 +1344,8 @@ fun IslandSurfaceOverlay(
     val cutoutDiameterDp = with(density) {
         if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
     }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
+    // The camera spans the full thickness; padding belongs to the wing content.
+    val compactPillThickness = cutoutDiameterDp
     val compactCornerRadius = compactPillThickness / 2f
     val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
