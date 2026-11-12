@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -193,118 +194,121 @@ fun Modifier.islandFluidProgressBorder(
 
     val strokePx = strokeWidth.toPx()
     val halfStroke = strokePx / 2f
-    val w = size.width
-    val h = size.height
-    // A newly appearing secondary dot can be smaller than the outline for a frame.
-    // Its content may draw, but the border has no valid path until it grows.
-    if (w <= strokePx || h <= strokePx) return@drawWithContent
-    val rPx = (cornerRadius.toPx() - halfStroke).coerceIn(0f, (minOf(w, h) / 2f) - halfStroke)
+    // Expand only the drawing bounds: the camera and surface keep their original size.
+    inset(-halfStroke) {
+        val w = size.width
+        val h = size.height
+        // A newly appearing secondary dot can be smaller than the outline for a frame.
+        // Its content may draw, but the border has no valid path until it grows.
+        if (w <= strokePx || h <= strokePx) return@inset
+        val rPx = (cornerRadius.toPx() + halfStroke).coerceIn(0f, minOf(w, h) / 2f)
 
-    val left = halfStroke
-    val top = halfStroke
-    val right = w - halfStroke
-    val bottom = h - halfStroke
+        val left = 0f
+        val top = 0f
+        val right = w
+        val bottom = h
 
-    val outline = shape.createOutline(size, layoutDirection, this)
+        val outline = shape.createOutline(size, layoutDirection, this)
 
-    // 1. Ambient hairline outline follows the surface shape, including the expanded squircle.
-    when (outline) {
-        is Outline.Generic -> drawPath(
-            path = outline.path,
-            color = trackColor,
-            style = Stroke(width = strokePx),
-        )
-        is Outline.Rounded -> drawPath(
-            path = Path().apply { addRoundRect(outline.roundRect) },
-            color = trackColor,
-            style = Stroke(width = strokePx),
-        )
-        is Outline.Rectangle -> drawRect(
-            color = trackColor,
-            topLeft = Offset(outline.rect.left, outline.rect.top),
-            size = Size(outline.rect.width, outline.rect.height),
-            style = Stroke(width = strokePx),
-        )
-    }
-
-    // 2. Sweeping active playback progress arc
-    if (progressFraction > 0.002f) {
-        if (outline is Outline.Generic) {
-            val pathMeasure = PathMeasure()
-            pathMeasure.setPath(outline.path, forceClosed = false)
-            val progressSegment = Path()
-            val squircleRadius = cornerRadius.toPx()
-                .coerceAtMost(minOf(w, h) / 2f)
-            val startDistance = ((w / 2f) - squircleRadius)
-                .coerceIn(0f, pathMeasure.length)
-            val progressDistance = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
-            val endDistance = startDistance + progressDistance
-            pathMeasure.getSegment(
-                startDistance,
-                endDistance.coerceAtMost(pathMeasure.length),
-                progressSegment,
-                startWithMoveTo = true,
+        // 1. Ambient hairline outline follows the surface shape, including the expanded squircle.
+        when (outline) {
+            is Outline.Generic -> drawPath(
+                path = outline.path,
+                color = trackColor,
+                style = Stroke(width = strokePx),
             )
-            if (endDistance > pathMeasure.length) {
+            is Outline.Rounded -> drawPath(
+                path = Path().apply { addRoundRect(outline.roundRect) },
+                color = trackColor,
+                style = Stroke(width = strokePx),
+            )
+            is Outline.Rectangle -> drawRect(
+                color = trackColor,
+                topLeft = Offset(outline.rect.left, outline.rect.top),
+                size = Size(outline.rect.width, outline.rect.height),
+                style = Stroke(width = strokePx),
+            )
+        }
+
+        // 2. Sweeping active playback progress arc
+        if (progressFraction > 0.002f) {
+            if (outline is Outline.Generic) {
+                val pathMeasure = PathMeasure()
+                pathMeasure.setPath(outline.path, forceClosed = false)
+                val progressSegment = Path()
+                val squircleRadius = cornerRadius.toPx()
+                    .coerceAtMost(minOf(w, h) / 2f)
+                val startDistance = ((w / 2f) - squircleRadius)
+                    .coerceIn(0f, pathMeasure.length)
+                val progressDistance = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
+                val endDistance = startDistance + progressDistance
                 pathMeasure.getSegment(
-                    0f,
-                    endDistance - pathMeasure.length,
+                    startDistance,
+                    endDistance.coerceAtMost(pathMeasure.length),
                     progressSegment,
-                    startWithMoveTo = false,
+                    startWithMoveTo = true,
                 )
+                if (endDistance > pathMeasure.length) {
+                    pathMeasure.getSegment(
+                        0f,
+                        endDistance - pathMeasure.length,
+                        progressSegment,
+                        startWithMoveTo = false,
+                    )
+                }
+                drawPath(
+                    path = progressSegment,
+                    color = progressColor,
+                    style = Stroke(width = strokePx, cap = StrokeCap.Round),
+                )
+            } else {
+            val centerX = w / 2f
+            val path = Path().apply {
+                moveTo(centerX, top)
+                lineTo(right - rPx, top)
+                arcTo(
+                    rect = Rect(right - 2 * rPx, top, right, top + 2 * rPx),
+                    startAngleDegrees = -90f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(right, bottom - rPx)
+                arcTo(
+                    rect = Rect(right - 2 * rPx, bottom - 2 * rPx, right, bottom),
+                    startAngleDegrees = 0f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(left + rPx, bottom)
+                arcTo(
+                    rect = Rect(left, bottom - 2 * rPx, left + 2 * rPx, bottom),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(left, top + rPx)
+                arcTo(
+                    rect = Rect(left, top, left + 2 * rPx, top + 2 * rPx),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(centerX, top)
             }
+
+            val pathMeasure = PathMeasure()
+            pathMeasure.setPath(path, forceClosed = true)
+            val progressLength = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
+
+            val progressSegment = Path()
+            pathMeasure.getSegment(0f, progressLength, progressSegment, startWithMoveTo = true)
+
             drawPath(
                 path = progressSegment,
                 color = progressColor,
                 style = Stroke(width = strokePx, cap = StrokeCap.Round),
             )
-        } else {
-        val centerX = w / 2f
-        val path = Path().apply {
-            moveTo(centerX, top)
-            lineTo(right - rPx, top)
-            arcTo(
-                rect = Rect(right - 2 * rPx, top, right, top + 2 * rPx),
-                startAngleDegrees = -90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(right, bottom - rPx)
-            arcTo(
-                rect = Rect(right - 2 * rPx, bottom - 2 * rPx, right, bottom),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(left + rPx, bottom)
-            arcTo(
-                rect = Rect(left, bottom - 2 * rPx, left + 2 * rPx, bottom),
-                startAngleDegrees = 90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(left, top + rPx)
-            arcTo(
-                rect = Rect(left, top, left + 2 * rPx, top + 2 * rPx),
-                startAngleDegrees = 180f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false,
-            )
-            lineTo(centerX, top)
-        }
-
-        val pathMeasure = PathMeasure()
-        pathMeasure.setPath(path, forceClosed = true)
-        val progressLength = pathMeasure.length * progressFraction.coerceIn(0f, 1f)
-
-        val progressSegment = Path()
-        pathMeasure.getSegment(0f, progressLength, progressSegment, startWithMoveTo = true)
-
-        drawPath(
-            path = progressSegment,
-            color = progressColor,
-            style = Stroke(width = strokePx, cap = StrokeCap.Round),
-        )
+            }
         }
     }
 }

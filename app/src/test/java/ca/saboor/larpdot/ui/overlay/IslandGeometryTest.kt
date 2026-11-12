@@ -26,7 +26,7 @@ class IslandGeometryTest {
     }
 
     @Test fun cameraSizesUseDensityAndClampHardwareOutliers() {
-        assertEquals(IslandCameraGeometry(24f, 28f, 14f), islandCameraGeometry(36f, 3f))
+        assertEquals(IslandCameraGeometry(24f, 24f, 12f), islandCameraGeometry(36f, 3f))
         assertEquals(36f, islandCameraGeometry(100f, 1f).diameter)
         assertEquals(16f, islandCameraGeometry(1f, 1f).diameter)
         assertEquals(24f, islandCameraGeometry(0f, 3f).diameter)

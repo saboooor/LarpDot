@@ -22,7 +22,7 @@ data class IslandCameraGeometry(val diameter: Float, val thickness: Float, val c
 
 fun islandCameraGeometry(radiusPx: Float, density: Float): IslandCameraGeometry {
     val diameter = (if (radiusPx > 0f) radiusPx * 2f / density else 24f).coerceIn(16f, 36f)
-    return IslandCameraGeometry(diameter, diameter + 4f, (diameter + 4f) / 2f)
+    return IslandCameraGeometry(diameter, diameter, diameter / 2f)
 }
 
 /** Expanded panels share the same camera-side placement regardless of their content size. */
