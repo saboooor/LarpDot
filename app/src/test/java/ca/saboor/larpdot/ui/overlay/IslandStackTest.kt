@@ -205,4 +205,11 @@ class IslandStackTest {
             assertEquals(60f, wings.trailingDp, 0.001f)
         }
     }
+    @Test fun wideAnnouncementKeepsBothTextWingsEqualWithTrailingBubble() {
+        val wings = compactMediaWings(210f, true, false, true, 19f)
+        assertEquals(105f, wings.leadingDp, 0.001f)
+        assertEquals(105f, wings.trailingDp, 0.001f)
+        assertEquals(0.5f, wings.trailingFraction, 0.001f)
+    }
+
 }

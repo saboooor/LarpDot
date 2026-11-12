@@ -223,7 +223,6 @@ fun CompactIslandOverlay(
         showTitle = showMinimizedTitle && isMusicActive,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
-        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
     val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
         if (activeDisplayType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
@@ -384,7 +383,6 @@ fun CompactIslandOverlay(
                         TransformOrigin.Center
                     }
                 }
-                .clip(mainShape)
                 .then(
                     Modifier.islandFluidProgressBorder(
                         progressFraction = if (presentation.compactOutline) animatedProgress else 0f,
@@ -612,10 +610,9 @@ fun CompactIslandOverlay(
                 .scale(pressScale * bubbleScale * secondaryPulseScale)
                 .graphicsLayer {
                     alpha = effectiveAlpha
-                    clip = true
+                    clip = false
                     shape = bubbleShape
                 }
-                .clip(bubbleShape)
                 .then(if (type == IslandType.FLASHLIGHT && showFlashlightOutline) {
                     Modifier.islandFluidProgressBorder(
                         progressFraction = flashlightFraction,
@@ -1042,7 +1039,6 @@ fun IslandSurfaceOverlay(
         showTitle = showMinimizedTitle,
         announcing = announcementActive,
         visualizerWidthDp = visualizerWidthDp,
-        announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
     val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
         if (expandedType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
@@ -1257,10 +1253,9 @@ fun IslandSurfaceOverlay(
                         else -> TransformOrigin.Center
                     }
                     alpha = if (isExpanded || keepComposedForExit) 1f else compactOpacity
-                    clip = true
+                    clip = false
                     shape = containerShape
                 }
-                .clip(containerShape)
                 .then(
                     Modifier.islandFluidProgressBorder(
                         progressFraction = if (
