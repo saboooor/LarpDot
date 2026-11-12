@@ -23,3 +23,35 @@ while preserving the camera anchor.
 
 Expansion captures the primary type, selected dot index, and dot count so each
 dot morphs from its own slot (left or right) rather than from a single secondary slot.
+
+All built-in content uses the same `IslandModel` interaction contract. Providers
+supply activate and hold actions; the shared model applies the tap-to-expand
+preference for both primary pills and secondary bubbles. Content-specific
+composables still render music, flashlight, or notification controls.
+
+`rememberIslandPressFeedback` supplies one spring animation for all island slots
+and the shared `IslandSurfaceOverlay`. It observes the initial pointer pass without
+consuming events, so child controls keep their gestures while the island responds
+to presses. Release and cancellation reset the feedback.
+
+## Shared shell
+
+- `IslandModel` combines provider identity, actions and `IslandPresentation`.
+  The presentation adapter supplies status, accent, progress, outline preferences,
+  and compact sizing. `IslandCompactContent` is the single dispatch point for
+  primary compact content, including content displayed during expansion/collapse.
+- `IslandGeometry` owns camera sizing, camera-side expanded placement and touch
+  region calculation. Compose reports animated primary/secondary bounds; the
+  controller unions those measured bounds with touch padding. It does not estimate
+  provider sizes. Bounds changes schedule a touch-window update on the UI thread.
+- `islandTapGestures` and `islandDragGestures` own gesture timing, thresholds,
+  cancellation, and stretch. Provider actions implement playback changes or torch
+  strength. Updated callbacks do not restart an in-progress gesture. A hold consumes
+  the action so release cannot also activate a tap.
+- `IslandLifecycle` owns visibility and cancellable delayed exits for providers and
+  announcement state. The controller applies one collapse rule when the selected
+  provider disappears. Expansion/collapse rendering stays in the common surface.
+
+Artwork, playback controls, torch strength controls and activity-specific content
+remain provider renderers. Their content sizes and actions may differ; shell
+interaction, geometry and animation behavior are shared.

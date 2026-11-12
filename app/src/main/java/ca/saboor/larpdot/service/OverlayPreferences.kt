@@ -56,9 +56,8 @@ object OverlayPreferences {
     private const val KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE = "show_minimized_flashlight_outline"
     private const val KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE = "show_expanded_flashlight_outline"
     private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
-    private const val KEY_USE_PIXELLIGHT = "use_pixellight"
-    private const val KEY_PIXELLIGHT_MAX_STRENGTH = "pixellight_max_strength"
-    private const val KEY_PIXELLIGHT_SAVED_STRENGTH = "pixellight_saved_strength"
+    private const val KEY_FLASHLIGHT_BOOST = "flashlight_boost_enabled"
+    private const val KEY_BOOST_STRENGTH = "flashlight_boost_strength"
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
     private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
@@ -274,8 +273,8 @@ object OverlayPreferences {
     private val _flashlightTapToToggleFlow = MutableStateFlow(true)
     val flashlightTapToToggleFlow: StateFlow<Boolean> = _flashlightTapToToggleFlow.asStateFlow()
 
-    private val _usePixelLightFlow = MutableStateFlow(true)
-    val usePixelLightFlow: StateFlow<Boolean> = _usePixelLightFlow.asStateFlow()
+    private val _flashlightBoostFlow = MutableStateFlow(false)
+    val flashlightBoostFlow: StateFlow<Boolean> = _flashlightBoostFlow.asStateFlow()
 
     private val _isDebugModeFlow = MutableStateFlow(false)
     val isDebugModeFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
@@ -359,7 +358,7 @@ object OverlayPreferences {
     private var isShowExpandedFlashlightOutlineInitialized = false
     private var isShowDotRightSideInfoInitialized = false
     private var isFlashlightTapToToggleInitialized = false
-    private var isUsePixelLightInitialized = false
+    private var isFlashlightBoostInitialized = false
     private var isDebugModeInitialized = false
     private var isHideWhenScreenOffInitialized = false
     private var isHideOnLockScreenInitialized = false
@@ -964,41 +963,23 @@ object OverlayPreferences {
         isFlashlightTapToToggleInitialized = true
     }
 
-    fun isUsePixelLightEnabled(context: Context): Boolean {
-        if (!isUsePixelLightInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_USE_PIXELLIGHT, true)
-            _usePixelLightFlow.value = enabled
-            isUsePixelLightInitialized = true
+    fun isFlashlightBoostEnabled(context: Context): Boolean {
+        if (!isFlashlightBoostInitialized) {
+            _flashlightBoostFlow.value = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BOOST, false)
+            isFlashlightBoostInitialized = true
         }
-        return _usePixelLightFlow.value
+        return _flashlightBoostFlow.value
     }
 
-    fun setUsePixelLightEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_USE_PIXELLIGHT, enabled).apply()
-        _usePixelLightFlow.value = enabled
-        isUsePixelLightInitialized = true
+    fun setFlashlightBoostEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BOOST, enabled).apply()
+        _flashlightBoostFlow.value = enabled
+        isFlashlightBoostInitialized = true
     }
 
-    fun getLastKnownPixelLightMax(context: Context?): Int {
-        if (context == null) return 127
-        val saved = getPrefs(context).getInt(KEY_PIXELLIGHT_MAX_STRENGTH, 127)
-        return if (saved <= 36) 127 else saved
-    }
-
-    fun setLastKnownPixelLightMax(context: Context?, max: Int) {
-        if (context == null || max <= 1) return
-        getPrefs(context).edit().putInt(KEY_PIXELLIGHT_MAX_STRENGTH, max).apply()
-    }
-
-    fun getLastKnownPixelLightStrength(context: Context?): Int {
-        if (context == null) return 127
-        val saved = getPrefs(context).getInt(KEY_PIXELLIGHT_SAVED_STRENGTH, 127)
-        return if (saved <= 36) 127 else saved
-    }
-
-    fun setLastKnownPixelLightStrength(context: Context?, strength: Int) {
-        if (context == null || strength <= 0) return
-        getPrefs(context).edit().putInt(KEY_PIXELLIGHT_SAVED_STRENGTH, strength).apply()
+    fun getBoostStrength(context: Context): Int = getPrefs(context).getInt(KEY_BOOST_STRENGTH, 1)
+    fun setBoostStrength(context: Context, strength: Int) {
+        getPrefs(context).edit().putInt(KEY_BOOST_STRENGTH, strength).apply()
     }
 
     fun isDebugModeEnabled(context: Context): Boolean {

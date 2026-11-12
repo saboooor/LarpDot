@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
+    <!-- Optional usage access identifies the active media app in the foreground. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
     <!-- Overlay over other apps permission -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
@@ -21,12 +24,15 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <!-- Hardware camera flash declaration (optional) -->
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
-    <!-- Package visibility for PixelLight integration and app listing -->
+    <!-- Package visibility for app listing -->
     <queries>
-        <package android:name="com.chiller3.pixellight" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -66,6 +72,11 @@
         <service
             android:name=".service.DotOverlayService"
             android:exported="true" />
+
+        <service
+            android:name=".flashlight.FlashlightBoostService"
+            android:foregroundServiceType="camera"
+            android:exported="false" />
 
         <!-- Internal Audio Playback Capture Service (Android 10+ MediaProjection loopback) -->
         <service

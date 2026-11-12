@@ -81,6 +81,10 @@ import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
 import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
 import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.service.ForegroundAppTracker
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
@@ -100,6 +104,17 @@ fun MusicScreen(
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
+    val usageAccessGranted by ForegroundAppTracker.hasUsageAccess.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        ForegroundAppTracker.refreshUsageAccess(context)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) ForegroundAppTracker.refreshUsageAccess(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
@@ -773,6 +788,18 @@ fun MusicScreen(
                                 OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, isChecked)
                             },
                         )
+                    }
+
+                    if (hideMusicWhenAppOpen) {
+                        Text(
+                            if (usageAccessGranted) "Usage access is enabled. The music island returns when you leave the player."
+                            else "Allow usage access to detect when your active player is open without accessibility access.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
+                            Text(if (usageAccessGranted) "Manage usage access" else "Grant usage access")
+                        }
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))

@@ -12,7 +12,6 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
-import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -274,7 +273,7 @@ object NotificationActivityState {
     }
 
     internal fun isMediaOrInternalNotification(notification: Notification, packageName: String): Boolean {
-        if (packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
+        if (packageName == "com.chiller3.pixellight") {
             return true
         }
 

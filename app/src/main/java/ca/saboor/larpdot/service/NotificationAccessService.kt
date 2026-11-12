@@ -10,12 +10,11 @@ import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.os.BundleCompat
-import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.notification.NotificationActivityState
 
 /**
- * Service to listen for system notifications, active media sessions, and PixelLight state
+ * Service to listen for system notifications and active media sessions
  * when Notification Access is granted.
  */
 class NotificationAccessService : NotificationListenerService() {
@@ -43,8 +42,6 @@ class NotificationAccessService : NotificationListenerService() {
             val activeControllers = mediaSessionManager?.getActiveSessions(component)
             MediaPlaybackState.updateFromControllers(activeControllers)
 
-            // Check if PixelLight is currently active
-            checkActivePixelLight()
             activeNotifications?.forEach { NotificationActivityState.update(this, it) }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -57,18 +54,6 @@ class NotificationAccessService : NotificationListenerService() {
 
         NotificationActivityState.update(this, sbn)
 
-        // Intercept PixelLight torch notification
-        if (sbn.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
-            val extras = sbn.notification?.extras
-            val progress = extras?.getInt("android.progress", -1) ?: -1
-            val max = extras?.getInt("android.progressMax", -1) ?: -1
-            val turnOffIntent = sbn.notification?.actions?.firstOrNull {
-                it.title?.toString()?.contains("Turn off", ignoreCase = true) == true
-            }?.actionIntent
-            FlashlightController.setPixelLightTurnOffPendingIntent(turnOffIntent)
-            android.util.Log.i("NotificationAccessService", "PixelLight notification posted: progress=$progress, max=$max, hasTurnOffIntent=${turnOffIntent != null}")
-            FlashlightController.onPixelLightNotificationPosted(progress, max)
-        }
 
         try {
             // Extract artwork from media notification extras if available (hilight-studio pattern)
@@ -177,10 +162,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     private fun handleNotificationRemoved(sbn: StatusBarNotification?) {
         sbn?.key?.let(NotificationActivityState::remove)
-        if (sbn?.packageName == FlashlightController.PIXELLIGHT_PACKAGE) {
-            android.util.Log.i("NotificationAccessService", "PixelLight notification removed")
-            FlashlightController.onPixelLightNotificationRemoved()
-        }
+
 
         if (sbn?.notification?.let(::isMediaNotification) != true) return
         try {
@@ -190,22 +172,7 @@ class NotificationAccessService : NotificationListenerService() {
         } catch (_: Exception) {}
     }
 
-    private fun checkActivePixelLight() {
-        try {
-            val active = activeNotifications ?: return
-            val pixellightNotif = active.firstOrNull { it.packageName == FlashlightController.PIXELLIGHT_PACKAGE }
-            if (pixellightNotif != null) {
-                val extras = pixellightNotif.notification?.extras
-                val progress = extras?.getInt("android.progress", -1) ?: -1
-                val max = extras?.getInt("android.progressMax", -1) ?: -1
-                val turnOffIntent = pixellightNotif.notification?.actions?.firstOrNull {
-                    it.title?.toString()?.contains("Turn off", ignoreCase = true) == true
-                }?.actionIntent
-                FlashlightController.setPixelLightTurnOffPendingIntent(turnOffIntent)
-                FlashlightController.onPixelLightNotificationPosted(progress, max)
-            }
-        } catch (_: Exception) {}
-    }
+
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()

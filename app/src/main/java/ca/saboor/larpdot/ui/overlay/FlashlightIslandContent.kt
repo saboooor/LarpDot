@@ -72,17 +72,10 @@ val FlashlightAmber = Color(0xFFFFB300)
 val FlashlightAmberLight = Color(0xFFFFD54F)
 val FlashlightAmberDark = Color(0xFFFF8F00)
 
-/**
- * Calculates the flashlight brightness percentage string, formatted as "X%".
- * If torch strength is variable (maxStrength > 1), computes (torchStrength / maxStrength * 100)%.
- * If torch is binary (maxStrength <= 1), returns "100%".
- */
-fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int): String {
-    val percent = if (maxStrength > 1) {
-        (torchStrength.toFloat() / maxStrength * 100).roundToInt().coerceIn(1, 100)
-    } else {
-        100
-    }
+/** Percentages use the standard torch maximum as 100%; boosted levels may exceed it. */
+fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int, standardMaxStrength: Int = maxStrength): String {
+    val level = torchStrength.coerceIn(1, maxStrength.coerceAtLeast(1))
+    val percent = (level.toFloat() / standardMaxStrength.coerceAtLeast(1) * 100).roundToInt().coerceAtLeast(1)
     return "$percent%"
 }
 
@@ -94,8 +87,9 @@ fun getFlashlightStrengthFraction(torchStrength: Int, maxStrength: Int): Float =
 fun rememberCompactFlashlightStatus(): String {
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    return remember(torchStrength, maxStrength) {
-        getFlashlightPercentText(torchStrength, maxStrength)
+    val standardMaximum by FlashlightController.standardMaxStrength.collectAsState()
+    return remember(torchStrength, maxStrength, standardMaximum) {
+        getFlashlightPercentText(torchStrength, maxStrength, standardMaximum)
     }
 }
 
@@ -311,7 +305,6 @@ fun ExpandedFlashlightContent(
                     detectDragGestures(
                         onDragStart = {
                             isDragging = true
-                            FlashlightController.setUserInteracting(true)
                             if (!currentIsFlashlightOn) {
                                 FlashlightController.turnOn()
                             }
@@ -320,11 +313,9 @@ fun ExpandedFlashlightContent(
                             isDragging = false
                             val finalStrength = (intensityFraction * currentMaxStrength).roundToInt().coerceIn(1, currentMaxStrength)
                             FlashlightController.flushStrength(finalStrength)
-                            FlashlightController.setUserInteracting(false)
                         },
                         onDragCancel = {
                             isDragging = false
-                            FlashlightController.setUserInteracting(false)
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()

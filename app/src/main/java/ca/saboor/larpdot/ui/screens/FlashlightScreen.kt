@@ -1,10 +1,16 @@
 package ca.saboor.larpdot.ui.screens
 
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.automirrored.filled.Launch
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.ui.platform.LocalUriHandler
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,9 +93,32 @@ fun FlashlightScreen(
     val isStrengthSupported by FlashlightController.isStrengthSupported.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    val isPixelLightInstalled by FlashlightController.isPixelLightInstalled.collectAsState()
-    val isPixelLightActive by FlashlightController.isPixelLightActive.collectAsState()
-    val usePixelLight by OverlayPreferences.usePixelLightFlow.collectAsState()
+    val standardMaximum by FlashlightController.standardMaxStrength.collectAsState()
+    val isBoostSupported by FlashlightController.isBoostSupported.collectAsState()
+    val isBoostActive by FlashlightController.isBoostActive.collectAsState()
+    val isBoostStarting by FlashlightController.isBoostStarting.collectAsState()
+    val boostEnabled by OverlayPreferences.flashlightBoostFlow.collectAsState()
+    val flashlightError by FlashlightController.lastError.collectAsState()
+    var pendingBoostPermission by remember { mutableStateOf(false) }
+    var pendingTorchPermission by remember { mutableStateOf(false) }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            FlashlightController.refreshHardware()
+            if (pendingBoostPermission) FlashlightController.setBoostEnabled(true)
+            if (pendingTorchPermission) FlashlightController.turnOn()
+        }
+        pendingBoostPermission = false
+        pendingTorchPermission = false
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) FlashlightController.refreshHardware()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val showInIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
     val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
@@ -98,12 +127,12 @@ fun FlashlightScreen(
 
     LaunchedEffect(Unit) {
         FlashlightController.init(context)
-        FlashlightController.checkPixelLightInstallation(context)
+        FlashlightController.refreshHardware()
         OverlayPreferences.isShowFlashlightIslandEnabled(context)
         OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)
         OverlayPreferences.isFlashlightTapToToggleEnabled(context)
-        OverlayPreferences.isUsePixelLightEnabled(context)
+        OverlayPreferences.isFlashlightBoostEnabled(context)
     }
 
     LazyColumn(
@@ -172,7 +201,7 @@ fun FlashlightScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = if (isFlashlightOn) "Illuminating" else "Off",
+                                text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -180,9 +209,12 @@ fun FlashlightScreen(
                     }
 
                     Switch(
-                        checked = isFlashlightOn,
+                        checked = isFlashlightOn || isBoostStarting,
                         onCheckedChange = {
-                            FlashlightController.setTorch(it)
+                            if (it && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                pendingTorchPermission = true
+                                cameraPermission.launch(Manifest.permission.CAMERA)
+                            } else FlashlightController.setTorch(it)
                         },
                     )
                 }
@@ -216,7 +248,7 @@ fun FlashlightScreen(
                                 )
                             }
                             Text(
-                                text = "${(torchStrength.toFloat() / maxStrength * 100).roundToInt()}% ($torchStrength / $maxStrength)",
+                                text = "${(torchStrength.toFloat() / standardMaximum.coerceAtLeast(1) * 100).roundToInt()}% ($torchStrength / $maxStrength)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
@@ -249,7 +281,7 @@ fun FlashlightScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             listOf(25, 50, 75, 100).forEach { pct ->
-                                val targetLevel = ((pct / 100f) * maxStrength).roundToInt().coerceIn(1, maxStrength)
+                                val targetLevel = ((pct / 100f) * standardMaximum).roundToInt().coerceIn(1, maxStrength)
                                 FilledTonalButton(
                                     onClick = { FlashlightController.setStrength(targetLevel) },
                                     modifier = Modifier.weight(1f),
@@ -410,105 +442,47 @@ fun FlashlightScreen(
             }
         }
 
-        // PixelLight Integration Card
-        if (selectedTabIndex == 2) item {
-            SectionHeader(title = "PixelLight Engine")
-            LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isPixelLightActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = if (isPixelLightActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    text = "PixelLight Boost",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                if (isPixelLightInstalled) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isPixelLightActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    ) {
-                                        Text(
-                                            text = if (isPixelLightActive) "BOOST ON" else "INSTALLED",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = if (isPixelLightActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = if (isPixelLightInstalled) {
-                                    "Bypasses standard Android LED limits for maximum hardware brightness."
-                                } else {
-                                    "Install PixelLight by chenxiaolong to unlock 100% LED hardware power."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+        if (flashlightError != null) item {
+            Text(flashlightError.orEmpty(), color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium)
+        }
 
-                    if (isPixelLightInstalled) {
-                        Switch(
-                            checked = usePixelLight,
-                            onCheckedChange = { enabled ->
-                                OverlayPreferences.setUsePixelLightEnabled(context, enabled)
-                            },
+        if (selectedTabIndex == 2) item {
+            SectionHeader(title = "Flashlight Boost")
+            LarpCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Built-in camera boost", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (isBoostSupported) "Unlocks brightness above 100%. The camera is used only above the standard flashlight maximum."
+                            else "This device does not expose boost controls. Standard flashlight control is available.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                if (isPixelLightInstalled) {
-                    OutlinedButton(
-                        onClick = { FlashlightController.openPixelLightApp(context) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Open PixelLight App")
-                    }
-                } else {
-                    val uriHandler = LocalUriHandler.current
-                    OutlinedButton(
-                        onClick = {
-                            uriHandler.openUri("https://github.com/chenxiaolong/PixelLight")
+                    Switch(
+                        checked = boostEnabled && isBoostSupported,
+                        enabled = isBoostSupported,
+                        onCheckedChange = { enabled ->
+                            if (enabled && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                pendingBoostPermission = true
+                                cameraPermission.launch(Manifest.permission.CAMERA)
+                            } else FlashlightController.setBoostEnabled(enabled)
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Get PixelLight on GitHub")
-                    }
+                    )
+                }
+                if (!isBoostSupported) {
+                    TextButton(onClick = {
+                        if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                            cameraPermission.launch(Manifest.permission.CAMERA)
+                        } else FlashlightController.refreshHardware()
+                    }) { Text("Check camera support") }
+                }
+                if (isBoostSupported) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("Above 100%, camera permission and a camera session are required. Returning to 100% releases the camera. No photos or video are saved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -527,9 +501,9 @@ fun FlashlightScreen(
                         isHighlight = isFlashlightAvailable,
                     )
                     DiagnosticRow(
-                        label = "PixelLight Engine",
-                        value = if (isPixelLightActive) "Active (Boost Mode)" else if (isPixelLightInstalled) "Installed & Ready" else "Not Installed",
-                        isHighlight = isPixelLightInstalled,
+                        label = "Camera Boost",
+                        value = if (isBoostActive) "Active" else if (isBoostSupported) "Supported" else "Not Supported",
+                        isHighlight = isBoostSupported,
                     )
                     DiagnosticRow(
                         label = "Multi-level Brightness",

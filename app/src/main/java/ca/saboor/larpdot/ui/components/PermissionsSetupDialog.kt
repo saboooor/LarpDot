@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import ca.saboor.larpdot.service.ForegroundAppTracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,10 +83,13 @@ fun PermissionsSetupDialog(
         mutableStateOf(ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context))
     }
 
+    var usageAccessGranted by remember { mutableStateOf(ForegroundAppTracker.refreshUsageAccess(context)) }
+
     // Automatically refresh permission status when user returns from settings
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                usageAccessGranted = ForegroundAppTracker.refreshUsageAccess(context)
                 notificationAccessGranted = hasNotificationAccess(context)
                 overlayGranted = hasOverlayPermission(context)
                 accessibilityGranted = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
@@ -164,6 +168,14 @@ fun PermissionsSetupDialog(
                         )
                         context.startActivity(intent)
                     },
+                )
+
+                PermissionSetupCard(
+                    title = "Usage Access (Optional)",
+                    description = "Hide the music island while the app providing the current media session is open.",
+                    icon = Icons.Default.Layers,
+                    isGranted = usageAccessGranted,
+                    onGrantClick = { ForegroundAppTracker.openUsageAccessSettings(context) },
                 )
 
                 // 3. Accessibility Service (Draw over Notification Panel & Lock Screen)

@@ -18,9 +18,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -88,7 +88,6 @@ import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.visualizer.BpmDetector
 import ca.saboor.larpdot.visualizer.rememberBpmPulse
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private fun bubbleGap(style: OverlayPreferences.BubbleStyle): Dp =
@@ -119,7 +118,6 @@ fun CompactIslandOverlay(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val mediaAccentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
     val density = LocalDensity.current
     val mainPillBounds = remember { arrayOfNulls<Rect>(1) }
     val secondaryBounds = remember { mutableMapOf<IslandType, Rect>() }
@@ -132,20 +130,11 @@ fun CompactIslandOverlay(
     val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
 
     val isMusicActiveGlobal by MediaPlaybackState.isMusicActive.collectAsState()
-    val isMusicActive = mediaInfo.hasMedia && isMusicActiveGlobal
+    val hideMedia by ca.saboor.larpdot.service.ForegroundAppTracker.shouldHideMedia.collectAsState()
+    val isMusicActive = mediaInfo.hasMedia && isMusicActiveGlobal && !hideMedia
     val isFlashlightActive = isFlashlightOn
     val isNotificationActivityActive = notificationActivity != null
     val isPillActive = isMusicActive || isFlashlightActive || isNotificationActivityActive
-
-    var isMediaSessionActive by remember { mutableStateOf(isMusicActive) }
-    LaunchedEffect(isMusicActive) {
-        if (isMusicActive) {
-            isMediaSessionActive = true
-        } else {
-            delay(320L)
-            isMediaSessionActive = false
-        }
-    }
 
     val stack = remember(isMusicActive, isFlashlightActive, isNotificationActivityActive, notificationActivity) {
         builtInIslandStack(
@@ -188,16 +177,13 @@ fun CompactIslandOverlay(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val cutoutDiameterDp = with(density) {
-        if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
-    }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
-    val compactCornerRadius = compactPillThickness / 2f
+    val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
+    val cutoutDiameterDp = cameraGeometry.diameter.dp
+    val compactPillThickness = cameraGeometry.thickness.dp
+    val compactCornerRadius = cameraGeometry.cornerRadius.dp
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val secondaryDotSize = secondaryBubbleThicknessDp(compactPillThickness.value, smallerBubbles).dp
 
-    val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
@@ -217,48 +203,31 @@ fun CompactIslandOverlay(
         enabled = pulseEntireIsland && isMusicActive,
     )
 
-    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-    val nestedActiveExtraDp = compactPillThickness + nestedArtSize
-    val blendedActiveExtraDp = compactPillThickness * 3
-
     val notificationActivityStatus = notificationActivity?.let { rememberCompactActivityStatus(it) }
     val flashlightStatus = rememberCompactFlashlightStatus()
-    val activityExtraDp = rememberCompactStatusExtraDp(notificationActivityStatus)
-    val flashlightExtraDp = rememberCompactStatusExtraDp(flashlightStatus)
 
-    val activeExtraDp = when {
-        activeDisplayType == IslandType.NOTIFICATION_ACTIVITY -> activityExtraDp
-        activeDisplayType == IslandType.FLASHLIGHT -> flashlightExtraDp
-        isMusicActive -> when (minimizedStyle) {
-            OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
-            OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
-            else -> 60.dp
-        }
-        lastDisplayType == IslandType.NOTIFICATION_ACTIVITY -> activityExtraDp
-        lastDisplayType == IslandType.FLASHLIGHT -> flashlightExtraDp
-        else -> when (minimizedStyle) {
-            OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
-            OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
-            else -> 60.dp
-        }
-    }
-    val titleExtraDp = if (showMinimizedTitle && isMusicActive) 180.dp else 0.dp
-    val announcementExtraDp = if (isAnnouncing) 210.dp else 0.dp
+    val presentations = rememberIslandPresentations(
+        mediaInfo, notificationActivityStatus, flashlightStatus,
+        getFlashlightStrengthFraction(FlashlightController.torchStrength.collectAsState().value,
+            FlashlightController.maxStrength.collectAsState().value),
+        compactPillThickness, isAnnouncing,
+    )
+    val presentation = presentations.getValue(activeDisplayType)
+    val activeExtraDp = presentation.compactExtra
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
     val mediaWings = compactMediaWings(
-        extraWidthDp = maxOf(activeExtraDp, titleExtraDp, announcementExtraDp).value,
+        extraWidthDp = activeExtraDp.value,
         hasTrailingBubble = !isLandscape && rightSecondaryType != null,
         showTitle = showMinimizedTitle && isMusicActive,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
         announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
-    val compactWidth = if (isLandscape) compactPillThickness else if (activeDisplayType == IslandType.MEDIA) {
-        cutoutDiameterDp + mediaWings.widthDp.dp
-    } else cutoutDiameterDp + maxOf(activeExtraDp, titleExtraDp, announcementExtraDp)
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + maxOf(activeExtraDp, if (isAnnouncing) 140.dp else 0.dp)) else compactPillThickness
+    val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
+        if (activeDisplayType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
+    val compactHeight = presentation.height(cutoutDiameterDp, compactPillThickness, isLandscape)
 
     val currentCornerRadius by animateDpAsState(
         targetValue = compactCornerRadius,
@@ -293,21 +262,31 @@ fun CompactIslandOverlay(
         label = "compact_content_alpha",
     )
 
-    var isIslandPressed by remember { mutableStateOf(false) }
-    val islandScale by animateFloatAsState(
-        targetValue = if (isIslandPressed) 1.08f else 1f,
-        animationSpec = if (isIslandPressed) {
-            spring(dampingRatio = 0.72f, stiffness = 450f)
-        } else {
-            spring(dampingRatio = 0.78f, stiffness = 360f)
-        },
-        label = "compact_scale",
-    )
+    fun islandModel(type: IslandType, secondary: Boolean = false): IslandModel {
+        val activate: () -> Unit = when (type) {
+            IslandType.MEDIA -> if (secondary) {
+                { MediaPlaybackState.togglePlayPause() }
+            } else {
+                { openPlayerApp(context, mediaInfo) }
+            }
+            IslandType.FLASHLIGHT -> onFlashlightToggle
+            IslandType.NOTIFICATION_ACTIVITY -> {
+                { notificationActivity?.let(NotificationActivityState::open) }
+            }
+        }
+        val hold: () -> Unit = when {
+            type == IslandType.MEDIA -> { { openPlayerApp(context, mediaInfo) } }
+            secondary && type == IslandType.NOTIFICATION_ACTIVITY -> { { requestExpand(type, true) } }
+            else -> activate
+        }
+        return IslandModel(type, activate, hold, presentations.getValue(type))
+    }
+
+    val primaryPress = rememberIslandPressFeedback(activeDisplayType, isPillActive && !isExpanded)
+    val islandScale = primaryPress.scale
     SideEffect { onCompactScaleChanged(islandScale) }
 
-    val progressFraction = if (mediaInfo.durationMs > 0) {
-        (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
-    } else 0f
+    val progressFraction = presentation.progress
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressFraction,
@@ -324,7 +303,6 @@ fun CompactIslandOverlay(
     val compactStretch = (dragOffsetAnim.value / maxDragOffsetPx).coerceIn(-1f, 1f)
     SideEffect { onCompactStretchChanged(compactStretch) }
 
-    val showProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
     val showFlashlightOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxTorchStrength by FlashlightController.maxStrength.collectAsState()
@@ -334,204 +312,37 @@ fun CompactIslandOverlay(
     val topAnchorPx = (cutoutInfo.centerY - (compactHPx / 2f)).coerceAtLeast(0f)
     val pillTopOffsetDp = with(density) { topAnchorPx.toDp() }.coerceAtLeast(0.dp)
 
+    fun dragActions(type: IslandType, secondary: Boolean): IslandDragActions {
+        val base = when (type) {
+            IslandType.FLASHLIGHT -> flashlightDragActions(coroutineScope, density.density) {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+            IslandType.MEDIA -> if (!secondary && isMusicActive) IslandDragActions(onSwipe = { next ->
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (next) MediaPlaybackState.skipNext() else MediaPlaybackState.skipPrevious()
+            }) else IslandDragActions()
+            IslandType.NOTIFICATION_ACTIVITY -> IslandDragActions()
+        }
+        return if (secondary) base else base.copy(onDown = {
+            ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
+        })
+    }
+
     val mainPillModifier = Modifier
-        .pointerInput(isPillActive, isExpanded, mediaInfo.hasMedia, activeDisplayType) {
-            if (isPillActive && !isExpanded) {
-                var totalDragX = 0f
-                var totalDragY = 0f
-                var hasTriggered = false
-                var adjustingFlashlight = false
-                var appliedFlashlightLevel = 1
-                val swipeThresholdPx = with(density) { 28.dp.toPx() }
-                val flashlightSwipe = FlashlightSwipeRepeater(
-                    scope = coroutineScope,
-                    nearDistancePx = with(density) { 24.dp.toPx() },
-                    maxDistancePx = with(density) { 120.dp.toPx() },
-                ) { direction, levels ->
-                    val newLevel = (appliedFlashlightLevel + direction * levels)
-                        .coerceIn(1, FlashlightController.maxStrength.value)
-                    if (newLevel != appliedFlashlightLevel) {
-                        appliedFlashlightLevel = newLevel
-                        FlashlightController.setStrength(newLevel)
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        true
-                    } else {
-                        false
-                    }
-                }
-
-                fun finishFlashlightSwipe() {
-                    if (adjustingFlashlight) {
-                        flashlightSwipe.stop()
-                        FlashlightController.flushStrength(appliedFlashlightLevel)
-                        FlashlightController.setUserInteracting(false)
-                        adjustingFlashlight = false
-                    }
-                }
-
-                try {
-                    detectDragGestures(
-                        onDragStart = {
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                            appliedFlashlightLevel = FlashlightController.torchStrength.value
-                        },
-                        onDragEnd = {
-                            finishFlashlightSwipe()
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                            coroutineScope.launch {
-                                dragOffsetAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                                )
-                            }
-                        },
-                        onDragCancel = {
-                            finishFlashlightSwipe()
-                            totalDragX = 0f
-                            totalDragY = 0f
-                            hasTriggered = false
-                            coroutineScope.launch {
-                                dragOffsetAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                                )
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            totalDragX += dragAmount.x
-                            totalDragY += dragAmount.y
-
-                            if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY)) {
-                                val damped = (totalDragX * 0.10f).coerceIn(-maxDragOffsetPx, maxDragOffsetPx)
-                                coroutineScope.launch {
-                                    dragOffsetAnim.snapTo(damped)
-                                }
-                                if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
-                                    isIslandPressed = false
-                                    change.consume()
-                                }
-                            }
-
-                            if (adjustingFlashlight) {
-                                change.consume()
-                                flashlightSwipe.update(totalDragX)
-                            } else if (!hasTriggered) {
-                                if (totalDragY > 20f && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
-                                } else if (activeDisplayType == IslandType.FLASHLIGHT &&
-                                    FlashlightController.maxStrength.value > 1 &&
-                                    kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f &&
-                                    totalDragX != 0f
-                                ) {
-                                    adjustingFlashlight = true
-                                    isIslandPressed = false
-                                    FlashlightController.setUserInteracting(true)
-                                    change.consume()
-                                    flashlightSwipe.start(totalDragX)
-                                } else if (activeDisplayType == IslandType.MEDIA && isMusicActive && totalDragX > swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    MediaPlaybackState.skipNext()
-                                } else if (activeDisplayType == IslandType.MEDIA && isMusicActive && totalDragX < -swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
-                                    hasTriggered = true
-                                    change.consume()
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    MediaPlaybackState.skipPrevious()
-                                }
-                            }
-                        }
-                    )
-                } finally {
-                    finishFlashlightSwipe()
-                    coroutineScope.launch {
-                        dragOffsetAnim.animateTo(
-                            targetValue = 0f,
-                            animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                        )
-                    }
-                }
-            }
-        }
-        .pointerInput(isPillActive, isExpanded, activeDisplayType) {
-            if (isPillActive && !isExpanded) {
-                val tapToExpand = OverlayPreferences.tapToExpandFlow.value
-                detectTapGestures(
-                    onPress = {
-                        MediaPlaybackState.dismissSongAnnouncement()
-                        isIslandPressed = true
-                        try {
-                            val longPressJob = coroutineScope.launch {
-                                delay(300L)
-                                if (isIslandPressed) {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    when (activeDisplayType) {
-                                        IslandType.MEDIA -> {
-                                            if (tapToExpand) {
-                                                openPlayerApp(context, mediaInfo)
-                                            } else {
-                                                requestExpand(IslandType.MEDIA, false)
-                                            }
-                                        }
-                                        IslandType.FLASHLIGHT -> {
-                                            if (tapToExpand) {
-                                                onFlashlightToggle()
-                                            } else {
-                                                requestExpand(IslandType.FLASHLIGHT, false)
-                                            }
-                                        }
-                                        IslandType.NOTIFICATION_ACTIVITY -> {
-                                            if (tapToExpand) {
-                                                notificationActivity?.let(NotificationActivityState::open)
-                                            } else {
-                                                requestExpand(IslandType.NOTIFICATION_ACTIVITY, false)
-                                            }
-                                        }
-                                    }
-                                    tryAwaitRelease()
-                                }
-                            }
-                            tryAwaitRelease()
-                            longPressJob.cancel()
-                        } finally {
-                            isIslandPressed = false
-                        }
-                    },
-                    onTap = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        when (activeDisplayType) {
-                            IslandType.MEDIA -> {
-                                if (tapToExpand) {
-                                    requestExpand(IslandType.MEDIA, false)
-                                } else {
-                                    openPlayerApp(context, mediaInfo)
-                                }
-                            }
-                            IslandType.FLASHLIGHT -> {
-                                if (tapToExpand) {
-                                    requestExpand(IslandType.FLASHLIGHT, false)
-                                } else {
-                                    onFlashlightToggle()
-                                }
-                            }
-                            IslandType.NOTIFICATION_ACTIVITY -> {
-                                if (tapToExpand) {
-                                    requestExpand(IslandType.NOTIFICATION_ACTIVITY, false)
-                                } else {
-                                    notificationActivity?.let(NotificationActivityState::open)
-                                }
-                            }
-                        }
-                    },
-                )
-            }
-        }
+        .then(primaryPress.modifier)
+        .islandDragGestures(
+            activeDisplayType, isPillActive && !isExpanded, dragOffsetAnim, maxDragOffsetPx,
+            density.density, dragActions(activeDisplayType, secondary = false),
+        )
+        .islandTapGestures(
+            identity = activeDisplayType,
+            enabled = isPillActive && !isExpanded,
+            tapToExpand = OverlayPreferences.tapToExpandFlow.collectAsState().value,
+            model = islandModel(activeDisplayType),
+            onExpand = { requestExpand(activeDisplayType, false) },
+            onFeedback = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) },
+            onPress = { MediaPlaybackState.dismissSongAnnouncement() },
+        )
 
     val mainPill = @Composable {
         if (!renderMainPill && isPillActive) {
@@ -576,17 +387,13 @@ fun CompactIslandOverlay(
                 .clip(mainShape)
                 .then(
                     Modifier.islandFluidProgressBorder(
-                        progressFraction = when {
-                            activeDisplayType == IslandType.MEDIA && isMusicActive && showProgressOutline -> animatedProgress
-                            activeDisplayType == IslandType.FLASHLIGHT && showFlashlightOutline -> flashlightFraction
-                            else -> 0f
-                        },
+                        progressFraction = if (presentation.compactOutline) animatedProgress else 0f,
                         cornerRadius = currentCornerRadius,
                         shape = mainShape,
                         strokeWidth = 0.75.dp,
-                        trackColor = if (activeDisplayType == IslandType.FLASHLIGHT && !showFlashlightOutline) Color.Transparent
+                        trackColor = if (presentation.hideTrackWhenOutlineDisabled && !presentation.compactOutline) Color.Transparent
                             else Color(0x30FFFFFF).copy(alpha = (48f / 255f) * contentAlpha),
-                        progressColor = if (activeDisplayType == IslandType.FLASHLIGHT) Color.White else mediaAccentColor,
+                        progressColor = presentation.accent,
                     )
                 ),
             shape = mainShape,
@@ -608,37 +415,14 @@ fun CompactIslandOverlay(
                             animationSpec = tween(durationMillis = 220),
                             label = "compact_content_type",
                         ) { displayType ->
-                            when (displayType) {
-                                IslandType.MEDIA -> {
-                                    CompactIslandContent(
-                                        mediaInfo = mediaInfo,
-                                        cutoutDiameterDp = cutoutDiameterDp,
-                                        onExpand = { requestExpand(IslandType.MEDIA, false) },
-                                        showMinimizedTitle = showMinimizedTitle,
-                                        isSongAnnouncement = isAnnouncing,
-                                        trailingWingFraction = mediaWings.trailingFraction,
-                                    )
-                                }
-                                IslandType.FLASHLIGHT -> {
-                                    CompactFlashlightContent(
-                                        cutoutDiameterDp = cutoutDiameterDp,
-                                        onExpand = { requestExpand(IslandType.FLASHLIGHT, false) },
-                                        onFlashlightToggle = onFlashlightToggle,
-                                        isLandscape = isLandscape,
-                                        status = flashlightStatus,
-                                    )
-                                }
-                                IslandType.NOTIFICATION_ACTIVITY -> {
-                                    if (notificationActivity != null) {
-                                        CompactNotificationActivityContent(
-                                            activity = notificationActivity,
-                                            cutoutDiameterDp = cutoutDiameterDp,
-                                            isLandscape = isLandscape,
-                                            status = notificationActivityStatus ?: "",
-                                        )
-                                    }
-                                }
-                            }
+                            IslandCompactContent(
+                                model = islandModel(displayType), media = mediaInfo, activity = notificationActivity,
+                                diameter = cutoutDiameterDp, landscape = isLandscape,
+                                showTitle = showMinimizedTitle, announcing = isAnnouncing,
+                                trailingWingFraction = mediaWings.trailingFraction,
+                                onExpand = { requestExpand(displayType, false) },
+                                onFlashlightToggle = onFlashlightToggle,
+                            )
                         }
                     }
                 }
@@ -776,12 +560,8 @@ fun CompactIslandOverlay(
     ) {
         if ((bubbleWidth <= 0.5.dp && bubbleHeight <= 0.5.dp) || bubbleAlpha <= 0.01f) return
 
-        var isPressed by remember { mutableStateOf(false) }
-        val pressScale by animateFloatAsState(
-            targetValue = if (isPressed) 1.15f else 1f,
-            animationSpec = spring(dampingRatio = 0.70f, stiffness = 500f),
-            label = "dot_press_scale",
-        )
+        val secondaryPress = rememberIslandPressFeedback(type, isActive && !isExpanded)
+        val pressScale = secondaryPress.scale
         SideEffect { onSecondaryScaleChanged(type, pressScale * bubbleScale) }
         SideEffect { onSecondaryAlphaChanged(type, bubbleAlpha) }
         val stretchAnim = remember { Animatable(0f) }
@@ -797,157 +577,25 @@ fun CompactIslandOverlay(
         } else RoundedCornerShape(bubbleCornerRadius)
 
         val bubbleModifier = Modifier
+                .then(secondaryPress.modifier)
                 .size(width = bubbleWidth, height = bubbleHeight)
                 .onGloballyPositioned {
                     val bounds = it.boundsInRoot()
                     secondaryBounds[type] = bounds
                     onSecondaryBoundsChanged(type, bounds)
                 }
-                .pointerInput(isExpanded, isActive, type) {
-                    if (!isExpanded && isActive) {
-                        var dragX = 0f
-                        var dragY = 0f
-                        var adjusting = false
-                        var appliedLevel = 1
-                        val flashlightSwipe = FlashlightSwipeRepeater(
-                            scope = coroutineScope,
-                            nearDistancePx = with(density) { 24.dp.toPx() },
-                            maxDistancePx = with(density) { 120.dp.toPx() },
-                        ) { direction, levels ->
-                            val newLevel = (appliedLevel + direction * levels)
-                                .coerceIn(1, FlashlightController.maxStrength.value)
-                            if (newLevel != appliedLevel) {
-                                appliedLevel = newLevel
-                                FlashlightController.setStrength(newLevel)
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                true
-                            } else {
-                                false
-                            }
-                        }
-
-                        fun finishSwipe() {
-                            if (adjusting) {
-                                flashlightSwipe.stop()
-                                FlashlightController.flushStrength(appliedLevel)
-                                FlashlightController.setUserInteracting(false)
-                                adjusting = false
-                            }
-                            coroutineScope.launch {
-                                stretchAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
-                                )
-                            }
-                        }
-
-                        try {
-                            detectDragGestures(
-                                onDragStart = {
-                                    dragX = 0f
-                                    dragY = 0f
-                                    appliedLevel = FlashlightController.torchStrength.value
-                                },
-                                onDragEnd = { finishSwipe() },
-                                onDragCancel = { finishSwipe() },
-                                onDrag = { change, dragAmount ->
-                                    dragX += dragAmount.x
-                                    dragY += dragAmount.y
-                                    if (kotlin.math.abs(dragX) > kotlin.math.abs(dragY)) {
-                                        val damped = (dragX * 0.10f).coerceIn(-maxDotDragPx, maxDotDragPx)
-                                        coroutineScope.launch { stretchAnim.snapTo(damped) }
-                                        if (kotlin.math.abs(dragX) > kotlin.math.abs(dragY) * 1.3f) {
-                                            isPressed = false
-                                            change.consume()
-                                        }
-                                    }
-                                    if (!adjusting && type == IslandType.FLASHLIGHT && FlashlightController.maxStrength.value > 1 &&
-                                        kotlin.math.abs(dragX) > kotlin.math.abs(dragY) * 1.3f && dragX != 0f
-                                    ) {
-                                        adjusting = true
-                                        isPressed = false
-                                        FlashlightController.setUserInteracting(true)
-                                        flashlightSwipe.start(dragX)
-                                    }
-                                    if (adjusting) {
-                                        change.consume()
-                                        flashlightSwipe.update(dragX)
-                                    }
-                                },
-                            )
-                        } finally {
-                            finishSwipe()
-                        }
-                    }
-                }
-                .pointerInput(isExpanded, isActive, type) {
-                    if (!isExpanded && isActive) {
-                        val tapToExpand = OverlayPreferences.tapToExpandFlow.value
-                        detectTapGestures(
-                            onPress = {
-                                isPressed = true
-                                try {
-                                    val job = coroutineScope.launch {
-                                        delay(300L)
-                                        if (isPressed) {
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            when (type) {
-                                                IslandType.NOTIFICATION_ACTIVITY -> {
-                                                    requestExpand(IslandType.NOTIFICATION_ACTIVITY, true)
-                                                }
-                                                IslandType.MEDIA -> {
-                                                    if (tapToExpand) {
-                                                        openPlayerApp(context, mediaInfo)
-                                                    } else {
-                                                        requestExpand(IslandType.MEDIA, true)
-                                                    }
-                                                }
-                                                IslandType.FLASHLIGHT -> {
-                                                    if (tapToExpand) {
-                                                        onFlashlightToggle()
-                                                    } else {
-                                                        requestExpand(IslandType.FLASHLIGHT, true)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    tryAwaitRelease()
-                                    job.cancel()
-                                } finally {
-                                    isPressed = false
-                                }
-                            },
-                            onTap = {
-                                isPressed = false
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                when (type) {
-                                    IslandType.NOTIFICATION_ACTIVITY -> {
-                                        if (tapToExpand) {
-                                            requestExpand(IslandType.NOTIFICATION_ACTIVITY, true)
-                                        } else {
-                                            notificationActivity?.let(NotificationActivityState::open)
-                                        }
-                                    }
-                                    IslandType.MEDIA -> {
-                                        if (tapToExpand) {
-                                            requestExpand(IslandType.MEDIA, true)
-                                        } else {
-                                            MediaPlaybackState.togglePlayPause()
-                                        }
-                                    }
-                                    IslandType.FLASHLIGHT -> {
-                                        if (tapToExpand) {
-                                            requestExpand(IslandType.FLASHLIGHT, true)
-                                        } else {
-                                            onFlashlightToggle()
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
+                .islandDragGestures(
+                    type, isActive && !isExpanded, stretchAnim, maxDotDragPx,
+                    density.density, dragActions(type, secondary = true),
+                )
+                .islandTapGestures(
+                    identity = type,
+                    enabled = isActive && !isExpanded,
+                    tapToExpand = OverlayPreferences.tapToExpandFlow.collectAsState().value,
+                    model = islandModel(type, secondary = true),
+                    onExpand = { requestExpand(type, true) },
+                    onFeedback = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) },
+                )
         if (!renderSecondarySurface(type)) {
             Box(bubbleModifier)
             return
@@ -1010,8 +658,10 @@ fun CompactIslandOverlay(
         val mediaBias = if (activeDisplayType == IslandType.MEDIA) {
             (currentWidth - cutoutDiameterDp).coerceAtLeast(0.dp) * (0.5f - mediaWings.trailingFraction)
         } else 0.dp
-        val pillStartOffset = ((maxWidth - currentWidth) / 2 - mediaBias).coerceAtLeast(0.dp)
-        val pillTopOffsetLandscape = ((maxHeight - currentHeight) / 2).coerceAtLeast(0.dp)
+        val cutoutCenterX = with(density) { cutoutInfo.centerX.toDp() }
+        val cutoutCenterY = with(density) { cutoutInfo.centerY.toDp() }
+        val pillStartOffset = (cutoutCenterX - currentWidth / 2 - mediaBias).coerceAtLeast(0.dp)
+        val pillTopOffsetLandscape = (cutoutCenterY - currentHeight / 2).coerceAtLeast(0.dp)
 
         if (isLandscape) {
             val topExtraOffset = if (isLeftBubbleVisible) (leftBubbleHeight + leftBubbleGap) else 0.dp
@@ -1020,7 +670,10 @@ fun CompactIslandOverlay(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = colTopOffset),
+                    .absoluteOffset(
+                        x = cutoutCenterX - maxWidth / 2,
+                        y = colTopOffset,
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (isLeftBubbleVisible && displayLeftType != null) {
@@ -1332,7 +985,6 @@ fun IslandSurfaceOverlay(
 ) {
     var keepComposedForExit by remember { mutableStateOf(isExpanded) }
 
-    val mediaAccentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
     val screenHeightDp = configuration.screenHeightDp.dp
@@ -1341,12 +993,10 @@ fun IslandSurfaceOverlay(
     val drawWindowWidthPx = LocalView.current.width.takeIf { it > 0 }?.toFloat()
         ?: with(density) { screenWidthDp.toPx() }
 
-    val cutoutDiameterDp = with(density) {
-        if (cutoutInfo.radiusPx > 0f) (cutoutInfo.radiusPx * 2f).toDp() else 24.dp
-    }.coerceIn(16.dp, 36.dp)
-    val outlineAllowanceDp = 2.dp
-    val compactPillThickness = cutoutDiameterDp + (outlineAllowanceDp * 2)
-    val compactCornerRadius = compactPillThickness / 2f
+    val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
+    val cutoutDiameterDp = cameraGeometry.diameter.dp
+    val compactPillThickness = cameraGeometry.thickness.dp
+    val compactCornerRadius = cameraGeometry.cornerRadius.dp
     val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val secondaryBubbleThickness = secondaryBubbleThicknessDp(compactPillThickness.value, smallerBubbles).dp
@@ -1357,7 +1007,6 @@ fun IslandSurfaceOverlay(
         (cutoutCenterYDp + cutoutDiameterDp / 2f + 8.dp - 14.dp).coerceAtLeast(0.dp)
     val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
-    val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
@@ -1374,19 +1023,16 @@ fun IslandSurfaceOverlay(
         isPlaying = mediaInfo.isPlaying,
         enabled = pulseEntireIsland && expandedType == IslandType.MEDIA,
     )
-    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-    val compactExtraDp = when {
-        expandedType == IslandType.FLASHLIGHT -> 48.dp
-        minimizedStyle == OverlayPreferences.AlbumArtStyle.BLENDED -> compactPillThickness * 3  // Matches CompactIslandOverlay's blendedActiveExtraDp
-        minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
-        else -> 60.dp
-    }
+    val notificationActivityStatus = notificationActivity?.let { rememberCompactActivityStatus(it) }
+    val flashlightStatus = rememberCompactFlashlightStatus()
     val announcementActive = isSongAnnouncement && showSongAnnouncement
-    val mediaExtraDp = maxOf(
-        compactExtraDp,
-        if (showMinimizedTitle) 180.dp else 0.dp,
-        if (announcementActive) 210.dp else 0.dp,
-    )
+    val presentation = rememberIslandPresentations(
+        mediaInfo, notificationActivityStatus, flashlightStatus,
+        getFlashlightStrengthFraction(FlashlightController.torchStrength.collectAsState().value,
+            FlashlightController.maxStrength.collectAsState().value),
+        compactPillThickness, announcementActive,
+    ).getValue(expandedType)
+    val mediaExtraDp = presentation.compactExtra
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
@@ -1398,17 +1044,9 @@ fun IslandSurfaceOverlay(
         visualizerWidthDp = visualizerWidthDp,
         announcementText = mediaInfo.artist.ifBlank { "Media Player" },
     )
-    val compactWidth = if (isLandscape) compactPillThickness else if (expandedType == IslandType.MEDIA) {
-        cutoutDiameterDp + mediaWings.widthDp.dp
-    } else cutoutDiameterDp + compactExtraDp
-    val compactHeight = if (isLandscape) (cutoutDiameterDp + compactExtraDp) else compactPillThickness
-    val showProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
-    val showCompactProgressOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
-    val showCompactFlashlightOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
-    val showExpandedFlashlightOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
-    val torchStrength by FlashlightController.torchStrength.collectAsState()
-    val maxTorchStrength by FlashlightController.maxStrength.collectAsState()
-    val flashlightFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxTorchStrength) else 0f
+    val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
+        if (expandedType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
+    val compactHeight = presentation.height(cutoutDiameterDp, compactPillThickness, isLandscape)
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
@@ -1419,14 +1057,19 @@ fun IslandSurfaceOverlay(
     }
 
     val topMarginDp = (cutoutCenterYDp - (compactHeight / 2f)).coerceAtLeast(0.dp)
-    val horizontalMarginDp = if (isLandscape) 14.dp else topMarginDp.coerceAtLeast(14.dp)
+    val drawWindowWidthDp = with(density) { drawWindowWidthPx.toDp() }
+    val cutoutCenterXDp = with(density) { cutoutInfo.centerX.toDp() }
+    val horizontalMarginDp = if (isLandscape) {
+        islandSideMargin(cutoutCenterXDp.value, drawWindowWidthDp.value, cutoutDiameterDp.value / 2f).dp
+    } else topMarginDp.coerceAtLeast(14.dp)
     val cardWidth = when (expandedType) {
         IslandType.FLASHLIGHT -> minOf(screenWidthDp - 96.dp, 220.dp)
         IslandType.NOTIFICATION_ACTIVITY -> minOf(screenWidthDp - 32.dp, 360.dp)
         IslandType.MEDIA -> if (usesVerticalMediaLayout) {
             minOf(screenWidthDp - 88.dp, 248.dp)
         } else {
-            screenWidthDp - (horizontalMarginDp * 2)
+            if (isLandscape) minOf(drawWindowWidthDp - horizontalMarginDp - 14.dp, 420.dp)
+            else screenWidthDp - (horizontalMarginDp * 2)
         }
     }
     val cardHeight = when (expandedType) {
@@ -1456,8 +1099,6 @@ fun IslandSurfaceOverlay(
     }
 
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
-    val notificationActivityStatus = notificationActivity?.let { rememberCompactActivityStatus(it) }
-    val flashlightStatus = rememberCompactFlashlightStatus()
     val secondaryItemWidth = secondaryItemWidthDp(
         type = expandedType,
         thicknessDp = secondaryBubbleThickness.value,
@@ -1536,8 +1177,15 @@ fun IslandSurfaceOverlay(
 
     val currentWidth = androidx.compose.ui.unit.lerp(startWidth, cardWidth, morphProgress.value)
     val currentHeight = androidx.compose.ui.unit.lerp(startHeight, cardHeight, morphProgress.value)
-    val currentOffsetX = androidx.compose.ui.unit.lerp(startOffsetX, 0.dp, morphProgress.value)
-    val currentOffsetY = androidx.compose.ui.unit.lerp(startOffsetY, 0.dp, morphProgress.value)
+    // Expand inward from the camera's edge, keeping the panel clear of the hole punch.
+    val panelPlacement = islandPanelPlacement(
+        drawWindowWidthDp.value, screenHeightDp.value, cutoutCenterXDp.value,
+        cutoutCenterYDp.value, cutoutDiameterDp.value / 2f, cardWidth.value, cardHeight.value, isLandscape,
+    )
+    val expandedOffsetX = panelPlacement.offsetX.dp
+    val expandedOffsetY = panelPlacement.top.dp - 14.dp
+    val currentOffsetX = androidx.compose.ui.unit.lerp(startOffsetX, expandedOffsetX, morphProgress.value)
+    val currentOffsetY = androidx.compose.ui.unit.lerp(startOffsetY, expandedOffsetY, morphProgress.value)
     val currentCornerRadius = androidx.compose.ui.unit.lerp(startCorner, expandedCornerRadiusDp, morphProgress.value)
     val innerCorner = androidx.compose.ui.unit.lerp(
         (startCorner * 0.3f).coerceAtMost(6.dp),
@@ -1560,11 +1208,9 @@ fun IslandSurfaceOverlay(
     val expandedAlpha = ((morphProgress.value - 0.45f) / 0.55f).coerceIn(0f, 1f)
     val expandedContentAlpha = ((morphProgress.value - 0.35f) / 0.65f).coerceIn(0f, 1f)
     val expandedContentScale = 0.94f + (0.06f * morphProgress.value)
-    val expandedOffsetY = 16.dp * (1f - morphProgress.value)
+    val expandedContentOffsetY = 16.dp * (1f - morphProgress.value)
 
-    val progressFraction = if (mediaInfo.durationMs > 0) {
-        (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
-    } else 0f
+    val progressFraction = presentation.progress
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressFraction,
@@ -1572,9 +1218,10 @@ fun IslandSurfaceOverlay(
         label = "expanded_progress",
     )
 
+    val surfacePress = rememberIslandPressFeedback(expandedType, isCompactVisible || isExpanded)
+
     val currentElevation = androidx.compose.ui.unit.lerp(4.dp, 12.dp, morphProgress.value)
-    val showFlashlightStrengthOutline =
-        if (morphProgress.value < 0.5f) showCompactFlashlightOutline else showExpandedFlashlightOutline
+    val showOutline = if (morphProgress.value < 0.5f) presentation.compactOutline else presentation.expandedOutline
 
     Box(
         modifier = modifier
@@ -1587,10 +1234,11 @@ fun IslandSurfaceOverlay(
         Surface(
             modifier = Modifier
                 .padding(top = 14.dp)
-                .offset(x = currentOffsetX, y = currentOffsetY)
+                .absoluteOffset(x = currentOffsetX, y = currentOffsetY)
                 .size(width = currentWidth, height = currentHeight)
+                .then(surfacePress.modifier)
                 .graphicsLayer {
-                    val pressScale = 1f + (compactPressScale - 1f) * (1f - morphProgress.value).coerceIn(0f, 1f)
+                    val pressScale = maxOf(surfacePress.scale, 1f + (compactPressScale - 1f) * (1f - morphProgress.value).coerceIn(0f, 1f))
                     val stretch = compactStretch * (1f - morphProgress.value).coerceIn(0f, 1f)
                     val pulse = bpmPulseState.value
                     val islandPulseScale = if (pulseEntireIsland && mediaInfo.isPlaying && expandedType == IslandType.MEDIA && pulse > 0f) {
@@ -1615,20 +1263,16 @@ fun IslandSurfaceOverlay(
                 .clip(containerShape)
                 .then(
                     Modifier.islandFluidProgressBorder(
-                        progressFraction = when (expandedType) {
-                            IslandType.MEDIA -> if ((!isSecondarySurface || morphProgress.value >= 0.5f) &&
-                                mediaInfo.hasMedia &&
-                                (if (morphProgress.value < 0.5f) showCompactProgressOutline else showProgressOutline)
-                            ) animatedProgress else 0f
-                            IslandType.FLASHLIGHT -> if (showFlashlightStrengthOutline) flashlightFraction else 0f
-                            IslandType.NOTIFICATION_ACTIVITY -> 0f
-                        },
+                        progressFraction = if (
+                            (if (morphProgress.value < 0.5f) presentation.compactOutline else presentation.expandedOutline) &&
+                            (!isSecondarySurface || morphProgress.value >= 0.5f || expandedType != IslandType.MEDIA)
+                        ) animatedProgress else 0f,
                         cornerRadius = currentCornerRadius,
                         shape = containerShape,
                         strokeWidth = 0.75.dp,
-                        trackColor = if (expandedType == IslandType.FLASHLIGHT && !showFlashlightStrengthOutline)
+                        trackColor = if (presentation.hideTrackWhenOutlineDisabled && !showOutline)
                             Color.Transparent else Color(0x30FFFFFF),
-                        progressColor = if (expandedType == IslandType.FLASHLIGHT) Color.White else mediaAccentColor,
+                        progressColor = presentation.accent,
                     )
                 ),
             shape = containerShape,
@@ -1660,29 +1304,13 @@ fun IslandSurfaceOverlay(
                                 notificationActivityStatus = notificationActivityStatus,
                                 flashlightStatus = flashlightStatus,
                             )
-                        } else if (expandedType == IslandType.NOTIFICATION_ACTIVITY && notificationActivity != null) {
-                            CompactNotificationActivityContent(
-                                activity = notificationActivity,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                isLandscape = isLandscape,
-                                status = notificationActivityStatus ?: "",
-                            )
-                        } else if (expandedType == IslandType.FLASHLIGHT) {
-                            CompactFlashlightContent(
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                onExpand = {},
-                                onFlashlightToggle = { ca.saboor.larpdot.flashlight.FlashlightController.toggleFlashlight() },
-                                isLandscape = isLandscape,
-                                status = flashlightStatus,
-                            )
                         } else {
-                            CompactIslandContent(
-                                mediaInfo = mediaInfo,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                onExpand = {},
-                                showMinimizedTitle = showMinimizedTitle,
-                                isSongAnnouncement = isSongAnnouncement && showSongAnnouncement,
-                                trailingWingFraction = mediaWings.trailingFraction,
+                            IslandCompactContent(
+                                model = IslandModel(expandedType, {}, presentation = presentation), media = mediaInfo, activity = notificationActivity,
+                                diameter = cutoutDiameterDp, landscape = isLandscape,
+                                showTitle = showMinimizedTitle,
+                                announcing = announcementActive, trailingWingFraction = mediaWings.trailingFraction,
+                                onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                             )
                         }
                     }
@@ -1696,7 +1324,7 @@ fun IslandSurfaceOverlay(
                                 alpha = expandedAlpha
                                 scaleX = expandedContentScale
                                 scaleY = expandedContentScale
-                                translationY = with(density) { expandedOffsetY.toPx() }
+                                translationY = with(density) { expandedContentOffsetY.toPx() }
                             },
                     ) {
                         when (expandedType) {
