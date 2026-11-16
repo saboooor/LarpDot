@@ -213,7 +213,7 @@ fun CompactFlashlightContent(
 
 /**
  * Taller and narrower Pixel-inspired Dynamic Island Flashlight Card:
- * - Completely pure black OLED background (Color.Black).
+ * - Background provided by the island surface.
  * - Standard Material Flashlight icon.
  * - Dynamic colors extracted directly from system wallpaper via Material You (dynamicDarkColorScheme).
  * - Upward-projecting light beam cone originating from the Material Flashlight icon.
@@ -283,7 +283,6 @@ fun ExpandedFlashlightContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black) // Pure OLED Black
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {

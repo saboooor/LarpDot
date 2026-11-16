@@ -372,7 +372,63 @@ object OverlayPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    private val _expandedBackgroundOpacity = MutableStateFlow(1f)
+    val expandedBackgroundOpacity = _expandedBackgroundOpacity.asStateFlow()
+    private val _backdropBlurEnabled = MutableStateFlow(false)
+    val backdropBlurEnabled = _backdropBlurEnabled.asStateFlow()
+    private val _backdropBlurRadius = MutableStateFlow(40f)
+    val backdropBlurRadius = _backdropBlurRadius.asStateFlow()
+
+    private val _minimizedMaxWidthPercent = MutableStateFlow(50f)
+    val minimizedMaxWidthPercent = _minimizedMaxWidthPercent.asStateFlow()
+
+    fun setMinimizedMaxWidthPercent(context: Context, value: Float) {
+        _minimizedMaxWidthPercent.value = value.coerceIn(40f, 100f)
+        getPrefs(context).edit().putFloat("minimized_max_width_percent", _minimizedMaxWidthPercent.value).apply()
+    }
+
+    private val _islandCornerRadius = MutableStateFlow(60f)
+    val islandCornerRadius = _islandCornerRadius.asStateFlow()
+    private val _islandSquircleEnabled = MutableStateFlow(true)
+    val islandSquircleEnabled = _islandSquircleEnabled.asStateFlow()
+
+    fun setIslandCornerRadius(context: Context, value: Float) {
+        _islandCornerRadius.value = value.coerceIn(0f, 100f)
+        getPrefs(context).edit().putFloat("island_corner_radius", _islandCornerRadius.value).apply()
+    }
+
+    fun setIslandSquircleEnabled(context: Context, enabled: Boolean) {
+        _islandSquircleEnabled.value = enabled
+        getPrefs(context).edit().putBoolean("island_squircle_enabled", enabled).apply()
+    }
+
+    fun loadIslandAppearance(context: Context) {
+        val prefs = getPrefs(context)
+        _minimizedMaxWidthPercent.value = prefs.getFloat("minimized_max_width_percent", 50f).coerceIn(40f, 100f)
+        _islandCornerRadius.value = prefs.getFloat("island_corner_radius", 60f).coerceIn(0f, 100f)
+        _islandSquircleEnabled.value = prefs.getBoolean("island_squircle_enabled", true)
+        _expandedBackgroundOpacity.value = prefs.getFloat("expanded_background_opacity", 1f).coerceIn(0f, 1f)
+        _backdropBlurEnabled.value = prefs.getBoolean("backdrop_blur_enabled", false)
+        _backdropBlurRadius.value = prefs.getFloat("backdrop_blur_radius", 40f).coerceIn(5f, 120f)
+    }
+
+    fun setExpandedBackgroundOpacity(context: Context, value: Float) {
+        _expandedBackgroundOpacity.value = value.coerceIn(0f, 1f)
+        getPrefs(context).edit().putFloat("expanded_background_opacity", _expandedBackgroundOpacity.value).apply()
+    }
+
+    fun setBackdropBlurEnabled(context: Context, enabled: Boolean) {
+        _backdropBlurEnabled.value = enabled
+        getPrefs(context).edit().putBoolean("backdrop_blur_enabled", enabled).apply()
+    }
+
+    fun setBackdropBlurRadius(context: Context, value: Float) {
+        _backdropBlurRadius.value = value.coerceIn(5f, 120f)
+        getPrefs(context).edit().putFloat("backdrop_blur_radius", _backdropBlurRadius.value).apply()
+    }
+
     fun initializeMusicSettings(context: Context) {
+        loadIslandAppearance(context)
         isShowMinimizedProgressOutlineEnabled(context)
         isShowExpandedProgressOutlineEnabled(context)
         isHideMusicWhenAppOpenEnabled(context)

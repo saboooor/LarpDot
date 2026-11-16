@@ -5,6 +5,66 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IslandGeometryTest {
+    @Test fun shortTitleDoesNotExpandToTheMaximum() {
+        val natural = compactTextMediaWings(60f, 20f, 0f, false)
+        val atHalf = fitCompactMediaWings(natural, 24f, 400f, 200f, 50f)
+        val atFull = fitCompactMediaWings(natural, 24f, 400f, 200f, 100f)
+        assertEquals(30f, atFull.leadingDp, 0.001f)
+        assertEquals(36f, atFull.trailingDp, 0.001f)
+        assertEquals(atHalf, atFull)
+    }
+
+    @Test fun longTitleStopsAtTheConfiguredLimit() {
+        val natural = compactTextMediaWings(60f, 600f, 0f, false)
+        assertEquals(200f, 24f + fitCompactMediaWings(natural, 24f, 400f, 200f, 50f).widthDp, 0.001f)
+        assertEquals(400f, 24f + fitCompactMediaWings(natural, 24f, 400f, 200f, 100f).widthDp, 0.001f)
+    }
+
+    @Test fun announcementFitsEachTextWingAndNestedArtwork() {
+        val natural = compactTextMediaWings(60f, 30f, 50f, true, 21f)
+        assertEquals(CompactMediaWings(59f, 58f), natural)
+        val fitted = fitCompactMediaWings(natural, 24f, 400f, 200f, 100f)
+        assertEquals(natural.leadingDp, fitted.leadingDp, 0.001f)
+        assertEquals(natural.trailingDp, fitted.trailingDp, 0.001f)
+    }
+
+    @Test fun compactWidthCanFillTheStatusBar() {
+        val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 200f, 100f)
+        assertEquals(400f, wings.widthDp + 24f, 0.001f)
+        assertEquals(188f, wings.leadingDp, 0.001f)
+    }
+
+    @Test fun compactWidthRespectsTheConfiguredMaximum() {
+        val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 200f, 50f)
+        assertEquals(200f, wings.widthDp + 24f, 0.001f)
+    }
+
+    @Test fun fullWidthKeepsAnOffCenterCameraAnchored() {
+        val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 40f, 100f)
+        assertEquals(28f, wings.leadingDp, 0.001f)
+        assertEquals(348f, wings.trailingDp, 0.001f)
+        assertEquals(0f, 40f - 12f - wings.leadingDp, 0.001f)
+    }
+
+    @Test fun compactWidthLeavesRoomForSecondaryBubbles() {
+        val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 200f, 100f, 40f, 60f)
+        assertEquals(148f, wings.leadingDp, 0.001f)
+        assertEquals(128f, wings.trailingDp, 0.001f)
+        assertEquals(300f, wings.widthDp + 24f, 0.001f)
+    }
+
+    @Test fun compactBackgroundStaysOpaqueWithTransparentExpandedSetting() {
+        assertEquals(1f, islandBackgroundAlpha(0f, 0f), 0f)
+        assertEquals(1f, islandBackgroundAlpha(0.4f, -0.1f), 0f)
+    }
+
+    @Test fun expandedBackgroundInterpolatesAndClampsSpringOvershoot() {
+        assertEquals(0.4f, islandBackgroundAlpha(0.4f, 1f), 0.0001f)
+        assertEquals(0.7f, islandBackgroundAlpha(0.4f, 0.5f), 0.0001f)
+        assertEquals(0f, islandBackgroundAlpha(0f, 1.2f), 0f)
+        assertEquals(1f, islandBackgroundAlpha(2f, 1f), 0f)
+    }
+
     @Test fun touchRegionTracksAsymmetricAnimatedContent() {
         val region = islandTouchRegion(listOf(Rect(100.2f, 10f, 150.8f, 40f), Rect(160f, 15f, 210.5f, 35f)), 6f)
         assertEquals(IslandTouchRegion(94, 4, 123, 42), region)

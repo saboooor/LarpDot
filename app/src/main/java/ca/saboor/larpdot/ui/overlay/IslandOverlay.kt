@@ -217,12 +217,18 @@ fun CompactIslandOverlay(
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
-    val mediaWings = compactMediaWings(
+    val mediaWings = configuredCompactMediaWings(
+        mediaInfo = mediaInfo,
         extraWidthDp = activeExtraDp.value,
         hasTrailingBubble = !isLandscape && rightSecondaryType != null,
         showTitle = showMinimizedTitle && isMusicActive,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
+        cameraDiameterDp = cutoutDiameterDp.value,
+        cameraCenterXPx = cutoutInfo.centerX,
+        bubbleThicknessDp = secondaryDotSize.value,
+        hasLeadingBubble = leftSecondaryType != null,
+        landscape = isLandscape,
     )
     val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
         if (activeDisplayType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
@@ -1002,7 +1008,6 @@ fun IslandSurfaceOverlay(
     // the physical camera, including a small gap around the cutout.
     val expandedCutoutClearanceDp = if (isLandscape) 0.dp else
         (cutoutCenterYDp + cutoutDiameterDp / 2f + 8.dp - 14.dp).coerceAtLeast(0.dp)
-    val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
 
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
@@ -1033,12 +1038,18 @@ fun IslandSurfaceOverlay(
     val visualizerWidthDp = if (showMinimizedVisualizer) {
         waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
     } else 0f
-    val mediaWings = compactMediaWings(
+    val mediaWings = configuredCompactMediaWings(
+        mediaInfo = mediaInfo,
         extraWidthDp = mediaExtraDp.value,
         hasTrailingBubble = !isLandscape && hasBubbleAfter,
         showTitle = showMinimizedTitle,
         announcing = announcementActive,
         visualizerWidthDp = visualizerWidthDp,
+        cameraDiameterDp = cutoutDiameterDp.value,
+        cameraCenterXPx = cutoutInfo.centerX,
+        bubbleThicknessDp = secondaryBubbleThickness.value,
+        hasLeadingBubble = hasBubbleBefore,
+        landscape = isLandscape,
     )
     val compactWidth = presentation.width(cutoutDiameterDp, compactPillThickness, isLandscape,
         if (expandedType == IslandType.MEDIA) mediaWings.widthDp.dp else null)
@@ -1074,10 +1085,10 @@ fun IslandSurfaceOverlay(
         IslandType.MEDIA -> if (usesVerticalMediaLayout) {
             val hasAlbumArt = showExpandedAlbumArt && mediaInfo.albumArt != null
             val materialHeight = when {
-                hasAlbumArt && hasExtraMediaButtons -> 420.dp
-                hasAlbumArt -> 340.dp
-                hasExtraMediaButtons -> 280.dp
-                else -> 200.dp
+                hasAlbumArt && hasExtraMediaButtons -> 430.dp
+                hasAlbumArt -> 350.dp
+                hasExtraMediaButtons -> 290.dp
+                else -> 210.dp
             }
             if (isLandscape) minOf(screenHeightDp - 36.dp, materialHeight) else materialHeight
         } else {
@@ -1086,8 +1097,9 @@ fun IslandSurfaceOverlay(
     }
     val mediaCardHorizontalMarginDp = (screenWidthDp - cardWidth) / 2f
 
-    val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
-    val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
+    val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
+    val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
+    val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(cardWidth, cardHeight) / 2f)
 
     val cutoutOffsetX = with(density) {
         val screenWidthPx = screenWidthDp.toPx()
@@ -1191,7 +1203,13 @@ fun IslandSurfaceOverlay(
     val grouped = bubbleStyle == OverlayPreferences.BubbleStyle.MATERIAL_3
     val beforeCorner = if (grouped && hasBubbleBefore) innerCorner else currentCornerRadius
     val afterCorner = if (grouped && hasBubbleAfter) innerCorner else currentCornerRadius
-    val containerShape = squircleShape(
+    val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
+    val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
+    val blurStatus = rememberBackdropBlurStatus()
+    val useBackdropBlur = blurEnabled && blurStatus == BackdropBlurStatus.AVAILABLE && morphProgress.value > 0f
+    // Match the native blur region exactly while retaining grouped compact geometry at rest.
+    val useRoundedCorners = (!squircleEnabled || blurEnabled) && morphProgress.value > 0f
+    val containerShape = if (useRoundedCorners) RoundedCornerShape(currentCornerRadius) else squircleShape(
         radiusPx = with(density) { currentCornerRadius.toPx() },
         curvatureFactor = 0.5522848f + (0.8f - 0.5522848f) * morphProgress.value,
         topLeftRadiusPx = with(density) { beforeCorner.toPx() },
@@ -1215,6 +1233,9 @@ fun IslandSurfaceOverlay(
     )
 
     val surfacePress = rememberIslandPressFeedback(expandedType, isCompactVisible || isExpanded)
+
+    val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
+    val backgroundAlpha = islandBackgroundAlpha(backgroundOpacity, morphProgress.value)
 
     val currentElevation = androidx.compose.ui.unit.lerp(4.dp, 12.dp, morphProgress.value)
     val showOutline = if (morphProgress.value < 0.5f) presentation.compactOutline else presentation.expandedOutline
@@ -1271,13 +1292,21 @@ fun IslandSurfaceOverlay(
                     )
                 ),
             shape = containerShape,
-            color = Color.Black,
+            color = Color.Transparent,
             shadowElevation = currentElevation,
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
+                if (useBackdropBlur) {
+                    IslandBackdropBlur(
+                        radiusPx = with(density) { blurRadius.dp.toPx() } * morphProgress.value.coerceIn(0f, 1f),
+                        cornerRadiusPx = with(density) { currentCornerRadius.toPx() },
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = backgroundAlpha)))
                 if (compactAlpha > 0.01f) {
                     Box(
                         modifier = Modifier

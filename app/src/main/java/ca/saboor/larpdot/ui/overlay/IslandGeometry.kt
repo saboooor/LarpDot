@@ -46,3 +46,42 @@ fun islandPanelPlacement(
     val top = (cameraY - panelHeight / 2f).coerceIn(14f, (screenHeight - panelHeight - 14f).coerceAtLeast(14f))
     return IslandPanelPlacement(if (cameraX < screenWidth / 2f) -offset else offset, top)
 }
+
+/** Only expansion reveals transparency; spring overshoot must never change the alpha range. */
+internal fun islandBackgroundAlpha(expandedOpacity: Float, expansion: Float): Float =
+    1f + (expandedOpacity.coerceIn(0f, 1f) - 1f) * expansion.coerceIn(0f, 1f)
+
+/** Fit around the physical camera, transferring wing space when it is off-center. */
+internal fun fitCompactMediaWings(
+    requested: CompactMediaWings,
+    diameter: Float,
+    screenWidth: Float,
+    cameraX: Float,
+    maxWidthPercent: Float,
+    beforeExtent: Float = 0f,
+    afterExtent: Float = 0f,
+): CompactMediaWings {
+    val leadingRoom = (cameraX - diameter / 2f - beforeExtent).coerceAtLeast(0f)
+    val trailingRoom = (screenWidth - cameraX - diameter / 2f - afterExtent).coerceAtLeast(0f)
+    val maxExtra = (screenWidth * maxWidthPercent.coerceIn(40f, 100f) / 100f - diameter).coerceAtLeast(0f)
+    val total = minOf(requested.widthDp, maxExtra, leadingRoom + trailingRoom)
+    val leading = (total * (1f - requested.trailingFraction))
+        .coerceIn((total - trailingRoom).coerceAtLeast(0f), minOf(total, leadingRoom))
+    return CompactMediaWings(leading, total - leading)
+}
+
+/** Natural content widths, before applying the user's upper limit. */
+internal fun compactTextMediaWings(
+    baseExtraDp: Float,
+    titleWidthDp: Float,
+    artistWidthDp: Float,
+    announcing: Boolean,
+    announcementArtWidthDp: Float = 0f,
+): CompactMediaWings = if (announcing) {
+    CompactMediaWings(
+        (titleWidthDp + announcementArtWidthDp + 8f).coerceAtLeast(12f),
+        (artistWidthDp + 8f).coerceAtLeast(12f),
+    )
+} else {
+    CompactMediaWings(baseExtraDp / 2f, maxOf(baseExtraDp / 2f, titleWidthDp + 16f))
+}

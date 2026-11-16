@@ -85,6 +85,13 @@ fun HomeScreen(
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
     val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
+    val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
+    val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
+    val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
+    val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
+    val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
+    val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
+    val blurStatus = ca.saboor.larpdot.ui.overlay.rememberBackdropBlurStatus()
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
@@ -103,6 +110,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
+        OverlayPreferences.loadIslandAppearance(context)
         OverlayPreferences.getBubbleStyle(context)
         OverlayPreferences.areSmallerBubblesEnabled(context)
         OverlayPreferences.isDebugModeEnabled(context)
@@ -137,9 +145,64 @@ fun HomeScreen(
 
         // Island Customization & Interaction Options
         item {
+            SectionHeader(title = "Island Background")
+            LarpCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CutoutSliderRow(
+                        label = "Expanded corner radius", value = cornerRadius,
+                        valueRange = 0f..100f, unit = "dp",
+                        onValueChange = { OverlayPreferences.setIslandCornerRadius(context, it) },
+                        onNudge = { OverlayPreferences.setIslandCornerRadius(context, cornerRadius + it) },
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Squircle corners", modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = squircleEnabled && !blurEnabled,
+                            enabled = !blurEnabled,
+                            onCheckedChange = { OverlayPreferences.setIslandSquircleEnabled(context, it) },
+                        )
+                    }
+                    if (blurEnabled) {
+                        Text("Turn off backdrop blur to enable squircle corners.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    CutoutSliderRow(
+                        label = "Expanded background opacity", value = backgroundOpacity * 100f,
+                        valueRange = 0f..100f, unit = "%",
+                        onValueChange = { OverlayPreferences.setExpandedBackgroundOpacity(context, it / 100f) },
+                        onNudge = { OverlayPreferences.setExpandedBackgroundOpacity(context, backgroundOpacity + it / 100f) },
+                    )
+                    Text("The minimized island and camera cover stay opaque.", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Backdrop blur", modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
+                            enabled = blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
+                            onCheckedChange = { OverlayPreferences.setBackdropBlurEnabled(context, it) },
+                        )
+                    }
+                    Text(blurStatus.description, style = MaterialTheme.typography.bodySmall)
+                    if (blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE) {
+                        CutoutSliderRow(
+                            label = "Blur amount", value = blurRadius, valueRange = 5f..120f, unit = "dp",
+                            onValueChange = { OverlayPreferences.setBackdropBlurRadius(context, it) },
+                            onNudge = { OverlayPreferences.setBackdropBlurRadius(context, blurRadius + it * 5f) },
+                        )
+                        Text("Lower the background opacity to see the blur.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        item {
             SectionHeader(title = "Island Customization")
             LarpCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CutoutSliderRow(
+                        label = "Maximum minimized width", value = minimizedMaxWidth,
+                        valueRange = 40f..100f, unit = "%",
+                        onValueChange = { OverlayPreferences.setMinimizedMaxWidthPercent(context, it) },
+                        onNudge = { OverlayPreferences.setMinimizedMaxWidthPercent(context, minimizedMaxWidth + it) },
+                    )
+                    Text("100% lets music titles and announcements span the status bar. Space is reserved for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
                     Text(
                         text = "Bubble Style",
                         style = MaterialTheme.typography.titleMedium,

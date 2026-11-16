@@ -196,10 +196,10 @@ fun ExpandedIslandPreview(
     } else if (usesVerticalMediaLayout) {
         val hasAlbumArt = showExpandedAlbumArt && previewTrack.albumArt != null
         val materialHeight = when {
-            hasAlbumArt && hasExtraMediaButtons -> 420.dp
-            hasAlbumArt -> 340.dp
-            hasExtraMediaButtons -> 280.dp
-            else -> 200.dp
+            hasAlbumArt && hasExtraMediaButtons -> 430.dp
+            hasAlbumArt -> 350.dp
+            hasExtraMediaButtons -> 290.dp
+            else -> 210.dp
         }
         materialHeight
     } else {
