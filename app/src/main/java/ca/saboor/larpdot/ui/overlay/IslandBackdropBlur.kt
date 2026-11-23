@@ -81,13 +81,17 @@ internal fun rememberBackdropBlurStatus(): BackdropBlurStatus {
 private class IslandBlurView(context: Context) : View(context) {
     private var drawable: Drawable? = null
     private var failed = false
-    private var radius = 0f
+    private var radius = 0
     private var corner = 0f
+    private var appliedRadius = -1
+    private var appliedCorner = -1f
 
     init { setWillNotDraw(false) }
 
     fun update(radiusPx: Float, cornerRadiusPx: Float) {
-        radius = radiusPx
+        val roundedRadius = radiusPx.roundToInt()
+        if (radius == roundedRadius && corner == cornerRadiusPx) return
+        radius = roundedRadius
         corner = cornerRadiusPx
         applyBlur()
     }
@@ -100,8 +104,14 @@ private class IslandBlurView(context: Context) : View(context) {
                 val root = api[0].invoke(this) ?: return
                 (api[1].invoke(root) as Drawable).also { drawable = it; it.callback = this }
             }
-            api[2].invoke(d, radius.roundToInt())
-            api[3].invoke(d, corner)
+            if (radius != appliedRadius) {
+                api[2].invoke(d, radius)
+                appliedRadius = radius
+            }
+            if (corner != appliedCorner) {
+                api[3].invoke(d, corner)
+                appliedCorner = corner
+            }
             d.setBounds(0, 0, width, height)
             invalidate()
         } catch (error: ReflectiveOperationException) {
@@ -121,6 +131,8 @@ private class IslandBlurView(context: Context) : View(context) {
             d.callback = null
         }
         drawable = null
+        appliedRadius = -1
+        appliedCorner = -1f
         invalidate()
     }
 

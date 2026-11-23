@@ -1,10 +1,6 @@
 package ca.saboor.larpdot.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.FilterChip
@@ -75,6 +71,7 @@ import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -91,6 +88,7 @@ fun HomeScreen(
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
+    val holdToExpandDurationMs by OverlayPreferences.holdToExpandDurationMsFlow.collectAsState()
     val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
     val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
     val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
@@ -117,6 +115,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.isTapToExpandEnabled(context)
+        OverlayPreferences.getHoldToExpandDurationMs(context)
         OverlayPreferences.loadIslandAppearance(context)
         OverlayPreferences.getBubbleStyle(context)
         OverlayPreferences.areSmallerBubblesEnabled(context)
@@ -260,7 +259,7 @@ fun HomeScreen(
                             onCheckedChange = { OverlayPreferences.setIslandSquircleEnabled(context, it) },
                         )
                     }
-                    if (blurEnabled) {
+                    AnimatedVisibility(blurEnabled, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
                         Text("Turn off backdrop blur to enable squircle corners.", style = MaterialTheme.typography.bodySmall)
                     }
                     CutoutSliderRow(
@@ -279,13 +278,19 @@ fun HomeScreen(
                         )
                     }
                     Text(blurStatus.description, style = MaterialTheme.typography.bodySmall)
-                    if (blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE) {
-                        CutoutSliderRow(
-                            label = "Blur amount", value = blurRadius, valueRange = 5f..120f, unit = "dp",
-                            onValueChange = { OverlayPreferences.setBackdropBlurRadius(context, it) },
-                            onNudge = { OverlayPreferences.setBackdropBlurRadius(context, blurRadius + it * 5f) },
-                        )
-                        Text("Lower the background opacity to see the blur.", style = MaterialTheme.typography.bodySmall)
+                    AnimatedVisibility(
+                        visible = blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
+                        enter = LarpMotion.reveal,
+                        exit = LarpMotion.conceal,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CutoutSliderRow(
+                                label = "Blur amount", value = blurRadius, valueRange = 5f..120f, unit = "dp",
+                                onValueChange = { OverlayPreferences.setBackdropBlurRadius(context, it) },
+                                onNudge = { OverlayPreferences.setBackdropBlurRadius(context, blurRadius + it * 5f) },
+                            )
+                            Text("Lower the background opacity to see the blur.", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -402,6 +407,25 @@ fun HomeScreen(
                         },
                     )
                 }
+
+                CutoutSliderRow(
+                    label = "Hold Duration to Expand",
+                    value = holdToExpandDurationMs.toFloat(),
+                    valueRange = OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS.toFloat()..OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS.toFloat(),
+                    unit = "ms",
+                    onValueChange = { raw ->
+                        val snapped = ((raw / 25f).roundToInt() * 25)
+                        OverlayPreferences.setHoldToExpandDurationMs(context, snapped)
+                    },
+                    onNudge = { delta ->
+                        OverlayPreferences.setHoldToExpandDurationMs(context, holdToExpandDurationMs + delta * 25)
+                    },
+                )
+                Text(
+                    text = "How long to press and hold the minimized island before it expands",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
@@ -704,8 +728,8 @@ private fun CutoutAlignmentCard(
 
         AnimatedVisibility(
             visible = config.isManualEnabled,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
+            enter = LarpMotion.reveal,
+            exit = LarpMotion.conceal,
         ) {
             Column(
                 modifier = Modifier

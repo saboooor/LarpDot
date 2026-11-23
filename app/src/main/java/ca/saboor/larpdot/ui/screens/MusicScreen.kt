@@ -1,10 +1,6 @@
 package ca.saboor.larpdot.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +92,8 @@ import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.theme.LarpMotion
+import ca.saboor.larpdot.ui.theme.motionItem
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -125,6 +123,7 @@ fun MusicScreen(
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val expandedStyle by OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
+    val albumArtGlow by OverlayPreferences.albumArtGlowFlow.collectAsState()
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showProgressSquiggles by OverlayPreferences.showProgressSquigglesFlow.collectAsState()
     val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
@@ -218,11 +217,11 @@ fun MusicScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
+        item(key = "preview") {
             IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.MUSIC)
         }
 
-        item {
+        item(key = "tabs") {
             PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
@@ -244,7 +243,7 @@ fun MusicScreen(
 
         // Minimized Island Presentation
         if (selectedTabIndex == 0) {
-            item {
+            motionItem("minimized_art") {
             SectionHeader(title = "Minimized Island Art")
             LarpCard {
                 Column(
@@ -299,8 +298,8 @@ fun MusicScreen(
 
                     AnimatedVisibility(
                         visible = minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
+                        enter = LarpMotion.reveal,
+                        exit = LarpMotion.conceal,
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             ShapePickerSection(
@@ -356,7 +355,7 @@ fun MusicScreen(
         } else if (selectedTabIndex == 1) {
 
             // Expanded Island Presentation
-            item {
+            motionItem("expanded_art") {
                 SectionHeader(title = "Expanded Island Art")
                 LarpCard {
                     Column(
@@ -449,8 +448,8 @@ fun MusicScreen(
 
                     AnimatedVisibility(
                         visible = showExpandedAlbumArt,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
+                        enter = LarpMotion.reveal,
+                        exit = LarpMotion.conceal,
                     ) {
                         ShapePickerSection(
                             title = "Album Art Shape",
@@ -491,8 +490,8 @@ fun MusicScreen(
 
                     AnimatedVisibility(
                         visible = showExpandedDominantGlow,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
+                        enter = LarpMotion.reveal,
+                        exit = LarpMotion.conceal,
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
@@ -555,7 +554,7 @@ fun MusicScreen(
                 }
             }
 
-            item {
+            motionItem("expanded_shape") {
                 SectionHeader(title = "Player Layout")
                 LarpCard {
                     Column(
@@ -616,9 +615,12 @@ fun MusicScreen(
 
         }
 
-        if (selectedTabIndex != 2) item {
+        if (selectedTabIndex != 2) motionItem(key = if (selectedTabIndex == 0) "minimized_elements" else "expanded_elements") {
             SectionHeader(title = if (selectedTabIndex == 0) "Minimized Elements" else "Expanded Elements")
             LarpCard {
+                val albumArtGlowOption = Triple("Album Art Glow", albumArtGlow) { enabled: Boolean ->
+                    OverlayPreferences.setAlbumArtGlowEnabled(context, enabled)
+                }
                 val visibilityOptions: List<Triple<String, Boolean, (Boolean) -> Unit>> =
                     if (selectedTabIndex == 0) {
                         listOf(
@@ -634,6 +636,7 @@ fun MusicScreen(
                             Triple("Progress Outline", showMinimizedProgressOutline) { enabled ->
                                 OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, enabled)
                             },
+                            albumArtGlowOption,
                             Triple("Dominant Color Glow", showMinimizedDominantGlow) { enabled ->
                                 OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, enabled)
                             },
@@ -685,6 +688,7 @@ fun MusicScreen(
                             Triple("Progress Outline", showExpandedProgressOutline) { enabled ->
                                 OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, enabled)
                             },
+                            albumArtGlowOption,
                             Triple("Dominant Color Glow", showExpandedDominantGlow) { enabled ->
                                 OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, enabled)
                             },
@@ -768,7 +772,7 @@ fun MusicScreen(
 
         if (selectedTabIndex == 2) {
         // Display Options Card
-        item {
+        motionItem("overview") {
             SectionHeader(title = "Display Options")
             LarpCard {
                 Column(
@@ -1139,8 +1143,8 @@ fun MusicScreen(
                         // BPM Status Card
                         AnimatedVisibility(
                             visible = visualizerMode == OverlayPreferences.VisualizerMode.BPM,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
+                            enter = LarpMotion.reveal,
+                            exit = LarpMotion.conceal,
                         ) {
                             Surface(
                                 modifier = Modifier
@@ -1204,8 +1208,8 @@ fun MusicScreen(
                         // Direct Device Audio (Screen/Audio Capture via MediaProjection) Card
                         AnimatedVisibility(
                             visible = visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
+                            enter = LarpMotion.reveal,
+                            exit = LarpMotion.conceal,
                         ) {
                             Surface(
                                 modifier = Modifier
@@ -1295,8 +1299,8 @@ fun MusicScreen(
                         // Song Processing Status & Audio Preview Player
                         AnimatedVisibility(
                             visible = visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
+                            enter = LarpMotion.reveal,
+                            exit = LarpMotion.conceal,
                         ) {
                             Surface(
                                 modifier = Modifier

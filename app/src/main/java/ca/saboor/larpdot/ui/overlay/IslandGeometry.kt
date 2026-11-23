@@ -1,11 +1,35 @@
 package ca.saboor.larpdot.ui.overlay
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.util.lerp
 import kotlin.math.ceil
 import kotlin.math.floor
 
 /** Physical screen pixels, rounded outward so no part of an island loses touch input. */
 data class IslandTouchRegion(val left: Int, val top: Int, val width: Int, val height: Int)
+
+/** Laid out compact bounds and the content split used to draw that same frame. */
+internal data class CompactIslandFrame(
+    val bounds: Rect,
+    val trailingFraction: Float = 0.5f,
+    val hasBubbleBefore: Boolean = false,
+    val hasBubbleAfter: Boolean = false,
+    val announcing: Boolean = false,
+) {
+    fun toward(target: CompactIslandFrame, fraction: Float): CompactIslandFrame {
+        if (fraction <= 0f) return this
+        if (fraction >= 1f) return target
+        return copy(
+            bounds = Rect(
+                lerp(bounds.left, target.bounds.left, fraction),
+                lerp(bounds.top, target.bounds.top, fraction),
+                lerp(bounds.right, target.bounds.right, fraction),
+                lerp(bounds.bottom, target.bounds.bottom, fraction),
+            ),
+            trailingFraction = lerp(trailingFraction, target.trailingFraction, fraction),
+        )
+    }
+}
 
 fun islandTouchRegion(bounds: List<Rect>, paddingPx: Float): IslandTouchRegion? {
     val visible = bounds.filter { it.width > 0f && it.height > 0f }
@@ -77,10 +101,11 @@ internal fun compactTextMediaWings(
     artistWidthDp: Float,
     announcing: Boolean,
     announcementArtWidthDp: Float = 0f,
+    announcementVisualizerWidthDp: Float = 0f,
 ): CompactMediaWings = if (announcing) {
     CompactMediaWings(
         (titleWidthDp + announcementArtWidthDp + 8f).coerceAtLeast(12f),
-        (artistWidthDp + 8f).coerceAtLeast(12f),
+        (artistWidthDp + announcementVisualizerWidthDp + 8f).coerceAtLeast(12f),
     )
 } else {
     CompactMediaWings(baseExtraDp / 2f, maxOf(baseExtraDp / 2f, titleWidthDp + 16f))

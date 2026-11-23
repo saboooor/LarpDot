@@ -7,8 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -52,6 +50,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * Pixel & Expressive spring bounce when touched.
@@ -60,13 +59,16 @@ import androidx.compose.ui.unit.dp
 fun Modifier.expressivePressEffect(pressed: Boolean, minScale: Float = 0.97f): Modifier {
     val scale by animateFloatAsState(
         targetValue = if (pressed) minScale else 1f,
-        animationSpec = spring(
+        animationSpec = LarpMotion.quickSpring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
         label = "expressive_press",
     )
-    return this.scale(scale)
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
 }
 
 /**
@@ -201,7 +203,7 @@ fun StatusPill(
             initialValue = 0.35f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(850, easing = FastOutSlowInEasing),
+                animation = LarpMotion.timing(850, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "dot_alpha",

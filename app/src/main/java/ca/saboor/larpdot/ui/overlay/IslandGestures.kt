@@ -2,7 +2,6 @@ package ca.saboor.larpdot.ui.overlay
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,6 +13,7 @@ import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /** Providers supply actions; the common recognizer owns thresholds, cancellation and stretch. */
 internal data class IslandDragActions(
@@ -78,7 +78,7 @@ internal fun Modifier.islandDragGestures(
         var triggered = false
         fun finish() {
             session.onFinish()
-            scope.launch { stretch.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 450f)) }
+            scope.launch { stretch.animateTo(0f, LarpMotion.release) }
         }
         try {
             detectDragGestures(

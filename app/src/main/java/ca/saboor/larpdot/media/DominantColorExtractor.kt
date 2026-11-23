@@ -4,7 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import kotlin.math.abs
+
+data class ArtworkColors(val primary: Color, val secondary: Color)
 
 /**
  * High-performance dominant color extraction based on hilight-studio's MediaTracker algorithm.
@@ -13,41 +17,36 @@ import kotlin.math.abs
  */
 object DominantColorExtractor {
 
-    // Non-Compose fallback matching the app's default dark primary. Compose surfaces replace
-    // this with MaterialTheme.colorScheme.primary so Android 12+ uses the live Material You color.
-    val DEFAULT_ACCENT: Color = Color(0xFFA5C8FF)
+    val defaultColors = ArtworkColors(Color(0xFFA5C8FF), Color(0xFFD6C5FF))
 
-    /**
-     * Extracts the primary dominant color from a bitmap album cover.
-     * If the bitmap is null, callers should substitute their current Material color-scheme primary.
-     * The static accent remains a safe fallback for non-Compose callers and invalid artwork.
-     */
-    fun extractDominantColor(bitmap: Bitmap?, fallbackSeed: Int? = null): Color {
-        if (bitmap == null) {
-            return DEFAULT_ACCENT
-        }
-        val colors = extractColors(bitmap)
-        return colors.firstOrNull() ?: fallbackColor(fallbackSeed ?: 42)
-    }
-
-    /**
-     * Extracts distinct dominant colors from the album cover bitmap.
-     */
-    fun extractColors(bitmap: Bitmap): List<Color> {
+    fun extractArtworkColors(bitmap: Bitmap): ArtworkColors {
         val size = 48
         val scaled = if (bitmap.width != size || bitmap.height != size) {
             runCatching { Bitmap.createScaledBitmap(bitmap, size, size, true) }.getOrDefault(bitmap)
         } else bitmap
+        val readable = if (scaled.config == Bitmap.Config.HARDWARE) {
+            scaled.copy(Bitmap.Config.ARGB_8888, false) ?: return defaultColors
+        } else scaled
 
-        val pixels = IntArray(scaled.width * scaled.height)
-        scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
-        return extractColorsFromPixels(pixels)
+        val pixels = IntArray(readable.width * readable.height)
+        readable.getPixels(pixels, 0, readable.width, 0, 0, readable.width, readable.height)
+        return artworkColorsFromPixels(pixels)
+    }
+
+    internal fun artworkColorsFromPixels(pixels: IntArray): ArtworkColors {
+        val colors = extractColorsFromPixels(pixels)
+        val primary = colors.firstOrNull() ?: return defaultColors
+        val secondary = colors.firstOrNull { it != primary } ?: run {
+            val neutral = if (primary.luminance() > 0.65f) Color(0xFF7F7F7F) else Color.White
+            lerp(primary, neutral, 0.36f)
+        }
+        return ArtworkColors(primary, secondary)
     }
 
     private data class ColorCandidate(val color: Int, val count: Int)
 
-    fun extractColorsFromPixels(pixels: IntArray): List<Color> {
-        if (pixels.isEmpty()) return listOf(DEFAULT_ACCENT)
+    private fun extractColorsFromPixels(pixels: IntArray): List<Color> {
+        if (pixels.isEmpty()) return emptyList()
 
         // 15-bit color quantization: 5 bits per channel (32 x 32 x 32 = 32,768 bins)
         val histogram = IntArray(32768)
@@ -72,7 +71,7 @@ object DominantColorExtractor {
             validPixels++
         }
 
-        if (validPixels == 0) return listOf(DEFAULT_ACCENT)
+        if (validPixels == 0) return emptyList()
 
         // Score each bin by frequency × saturation × brightness — this down-weights dark
         // backgrounds and washed-out areas so the winning color is genuinely chromatic.
@@ -172,11 +171,6 @@ object DominantColorExtractor {
             // Normal chromatic: clamp both channels to avoid neon blowout
             else -> hsvToColor(h, s.coerceIn(0.45f, 0.72f), v.coerceIn(0.55f, 0.90f))
         }
-    }
-
-    fun fallbackColor(seed: Int): Color {
-        val baseHue = abs(seed % 360).toFloat()
-        return Color(hsvToColor(baseHue, 0.9f, 1f))
     }
 
     private fun colorToHsv(color: Int, outHsv: FloatArray) {

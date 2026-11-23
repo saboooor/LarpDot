@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,11 +46,13 @@ import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactFlashlightContent
 import ca.saboor.larpdot.ui.overlay.getFlashlightStrengthFraction
+import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
 import ca.saboor.larpdot.ui.overlay.squircleShape
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * Authentic live preview of the Flashlight Dynamic Island
@@ -71,20 +74,32 @@ fun FlashlightIslandPreview(
     val maxStrength by FlashlightController.maxStrength.collectAsState()
     val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
     val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
+    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
+    val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
+    val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
+    val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
+    val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
     val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
 
-    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
+    val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
+    val cutoutDiameterDp = cameraGeometry.diameter.dp
     val flashlightStatus = rememberCompactFlashlightStatus()
     val compactExtraDp = rememberCompactStatusExtraDp(flashlightStatus)
     val compactWidth = cutoutDiameterDp + compactExtraDp
 
-    val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
-    val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
-    val topMarginDp = (cutoutCenterYDp - 18.dp).coerceAtLeast(8.dp)
-    val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
-    val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val wideFlashlight = expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER
+    val previewCardWidth = if (wideFlashlight) screenWidthDp - 32.dp else minOf(screenWidthDp - 96.dp, 220.dp)
+    val previewCardHeight = if (wideFlashlight) cutoutDiameterDp + 64.dp else 290.dp
+    val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
+
+    val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewCardHeight) / 2f)
     val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
-    val containerShape = squircleShape(expandedCornerRadiusPx, 0.80f)
+    val containerShape = if (!squircleEnabled || blurEnabled) {
+        RoundedCornerShape(expandedCornerRadiusDp)
+    } else {
+        squircleShape(expandedCornerRadiusPx, 0.80f)
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -132,107 +147,109 @@ fun FlashlightIslandPreview(
         }
 
         // Compact Pill Live Preview
-        if (showMinimizedPreview) Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            // The camera spans the full thickness; padding belongs to the wing content.
-            val compactHeight = cutoutDiameterDp
-            val compactCornerRadius = compactHeight / 2f
-            Surface(
+        AnimatedVisibility(showMinimizedPreview, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
+            Box(
                 modifier = Modifier
-                    .width(compactWidth)
-                    .height(compactHeight)
-                    .islandFluidProgressBorder(
-                        progressFraction = if (showMinimizedOutline) strengthFraction else 0f,
-                        cornerRadius = compactCornerRadius,
-                        shape = RoundedCornerShape(compactCornerRadius),
-                        trackColor = if (showMinimizedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                        progressColor = Color.White,
-                    ),
-                shape = RoundedCornerShape(compactCornerRadius),
-                color = Color.Black,
-                shadowElevation = 6.dp,
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                // The camera spans the full thickness; padding belongs to the wing content.
+                val compactHeight = cutoutDiameterDp
+                val compactCornerRadius = compactHeight / 2f
+                Surface(
+                    modifier = Modifier
+                        .width(compactWidth)
+                        .height(compactHeight)
+                        .islandFluidProgressBorder(
+                            progressFraction = if (showMinimizedOutline) strengthFraction else 0f,
+                            cornerRadius = compactCornerRadius,
+                            shape = RoundedCornerShape(compactCornerRadius),
+                            trackColor = if (showMinimizedOutline) Color(0x30FFFFFF) else Color.Transparent,
+                            progressColor = Color.White,
+                        ),
+                    shape = RoundedCornerShape(compactCornerRadius),
+                    color = Color.Black,
+                    shadowElevation = 6.dp,
                 ) {
-                    CompactFlashlightContent(
-                        cutoutDiameterDp = cutoutDiameterDp,
-                        onExpand = {},
-                        onFlashlightToggle = { FlashlightController.toggleFlashlight() },
-                        status = flashlightStatus,
-                    )
-                    // Hardware camera cutout visualizer centered between wings
                     Box(
-                        modifier = Modifier
-                            .size(cutoutDiameterDp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0D0D0D))
-                            .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
-                    )
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompactFlashlightContent(
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            onExpand = {},
+                            onFlashlightToggle = { FlashlightController.toggleFlashlight() },
+                            status = flashlightStatus,
+                        )
+                        // Hardware camera cutout visualizer centered between wings
+                        Box(
+                            modifier = Modifier
+                                .size(cutoutDiameterDp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0D0D0D))
+                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                        )
+                    }
                 }
             }
         }
 
         // Expanded Card Live Preview
-        if (showExpandedPreview) Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Surface(
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(290.dp)
-                    .islandFluidProgressBorder(
-                        progressFraction = if (showExpandedOutline) strengthFraction else 0f,
-                        cornerRadius = expandedCornerRadiusDp,
-                        shape = containerShape,
-                        trackColor = if (showExpandedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                        progressColor = Color.White,
-                    ),
-                shape = containerShape,
-                color = Color.Black,
-                shadowElevation = 14.dp,
+        AnimatedVisibility(showExpandedPreview, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.TopCenter,
-                ) {
-                ExpandedFlashlightContent(
-                    cutoutDiameterDp = cutoutDiameterDp,
-                    isExpanded = true,
-                    onCollapse = { /* In-app preview */ },
-                    cutoutInfo = cutoutInfo,
-                    cardHorizontalMarginDp = 16.dp,
-                )
-
-                // Hardware camera cutout punch hole positioned accurately
-                val screenWidthDp = configuration.screenWidthDp.dp
-                val previewCardWidthDp = screenWidthDp - 32.dp
-                val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - 16.dp
-                val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
-                    cutoutDiameterDp / 2f,
-                    previewCardWidthDp - (cutoutDiameterDp / 2f),
-                )
-                val punchHoleCenterYDp = 18.dp
-
-                Box(
+                Surface(
                     modifier = Modifier
-                        .offset(
-                            x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
-                            y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                        .width(previewCardWidth)
+                        .height(previewCardHeight)
+                        .islandFluidProgressBorder(
+                            progressFraction = if (showExpandedOutline) strengthFraction else 0f,
+                            cornerRadius = expandedCornerRadiusDp,
+                            shape = containerShape,
+                            trackColor = if (showExpandedOutline) Color(0x30FFFFFF) else Color.Transparent,
+                            progressColor = Color.White,
+                        ),
+                    shape = containerShape,
+                    color = Color.Black.copy(alpha = backgroundOpacity.coerceIn(0f, 1f)),
+                    shadowElevation = 14.dp,
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        ExpandedFlashlightContent(
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            isExpanded = true,
+                            onCollapse = { /* In-app preview */ },
+                            cutoutInfo = cutoutInfo,
+                            cardHorizontalMarginDp = previewHorizontalMarginDp,
                         )
-                        .size(cutoutDiameterDp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0D0D0D))
-                        .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
-                )
+
+                        // Hardware camera cutout punch hole positioned accurately
+                        val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - previewHorizontalMarginDp
+                        val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
+                            cutoutDiameterDp / 2f,
+                            previewCardWidth - (cutoutDiameterDp / 2f),
+                        )
+                        val punchHoleCenterYDp = 18.dp
+
+                        Box(
+                            modifier = Modifier
+                                .offset(
+                                    x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
+                                    y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                                )
+                                .size(cutoutDiameterDp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0D0D0D))
+                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                        )
+                    }
+                }
             }
-        }
         }
 
         // Action Controls: Quick Toggle and Simulation Toggle

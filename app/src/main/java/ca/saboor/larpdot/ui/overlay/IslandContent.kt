@@ -16,6 +16,7 @@ internal fun IslandCompactContent(
     showTitle: Boolean,
     announcing: Boolean,
     trailingWingFraction: Float,
+    artworkAnchor: ArtworkAnchor? = null,
     onExpand: () -> Unit = {},
     onFlashlightToggle: () -> Unit = {},
 ) {
@@ -23,7 +24,7 @@ internal fun IslandCompactContent(
         IslandType.MEDIA -> CompactIslandContent(
             mediaInfo = media, cutoutDiameterDp = diameter, onExpand = onExpand,
             showMinimizedTitle = showTitle, isSongAnnouncement = announcing,
-            trailingWingFraction = trailingWingFraction,
+            trailingWingFraction = trailingWingFraction, artworkAnchor = artworkAnchor,
         )
         IslandType.FLASHLIGHT -> CompactFlashlightContent(
             cutoutDiameterDp = diameter, onExpand = onExpand,

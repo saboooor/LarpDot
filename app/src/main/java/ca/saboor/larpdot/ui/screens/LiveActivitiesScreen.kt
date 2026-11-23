@@ -1,12 +1,9 @@
 package ca.saboor.larpdot.ui.screens
 
 import androidx.compose.material3.FilterChip
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -82,8 +79,8 @@ fun LiveActivitiesScreen(modifier: Modifier = Modifier) {
 
                 AnimatedVisibility(
                     visible = settings.enabled,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
+                    enter = LarpMotion.reveal,
+                    exit = LarpMotion.conceal,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))

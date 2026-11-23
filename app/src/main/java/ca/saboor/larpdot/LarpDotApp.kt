@@ -1,8 +1,13 @@
 package ca.saboor.larpdot
 
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,9 +44,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
@@ -54,12 +61,14 @@ import ca.saboor.larpdot.ui.screens.FlashlightScreen
 import ca.saboor.larpdot.ui.screens.HomeScreen
 import ca.saboor.larpdot.ui.screens.LiveActivitiesScreen
 import ca.saboor.larpdot.ui.screens.MusicScreen
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LarpDotApp() {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val tabTravel = with(LocalDensity.current) { 14.dp.roundToPx() }
 
     var selectedDestinationName by rememberSaveable { mutableStateOf(Destination.Home.name) }
     val selectedDestination = Destination.valueOf(selectedDestinationName)
@@ -159,12 +168,14 @@ fun LarpDotApp() {
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text(
-                                text = statusText,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isEnabled) Color(0xFF00E676) else MaterialTheme.colorScheme.outline,
-                            )
+                            Crossfade(statusText, animationSpec = LarpMotion.fade(180), label = "overlay_status") { status ->
+                                Text(
+                                    text = status,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (status == "STANDBY") MaterialTheme.colorScheme.outline else Color(0xFF00E676),
+                                )
+                            }
                         }
                     },
                     actions = {
@@ -217,11 +228,18 @@ fun LarpDotApp() {
                 }
             }
         ) { innerPadding ->
-            Crossfade(
+            AnimatedContent(
                 targetState = selectedDestination,
-                animationSpec = tween(280),
-                label = "tab_crossfade",
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier.padding(innerPadding).fillMaxSize().clipToBounds(),
+                label = "root_tab",
+                transitionSpec = {
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    val enter = fadeIn(LarpMotion.timing(250, delayMillis = 30, easing = LarpMotion.standard)) +
+                        slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * tabTravel }
+                    val exit = fadeOut(LarpMotion.fade(160)) +
+                        slideOutHorizontally(LarpMotion.fade(200)) { -direction * tabTravel / 2 }
+                    (enter togetherWith exit).using(null)
+                },
             ) { destination ->
                 when (destination) {
                     Destination.Home -> HomeScreen(

@@ -58,7 +58,13 @@ internal fun configuredCompactMediaWings(
             artistWidthDp = if (announcing) textWidth(mediaInfo.artist.ifBlank { "Media Player" }, false) else 0f,
             announcing = announcing,
             announcementArtWidthDp = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                (cameraDiameterDp - 8f).coerceIn(18f, 26f) + 3f
+                val artSize = (cameraDiameterDp - 12f).coerceIn(16f, 24f)
+                val startInset = ((cameraDiameterDp - artSize) / 2f).coerceAtLeast(6f)
+                artSize + startInset + 4f
+            } else 0f,
+            announcementVisualizerWidthDp = if (visualizerWidthDp > 0f) {
+                val endInset = (cameraDiameterDp / 3f).coerceAtLeast(8f)
+                visualizerWidthDp + endInset + 4f
             } else 0f,
         )
     } else compactMediaWings(extraWidthDp, hasTrailingBubble, showTitle, announcing, visualizerWidthDp)

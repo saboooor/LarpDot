@@ -39,13 +39,14 @@ data class MediaTrackInfo(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
-    val dominantColor: Color = DominantColorExtractor.DEFAULT_ACCENT,
+    val artworkColors: ArtworkColors = DominantColorExtractor.defaultColors,
     val isSimulated: Boolean = false,
     val controller: MediaController? = null,
     val playerPackageName: String? = null,
     val appName: String? = null,
     val sessionActions: List<MediaSessionAction> = emptyList(),
 ) {
+    val dominantColor: Color get() = artworkColors.primary
     val hasMedia: Boolean get() = title.isNotBlank() || isPlaying
 }
 
@@ -129,37 +130,35 @@ object MediaPlaybackState {
     private var musicGraceJob: Job? = null
     private var activeController: MediaController? = null
     private var controllerCallback: MediaController.Callback? = null
+    private var sessionMetadata: MediaMetadata? = null
+    private var sessionArtwork: Bitmap? = null
 
     private val playbackScope = CoroutineScope(Dispatchers.Main)
     private var progressTickerJob: Job? = null
-    private var dominantColorJob: Job? = null
-    private var pendingColorArtwork: Bitmap? = null
-    private var cachedColorArtwork: Bitmap? = null
-    private var cachedArtworkColor = DominantColorExtractor.DEFAULT_ACCENT
+    private var artworkUpdateJob: Job? = null
+    private var lastArtworkCandidate: Bitmap? = null
 
-    private fun colorForArtwork(artwork: Bitmap?, current: MediaTrackInfo): Color {
-        if (artwork == null) return DominantColorExtractor.DEFAULT_ACCENT
-        if (artwork === cachedColorArtwork) return cachedArtworkColor
-        val previousColor = current.dominantColor
-            .takeUnless { it == DominantColorExtractor.DEFAULT_ACCENT }
-            ?: cachedArtworkColor
-        if (artwork !== pendingColorArtwork || dominantColorJob?.isActive != true) {
-            dominantColorJob?.cancel()
-            pendingColorArtwork = artwork
-            dominantColorJob = playbackScope.launch {
-                val color = withContext(Dispatchers.Default) {
-                    DominantColorExtractor.extractDominantColor(artwork)
-                }
-                cachedColorArtwork = artwork
-                cachedArtworkColor = color
-                pendingColorArtwork = null
-                val latest = _currentTrack.value
-                if (latest.albumArt === artwork) {
-                    _currentTrack.value = latest.copy(dominantColor = color)
-                }
-            }
+    private fun resetArtworkUpdate() {
+        artworkUpdateJob?.cancel()
+        artworkUpdateJob = null
+        lastArtworkCandidate = null
+    }
+
+    private fun updateArtwork(candidate: Bitmap?) {
+        if (candidate == null || candidate.isRecycled || candidate === lastArtworkCandidate) return
+        lastArtworkCandidate = candidate
+        artworkUpdateJob?.cancel()
+        val displayedArtwork = _currentTrack.value.albumArt
+        if (candidate === displayedArtwork) return
+
+        artworkUpdateJob = playbackScope.launch {
+            val colors = withContext(Dispatchers.Default) {
+                // Media apps can send a fresh Bitmap containing the same cover on each update.
+                if (displayedArtwork != null && !displayedArtwork.isRecycled && displayedArtwork.sameAs(candidate)) null
+                else DominantColorExtractor.extractArtworkColors(candidate)
+            } ?: return@launch
+            _currentTrack.value = _currentTrack.value.copy(albumArt = candidate, artworkColors = colors)
         }
-        return previousColor
     }
 
     fun updateFromControllers(controllers: List<MediaController>?) {
@@ -188,14 +187,20 @@ object MediaPlaybackState {
         }
         if (activeController?.sessionToken != controller.sessionToken) {
             controllerCallback?.let { activeController?.unregisterCallback(it) }
+            resetArtworkUpdate()
             activeController = controller
+            sessionMetadata = controller.metadata
+            sessionArtwork = null
 
             val callback = object : MediaController.Callback() {
                 override fun onMetadataChanged(metadata: MediaMetadata?) {
+                    if (controllerCallback !== this) return
+                    sessionMetadata = metadata
                     refreshFromController()
                 }
 
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
+                    if (controllerCallback !== this) return
                     refreshFromController()
                 }
 
@@ -212,7 +217,7 @@ object MediaPlaybackState {
             clear()
             return
         }
-        val metadata = controller.metadata
+        val metadata = sessionMetadata
         val state = controller.playbackState
 
         val current = _currentTrack.value
@@ -221,9 +226,10 @@ object MediaPlaybackState {
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         val rawArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
-        val rawArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        val rawArtwork = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: metadata?.description?.iconBitmap
+        val samePlayer = controller.packageName == current.playerPackageName
 
         val title = when {
             !rawTitle.isNullOrBlank() -> rawTitle
@@ -235,7 +241,9 @@ object MediaPlaybackState {
             current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
             else -> "Media Player"
         }
-        val albumArt = rawArt ?: current.albumArt
+        if (rawArtwork != null || !samePlayer || title != current.title) {
+            sessionArtwork = rawArtwork
+        }
         val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L)
             ?: current.durationMs.coerceAtLeast(0L)
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
@@ -292,8 +300,6 @@ object MediaPlaybackState {
             rawPosition.coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
         }
 
-        val dominant = colorForArtwork(albumArt, current)
-
         val trackKey = "${title}_${artist}".trim()
         val wasMusicActive = _isMusicActive.value
         val isNewTrack = trackKey.isNotBlank() && (trackKey != lastAnnouncedTrackKey || !wasMusicActive)
@@ -326,14 +332,13 @@ object MediaPlaybackState {
 
         val isIdenticalTrack = title == current.title &&
             artist == current.artist &&
-            albumArt == current.albumArt &&
             isPlaying == current.isPlaying &&
             duration == current.durationMs &&
-            dominant == current.dominantColor &&
-            controller.packageName == current.playerPackageName &&
+            samePlayer &&
             sessionActions == current.sessionActions
 
         if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - current.positionMs) < 1000L) {
+            updateArtwork(sessionArtwork)
             checkTickerState(isPlaying)
             return
         }
@@ -341,11 +346,11 @@ object MediaPlaybackState {
         _currentTrack.value = MediaTrackInfo(
             title = title,
             artist = artist,
-            albumArt = albumArt,
+            albumArt = current.albumArt.takeIf { samePlayer },
             isPlaying = isPlaying,
             positionMs = calculatedPosition,
             durationMs = duration,
-            dominantColor = dominant,
+            artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
             controller = controller,
             playerPackageName = controller.packageName,
             appName = current.appName,
@@ -353,6 +358,7 @@ object MediaPlaybackState {
             isSimulated = false,
         )
 
+        updateArtwork(sessionArtwork)
         checkTickerState(isPlaying)
     }
 
@@ -365,12 +371,16 @@ object MediaPlaybackState {
     ) {
         val current = _currentTrack.value
         if (current.isSimulated) return
+        val controllerPackage = activeController?.packageName
+        if (controllerPackage != null && packageName != null && packageName != controllerPackage) return
+        val newPackage = packageName ?: current.playerPackageName
+        if (isPackageBlacklisted(newPackage)) return
 
-        val controllerTitle = current.controller?.metadata?.let {
+        val controllerTitle = sessionMetadata?.let {
             it.getString(MediaMetadata.METADATA_KEY_TITLE) ?: it.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         }?.takeIf { it.isNotBlank() }
 
-        val controllerArtist = current.controller?.metadata?.let {
+        val controllerArtist = sessionMetadata?.let {
             it.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: it.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
         }?.takeIf { it.isNotBlank() }
 
@@ -389,44 +399,28 @@ object MediaPlaybackState {
             else -> current.artist
         }
 
-        val isSameSong = newTitle.equals(current.title, ignoreCase = true) &&
-            newArtist.equals(current.artist, ignoreCase = true)
-
-        val newArt = when {
-            isSameSong && current.albumArt != null -> current.albumArt
-            artwork == null -> current.albumArt
-            current.albumArt == null -> artwork
-            artwork.width.toLong() * artwork.height >=
-                current.albumArt.width.toLong() * current.albumArt.height -> artwork
-            else -> current.albumArt
-        }
-
-        val dominant = colorForArtwork(newArt, current)
-
         val resolvedAppName = appName ?: current.appName
-        val newPackage = packageName ?: current.playerPackageName
-        if (isPackageBlacklisted(newPackage) || isPackageBlacklisted(packageName)) {
-            return
-        }
-
+        val samePlayer = newPackage == current.playerPackageName
+        val candidate = sessionArtwork ?: artwork
         if (newTitle == current.title &&
             newArtist == current.artist &&
-            newArt == current.albumArt &&
-            dominant == current.dominantColor &&
-            newPackage == current.playerPackageName &&
+            samePlayer &&
             resolvedAppName == current.appName
         ) {
+            updateArtwork(candidate)
             return
         }
 
+        if (!samePlayer) resetArtworkUpdate()
         _currentTrack.value = current.copy(
             title = newTitle,
             artist = newArtist,
-            albumArt = newArt,
-            dominantColor = dominant,
+            albumArt = current.albumArt.takeIf { samePlayer },
+            artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
             playerPackageName = newPackage,
             appName = resolvedAppName,
         )
+        updateArtwork(candidate)
 
         val notifTrackKey = "${newTitle}_${newArtist}".trim()
         if (current.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {
@@ -498,13 +492,13 @@ object MediaPlaybackState {
         if (track.isSimulated) {
             val nextTitle = if (track.title == "Starboy") "Blinding Lights" else "Starboy"
             val artwork = DominantColorExtractor.createSampleArtwork(nextTitle)
-            val dominant = DominantColorExtractor.extractDominantColor(artwork)
+            val artworkColors = DominantColorExtractor.extractArtworkColors(artwork)
             lastAnnouncedTrackKey = "${nextTitle}_The Weeknd"
             _currentTrack.value = track.copy(
                 title = nextTitle,
                 artist = "The Weeknd",
                 albumArt = artwork,
-                dominantColor = dominant,
+                artworkColors = artworkColors,
                 positionMs = 0L,
             )
             triggerSongAnnouncement()
@@ -518,13 +512,13 @@ object MediaPlaybackState {
         if (track.isSimulated) {
             val prevTitle = if (track.title == "Starboy") "Die For You" else "Starboy"
             val artwork = DominantColorExtractor.createSampleArtwork(prevTitle)
-            val dominant = DominantColorExtractor.extractDominantColor(artwork)
+            val artworkColors = DominantColorExtractor.extractArtworkColors(artwork)
             lastAnnouncedTrackKey = "${prevTitle}_The Weeknd"
             _currentTrack.value = track.copy(
                 title = prevTitle,
                 artist = "The Weeknd",
                 albumArt = artwork,
-                dominantColor = dominant,
+                artworkColors = artworkColors,
                 positionMs = 0L,
             )
             triggerSongAnnouncement()
@@ -658,9 +652,7 @@ object MediaPlaybackState {
     }
 
     fun clear() {
-        dominantColorJob?.cancel()
-        dominantColorJob = null
-        pendingColorArtwork = null
+        resetArtworkUpdate()
         dismissSongAnnouncement()
         lastAnnouncedTrackKey = ""
         musicGraceJob?.cancel()
@@ -673,6 +665,8 @@ object MediaPlaybackState {
         controllerCallback?.let { activeController?.unregisterCallback(it) }
         controllerCallback = null
         activeController = null
+        sessionMetadata = null
+        sessionArtwork = null
         _currentTrack.value = MediaTrackInfo()
     }
 }

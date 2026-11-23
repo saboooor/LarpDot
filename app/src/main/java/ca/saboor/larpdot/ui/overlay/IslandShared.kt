@@ -6,7 +6,6 @@ import android.text.TextPaint
 import ca.saboor.larpdot.service.OverlayPreferences
 import android.graphics.RuntimeShader
 import android.os.Build
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,10 +57,6 @@ internal fun groupedIslandShape(
  * Authentic cubic-bezier spring and ease curves extracted directly from com.pryshedko.mtisland
  * (zl0.java, jc1.java, f92.java).
  */
-val MtIslandEnterEasing = CubicBezierEasing(0.25f, 0.9f, 0.35f, 1.02f) // Soft overshoot bounce
-val MtIslandExitEasing = CubicBezierEasing(0.42f, 0.0f, 0.12f, 1.0f)  // Apple-style snap collapse
-val MtIslandDecelerate = CubicBezierEasing(0.0f, 0.0f, 0.2f, 1.0f)
-val MtIslandStandard = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
 
 enum class IslandType {
     MEDIA,

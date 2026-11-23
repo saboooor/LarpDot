@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import ca.saboor.larpdot.ui.theme.motionItem
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -144,11 +145,11 @@ fun FlashlightScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // 1. Live Island Preview
-        item {
+        item(key = "preview") {
             IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.FLASHLIGHT)
         }
 
-        item {
+        item(key = "tabs") {
             PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
@@ -169,7 +170,7 @@ fun FlashlightScreen(
         }
 
         // 2. Master Controls Card
-        if (selectedTabIndex == 1) item {
+        if (selectedTabIndex == 1) motionItem("expanded_style") {
             SectionHeader(title = "Expanded style")
             LarpCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -183,7 +184,7 @@ fun FlashlightScreen(
                 }
             }
         }
-        if (selectedTabIndex == 1) item {
+        if (selectedTabIndex == 1) motionItem("expanded_controls") {
             SectionHeader(title = "Master Controls")
             LarpCard {
                 // Power Toggle Row
@@ -326,7 +327,7 @@ fun FlashlightScreen(
         }
 
         // 3. Dynamic Island Behavior Card
-        if (selectedTabIndex == 0) item {
+        if (selectedTabIndex == 0) motionItem("minimized_controls") {
             SectionHeader(title = "Dynamic Island Integration")
             LarpCard {
                 // Show in Island switch
@@ -435,7 +436,7 @@ fun FlashlightScreen(
             }
         }
 
-        if (selectedTabIndex == 1) item {
+        if (selectedTabIndex == 1) motionItem("expanded_outline") {
             SectionHeader(title = "Expanded Appearance")
             LarpCard {
                 Row(
@@ -459,12 +460,12 @@ fun FlashlightScreen(
             }
         }
 
-        if (flashlightError != null) item {
+        if (flashlightError != null) motionItem("hardware_error") {
             Text(flashlightError.orEmpty(), color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium)
         }
 
-        if (selectedTabIndex == 2) item {
+        if (selectedTabIndex == 2) motionItem("overview_controls") {
             SectionHeader(title = "Flashlight Boost")
             LarpCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -505,7 +506,7 @@ fun FlashlightScreen(
         }
 
         // 4. Hardware & Diagnostics Card
-        if (selectedTabIndex == 2) item {
+        if (selectedTabIndex == 2) motionItem("diagnostics") {
             SectionHeader(title = "Hardware & Diagnostics")
             LarpCard {
                 Column(

@@ -4,9 +4,6 @@ import android.os.SystemClock
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * High-performance hardware-vsync multi-band audio visualizer.
@@ -50,6 +48,7 @@ fun TrackVisualizer(
     barSpacing: Dp = 2.dp,
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -80,16 +79,16 @@ fun TrackVisualizer(
     val playProgress by animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
         animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
+            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
         } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
         },
         label = "tv_play_spring",
     )
 
     val playAlpha by animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.45f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "tv_alpha",
     )
 
@@ -115,7 +114,8 @@ fun TrackVisualizer(
     val frameAmps = remember(safeCount) { FloatArray(safeCount) }
     val cornerRadiusPx = barWidthPx / 2f
 
-    Canvas(modifier = modifier) {
+    val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
+    WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         // Subscribe to display refresh loop
         val _tick = vsyncClock
 
@@ -128,21 +128,20 @@ fun TrackVisualizer(
 
         if (totalFrames <= 0) {
             // Resting state: Draw resting pill dots
-            val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
             var currentX = (size.width - totalWidth) / 2f
             val centerY = size.height / 2f
-            val dotColor = accentColor.copy(alpha = playAlpha)
 
             for (i in 0 until barCount) {
                 drawRoundRect(
-                    color = dotColor,
+                    brush = gradient,
+                    alpha = playAlpha,
                     topLeft = Offset(currentX, centerY - (minHeightPx / 2f)),
                     size = Size(barWidthPx, minHeightPx),
                     cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
                 )
                 currentX += barWidthPx + barSpacingPx
             }
-            return@Canvas
+            return@WaveformCanvas
         }
 
         // Exact playback time interpolated from hardware clock
@@ -174,10 +173,8 @@ fun TrackVisualizer(
         }
         val frameMean = frameSum / barCount.coerceAtLeast(1)
 
-        val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
         var currentX = (size.width - totalWidth) / 2f
         val centerY = size.height / 2f
-        val drawColor = accentColor.copy(alpha = playAlpha)
 
         // Step 2: Render each bar with spectral contrast and per-band ballistics
         for (i in 0 until barCount) {
@@ -209,7 +206,8 @@ fun TrackVisualizer(
             val barH = (minHeightPx + (activeHeightPx - minHeightPx) * playProgress).coerceIn(minHeightPx, maxHeightPx)
 
             drawRoundRect(
-                color = drawColor,
+                brush = gradient,
+                alpha = playAlpha,
                 topLeft = Offset(currentX, centerY - (barH / 2f)),
                 size = Size(barWidthPx, barH),
                 cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
@@ -233,6 +231,7 @@ fun LiveTrackVisualizer(
     barSpacing: Dp = 2.dp,
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -261,16 +260,16 @@ fun LiveTrackVisualizer(
     val playProgress by animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
         animationSpec = if (isPlaying) {
-            spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
+            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
         } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
         },
         label = "live_play_spring",
     )
 
     val playAlpha by animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.45f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "live_alpha",
     )
 
@@ -285,26 +284,26 @@ fun LiveTrackVisualizer(
     val ballisticHeights = remember(safeCount) { FloatArray(safeCount) }
     val cornerRadiusPx = barWidthPx / 2f
 
-    Canvas(modifier = modifier) {
+    val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
+    WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
 
-        val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
         var currentX = (size.width - totalWidth) / 2f
         val centerY = size.height / 2f
-        val drawColor = accentColor.copy(alpha = playAlpha)
 
         val live = amplitudes
         if (live == null || live.isEmpty() || !isPlaying) {
             for (i in 0 until barCount) {
                 drawRoundRect(
-                    color = drawColor,
+                    brush = gradient,
+                    alpha = playAlpha,
                     topLeft = Offset(currentX, centerY - (minHeightPx / 2f)),
                     size = Size(barWidthPx, minHeightPx),
                     cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
                 )
                 currentX += barWidthPx + barSpacingPx
             }
-            return@Canvas
+            return@WaveformCanvas
         }
 
         var frameSum = 0f
@@ -336,7 +335,8 @@ fun LiveTrackVisualizer(
             val barH = (minHeightPx + (activeHeightPx - minHeightPx) * playProgress).coerceIn(minHeightPx, maxHeightPx)
 
             drawRoundRect(
-                color = drawColor,
+                brush = gradient,
+                alpha = playAlpha,
                 topLeft = Offset(currentX, centerY - (barH / 2f)),
                 size = Size(barWidthPx, barH),
                 cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),

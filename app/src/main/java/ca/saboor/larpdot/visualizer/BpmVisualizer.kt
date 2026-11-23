@@ -4,9 +4,6 @@ import android.os.SystemClock
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -43,6 +40,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * Lightweight, zero-battery BPM-synchronized visualizer.
@@ -66,6 +64,7 @@ fun BpmVisualizer(
     barSpacing: Dp = 2.dp,
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -99,16 +98,16 @@ fun BpmVisualizer(
     val playProgress by animateFloatAsState(
         targetValue = if (isBpmActive) 1f else 0f,
         animationSpec = if (isBpmActive) {
-            spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
+            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
         } else {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
         },
         label = "bpm_play_spring",
     )
 
     val playAlpha by animateFloatAsState(
         targetValue = if (isBpmActive) 1.0f else 0.45f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "bpm_alpha",
     )
 
@@ -138,7 +137,8 @@ fun BpmVisualizer(
     val safeBpm = (bpm ?: 0f).toDouble().coerceIn(60.0, 240.0)
     val beatDurationMs = 60_000.0 / safeBpm
 
-    Canvas(modifier = modifier) {
+    val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
+    WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
 
         val now = SystemClock.elapsedRealtime()
@@ -167,10 +167,8 @@ fun BpmVisualizer(
         val barMeasurePhase = (currentBeatExact / 4.0) * 2.0 * PI
         val melodySway = (sin(barMeasurePhase) * 0.15 + 0.15).coerceIn(0.0, 0.3)
 
-        val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
         var currentX = (size.width - totalWidth) / 2f
         val centerY = size.height / 2f
-        val drawColor = accentColor.copy(alpha = playAlpha)
 
         for (i in 0 until barCount) {
             val normalizedCol = if (barCount > 1) i.toFloat() / (barCount - 1) else 0.5f
@@ -212,7 +210,8 @@ fun BpmVisualizer(
             val barH = (minHeightPx + (activeHeightPx - minHeightPx) * playProgress).coerceIn(minHeightPx, maxHeightPx)
 
             drawRoundRect(
-                color = drawColor,
+                brush = gradient,
+                alpha = playAlpha,
                 topLeft = Offset(currentX, centerY - (barH / 2f)),
                 size = Size(barWidthPx, barH),
                 cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
@@ -234,6 +233,7 @@ fun BpmVisualizer(
     barSpacing: Dp = 2.dp,
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) = BpmVisualizer(
     bpm = bpm?.toFloat(),
     currentPositionMs = currentPositionMs,
@@ -245,6 +245,7 @@ fun BpmVisualizer(
     barSpacing = barSpacing,
     maxHeight = maxHeight,
     minHeight = minHeight,
+    secondaryColor = secondaryColor,
 )
 
 /**

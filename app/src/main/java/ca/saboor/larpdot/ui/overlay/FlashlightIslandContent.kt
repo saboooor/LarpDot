@@ -13,7 +13,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -69,6 +68,7 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 val FlashlightWhite = Color.White
 val FlashlightWhiteLight = Color.White
@@ -127,7 +127,7 @@ fun CompactFlashlightContent(
         initialValue = 0.65f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            animation = LarpMotion.timing(durationMillis = 1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "pulse_alpha",
@@ -313,7 +313,7 @@ fun ExpandedFlashlightContent(
     // Smooth transition for on/off toggle (cone fades in/out)
     val onOffProgress by animateFloatAsState(
         targetValue = if (isFlashlightOn) 1f else 0f,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.fade(if (isFlashlightOn) 260 else 200),
         label = "anim_on_off",
     )
 
@@ -408,7 +408,7 @@ fun ExpandedFlashlightContent(
                     close()
                 }
 
-                if (isFlashlightOn && onOffProgress > 0.02f) {
+                if (onOffProgress > 0.002f) {
                     if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.BLURRED_BEAM) {
                         // Approximate a Gaussian blur in horizontal bands: the light is sharp
                         // at its source and diffuses progressively toward the wide end.

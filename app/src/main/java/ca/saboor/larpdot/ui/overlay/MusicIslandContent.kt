@@ -1,6 +1,11 @@
 package ca.saboor.larpdot.ui.overlay
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.text.style.TextAlign
 import ca.saboor.larpdot.ui.components.MarqueeText
 import android.content.Context
@@ -10,15 +15,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -119,6 +116,7 @@ import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
 import ca.saboor.larpdot.visualizer.TrackVisualizer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * Compact Dynamic Island pill content following mtisland's layout:
@@ -258,181 +256,6 @@ private fun AnnouncementTrackText(
 }
 
 @Composable
-private fun AnnouncementAlbumArt(
-    mediaInfo: MediaTrackInfo,
-    albumArtStyle: OverlayPreferences.AlbumArtStyle,
-    nestedShape: OverlayPreferences.NestedAlbumArtShape,
-    nestedRotation: Float,
-    cutoutDiameterDp: Dp,
-    isLandscape: Boolean,
-    modifier: Modifier = Modifier,
-    minimizedNestedBlurredBg: Boolean = false,
-) {
-    val albumArt = mediaInfo.albumArt ?: return
-    val density = LocalDensity.current
-    val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
-    when (albumArtStyle) {
-        OverlayPreferences.AlbumArtStyle.NESTED -> {
-            val artSize = (cutoutDiameterDp - 8.dp).coerceIn(18.dp, 26.dp)
-            if (minimizedNestedBlurredBg) {
-                Box(
-                    modifier = modifier.size(artSize + 6.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(
-                        bitmap = albumArt.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .blur(10.dp)
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.radialGradient(
-                                        listOf(Color.White.copy(alpha = 0.7f), Color.Transparent)
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                        contentScale = ContentScale.Crop,
-                    )
-                    Image(
-                        bitmap = albumArt.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(artSize)
-                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
-                        contentScale = ContentScale.Crop,
-                    )
-                }
-            } else {
-                Image(
-                    bitmap = albumArt.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = modifier
-                        .size(artSize)
-                        .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-        }
-
-        OverlayPreferences.AlbumArtStyle.BASIC_FADED -> Image(
-            bitmap = albumArt.asImageBitmap(),
-            contentDescription = null,
-            modifier = modifier
-                .then(
-                    if (isLandscape) Modifier.fillMaxWidth().aspectRatio(1f)
-                    else Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true)
-                )
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = if (isLandscape) {
-                            Brush.verticalGradient(listOf(Color.White, Color.Transparent))
-                        } else {
-                            Brush.horizontalGradient(listOf(Color.White, Color.Transparent))
-                        },
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
-            contentScale = ContentScale.Crop,
-        )
-
-        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
-        OverlayPreferences.AlbumArtStyle.BLENDED -> {
-            val bitmap = albumArt.asImageBitmap()
-            val side = minOf(bitmap.width, bitmap.height)
-            val cropX = (bitmap.width - side) / 2
-            val cropY = (bitmap.height - side) / 2
-            // Use a wider source slice to reduce distortion in the mirrored extension.
-            val reflectionSlice = side / 4
-            Canvas(
-                modifier = modifier
-                    .fillMaxSize()
-                    .layout { measurable, constraints ->
-                        val extraPx = 6.dp.roundToPx()
-                        val placeable = if (isLandscape) {
-                            measurable.measure(
-                                constraints.copy(
-                                    minHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
-                                    maxHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
-                                )
-                            )
-                        } else {
-                            measurable.measure(
-                                constraints.copy(
-                                    minWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
-                                    maxWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
-                                )
-                            )
-                        }
-                        layout(constraints.maxWidth, constraints.maxHeight) {
-                            placeable.place(0, 0)
-                        }
-                    }
-                    .progressiveBlur(
-                        direction = if (isLandscape) 1 else 0,
-                        startFraction = 0.65f,
-                        maxBlurDp = 24.dp,
-                        dotRadiusPx = dotRadiusPx,
-                    ),
-            ) {
-                if (isLandscape) {
-                    val artHeight = size.width
-                    val reflectionHeight = (size.height - artHeight).coerceAtLeast(0f)
-                    drawImage(
-                        image = bitmap,
-                        srcOffset = IntOffset(cropX, cropY),
-                        srcSize = IntSize(side, side),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(size.width.roundToInt(), artHeight.roundToInt()),
-                    )
-                    scale(
-                        scaleX = 1f,
-                        scaleY = -1f,
-                        pivot = Offset(size.width / 2f, artHeight + reflectionHeight / 2f),
-                    ) {
-                        drawImage(
-                            image = bitmap,
-                            srcOffset = IntOffset(cropX, cropY + side - reflectionSlice),
-                            srcSize = IntSize(side, reflectionSlice),
-                            dstOffset = IntOffset(0, artHeight.roundToInt()),
-                            dstSize = IntSize(size.width.roundToInt(), reflectionHeight.roundToInt()),
-                        )
-                    }
-                } else {
-                    val artWidth = size.height
-                    val reflectionWidth = (size.width - artWidth).coerceAtLeast(0f)
-                    drawImage(
-                        image = bitmap,
-                        srcOffset = IntOffset(cropX, cropY),
-                        srcSize = IntSize(side, side),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(artWidth.roundToInt(), size.height.roundToInt()),
-                    )
-                    scale(
-                        scaleX = -1f,
-                        scaleY = 1f,
-                        pivot = Offset(artWidth + reflectionWidth / 2f, size.height / 2f),
-                    ) {
-                        drawImage(
-                            image = bitmap,
-                            srcOffset = IntOffset(cropX + side - reflectionSlice, cropY),
-                            srcSize = IntSize(reflectionSlice, side),
-                            dstOffset = IntOffset(artWidth.roundToInt(), 0),
-                            dstSize = IntSize(reflectionWidth.roundToInt(), size.height.roundToInt()),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
@@ -453,7 +276,10 @@ internal fun CompactIslandContent(
     minimizedNestedBlurredBg: Boolean = OverlayPreferences.minimizedNestedBlurredBgFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
     trailingWingFraction: Float = 0.5f,
+    artworkAnchor: ArtworkAnchor? = null,
 ) {
+    val artworkGlow = albumArtGlowColor(mediaInfo)
+    val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -463,9 +289,15 @@ internal fun CompactIslandContent(
     val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + cutoutDiameterDp).toPx() }
     val glowAlpha by animateFloatAsState(
         targetValue = if (mediaInfo.isPlaying) 0.28f else 0.08f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.fade(360),
         label = "compact_glow_alpha",
     )
+    val announcementAlpha by animateFloatAsState(
+        targetValue = if (isSongAnnouncement) 1f else 0f,
+        animationSpec = LarpMotion.fade(if (isSongAnnouncement) 160 else 180),
+        label = "announcement_text_alpha",
+    )
+    val showAnnouncementText = isSongAnnouncement || announcementAlpha > 0.01f
 
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
@@ -480,177 +312,7 @@ internal fun CompactIslandContent(
         enabled = bpmPulseEnabled,
     )
 
-    Crossfade(
-        targetState = isSongAnnouncement,
-        animationSpec = tween(durationMillis = 280),
-        label = "song_announcement_crossfade",
-    ) { announcing ->
-        if (announcing) {
-            if (isLandscape) {
-                Column(
-                    modifier = modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AnnouncementAlbumArt(
-                            mediaInfo = mediaInfo,
-                            albumArtStyle = albumArtStyle,
-                            nestedShape = nestedShape,
-                            nestedRotation = nestedRotation,
-                            cutoutDiameterDp = cutoutDiameterDp,
-                            isLandscape = true,
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(cutoutDiameterDp))
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AnnouncementTrackText(
-                            title = mediaInfo.title,
-                            artist = mediaInfo.artist,
-                            accentColor = accentColor,
-                            titleFontSize = 10.5f,
-                            artistFontSize = 9f,
-                            fadeWidth = 6.dp,
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    modifier = modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f - trailingWingFraction)
-                            .fillMaxHeight(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 3.dp, end = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                AnnouncementAlbumArt(
-                                    mediaInfo = mediaInfo,
-                                    albumArtStyle = albumArtStyle,
-                                    nestedShape = nestedShape,
-                                    nestedRotation = nestedRotation,
-                                    cutoutDiameterDp = cutoutDiameterDp,
-                                    isLandscape = false,
-                                )
-                                MarqueeText(
-                                    text = mediaInfo.title.ifBlank { "Playing Track" },
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                        fontSize = 11.5.sp,
-                                    ),
-                                    modifier = Modifier.weight(1f),
-                                    textAlign = TextAlign.Center,
-                                    fadeWidth = 6.dp,
-                                    initialDelayMillis = 600,
-                                    repeatDelayMillis = 1000,
-                                    velocity = 35.dp,
-                                )
-                            }
-                        } else {
-                            AnnouncementAlbumArt(
-                                mediaInfo = mediaInfo,
-                                albumArtStyle = albumArtStyle,
-                                nestedShape = nestedShape,
-                                nestedRotation = nestedRotation,
-                                cutoutDiameterDp = cutoutDiameterDp,
-                                isLandscape = false,
-                                modifier = Modifier.align(Alignment.CenterStart),
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .background(Color.Black.copy(alpha = 0.34f)),
-                            )
-                            MarqueeText(
-                                text = mediaInfo.title.ifBlank { "Playing Track" },
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                    fontSize = 11.5.sp,
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 6.dp, end = 2.dp),
-                                textAlign = TextAlign.Center,
-                                fadeWidth = 6.dp,
-                                initialDelayMillis = 600,
-                                repeatDelayMillis = 1000,
-                                velocity = 35.dp,
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(cutoutDiameterDp))
-
-                    Box(
-                        modifier = Modifier
-                            .weight(trailingWingFraction)
-                            .fillMaxHeight()
-                            .then(
-                                if (showDominantGlow) {
-                                    Modifier.drawWithCache {
-                                        val gradient = Brush.horizontalGradient(
-                                            listOf(
-                                                Color.Transparent,
-                                                accentColor,
-                                            )
-                                        )
-                                        onDrawBehind {
-                                            val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                                0.16f + (0.22f * bpmPulseState.value * pulseAmount)
-                                            } else {
-                                                glowAlpha
-                                            }
-                                            drawRect(brush = gradient, alpha = alpha)
-                                        }
-                                    }
-                                } else Modifier
-                            )
-                            .padding(start = 2.dp, end = 6.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        MarqueeText(
-                            text = mediaInfo.artist.ifBlank { "Media Player" },
-                            color = accentColor.copy(alpha = 0.95f),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
-                            textAlign = TextAlign.Center,
-                            fadeWidth = 6.dp,
-                            initialDelayMillis = 600,
-                            repeatDelayMillis = 1000,
-                            velocity = 35.dp,
-                        )
-                    }
-                }
-            }
-        } else {
-            if (isLandscape) {
+    if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
         Column(
             modifier = modifier
@@ -676,7 +338,12 @@ internal fun CompactIslandContent(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(albumArtSize)
-                                    .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
+                                    .albumArtGlow(artworkGlow, artworkAnchor)
+                                    .clip(artworkShape)
+                                    .artworkTile(
+                                        artworkAnchor,
+                                        ArtworkStyle(shape = artworkShape),
+                                    ),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -694,6 +361,7 @@ internal fun CompactIslandContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f, matchHeightConstraintsFirst = false)
+                                    .albumArtGlow(artworkGlow, artworkAnchor)
                                     .graphicsLayer {
                                         compositingStrategy = CompositingStrategy.Offscreen
                                     }
@@ -708,7 +376,11 @@ internal fun CompactIslandContent(
                                             ),
                                             blendMode = BlendMode.DstIn,
                                         )
-                                    },
+                                    }
+                                    .artworkTile(
+                                        artworkAnchor,
+                                        ArtworkStyle(fadeVertically = true),
+                                    ),
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -749,12 +421,13 @@ internal fun CompactIslandContent(
                                         startFraction = 0.65f,
                                         maxBlurDp = 24.dp,
                                         dotRadiusPx = dotRadiusPx,
-                                    ),
+                                    )
+                                    .artworkTile(artworkAnchor, firstSquare = true),
                             ) {
                                 val w = size.width
                                 val artH = w
                                 val refH = size.height - artH
-                                drawImage(
+                                if (artworkAnchor?.isMoving() != true) drawImage(
                                     image = bitmap,
                                     srcOffset = IntOffset(cropX, cropY),
                                     srcSize = IntSize(side, side),
@@ -770,6 +443,7 @@ internal fun CompactIslandContent(
                                         dstSize = IntSize(w.roundToInt(), refH.roundToInt()),
                                     )
                                 }
+                                drawBlendedAlbumArtGlow(artworkGlow, isLandscape, artworkAnchor)
                             }
                         }
                     }
@@ -838,16 +512,34 @@ internal fun CompactIslandContent(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                if (showVisualizer) {
-                    EqualizerWaveform(
-                        isPlaying = mediaInfo.isPlaying,
-                        maxHeightDp = 13.5f,
-                        accentColor = accentColor,
-                        barCount = waveformBandCount,
-                        barWidth = waveformBarWidth.dp,
-                        barSpacing = waveformBarSpacing.dp,
-                        currentPositionMs = mediaInfo.positionMs,
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (showAnnouncementText) Modifier.padding(horizontal = 4.dp, vertical = 4.dp) else Modifier),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                ) {
+                    if (showAnnouncementText) {
+                        Box(modifier = Modifier.graphicsLayer { alpha = announcementAlpha }) {
+                            AnnouncementTrackText(
+                                title = mediaInfo.title,
+                                artist = mediaInfo.artist,
+                                accentColor = accentColor,
+                                titleFontSize = 10.5f,
+                                artistFontSize = 9f,
+                                fadeWidth = 6.dp,
+                            )
+                        }
+                    }
+                    if (showVisualizer) {
+                        EqualizerWaveform(
+                            mediaInfo = mediaInfo,
+                            maxHeightDp = 13.5f,
+                            barCount = waveformBandCount,
+                            barWidth = waveformBarWidth.dp,
+                            barSpacing = waveformBarSpacing.dp,
+                        )
+                    }
                 }
             }
         }
@@ -860,27 +552,56 @@ internal fun CompactIslandContent(
                 .background(Color.Black),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left Wing: Album art based on chosen AlbumArtStyle
+            // Left Wing: Album art based on chosen AlbumArtStyle, with announcement title inserted in front
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
                         // The camera spans the full thickness; padding belongs to the wing content.
                         val compactPillThickness = cutoutDiameterDp
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-                        Box(
+                        val artStartInset = ((compactPillThickness - albumArtSize) / 2f).coerceAtLeast(6.dp)
+                        Row(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.CenterEnd,
+                                .fillMaxHeight()
+                                .padding(
+                                    start = if (showAnnouncementText) artStartInset else 0.dp,
+                                    end = if (showAnnouncementText) 2.dp else 0.dp,
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.End,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(albumArtSize)
-                                    .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
+                                    .albumArtGlow(artworkGlow, artworkAnchor)
+                                    .clip(artworkShape)
+                                    .artworkTile(
+                                        artworkAnchor,
+                                        ArtworkStyle(shape = artworkShape),
+                                    ),
                                 contentScale = ContentScale.Crop,
                             )
+                            if (showAnnouncementText) {
+                                MarqueeText(
+                                    text = mediaInfo.title.ifBlank { "Playing Track" },
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                        fontSize = 11.5.sp,
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .graphicsLayer { alpha = announcementAlpha },
+                                    textAlign = TextAlign.Center,
+                                    fadeWidth = 6.dp,
+                                    initialDelayMillis = 600,
+                                    repeatDelayMillis = 1000,
+                                    velocity = 35.dp,
+                                )
+                            }
                         }
                     }
                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
@@ -888,14 +609,16 @@ internal fun CompactIslandContent(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
                                 .fillMaxHeight(),
-                            contentAlignment = Alignment.CenterEnd,
+                            contentAlignment = Alignment.Center,
                         ) {
                             Image(
                                 bitmap = mediaInfo.albumArt.asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
+                                    .align(if (showAnnouncementText) Alignment.CenterStart else Alignment.CenterEnd)
                                     .fillMaxHeight()
                                     .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                    .albumArtGlow(artworkGlow, artworkAnchor)
                                     .graphicsLayer {
                                         compositingStrategy = CompositingStrategy.Offscreen
                                     }
@@ -910,19 +633,47 @@ internal fun CompactIslandContent(
                                             ),
                                             blendMode = BlendMode.DstIn,
                                         )
-                                    },
+                                    }
+                                    .artworkTile(
+                                        artworkAnchor,
+                                        ArtworkStyle(fadeVertically = false),
+                                    ),
                                 contentScale = ContentScale.Crop,
                             )
+                            if (showAnnouncementText) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer { alpha = announcementAlpha }
+                                        .background(Color.Black.copy(alpha = 0.34f)),
+                                )
+                                MarqueeText(
+                                    text = mediaInfo.title.ifBlank { "Playing Track" },
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                        fontSize = 11.5.sp,
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 6.dp, end = 2.dp)
+                                        .graphicsLayer { alpha = announcementAlpha },
+                                    textAlign = TextAlign.Center,
+                                    fadeWidth = 6.dp,
+                                    initialDelayMillis = 600,
+                                    repeatDelayMillis = 1000,
+                                    velocity = 35.dp,
+                                )
+                            }
                         }
                     }
                     OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
                     OverlayPreferences.AlbumArtStyle.BLENDED -> {
-                        Row(
+                        Box(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
                                 .fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Start,
+                            contentAlignment = Alignment.Center,
                         ) {
                             val bitmap = mediaInfo.albumArt.asImageBitmap()
                             val side = minOf(bitmap.width, bitmap.height)
@@ -951,12 +702,13 @@ internal fun CompactIslandContent(
                                         startFraction = 0.65f,
                                         maxBlurDp = 24.dp,
                                         dotRadiusPx = dotRadiusPx,
-                                    ),
+                                    )
+                                    .artworkTile(artworkAnchor, firstSquare = true),
                             ) {
                                 val h = size.height
                                 val artW = h
                                 val refW = size.width - artW
-                                drawImage(
+                                if (artworkAnchor?.isMoving() != true) drawImage(
                                     image = bitmap,
                                     srcOffset = IntOffset(cropX, cropY),
                                     srcSize = IntSize(side, side),
@@ -972,6 +724,32 @@ internal fun CompactIslandContent(
                                         dstSize = IntSize(refW.roundToInt(), h.roundToInt()),
                                     )
                                 }
+                                drawBlendedAlbumArtGlow(artworkGlow, isLandscape, artworkAnchor)
+                            }
+                            if (showAnnouncementText) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer { alpha = announcementAlpha }
+                                        .background(Color.Black.copy(alpha = 0.34f)),
+                                )
+                                MarqueeText(
+                                    text = mediaInfo.title.ifBlank { "Playing Track" },
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                        fontSize = 11.5.sp,
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 6.dp, end = 2.dp)
+                                        .graphicsLayer { alpha = announcementAlpha },
+                                    textAlign = TextAlign.Center,
+                                    fadeWidth = 6.dp,
+                                    initialDelayMillis = 600,
+                                    repeatDelayMillis = 1000,
+                                    velocity = 35.dp,
+                                )
                             }
                         }
                     }
@@ -990,23 +768,44 @@ internal fun CompactIslandContent(
                 Box(
                     modifier = Modifier.weight(leadingWingFraction).fillMaxHeight(),
                     contentAlignment = if (
+                        showAnnouncementText ||
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
                     ) Alignment.Center else Alignment.CenterEnd,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(placeholderSize)
-                            .clip(placeholderShape)
-                            .background(materialYouPrimary.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MusicNote,
-                            contentDescription = "Music artwork placeholder",
-                            tint = materialYouPrimary,
-                            modifier = Modifier.size(placeholderSize * 0.58f),
+                    if (showAnnouncementText) {
+                        MarqueeText(
+                            text = mediaInfo.title.ifBlank { "Playing Track" },
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                fontSize = 11.5.sp,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 6.dp, end = 2.dp)
+                                .graphicsLayer { alpha = announcementAlpha },
+                            textAlign = TextAlign.Center,
+                            fadeWidth = 6.dp,
+                            initialDelayMillis = 600,
+                            repeatDelayMillis = 1000,
+                            velocity = 35.dp,
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(placeholderSize)
+                                .clip(placeholderShape)
+                                .background(materialYouPrimary.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MusicNote,
+                                contentDescription = "Music artwork placeholder",
+                                tint = materialYouPrimary,
+                                modifier = Modifier.size(placeholderSize * 0.58f),
+                            )
+                        }
                     }
                 }
             }
@@ -1049,29 +848,52 @@ internal fun CompactIslandContent(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                if (showMinimizedTitle && mediaInfo.title.isNotBlank()) {
-                    MarqueeText(
-                        text = mediaInfo.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        fadeWidth = 6.dp,
-                    )
-                } else if (showVisualizer) {
-                    EqualizerWaveform(
-                        isPlaying = mediaInfo.isPlaying,
-                        maxHeightDp = 13.5f,
-                        accentColor = accentColor,
-                        barCount = waveformBandCount,
-                        barWidth = waveformBarWidth.dp,
-                        barSpacing = waveformBarSpacing.dp,
-                        modifier = Modifier.offset(x = equalizerShift),
-                        currentPositionMs = mediaInfo.positionMs,
-                    )
+                val visualizerEndInset = (compactPillThickness / 3f).coerceAtLeast(8.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (showAnnouncementText) Modifier.padding(start = 2.dp, end = visualizerEndInset)
+                            else Modifier
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.Center,
+                ) {
+                    if (showAnnouncementText) {
+                        MarqueeText(
+                            text = mediaInfo.artist.ifBlank { "Media Player" },
+                            color = accentColor.copy(alpha = 0.95f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer { alpha = announcementAlpha },
+                            textAlign = TextAlign.Center,
+                            fadeWidth = 6.dp,
+                            initialDelayMillis = 600,
+                            repeatDelayMillis = 1000,
+                            velocity = 35.dp,
+                        )
+                    }
+                    if (!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank()) {
+                        MarqueeText(
+                            text = mediaInfo.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            fadeWidth = 6.dp,
+                        )
+                    } else if (showVisualizer) {
+                        EqualizerWaveform(
+                            mediaInfo = mediaInfo,
+                            maxHeightDp = 13.5f,
+                            barCount = waveformBandCount,
+                            barWidth = waveformBarWidth.dp,
+                            barSpacing = waveformBarSpacing.dp,
+                            modifier = Modifier.offset(x = if (showAnnouncementText) 0.dp else equalizerShift),
+                        )
+                    }
                 }
             }
-        }
-    }
         }
     }
 }
@@ -1118,6 +940,7 @@ internal fun ExpandedIslandContent(
     cardHorizontalMarginDp: Dp = 14.dp,
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
+    artworkAnchor: ArtworkAnchor? = null,
     playerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.expandedPlayerLayoutFlow.collectAsState().value,
     showProgressSquiggles: Boolean = OverlayPreferences.showProgressSquigglesFlow.collectAsState().value,
     elementVisibility: OverlayPreferences.ExpandedElementVisibility = OverlayPreferences.expandedElementVisibilityFlow.collectAsState().value,
@@ -1133,6 +956,8 @@ internal fun ExpandedIslandContent(
     fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
+    val artworkGlow = albumArtGlowColor(mediaInfo)
+    val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
     val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
@@ -1152,12 +977,12 @@ internal fun ExpandedIslandContent(
 
     val albumArtPlaybackScale by animateFloatAsState(
         targetValue = if (mediaInfo.isPlaying) 1f else 0.86f,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.fade(260),
         label = "album_art_playback_scale",
     )
     val albumArtPlaybackAlpha by animateFloatAsState(
         targetValue = if (mediaInfo.isPlaying) 1f else 0.55f,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        animationSpec = LarpMotion.fade(260),
         label = "album_art_playback_alpha",
     )
 
@@ -1171,7 +996,7 @@ internal fun ExpandedIslandContent(
 
     val activeFraction = if (isDragging) dragFraction else progressFraction
 
-    val cardDragOffsetAnim = androidx.compose.animation.core.Animatable(0f)
+    val cardDragOffsetAnim = remember { androidx.compose.animation.core.Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
     val maxCardDragOffsetPx = with(density) { 8.dp.toPx() }
 
@@ -1223,7 +1048,7 @@ internal fun ExpandedIslandContent(
                         coroutineScope.launch {
                             cardDragOffsetAnim.animateTo(
                                 targetValue = 0f,
-                                animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                                animationSpec = LarpMotion.release,
                             )
                         }
                     },
@@ -1234,7 +1059,7 @@ internal fun ExpandedIslandContent(
                         coroutineScope.launch {
                             cardDragOffsetAnim.animateTo(
                                 targetValue = 0f,
-                                animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+                                animationSpec = LarpMotion.release,
                             )
                         }
                     },
@@ -1710,18 +1535,20 @@ internal fun ExpandedIslandContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 if (showAlbumArt && mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = "Album art",
+                    ExpandedArtwork(
+                        artwork = mediaInfo.albumArt,
+                        anchor = artworkAnchor,
+                        glowColor = artworkGlow,
+                        shape = artworkShape,
+                        opacity = { albumArtPlaybackAlpha },
                         modifier = Modifier
                             .size(56.dp)
                             .graphicsLayer {
                                 scaleX = albumArtPlaybackScale
                                 scaleY = albumArtPlaybackScale
                                 alpha = albumArtPlaybackAlpha
-                            }
-                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
-                        contentScale = ContentScale.Crop,
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
+                            },
                     )
                     Spacer(Modifier.width(14.dp))
                 }
@@ -1764,15 +1591,13 @@ internal fun ExpandedIslandContent(
                         contentAlignment = Alignment.Center,
                     ) {
                         EqualizerWaveform(
-                            isPlaying = mediaInfo.isPlaying,
+                            mediaInfo = mediaInfo,
                             maxHeightDp = 20f,
-                            accentColor = accentColor,
                             barCount = waveformBandCount,
                             barWidth = if (waveformBandCount > 5) 3.2.dp else 4.dp,
                             barSpacing = if (waveformBandCount > 5) 2.4.dp else 3.dp,
                             minHeight = 4.dp,
                             barCornerRadius = 2.dp,
-                            currentPositionMs = mediaInfo.positionMs,
                         )
                     }
                     if (elementVisibility.visualizer && elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
@@ -1794,11 +1619,10 @@ internal fun ExpandedIslandContent(
                         shadowElevation = 2.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                            PlaybackIcon(
+                                playing = mediaInfo.isPlaying,
                                 tint = Color(0xFF1B1A1E),
-                                modifier = Modifier.size(26.dp),
+                                size = 26.dp,
                             )
                         }
                     }
@@ -1920,19 +1744,21 @@ internal fun ExpandedIslandContent(
                 verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
             ) {
                 if (showAlbumArt && mediaInfo.albumArt != null) {
-                    Image(
-                        bitmap = mediaInfo.albumArt.asImageBitmap(),
-                        contentDescription = "Album art",
+                    ExpandedArtwork(
+                        artwork = mediaInfo.albumArt,
+                        anchor = artworkAnchor,
+                        glowColor = artworkGlow,
+                        shape = artworkShape,
+                        opacity = { albumArtPlaybackAlpha },
                         modifier = Modifier
                             .size(140.dp)
                             .graphicsLayer {
                                 scaleX = albumArtPlaybackScale
                                 scaleY = albumArtPlaybackScale
                                 alpha = albumArtPlaybackAlpha
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
                             }
-                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation))
                             .clickable { openPlayerApp(context, mediaInfo) },
-                        contentScale = ContentScale.Crop,
                     )
                 }
 
@@ -1980,14 +1806,12 @@ internal fun ExpandedIslandContent(
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         EqualizerWaveform(
-                            isPlaying = mediaInfo.isPlaying,
+                            mediaInfo = mediaInfo,
                             maxHeightDp = 20f,
-                            accentColor = accentColor,
                             barCount = waveformBandCount,
                             barWidth = if (waveformBandCount > 5) 2.8.dp else 3.5.dp,
                             barSpacing = if (waveformBandCount > 5) 2.dp else 2.5.dp,
                             minHeight = 3.dp,
-                            currentPositionMs = mediaInfo.positionMs,
                         )
                     }
                 }
@@ -2077,11 +1901,10 @@ internal fun ExpandedIslandContent(
                         shadowElevation = 2.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                            PlaybackIcon(
+                                playing = mediaInfo.isPlaying,
                                 tint = Color.Black,
-                                modifier = Modifier.size(31.dp),
+                                size = 31.dp,
                             )
                         }
                     }
@@ -2148,18 +1971,20 @@ internal fun ExpandedIslandContent(
                 Spacer(Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (showAlbumArt && mediaInfo.albumArt != null) {
-                        Image(
-                            bitmap = mediaInfo.albumArt.asImageBitmap(),
-                            contentDescription = "Album art",
+                        ExpandedArtwork(
+                            artwork = mediaInfo.albumArt,
+                            anchor = artworkAnchor,
+                            glowColor = artworkGlow,
+                            shape = RoundedCornerShape(12.dp),
+                            opacity = { albumArtPlaybackAlpha },
                             modifier = Modifier
                                 .size(64.dp)
                                 .graphicsLayer {
                                     scaleX = albumArtPlaybackScale
                                     scaleY = albumArtPlaybackScale
                                     alpha = albumArtPlaybackAlpha
-                                }
-                                .clip(RoundedCornerShape(12.dp)),
-                            contentScale = ContentScale.Crop,
+                                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                                },
                         )
                         Spacer(Modifier.width(14.dp))
                     }
@@ -2201,14 +2026,12 @@ internal fun ExpandedIslandContent(
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         EqualizerWaveform(
-                            isPlaying = mediaInfo.isPlaying,
+                            mediaInfo = mediaInfo,
                             maxHeightDp = 20f,
-                            accentColor = accentColor,
                             barCount = waveformBandCount,
                             barWidth = if (waveformBandCount > 5) 2.8.dp else 3.5.dp,
                             barSpacing = if (waveformBandCount > 5) 2.dp else 2.5.dp,
                             minHeight = 3.dp,
-                            currentPositionMs = mediaInfo.positionMs,
                         )
                     }
                 }
@@ -2292,11 +2115,10 @@ internal fun ExpandedIslandContent(
                                     }
                                 },
                         ) {
-                            Icon(
-                                imageVector = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
+                            PlaybackIcon(
+                                playing = mediaInfo.isPlaying,
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp),
+                                size = 32.dp,
                             )
                         }
                         IconButton(onClick = { MediaPlaybackState.skipNext() }, modifier = Modifier.size(38.dp)) {
@@ -2373,3 +2195,46 @@ internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     val sec = totalSec % 60
     return String.format("-%d:%02d", min, sec)
 }
+
+@Composable
+private fun PlaybackIcon(playing: Boolean, tint: Color, size: Dp) {
+    Crossfade(playing, animationSpec = LarpMotion.fade(145), label = "play_pause") { isPlaying ->
+        Icon(
+            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (isPlaying) "Pause" else "Play",
+            tint = tint,
+            modifier = Modifier.size(size),
+        )
+    }
+}
+
+@Composable
+private fun ExpandedArtwork(
+    artwork: Bitmap,
+    anchor: ArtworkAnchor?,
+    glowColor: Color,
+    shape: Shape,
+    opacity: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedContent(
+        targetState = artwork,
+        modifier = modifier
+            .albumArtGlow(glowColor, anchor)
+            .clip(shape)
+            .artworkTile(anchor, ArtworkStyle(shape), opacity),
+        transitionSpec = { fadeOverPrevious(250) },
+        label = "album_art",
+    ) { bitmap ->
+        Image(
+            bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+            contentDescription = "Album art",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+private fun AnimatedContentTransitionScope<*>.fadeOverPrevious(durationMillis: Int) =
+    (fadeIn(LarpMotion.fade(durationMillis)) togetherWith ExitTransition.KeepUntilTransitionsFinished)
+        .apply { targetContentZIndex = 1f }

@@ -395,7 +395,7 @@ fun AppBlacklistScreen(
                         onClick = {
                             OverlayPreferences.toggleBlacklistedPackage(context, app.packageName)
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().animateItem(placementSpec = null),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.elevatedCardColors(
                             containerColor = if (isBlacklisted) {

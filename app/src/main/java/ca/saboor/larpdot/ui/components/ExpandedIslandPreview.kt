@@ -2,10 +2,10 @@ package ca.saboor.larpdot.ui.components
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -56,11 +56,13 @@ import ca.saboor.larpdot.media.DominantColorExtractor
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.overlay.calculateAnnouncementExtraDp
 import ca.saboor.larpdot.ui.overlay.CompactIslandContent
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
+import ca.saboor.larpdot.ui.overlay.configuredCompactMediaWings
+import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.squircleShape
+import ca.saboor.larpdot.ui.theme.LarpMotion
 
 enum class IslandPreviewMode {
     MINIMIZED,
@@ -93,13 +95,21 @@ fun ExpandedIslandPreview(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
-    val showProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
+    val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
+    val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
+    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
+    val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
+    val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
     val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val isAnnouncing = isSongAnnouncement && showSongAnnouncement
+    val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
+    val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
+    val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
+    val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
 
     val hasNotificationAccess = remember(context) {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
@@ -115,7 +125,7 @@ fun ExpandedIslandPreview(
             isPlaying = true,
             positionMs = 64000L,
             durationMs = 230000L,
-            dominantColor = DominantColorExtractor.extractDominantColor(sampleArt),
+            artworkColors = DominantColorExtractor.extractArtworkColors(sampleArt),
             isSimulated = false,
         )
     }
@@ -134,35 +144,36 @@ fun ExpandedIslandPreview(
         enabled = pulseEntireIsland,
     )
 
-    val cutoutDiameterDp = with(density) { (cutoutInfo.radiusPx * 2f).toDp() }.coerceIn(16.dp, 36.dp)
-    // The camera spans the full thickness; padding belongs to the wing content.
-    val compactPillThickness = cutoutDiameterDp
-    val compactCornerRadius = compactPillThickness / 2f
+    val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
+    val cutoutDiameterDp = cameraGeometry.diameter.dp
+    val compactPillThickness = cameraGeometry.thickness.dp
+    val compactCornerRadius = cameraGeometry.cornerRadius.dp
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-    val nestedActiveExtraDp = compactPillThickness + nestedArtSize
-    val blendedActiveExtraDp = compactPillThickness * 3
     val compactExtraDp = when (minimizedStyle) {
-        OverlayPreferences.AlbumArtStyle.BLENDED -> blendedActiveExtraDp
-        OverlayPreferences.AlbumArtStyle.NESTED -> nestedActiveExtraDp
+        OverlayPreferences.AlbumArtStyle.BLENDED -> compactPillThickness * 3
+        OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
         else -> 60.dp
     }
-    val announcementExtraDp = if (isAnnouncing) {
-        remember(previewTrack.title, previewTrack.artist, cutoutDiameterDp, minimizedStyle, density.density, showMinimizedVisualizer, islandFontStyle) {
-            calculateAnnouncementExtraDp(
-                title = previewTrack.title,
-                artist = previewTrack.artist,
-                cutoutDiameterDp = cutoutDiameterDp.value,
-                albumArtStyle = minimizedStyle,
-                density = density.density,
-                showVisualizer = showMinimizedVisualizer,
-                fontStyle = islandFontStyle,
-            ).dp
-        }
-    } else 0.dp
-    val targetCompactWidth = cutoutDiameterDp + (if (isAnnouncing) announcementExtraDp else compactExtraDp)
+    val visualizerWidthDp = if (showMinimizedVisualizer) {
+        waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
+    } else 0f
+    val mediaWings = configuredCompactMediaWings(
+        mediaInfo = previewTrack,
+        extraWidthDp = compactExtraDp.value,
+        hasTrailingBubble = false,
+        showTitle = showMinimizedTitle,
+        announcing = isAnnouncing,
+        visualizerWidthDp = visualizerWidthDp,
+        cameraDiameterDp = cutoutDiameterDp.value,
+        cameraCenterXPx = cutoutInfo.centerX,
+        bubbleThicknessDp = compactPillThickness.value,
+        hasLeadingBubble = false,
+        landscape = false,
+    )
+    val targetCompactWidth = cutoutDiameterDp + mediaWings.widthDp.dp
     val animatedCompactWidth by animateDpAsState(
         targetValue = targetCompactWidth,
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = LarpMotion.resize(),
         label = "preview_compact_width",
     )
 
@@ -172,16 +183,10 @@ fun ExpandedIslandPreview(
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressFraction,
-        animationSpec = tween(durationMillis = 350, easing = LinearEasing),
+        animationSpec = LarpMotion.timing(durationMillis = 350, easing = LinearEasing),
         label = "preview_progress",
     )
 
-    // Concentric expanded corner radius matching the live IslandSurfaceOverlay
-    val displayRadiusDp = with(density) { cutoutInfo.displayCornerRadiusPx.toDp() }.coerceAtLeast(24.dp)
-    val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
-    val topMarginDp = (cutoutCenterYDp - 18.dp).coerceAtLeast(8.dp)
-    val concentricCornerRadiusDp = (displayRadiusDp - topMarginDp).coerceAtLeast(16.dp)
-    val expandedCornerRadiusDp = concentricCornerRadiusDp.coerceAtLeast(60.dp)
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
@@ -212,8 +217,13 @@ fun ExpandedIslandPreview(
     }
     val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
 
+    val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewHeight) / 2f)
     val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
-    val containerShape = squircleShape(expandedCornerRadiusPx, 0.80f)
+    val containerShape = if (!squircleEnabled || blurEnabled) {
+        RoundedCornerShape(expandedCornerRadiusDp)
+    } else {
+        squircleShape(expandedCornerRadiusPx, 0.80f)
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -261,7 +271,7 @@ fun ExpandedIslandPreview(
         }
 
         // Compact Pill Live Preview
-        if (showMinimizedPreview) {
+        AnimatedVisibility(showMinimizedPreview, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -282,7 +292,7 @@ fun ExpandedIslandPreview(
                         }
                         .then(
                             Modifier.islandFluidProgressBorder(
-                                progressFraction = if (showProgressOutline) animatedProgress else 0f,
+                                progressFraction = if (showMinimizedProgressOutline) animatedProgress else 0f,
                                 cornerRadius = compactCornerRadius,
                                 shape = RoundedCornerShape(compactCornerRadius),
                                 strokeWidth = 0.75.dp,
@@ -306,6 +316,7 @@ fun ExpandedIslandPreview(
                             showVisualizer = showMinimizedVisualizer,
                             waveformBandCount = waveformBandCount,
                             isSongAnnouncement = isAnnouncing,
+                            trailingWingFraction = mediaWings.trailingFraction,
                             pulseAmount = pulseAmount,
                             fontStyle = islandFontStyle,
                         )
@@ -323,11 +334,15 @@ fun ExpandedIslandPreview(
         }
 
         // Expanded Card Live Preview
-        if (showExpandedPreview) {
+        AnimatedVisibility(
+            visible = showExpandedPreview,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            enter = LarpMotion.reveal,
+            exit = LarpMotion.conceal,
+        ) {
             Surface(
                 modifier = Modifier
                     .width(previewCardWidth)
-                    .align(Alignment.CenterHorizontally)
                     .height(previewHeight)
                     .graphicsLayer {
                         val pulse = bpmPulseState.value * pulseAmount
@@ -339,7 +354,7 @@ fun ExpandedIslandPreview(
                     }
                     .then(
                         Modifier.islandFluidProgressBorder(
-                            progressFraction = if (showProgressOutline) animatedProgress else 0f,
+                            progressFraction = if (showExpandedProgressOutline) animatedProgress else 0f,
                             cornerRadius = expandedCornerRadiusDp,
                             shape = containerShape,
                             strokeWidth = 0.75.dp,
@@ -348,7 +363,7 @@ fun ExpandedIslandPreview(
                         )
                     ),
                 shape = containerShape,
-                color = Color.Black,
+                color = Color.Black.copy(alpha = backgroundOpacity.coerceIn(0f, 1f)),
                 shadowElevation = 14.dp,
             ) {
                 Box(

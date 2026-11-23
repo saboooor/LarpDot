@@ -21,12 +21,17 @@ object OverlayPreferences {
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
     private const val KEY_SHOW_SONG_ANNOUNCEMENT = "show_song_announcement"
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
+    private const val KEY_HOLD_TO_EXPAND_DURATION_MS = "hold_to_expand_duration_ms"
+    const val DEFAULT_HOLD_TO_EXPAND_DURATION_MS = 300
+    const val MIN_HOLD_TO_EXPAND_DURATION_MS = 100
+    const val MAX_HOLD_TO_EXPAND_DURATION_MS = 1000
     private const val KEY_BUBBLE_STYLE = "bubble_style"
     private const val KEY_SMALLER_BUBBLES = "smaller_bubbles"
     private const val KEY_ALBUM_ART_STYLE = "album_art_style"
     private const val KEY_MINIMIZED_ALBUM_ART_STYLE = "minimized_album_art_style"
     private const val KEY_EXPANDED_ALBUM_ART_STYLE = "expanded_album_art_style"
     private const val KEY_SHOW_EXPANDED_ALBUM_ART = "show_expanded_album_art"
+    private const val KEY_ALBUM_ART_GLOW = "album_art_glow"
     private const val KEY_EXPANDED_PLAYER_LAYOUT = "expanded_player_layout"
     private const val KEY_SHOW_PROGRESS_SQUIGGLES = "show_progress_squiggles"
     private const val KEY_SHOW_MINIMIZED_VISUALIZER = "show_minimized_visualizer"
@@ -243,6 +248,9 @@ object OverlayPreferences {
     private val _tapToExpandFlow = MutableStateFlow(false)
     val tapToExpandFlow: StateFlow<Boolean> = _tapToExpandFlow.asStateFlow()
 
+    private val _holdToExpandDurationMsFlow = MutableStateFlow(DEFAULT_HOLD_TO_EXPAND_DURATION_MS)
+    val holdToExpandDurationMsFlow: StateFlow<Int> = _holdToExpandDurationMsFlow.asStateFlow()
+
     private val _bubbleStyleFlow = MutableStateFlow(BubbleStyle.IPHONE)
     val bubbleStyleFlow: StateFlow<BubbleStyle> = _bubbleStyleFlow.asStateFlow()
 
@@ -263,6 +271,9 @@ object OverlayPreferences {
 
     private val _showExpandedAlbumArtFlow = MutableStateFlow(true)
     val showExpandedAlbumArtFlow: StateFlow<Boolean> = _showExpandedAlbumArtFlow.asStateFlow()
+
+    private val _albumArtGlowFlow = MutableStateFlow(false)
+    val albumArtGlowFlow: StateFlow<Boolean> = _albumArtGlowFlow.asStateFlow()
 
     private val _expandedPlayerLayoutFlow = MutableStateFlow(ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS)
     val expandedPlayerLayoutFlow: StateFlow<ExpandedPlayerLayout> = _expandedPlayerLayoutFlow.asStateFlow()
@@ -395,6 +406,7 @@ object OverlayPreferences {
     private var isTitlePrefInitialized = false
     private var isSongAnnouncementInitialized = false
     private var isTapToExpandInitialized = false
+    private var isHoldToExpandDurationInitialized = false
     private var isBubbleStyleInitialized = false
     private var isSmallerBubblesInitialized = false
     private var isMinimizedAlbumArtStyleInitialized = false
@@ -476,6 +488,8 @@ object OverlayPreferences {
         _expandedBackgroundOpacity.value = prefs.getFloat("expanded_background_opacity", 1f).coerceIn(0f, 1f)
         _backdropBlurEnabled.value = prefs.getBoolean("backdrop_blur_enabled", false)
         _backdropBlurRadius.value = prefs.getFloat("backdrop_blur_radius", 40f).coerceIn(5f, 120f)
+        isTapToExpandEnabled(context)
+        getHoldToExpandDurationMs(context)
     }
 
     fun setExpandedBackgroundOpacity(context: Context, value: Float) {
@@ -507,6 +521,7 @@ object OverlayPreferences {
         getMinimizedAlbumArtStyle(context)
         getExpandedAlbumArtStyle(context)
         isShowExpandedAlbumArtEnabled(context)
+        _albumArtGlowFlow.value = getPrefs(context).getBoolean(KEY_ALBUM_ART_GLOW, false)
         getExpandedPlayerLayout(context)
         isShowProgressSquigglesEnabled(context)
         isShowMinimizedVisualizerEnabled(context)
@@ -635,6 +650,24 @@ object OverlayPreferences {
         isTapToExpandInitialized = true
     }
 
+    fun getHoldToExpandDurationMs(context: Context): Int {
+        if (!isHoldToExpandDurationInitialized) {
+            val duration = getPrefs(context)
+                .getInt(KEY_HOLD_TO_EXPAND_DURATION_MS, DEFAULT_HOLD_TO_EXPAND_DURATION_MS)
+                .coerceIn(MIN_HOLD_TO_EXPAND_DURATION_MS, MAX_HOLD_TO_EXPAND_DURATION_MS)
+            _holdToExpandDurationMsFlow.value = duration
+            isHoldToExpandDurationInitialized = true
+        }
+        return _holdToExpandDurationMsFlow.value
+    }
+
+    fun setHoldToExpandDurationMs(context: Context, durationMs: Int) {
+        val clamped = durationMs.coerceIn(MIN_HOLD_TO_EXPAND_DURATION_MS, MAX_HOLD_TO_EXPAND_DURATION_MS)
+        getPrefs(context).edit().putInt(KEY_HOLD_TO_EXPAND_DURATION_MS, clamped).apply()
+        _holdToExpandDurationMsFlow.value = clamped
+        isHoldToExpandDurationInitialized = true
+    }
+
     fun isShowMinimizedTitleEnabled(context: Context): Boolean {
         if (!isTitlePrefInitialized) {
             val enabled = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_TITLE, false)
@@ -713,6 +746,11 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_ALBUM_ART, enabled).apply()
         _showExpandedAlbumArtFlow.value = enabled
         isShowExpandedAlbumArtInitialized = true
+    }
+
+    fun setAlbumArtGlowEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_ALBUM_ART_GLOW, enabled).apply()
+        _albumArtGlowFlow.value = enabled
     }
 
     fun getExpandedPlayerLayout(context: Context): ExpandedPlayerLayout {
