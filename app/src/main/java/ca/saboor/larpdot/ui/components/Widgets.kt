@@ -231,7 +231,7 @@ fun StatusPill(
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             color = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

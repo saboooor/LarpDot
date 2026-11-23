@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IslandStackTest {
+    @Test fun simultaneousStatusesUseDistinctSecondarySlotsAlongsideOtherProviders() {
+        fun status(key: String) = ca.saboor.larpdot.notification.NotificationActivityInfo(
+            key = key, packageName = "android", appName = "System", title = "Charging", text = null,
+            kind = ca.saboor.larpdot.notification.NotificationActivityKind.BATTERY_CHARGING,
+            progress = null, progressMax = null, progressIndeterminate = false,
+            chronometerBaseElapsedRealtime = null, chronometerCountsDown = false,
+            postedAtMillis = 1L, contentIntent = null, actions = emptyList(),
+        )
+        val charging = status("charging")
+        val bluetooth = status("bluetooth")
+        val sound = status("sound")
+        val stack = builtInIslandSlots(true, true, charging, listOf(charging, bluetooth, sound))
+        assertEquals(5, stack.ordered.size)
+        assertEquals(5, stack.ordered.map { it.content }.distinct().size)
+        assertEquals(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "charging"), stack.primary?.content)
+        assertTrue(stack.secondary.any { it.content == IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "bluetooth") })
+        assertTrue(stack.secondary.any { it.content == IslandSlot(IslandType.MEDIA) })
+        val after = builtInIslandSlots(true, true, bluetooth, listOf(bluetooth, sound))
+        assertFalse(after.ordered.any { it.content.activityKey == "charging" })
+    }
+
     @Test fun everyBuiltInCombinationKeepsEachActiveProviderExactlyOnce() {
         for (mask in 0..7) {
             val music = mask and 1 != 0

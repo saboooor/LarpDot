@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.ui.screens
 
+import androidx.compose.material3.FilterChip
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -86,7 +87,9 @@ fun FlashlightScreen(
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val context = LocalContext.current
+    LaunchedEffect(context) { OverlayPreferences.getFlashlightExpandedStyle(context) }
 
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isFlashlightAvailable by FlashlightController.isFlashlightAvailable.collectAsState()
@@ -167,6 +170,20 @@ fun FlashlightScreen(
 
         // 2. Master Controls Card
         if (selectedTabIndex == 1) item {
+            SectionHeader(title = "Expanded style")
+            LarpCard {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OverlayPreferences.FlashlightExpandedStyle.entries.forEach { style ->
+                        FilterChip(
+                            selected = expandedStyle == style,
+                            onClick = { OverlayPreferences.setFlashlightExpandedStyle(context, style) },
+                            label = { Text(style.label) },
+                        )
+                    }
+                }
+            }
+        }
+        if (selectedTabIndex == 1) item {
             SectionHeader(title = "Master Controls")
             LarpCard {
                 // Power Toggle Row
@@ -198,7 +215,7 @@ fun FlashlightScreen(
                             Text(
                                 text = "Flashlight Power",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
@@ -244,13 +261,13 @@ fun FlashlightScreen(
                                 Text(
                                     text = "Brightness Level",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                 )
                             }
                             Text(
                                 text = "${(torchStrength.toFloat() / standardMaximum.coerceAtLeast(1) * 100).roundToInt()}% ($torchStrength / $maxStrength)",
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -333,7 +350,7 @@ fun FlashlightScreen(
                             Text(
                                 text = "Show in Dynamic Island",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Morph pill into active torch when flashlight is on",
@@ -392,7 +409,7 @@ fun FlashlightScreen(
                         Text(
                             text = "Compact Pill Tap Action",
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         )
                     }
 

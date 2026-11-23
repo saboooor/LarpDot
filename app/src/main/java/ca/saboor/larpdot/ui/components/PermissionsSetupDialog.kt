@@ -126,7 +126,7 @@ fun PermissionsSetupDialog(
                 Text(
                     text = "App Setup",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                 )
             }
         },
@@ -241,7 +241,7 @@ private fun PermissionSetupCard(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                 }
 
@@ -266,7 +266,7 @@ private fun PermissionSetupCard(
                     Text(
                         text = if (isGranted) "Granted" else "Required",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         color = if (isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                     )
                 }

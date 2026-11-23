@@ -34,6 +34,10 @@ fun builtInIslandStack(
             // Navigation is specifically lower priority than music (150 vs 200) because music has both left and right info.
             // Activities without right-wing content are demoted to a dot (150) so two-sided media (200) can take over.
             val priority = when {
+                activityKind == NotificationActivityKind.BATTERY_CHARGING ||
+                activityKind == NotificationActivityKind.BATTERY_LOW ||
+                activityKind == NotificationActivityKind.SOUND_MODE ||
+                activityKind == NotificationActivityKind.BLUETOOTH -> 350
                 activityKind == NotificationActivityKind.NAVIGATION -> 150
                 activityHasRightWing -> 300
                 else -> 150
@@ -62,4 +66,26 @@ fun stackedPillWidthWithExtents(
 ): Float {
     val maxExtent = maxOf(leftExtent, rightExtent)
     return requested.coerceAtMost((availableWidth - 2f * maxExtent).coerceAtLeast(thickness))
+}
+
+/** Identity stays stable when an individual notification's content changes. */
+data class IslandSlot(val type: IslandType, val activityKey: String? = null) {
+    val activity get() = ca.saboor.larpdot.notification.NotificationActivityState.shortTermActivities.value
+        .firstOrNull { it.key == activityKey }
+        ?: ca.saboor.larpdot.notification.NotificationActivityState.current.value?.takeIf { it.key == activityKey }
+}
+
+fun builtInIslandSlots(
+    music: Boolean, flashlight: Boolean,
+    activity: ca.saboor.larpdot.notification.NotificationActivityInfo?,
+    shortTerms: List<ca.saboor.larpdot.notification.NotificationActivityInfo>,
+): IslandStack<IslandSlot> {
+    val base = builtInIslandStack(music, flashlight, activity != null,
+        hasCompactStatusContent(activity), activity?.kind)
+    return resolveIslandStack(base.ordered.map {
+        IslandCandidate(it.id, it.priority, IslandSlot(it.content,
+            if (it.content == IslandType.NOTIFICATION_ACTIVITY) activity?.key else null))
+    } + shortTerms.filter { it.key != activity?.key }.map {
+        IslandCandidate(it.key, 340, IslandSlot(IslandType.NOTIFICATION_ACTIVITY, it.key))
+    })
 }

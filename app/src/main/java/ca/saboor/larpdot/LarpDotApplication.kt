@@ -28,5 +28,6 @@ class LarpDotApplication : Application() {
         OverlayPreferences.getBlacklistedPackages(this)
         OverlayPreferences.getNotificationActivitySettings(this)
         FlashlightController.init(this)
+        ca.saboor.larpdot.service.SystemEventManager.init(this)
     }
 }

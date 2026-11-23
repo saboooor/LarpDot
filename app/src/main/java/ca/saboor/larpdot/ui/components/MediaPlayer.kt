@@ -197,7 +197,7 @@ fun MediaPlayer(
                                 Text(
                                     "This phone",
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                     color = Color.White
                                 )
                             }
@@ -221,7 +221,7 @@ fun MediaPlayer(
                         MarqueeText(
                             text = nowPlaying.title.ifEmpty { "No Media Playing" },
                             style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             ),
                             color = Color.White,
                         )

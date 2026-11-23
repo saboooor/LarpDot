@@ -30,6 +30,10 @@ enum class NotificationActivityKind {
     NAVIGATION,
     CALL,
     TIMER,
+    BATTERY_CHARGING,
+    BATTERY_LOW,
+    SOUND_MODE,
+    BLUETOOTH,
 }
 
 data class NotificationActivitySettings(
@@ -38,12 +42,25 @@ data class NotificationActivitySettings(
     val navigation: Boolean = true,
     val calls: Boolean = true,
     val timers: Boolean = true,
+    val batteryCharging: Boolean = true,
+    val batteryLow: Boolean = true,
+    val soundMode: Boolean = true,
+    val bluetooth: Boolean = true,
+    val permanentShortTerm: Boolean = false,
+    val permanentCharging: Boolean = permanentShortTerm,
+    val permanentLowBattery: Boolean = permanentShortTerm,
+    val permanentSoundMode: Boolean = permanentShortTerm,
+    val permanentBluetooth: Boolean = permanentShortTerm,
 ) {
     fun allows(kind: NotificationActivityKind): Boolean = enabled && when (kind) {
         NotificationActivityKind.PROGRESS -> progress
         NotificationActivityKind.NAVIGATION -> navigation
         NotificationActivityKind.CALL -> calls
         NotificationActivityKind.TIMER -> timers
+        NotificationActivityKind.BATTERY_CHARGING -> batteryCharging
+        NotificationActivityKind.BATTERY_LOW -> batteryLow
+        NotificationActivityKind.SOUND_MODE -> soundMode
+        NotificationActivityKind.BLUETOOTH -> bluetooth
     }
 }
 
@@ -68,6 +85,9 @@ data class NotificationActivityInfo(
     val contentIntent: PendingIntent?,
     val actions: List<NotificationActivityAction>,
     val appIcon: Bitmap? = null,
+    val concurrentStatuses: List<String> = emptyList(),
+    val bluetoothDeviceType: String? = null,
+    val bluetoothBatteryPercent: Int? = null,
 ) {
     val progressFraction: Float?
         get() = if (progress != null && progressMax != null && progressMax > 0) {
@@ -89,6 +109,9 @@ object NotificationActivityState {
 
     private val _current = MutableStateFlow<NotificationActivityInfo?>(null)
     val current: StateFlow<NotificationActivityInfo?> = _current.asStateFlow()
+
+    private val _shortTermActivities = MutableStateFlow<List<NotificationActivityInfo>>(emptyList())
+    val shortTermActivities = _shortTermActivities.asStateFlow()
 
     private var settings: NotificationActivitySettings = NotificationActivitySettings()
     private val scope = CoroutineScope(Dispatchers.Default + Job())
@@ -168,6 +191,7 @@ object NotificationActivityState {
         synchronized(lock) {
             activities.clear()
             _current.value = null
+            _shortTermActivities.value = emptyList()
         }
     }
 
@@ -227,18 +251,44 @@ object NotificationActivityState {
         runCatching { pendingIntent.send() }
     }
 
+    fun postSystemActivity(info: NotificationActivityInfo) {
+        synchronized(lock) {
+            activities[info.key] = info
+            publishBestLocked()
+        }
+    }
+
+    fun updateBluetoothBattery(key: String, batteryPercent: Int?) {
+        synchronized(lock) {
+            val current = activities[key] ?: return
+            if (current.kind != NotificationActivityKind.BLUETOOTH) return
+            activities[key] = current.copy(bluetoothBatteryPercent = batteryPercent)
+            publishBestLocked()
+        }
+    }
+
+    fun removeSystemActivity(key: String) = remove(key)
+
     private fun publishBestLocked() {
-        _current.value = activities.values.asSequence()
+        val eligible = activities.values.filter { settings.allows(it.kind) && !isPackageBlacklisted(it.packageName) }
+        val shortTerm = eligible.filter { it.packageName == "android" && it.key.startsWith("system_") }
+        val best = activities.values.asSequence()
             .filter { settings.allows(it.kind) }
             .filter { !isPackageBlacklisted(it.packageName) }
             .maxWithOrNull(
             compareBy<NotificationActivityInfo> { priority(it.kind) }
                 .thenBy { it.postedAtMillis },
             )
+        _shortTermActivities.value = shortTerm.sortedBy { it.key }
+        _current.value = best
     }
 
     private fun priority(kind: NotificationActivityKind): Int = when (kind) {
-        NotificationActivityKind.CALL -> 4
+        NotificationActivityKind.CALL -> 6
+        NotificationActivityKind.BATTERY_LOW -> 5
+        NotificationActivityKind.BATTERY_CHARGING -> 5
+        NotificationActivityKind.SOUND_MODE -> 4
+        NotificationActivityKind.BLUETOOTH -> 4
         NotificationActivityKind.NAVIGATION -> 3
         NotificationActivityKind.TIMER -> 2
         NotificationActivityKind.PROGRESS -> 1

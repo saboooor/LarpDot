@@ -1,5 +1,11 @@
 package ca.saboor.larpdot.ui.overlay
 
+import ca.saboor.larpdot.service.OverlayPreferences
+import androidx.compose.material3.Slider
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import android.os.Build
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -68,6 +74,15 @@ val FlashlightWhite = Color.White
 val FlashlightWhiteLight = Color.White
 val FlashlightWhiteDim = Color(0xB3FFFFFF)
 
+@Composable
+internal fun flashlightAccentColor(): Color {
+    val context = LocalContext.current
+    return remember(context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicDarkColorScheme(context).primary
+        else Color(0xFFF2B8B5)
+    }
+}
+
 val FlashlightAmber = Color(0xFFFFB300)
 val FlashlightAmberLight = Color(0xFFFFD54F)
 val FlashlightAmberDark = Color(0xFFFF8F00)
@@ -106,6 +121,7 @@ fun CompactFlashlightContent(
     isLandscape: Boolean = false,
     status: String = rememberCompactFlashlightStatus(),
 ) {
+    val accentColor = flashlightAccentColor()
     val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.65f,
@@ -121,7 +137,7 @@ fun CompactFlashlightContent(
         Icon(
             imageVector = Icons.Default.FlashlightOn,
             contentDescription = "Flashlight Active",
-            tint = Color.White.copy(alpha = pulseAlpha),
+            tint = accentColor.copy(alpha = pulseAlpha),
             modifier = Modifier.size(18.dp),
         )
     }
@@ -132,9 +148,9 @@ fun CompactFlashlightContent(
     val summary = @Composable {
         Text(
             text = formattedStatus,
-            color = Color.White,
+            color = accentColor,
             fontSize = if (isPercentage) 10.5.sp else 11.5.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Visible,
@@ -152,8 +168,8 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 2.dp),
-                contentAlignment = Alignment.TopCenter,
+                    .padding(vertical = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 icon()
             }
@@ -162,15 +178,15 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = 8.dp),
-                contentAlignment = Alignment.BottomCenter,
+                    .padding(vertical = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 if (status.isNotEmpty()) {
                     Text(
                         text = formattedStatus,
-                        color = Color.White,
+                        color = accentColor,
                         fontSize = if (isPercentage) 9.5.sp else 10.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Visible,
@@ -190,8 +206,8 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 10.dp, end = 4.dp),
-                contentAlignment = Alignment.CenterStart,
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 icon()
             }
@@ -200,8 +216,8 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 4.dp, end = 10.dp),
-                contentAlignment = Alignment.CenterEnd,
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 if (status.isNotEmpty()) {
                     summary()
@@ -243,14 +259,37 @@ fun ExpandedFlashlightContent(
     val currentIsFlashlightOn by rememberUpdatedState(isFlashlightOn)
 
     // Dynamic Material You system accent colors
-    val accentColor = remember(context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            dynamicDarkColorScheme(context).primary
-        } else {
-            Color(0xFFF2B8B5)
-        }
-    }
+    val accentColor = flashlightAccentColor()
 
+    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
+    if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
+        Row(
+            modifier = modifier.fillMaxSize().padding(
+                start = 16.dp, end = 16.dp,
+                top = maxOf(cutoutDiameterDp, topContentInset) + 8.dp, bottom = 8.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconButton(onClick = { FlashlightController.toggleFlashlight() }, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
+                    contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
+                    tint = if (isFlashlightOn) accentColor else Color.Gray,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            Slider(
+                modifier = Modifier.weight(1f),
+                value = torchStrength.toFloat().coerceIn(1f, maxStrength.coerceAtLeast(2).toFloat()),
+                onValueChange = { FlashlightController.setStrength(it.roundToInt().coerceIn(1, maxStrength.coerceAtLeast(1))) },
+                onValueChangeFinished = { FlashlightController.flushStrength(FlashlightController.torchStrength.value) },
+                valueRange = 1f..maxStrength.coerceAtLeast(2).toFloat(),
+                enabled = isFlashlightOn && maxStrength > 1,
+            )
+        }
+        return
+    }
     // Whether user is actively dragging the slider
     var isDragging by remember { mutableStateOf(false) }
 
@@ -370,6 +409,32 @@ fun ExpandedFlashlightContent(
                 }
 
                 if (isFlashlightOn && onOffProgress > 0.02f) {
+                    if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.BLURRED_BEAM) {
+                        // Approximate a Gaussian blur in horizontal bands: the light is sharp
+                        // at its source and diffuses progressively toward the wide end.
+                        val beamHeight = (beamOriginY - currentSliderY).coerceAtLeast(1f)
+                        val bands = 24
+                        for (band in 0 until bands) {
+                            val progress = (band + 0.5f) / bands
+                            val radius = 16.dp.toPx() * (1f - progress) * (1f - progress)
+                            clipRect(top = currentSliderY + beamHeight * band / bands,
+                                bottom = currentSliderY + beamHeight * (band + 1) / bands + 0.5f) {
+                                for (sample in -6..6) {
+                                    val weight = kotlin.math.exp(-sample * sample / 8f) / 5.008f
+                                    translate(left = sample * radius / 3f) {
+                                        drawPath(
+                                            path = beamPath,
+                                            brush = Brush.verticalGradient(
+                                                listOf(accentColor.copy(alpha = 0.85f * onOffProgress * weight),
+                                                    accentColor.copy(alpha = 0.12f * onOffProgress * weight)),
+                                                startY = currentSliderY, endY = beamOriginY,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
                     drawPath(
                         path = beamPath,
                         brush = Brush.verticalGradient(
@@ -382,6 +447,7 @@ fun ExpandedFlashlightContent(
                             endY = beamOriginY,
                         ),
                     )
+                    }
                 } else {
                     // Subtle translucent guide when unlit
                     drawPath(

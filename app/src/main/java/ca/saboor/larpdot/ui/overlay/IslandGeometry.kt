@@ -51,7 +51,7 @@ fun islandPanelPlacement(
 internal fun islandBackgroundAlpha(expandedOpacity: Float, expansion: Float): Float =
     1f + (expandedOpacity.coerceIn(0f, 1f) - 1f) * expansion.coerceIn(0f, 1f)
 
-/** Fit around the physical camera, transferring wing space when it is off-center. */
+/** Limit each wing independently to its available space around the physical camera. */
 internal fun fitCompactMediaWings(
     requested: CompactMediaWings,
     diameter: Float,
@@ -63,11 +63,11 @@ internal fun fitCompactMediaWings(
 ): CompactMediaWings {
     val leadingRoom = (cameraX - diameter / 2f - beforeExtent).coerceAtLeast(0f)
     val trailingRoom = (screenWidth - cameraX - diameter / 2f - afterExtent).coerceAtLeast(0f)
-    val maxExtra = (screenWidth * maxWidthPercent.coerceIn(40f, 100f) / 100f - diameter).coerceAtLeast(0f)
-    val total = minOf(requested.widthDp, maxExtra, leadingRoom + trailingRoom)
-    val leading = (total * (1f - requested.trailingFraction))
-        .coerceIn((total - trailingRoom).coerceAtLeast(0f), minOf(total, leadingRoom))
-    return CompactMediaWings(leading, total - leading)
+    val fraction = maxWidthPercent.coerceIn(40f, 100f) / 100f
+    return CompactMediaWings(
+        minOf(requested.leadingDp, leadingRoom * fraction),
+        minOf(requested.trailingDp, trailingRoom * fraction),
+    )
 }
 
 /** Natural content widths, before applying the user's upper limit. */

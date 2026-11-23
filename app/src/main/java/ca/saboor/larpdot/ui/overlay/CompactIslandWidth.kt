@@ -40,7 +40,7 @@ internal fun configuredCompactMediaWings(
     fun textWidth(text: String, title: Boolean): Float {
         val textStyle = if (announcing) labelStyle.copy(
             fontSize = 11.5.sp,
-            fontWeight = if (title) FontWeight.SemiBold else labelStyle.fontWeight,
+            fontWeight = labelStyle.fontWeight,
         ) else labelStyle
         return textMeasurer.measure(
             AnnotatedString(text), style = textStyle, softWrap = false, maxLines = 1,

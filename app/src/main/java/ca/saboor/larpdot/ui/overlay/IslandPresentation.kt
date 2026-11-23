@@ -19,7 +19,6 @@ data class IslandPresentation(
     val expandedOutline: Boolean = false,
     val compactExtra: Dp = 0.dp,
     val landscapeExtra: Dp = compactExtra,
-    val hideTrackWhenOutlineDisabled: Boolean = false,
 ) {
     fun width(diameter: Dp, thickness: Dp, landscape: Boolean, mediaWingWidth: Dp? = null): Dp =
         if (landscape) thickness else diameter + (mediaWingWidth ?: compactExtra)
@@ -44,8 +43,9 @@ internal fun rememberIslandPresentations(
     val expandedMediaOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val compactFlashOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
     val expandedFlashOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
-    val activityExtra = rememberCompactStatusExtraDp(activityStatus)
-    val flashlightExtra = rememberCompactStatusExtraDp(flashlightStatus)
+    val maxActivityExtra = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp - thickness - 32.dp).coerceAtLeast(56.dp)
+    val activityExtra = (if (activityStatus.isNullOrEmpty()) 56.dp else rememberCompactStatusExtraDp(activityStatus)).coerceAtMost(maxActivityExtra)
+    val flashlightExtra = rememberCompactStatusExtraDp(flashlightStatus).coerceAtLeast(56.dp)
     return mapOf(
         IslandType.MEDIA to run {
             val base = when (artStyle) {
@@ -64,8 +64,8 @@ internal fun rememberIslandPresentations(
                 landscapeExtra = maxOf(base, if (announcing) 140.dp else 0.dp),
             )
         },
-        IslandType.FLASHLIGHT to IslandPresentation(flashlightStatus, Color.White, flashlightProgress,
-            compactFlashOutline, expandedFlashOutline, flashlightExtra, hideTrackWhenOutlineDisabled = true),
+        IslandType.FLASHLIGHT to IslandPresentation(flashlightStatus, flashlightAccentColor(), flashlightProgress,
+            compactFlashOutline, expandedFlashOutline, flashlightExtra),
         IslandType.NOTIFICATION_ACTIVITY to IslandPresentation(status = activityStatus.orEmpty(), compactExtra = activityExtra),
     )
 }

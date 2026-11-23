@@ -40,6 +40,8 @@ import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.IslandSurfaceOverlay
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
+import ca.saboor.larpdot.ui.overlay.IslandSlot
+import ca.saboor.larpdot.ui.overlay.builtInIslandSlots
 import ca.saboor.larpdot.ui.overlay.IslandStack
 import ca.saboor.larpdot.ui.overlay.builtInIslandStack
 import ca.saboor.larpdot.ui.overlay.hasCompactStatusContent
@@ -116,11 +118,12 @@ class IslandOverlayViewController(
     private var isSelectedDotFallbackHidden by mutableStateOf(false)
     private var compactPressScale by mutableFloatStateOf(1f)
     private var compactStretch by mutableFloatStateOf(0f)
+    private var selectedSlot by mutableStateOf<IslandSlot?>(null)
     private var compactSurfaceBounds by mutableStateOf<Rect?>(null)
-    private val secondarySurfaceBounds = mutableStateMapOf<IslandType, Rect>()
-    private val secondarySurfaceScales = mutableStateMapOf<IslandType, Float>()
-    private val secondarySurfaceStretches = mutableStateMapOf<IslandType, Float>()
-    private val secondarySurfaceAlphas = mutableStateMapOf<IslandType, Float>()
+    private val secondarySurfaceBounds = mutableStateMapOf<IslandSlot, Rect>()
+    private val secondarySurfaceScales = mutableStateMapOf<IslandSlot, Float>()
+    private val secondarySurfaceStretches = mutableStateMapOf<IslandSlot, Float>()
+    private val secondarySurfaceAlphas = mutableStateMapOf<IslandSlot, Float>()
     private var expansionSourceBounds by mutableStateOf<Rect?>(null)
     private var isExpandedFromTinyDot by mutableStateOf(false)
     private var expansionPrimaryType by mutableStateOf(IslandType.MEDIA)
@@ -128,12 +131,11 @@ class IslandOverlayViewController(
     private var expansionDotCount by mutableStateOf(0)
 
 
-    private fun currentStack(): IslandStack<IslandType> = builtInIslandStack(
+    private fun currentStack(): IslandStack<IslandSlot> = builtInIslandSlots(
         music = isMusicActive && MediaPlaybackState.currentTrack.value.hasMedia && !ForegroundAppTracker.shouldHideMedia.value,
         flashlight = isFlashlightActive && OverlayPreferences.showFlashlightIslandFlow.value,
-        activity = isNotificationActivityActive && NotificationActivityState.current.value != null,
-        activityHasRightWing = hasCompactStatusContent(NotificationActivityState.current.value),
-        activityKind = NotificationActivityState.current.value?.kind,
+        activity = NotificationActivityState.current.value,
+        shortTerms = NotificationActivityState.shortTermActivities.value,
     )
 
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
@@ -214,16 +216,15 @@ class IslandOverlayViewController(
                     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
                     val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
                     val activeCutout = currentCutoutInfo ?: cutout
-                    val currentActivity by NotificationActivityState.current.collectAsState()
+                    val primaryActivity by NotificationActivityState.current.collectAsState()
+                    val shortTermActivities by NotificationActivityState.shortTermActivities.collectAsState()
+                    val currentActivity = primaryActivity
                     val activeExpandedType by expandedType.collectAsState()
-                    val stack = builtInIslandStack(
-                        music = mediaTrack.hasMedia && isMusicActiveNow && !hideMedia,
-                        flashlight = isFlashlightOn && showFlashlightIsland,
-                        activity = currentActivity != null,
-                        activityHasRightWing = hasCompactStatusContent(currentActivity),
-                        activityKind = currentActivity?.kind,
+                    val stack = builtInIslandSlots(
+                        mediaTrack.hasMedia && isMusicActiveNow && !hideMedia,
+                        isFlashlightOn && showFlashlightIsland, primaryActivity, shortTermActivities,
                     )
-                    val compactType = stack.primary?.content
+                    val compactType = stack.primary?.content?.type
                     val secondaryTypes = stack.secondary.map { it.content }
                     val surfaceType = if ((isIslandExpanded || isOverlayMorphing) && !isExpandedFromTinyDot) {
                         activeExpandedType
@@ -262,7 +263,8 @@ class IslandOverlayViewController(
                             },
                             fromTinyDot = isExpandedFromTinyDot,
                             expandedStackType = activeExpandedType,
-                            onExpand = { type, fromTiny, bounds -> expandOverlay(type, fromTiny, bounds) },
+                            onSelectSecondary = { selectedSlot = it },
+                            onExpand = { type, fromTiny, bounds -> if (!fromTiny) selectedSlot = null; expandOverlay(type, fromTiny, bounds) },
                             onCompactBoundsChanged = { bounds ->
                                 if (compactSurfaceBounds != bounds) {
                                     compactSurfaceBounds = bounds
@@ -309,7 +311,7 @@ class IslandOverlayViewController(
                             stackDotIndex = expansionDotIndex,
                             stackDotCount = expansionDotCount,
                             fromTinyDot = false,
-                            hasBubbleBefore = secondaryTypes.size == 2,
+                            hasBubbleBefore = secondaryTypes.size >= 2,
                             hasBubbleAfter = secondaryTypes.isNotEmpty(),
                             isExpanded = isIslandExpanded && !isExpandedFromTinyDot,
                             isCompactVisible = compactType != null && compactSurfaceBounds != null,
@@ -326,23 +328,23 @@ class IslandOverlayViewController(
                             compactPressScale = compactPressScale,
                             compactStretch = compactStretch,
                         )
-                        val dotSurfaces = buildList {
+                        val dotSurfaces = buildList<IslandSlot> {
                             addAll(secondaryTypes)
                             if (isExpandedFromTinyDot && (isIslandExpanded || isOverlayMorphing) &&
-                                activeExpandedType !in this
-                            ) add(activeExpandedType)
+                                selectedSlot !in this
+                            ) selectedSlot?.let { add(it) }
                         }
                         dotSurfaces.forEach { type ->
                             key(type) {
-                                val selected = isExpandedFromTinyDot && activeExpandedType == type
+                                val selected = isExpandedFromTinyDot && selectedSlot == type
                                 val bounds = secondarySurfaceBounds[type]
                                 IslandSurfaceOverlay(
                                     modifier = Modifier.zIndex(2f),
                                     cutoutInfo = activeCutout,
                                     mediaInfo = mediaTrack,
-                                    notificationActivity = currentActivity,
+                                    notificationActivity = type.activity ?: currentActivity,
                                     isFlashlightOn = isFlashlightOn && showFlashlightIsland,
-                                    expandedType = type,
+                                    expandedType = type.type,
                                     stackPrimaryType = expansionPrimaryType,
                                     stackDotIndex = expansionDotIndex,
                                     stackDotCount = expansionDotCount,
@@ -350,10 +352,10 @@ class IslandOverlayViewController(
                                     isSecondarySurface = true,
                                     hasBubbleBefore = if (selected) {
                                         !(expansionDotCount == 2 && expansionDotIndex == 0)
-                                    } else !(secondaryTypes.size == 2 && secondaryTypes.firstOrNull() == type),
+                                    } else !(secondaryTypes.size >= 2 && secondaryTypes.firstOrNull() == type),
                                     hasBubbleAfter = if (selected) {
                                         expansionDotCount == 2 && expansionDotIndex == 0
-                                    } else secondaryTypes.size == 2 && secondaryTypes.firstOrNull() == type,
+                                    } else secondaryTypes.size >= 2 && secondaryTypes.firstOrNull() == type,
                                     isExpanded = isIslandExpanded && selected,
                                     isCompactVisible = type in secondaryTypes && bounds != null && !isCompactSurfaceHidden,
                                     compactOpacity = secondarySurfaceAlphas[type] ?: 1f,
@@ -431,9 +433,9 @@ class IslandOverlayViewController(
         isSongAnnouncementActive = false
 
         val stack = currentStack()
-        expansionPrimaryType = stack.primary?.content ?: type
+        expansionPrimaryType = stack.primary?.content?.type ?: type
         expansionDotCount = stack.secondary.size
-        val dotIdx = stack.secondary.indexOfFirst { it.content == type }
+        val dotIdx = stack.secondary.indexOfFirst { it.content == selectedSlot }
         expansionDotIndex = if (dotIdx >= 0) dotIdx else 0
 
         _expandedType.value = type

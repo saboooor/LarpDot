@@ -5,6 +5,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,13 +76,16 @@ import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.FlashlightAmber
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     cutoutInfo: CutoutInfo,
     isEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
+    val fontWeight by OverlayPreferences.islandFontWeightFlow.collectAsState()
+    val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
     val context = LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val density = LocalDensity.current
@@ -131,6 +138,97 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Camera Cutout Information & Manual Alignment Card
+            item {
+                SectionHeader(title = "Expanded Cutout")
+                LarpCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Camera Cover",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                        )
+                        Text(
+                            text = cameraCoverStyle.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            OverlayPreferences.CameraCoverStyle.entries.forEach { style ->
+                                toggleableItem(
+                                    checked = cameraCoverStyle == style,
+                                    label = style.label,
+                                    onCheckedChange = { OverlayPreferences.setCameraCoverStyle(context, style) },
+                                    weight = 1f,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        item {
+            SectionHeader(title = "Typography")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FormatSize,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Column {
+                                Text(
+                                    text = "Island Font Style",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                                )
+                                Text(
+                                    text = "Font family applied to island tracks, artists, and live notifications",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OverlayPreferences.IslandFontStyle.entries.forEach { style ->
+                                FilterChip(
+                                    selected = islandFontStyle == style,
+                                    onClick = { OverlayPreferences.setIslandFontStyle(context, style) },
+                                    label = {
+                                        Text(
+                                            text = style.label,
+                                            fontFamily = style.fontFamily,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        Text("Font weight: $fontWeight")
+                        Slider(
+                            value = fontWeight.toFloat(),
+                            onValueChange = { OverlayPreferences.setIslandFontWeight(context, (it / 100).roundToInt() * 100) },
+                            valueRange = 100f..900f,
+                            steps = 7,
+                        )
+                    }
+                }
+            }
         item {
             SectionHeader(title = "Cutout Alignment")
             CutoutAlignmentCard(
@@ -197,16 +295,16 @@ fun HomeScreen(
             LarpCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CutoutSliderRow(
-                        label = "Maximum minimized width", value = minimizedMaxWidth,
+                        label = "Maximum minimized side width", value = minimizedMaxWidth,
                         valueRange = 40f..100f, unit = "%",
                         onValueChange = { OverlayPreferences.setMinimizedMaxWidthPercent(context, it) },
                         onNudge = { OverlayPreferences.setMinimizedMaxWidthPercent(context, minimizedMaxWidth + it) },
                     )
-                    Text("100% lets music titles and announcements span the status bar. Space is reserved for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
+                    Text("Limits each side independently. 100% allows each side to reach its screen edge, reserving space for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
                     Text(
                         text = "Bubble Style",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = "Shape of the island and nearby bubbles",
@@ -250,7 +348,7 @@ fun HomeScreen(
                             Text(
                                 text = "Smaller Bubbles",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Reduce secondary bubble thickness by 20%",
@@ -287,7 +385,7 @@ fun HomeScreen(
                             Text(
                                 text = "Tap to Expand",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Tap expands island, hold-tap opens player",
@@ -328,7 +426,7 @@ fun HomeScreen(
                             Text(
                                 text = "Hide When Phone Is Off",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Dismiss the island overlay whenever the screen turns off",
@@ -369,7 +467,7 @@ fun HomeScreen(
                             Text(
                                 text = "Hide on Lock Screen",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Dismiss the island overlay while the device is locked",
@@ -410,7 +508,7 @@ fun HomeScreen(
                             Text(
                                 text = "Show Right Side Info on Dots",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Show info alongside icons on secondary dots, making them mini pills",
@@ -454,7 +552,7 @@ fun HomeScreen(
                             Text(
                                 text = "App Blacklist",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             val count = blacklistedPackages.size
                             val statusText = if (!appBlacklistEnabled) {
@@ -519,7 +617,7 @@ private fun CutoutAlignmentCard(
                     Text(
                         text = "Manual Alignment",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = if (config.isManualEnabled) {
@@ -558,7 +656,7 @@ private fun CutoutAlignmentCard(
                 text = "X: ${cutoutInfo.centerX.toInt()} • Y: ${cutoutInfo.centerY.toInt()} px",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 
@@ -586,7 +684,7 @@ private fun CutoutAlignmentCard(
                     Text(
                         text = "Debug Mode",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = "Show green cutout alignment dot when idle",
@@ -703,13 +801,13 @@ private fun CutoutSliderRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
             Text(
                 text = "${value.roundToInt()} $unit",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 

@@ -190,7 +190,7 @@ fun AppBlacklistScreen(
                     Text(
                         text = "App Blacklist",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = if (blacklistedPackages.isEmpty()) {
@@ -237,7 +237,7 @@ fun AppBlacklistScreen(
                         Text(
                             text = "Enable App Blacklist",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         )
                         Text(
                             text = "Ignore media playback and notifications from selected apps so they never appear on the dynamic island",
@@ -365,7 +365,7 @@ fun AppBlacklistScreen(
                             "No apps found"
                         },
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
@@ -432,7 +432,7 @@ fun AppBlacklistScreen(
                                 Text(
                                     text = app.label,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )

@@ -96,6 +96,7 @@ fun ExpandedIslandPreview(
     val showProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val isAnnouncing = isSongAnnouncement && showSongAnnouncement
@@ -122,6 +123,8 @@ fun ExpandedIslandPreview(
     // Always display realistic media so styles, shapes, blur, and waveforms are immediately visible
     val previewTrack = if (nowPlaying.hasMedia) nowPlaying else sampleTrack
     val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
+    val pulseAmount by OverlayPreferences.pulseAmountFlow.collectAsState()
+    val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     val isBpmResolved by BpmDetector.isResolved.collectAsState()
     val bpmPulseState = rememberBpmPulse(
@@ -144,13 +147,15 @@ fun ExpandedIslandPreview(
         else -> 60.dp
     }
     val announcementExtraDp = if (isAnnouncing) {
-        remember(previewTrack.title, previewTrack.artist, cutoutDiameterDp, minimizedStyle, density.density) {
+        remember(previewTrack.title, previewTrack.artist, cutoutDiameterDp, minimizedStyle, density.density, showMinimizedVisualizer, islandFontStyle) {
             calculateAnnouncementExtraDp(
                 title = previewTrack.title,
                 artist = previewTrack.artist,
                 cutoutDiameterDp = cutoutDiameterDp.value,
                 albumArtStyle = minimizedStyle,
                 density = density.density,
+                showVisualizer = showMinimizedVisualizer,
+                fontStyle = islandFontStyle,
             ).dp
         }
     } else 0.dp
@@ -268,7 +273,7 @@ fun ExpandedIslandPreview(
                         .width(animatedCompactWidth)
                         .height(compactPillThickness)
                         .graphicsLayer {
-                            val pulse = bpmPulseState.value
+                            val pulse = bpmPulseState.value * pulseAmount
                             if (pulseEntireIsland && previewTrack.isPlaying && pulse > 0f) {
                                 val scale = 1f + (0.035f * pulse)
                                 scaleX = scale
@@ -298,8 +303,11 @@ fun ExpandedIslandPreview(
                             cutoutDiameterDp = cutoutDiameterDp,
                             onExpand = {},
                             albumArtStyle = minimizedStyle,
+                            showVisualizer = showMinimizedVisualizer,
                             waveformBandCount = waveformBandCount,
                             isSongAnnouncement = isAnnouncing,
+                            pulseAmount = pulseAmount,
+                            fontStyle = islandFontStyle,
                         )
                         // Hardware camera cutout visualizer centered between wings
                         Box(
@@ -322,7 +330,7 @@ fun ExpandedIslandPreview(
                     .align(Alignment.CenterHorizontally)
                     .height(previewHeight)
                     .graphicsLayer {
-                        val pulse = bpmPulseState.value
+                        val pulse = bpmPulseState.value * pulseAmount
                         if (pulseEntireIsland && previewTrack.isPlaying && pulse > 0f) {
                             val scale = 1f + (0.02f * pulse)
                             scaleX = scale
@@ -355,6 +363,8 @@ fun ExpandedIslandPreview(
                         cutoutInfo = cutoutInfo,
                         cardHorizontalMarginDp = previewHorizontalMarginDp,
                         waveformBandCount = waveformBandCount,
+                        pulseAmount = pulseAmount,
+                        fontStyle = islandFontStyle,
                     )
 
                     // Hardware camera cutout punch hole positioned accurately over the organic scoop shader

@@ -1,5 +1,15 @@
 package ca.saboor.larpdot.ui.overlay
 
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.DpSize
+
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -20,11 +30,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothConnected
+import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -50,10 +69,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
@@ -63,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
+import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.delay
 import kotlin.math.absoluteValue
 
@@ -75,7 +93,7 @@ private val DOWNLOAD_KEYWORDS_REGEX = Regex(
  * Checks whether an activity is certainly a download rather than a generic progress notification.
  * If true, the download icon is shown. If false, the app icon is displayed instead.
  */
-fun isCertainDownload(activity: NotificationActivityInfo): Boolean {
+internal fun isCertainDownload(activity: NotificationActivityInfo): Boolean {
     if (activity.kind != NotificationActivityKind.PROGRESS) return false
 
     val pkg = activity.packageName.lowercase()
@@ -130,6 +148,45 @@ fun ActivityIcon(
                 imageVector = Icons.Default.Navigation,
                 contentDescription = activity.appName,
                 tint = activityIconTint(activity.kind, primaryColor),
+                modifier = iconModifier,
+            )
+        }
+        NotificationActivityKind.BATTERY_CHARGING -> {
+            Icon(
+                imageVector = Icons.Default.BatteryChargingFull,
+                contentDescription = activity.appName,
+                tint = Color(0xFF4CAF50),
+                modifier = iconModifier,
+            )
+        }
+        NotificationActivityKind.BATTERY_LOW -> {
+            Icon(
+                imageVector = Icons.Default.BatteryAlert,
+                contentDescription = activity.appName,
+                tint = Color(0xFFFF5252),
+                modifier = iconModifier,
+            )
+        }
+        NotificationActivityKind.SOUND_MODE -> {
+            val icon = activityIcon(activity)
+            val tint = when {
+                activity.title.contains("Silent", ignoreCase = true) -> Color(0xFFFF5252)
+                activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
+                else -> Color(0xFF4CAF50)
+            }
+            Icon(
+                imageVector = icon,
+                contentDescription = activity.appName,
+                tint = tint,
+                modifier = iconModifier,
+            )
+        }
+        NotificationActivityKind.BLUETOOTH -> {
+            val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+            Icon(
+                imageVector = if (isDisconnected) Icons.Default.BluetoothDisabled else Icons.Default.BluetoothConnected,
+                contentDescription = activity.appName,
+                tint = if (isDisconnected) Color.White.copy(alpha = 0.6f) else Color(0xFF29B6F6),
                 modifier = iconModifier,
             )
         }
@@ -206,8 +263,8 @@ fun formatCompactStatus(status: String): AnnotatedString {
  * The extra width is split symmetrically into left and right wings around the central punch hole.
  */
 fun calculateActivityCompactExtraDp(statusTextWidthDp: Float): Float {
-    val minWingWidthDp = 40f
-    val wingPaddingDp = 18f
+    val minWingWidthDp = 28f
+    val wingPaddingDp = 6f
     val requiredWingWidthDp = if (statusTextWidthDp <= 0f) {
         minWingWidthDp
     } else {
@@ -236,13 +293,13 @@ fun rememberCompactStatusExtraDp(
         status.map { if (it.isDigit()) '0' else it }.joinToString("")
     }
 
-    val measuredTextWidthDp = remember(normalizedStatus, density) {
+    val configuredStyle = MaterialTheme.typography.labelSmall
+    val measuredTextWidthDp = remember(normalizedStatus, density, configuredStyle) {
         val formatted = formatCompactStatus(normalizedStatus)
         val result = textMeasurer.measure(
             text = formatted,
-            style = TextStyle(
+            style = configuredStyle.copy(
                 fontSize = if (normalizedStatus.contains('%')) 10.5.sp else 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
             ),
             softWrap = false,
         )
@@ -266,10 +323,12 @@ fun rememberActivityCompactExtraDp(
 internal fun CompactNotificationActivityContent(
     activity: NotificationActivityInfo,
     cutoutDiameterDp: Dp,
-    isLandscape: Boolean = false,
-    status: String = rememberCompactActivityStatus(activity),
     modifier: Modifier = Modifier,
+    isLandscape: Boolean = false,
 ) {
+    val status = rememberCompactActivityStatus(activity)
+    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
+
     val icon = @Composable {
         ActivityIcon(
             activity = activity,
@@ -282,10 +341,12 @@ internal fun CompactNotificationActivityContent(
 
     val summary = @Composable {
         Text(
+            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
             text = formattedStatus,
             color = Color.White,
             fontSize = if (isPercentage) 10.5.sp else 11.5.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+            fontFamily = fontStyle.fontFamily,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Visible,
@@ -305,8 +366,8 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 2.dp),
-                contentAlignment = Alignment.TopCenter,
+                    .padding(vertical = 5.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 icon()
             }
@@ -315,7 +376,7 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = 8.dp),
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 if (status.isNotEmpty()) {
@@ -323,7 +384,8 @@ internal fun CompactNotificationActivityContent(
                         text = formattedStatus,
                         color = Color.White,
                         fontSize = if (isPercentage) 9.5.sp else 10.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+                        fontFamily = fontStyle.fontFamily,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Visible,
@@ -341,8 +403,8 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 10.dp, end = 4.dp),
-                contentAlignment = Alignment.CenterStart,
+                    .padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 icon()
             }
@@ -351,7 +413,7 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 4.dp, end = 10.dp),
+                    .padding(horizontal = 2.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 if (status.isNotEmpty()) {
@@ -362,6 +424,60 @@ internal fun CompactNotificationActivityContent(
     }
 }
 
+internal fun activitySubtitle(activity: NotificationActivityInfo): String = listOfNotNull(
+    activity.text?.takeIf { it.isNotBlank() } ?: activity.appName,
+    if (activity.kind == NotificationActivityKind.BLUETOOTH)
+        activity.bluetoothBatteryPercent?.let { "Battery: $it%" } ?: "Battery unavailable" else null,
+).joinToString(" • ")
+
+@Composable
+internal fun activityTextStyle(title: Boolean): TextStyle {
+    val family by OverlayPreferences.islandFontStyleFlow.collectAsState()
+    val weight by OverlayPreferences.islandFontWeightFlow.collectAsState()
+    return MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = family.fontFamily, fontWeight = FontWeight(weight),
+        fontSize = if (title) 20.sp else 12.sp,
+        lineHeight = if (title) 25.sp else 17.sp,
+    )
+}
+
+/** Measure the same text styles and wrapping limits used by the activity card. */
+@Composable
+internal fun expandedActivitySize(activity: NotificationActivityInfo?, maxWidth: Dp, maxHeight: Dp, topInset: Dp): DpSize {
+    if (activity == null) return DpSize(maxWidth, 80.dp)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val titleStyle = activityTextStyle(true)
+    val subtitleStyle = activityTextStyle(false)
+    val buttonStyle = MaterialTheme.typography.labelLarge
+    return with(density) {
+        val titleNatural = measurer.measure(activity.title, titleStyle, softWrap = false).size.width.toDp()
+        val subtitleNatural = measurer.measure(activitySubtitle(activity), subtitleStyle, softWrap = false).size.width.toDp()
+        val buttonWidths = activity.actions.take(3).map {
+            maxOf(64.dp, measurer.measure(it.title, buttonStyle, softWrap = false).size.width.toDp() + 48.dp)
+        }
+        val actionsWidth = buttonWidths.fold(0.dp) { sum, width -> sum + width } + (8.dp * (buttonWidths.size - 1).coerceAtLeast(0))
+        val width = maxOf(160.dp, maxOf(titleNatural, subtitleNatural) + 78.dp, actionsWidth + 44.dp).coerceAtMost(maxWidth)
+        val textWidthPx = (width - 78.dp).coerceAtLeast(1.dp).roundToPx()
+        val titleHeight = measurer.measure(activity.title, titleStyle, maxLines = 2,
+            constraints = Constraints(maxWidth = textWidthPx)).size.height.toDp()
+        val subtitleHeight = measurer.measure(activitySubtitle(activity), subtitleStyle, maxLines = 4,
+            constraints = Constraints(maxWidth = textWidthPx)).size.height.toDp()
+        var rows = if (buttonWidths.isEmpty()) 0 else 1
+        var rowWidth = 0.dp
+        buttonWidths.forEach { button ->
+            val next = if (rowWidth == 0.dp) button else rowWidth + 8.dp + button
+            if (rowWidth > 0.dp && next > width - 44.dp) { rows++; rowWidth = button }
+            else rowWidth = next
+        }
+        val height = maxOf(18.dp, topInset) + 18.dp + maxOf(24.dp, titleHeight + subtitleHeight) +
+            (if (activity.progressFraction != null) 20.dp else 0.dp) +
+            (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
+        DpSize(width, height.coerceAtMost(maxHeight))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ExpandedNotificationActivityContent(
     activity: NotificationActivityInfo,
@@ -370,6 +486,7 @@ internal fun ExpandedNotificationActivityContent(
     topContentInset: Dp = 0.dp,
 ) {
     val context = LocalContext.current
+    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val openApp = {
         NotificationActivityState.open(context, activity)
         onCollapse()
@@ -378,6 +495,7 @@ internal fun ExpandedNotificationActivityContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -399,17 +517,19 @@ internal fun ExpandedNotificationActivityContent(
                 Text(
                     text = activity.title,
                     color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    style = activityTextStyle(true),
+                    fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+                    fontFamily = fontStyle.fontFamily,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val subtitle = activity.text?.takeIf { it.isNotBlank() } ?: activity.appName
+                val subtitle = activitySubtitle(activity)
                 Text(
                     text = subtitle,
                     color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 12.sp,
-                    maxLines = 1,
+                    style = activityTextStyle(false),
+                    fontFamily = fontStyle.fontFamily,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -430,12 +550,13 @@ internal fun ExpandedNotificationActivityContent(
 
         if (activity.actions.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
                 activity.actions.take(3).forEach { action ->
-                    Button(onClick = { NotificationActivityState.perform(action) }) {
+                    Button(modifier = Modifier.heightIn(min = 48.dp), onClick = { NotificationActivityState.perform(action) }) {
                         Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -449,6 +570,10 @@ internal fun activityIcon(kind: NotificationActivityKind): ImageVector = when (k
     NotificationActivityKind.NAVIGATION -> Icons.Default.Navigation
     NotificationActivityKind.CALL -> Icons.Default.Call
     NotificationActivityKind.TIMER -> Icons.Default.Timer
+    NotificationActivityKind.BATTERY_CHARGING -> Icons.Default.BatteryChargingFull
+    NotificationActivityKind.BATTERY_LOW -> Icons.Default.BatteryAlert
+    NotificationActivityKind.SOUND_MODE -> Icons.Default.VolumeUp
+    NotificationActivityKind.BLUETOOTH -> Icons.Default.BluetoothConnected
 }
 
 internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = when (activity.kind) {
@@ -456,12 +581,27 @@ internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = whe
     NotificationActivityKind.NAVIGATION -> Icons.Default.Navigation
     NotificationActivityKind.CALL -> Icons.Default.Call
     NotificationActivityKind.TIMER -> Icons.Default.Timer
+    NotificationActivityKind.BATTERY_CHARGING -> Icons.Default.BatteryChargingFull
+    NotificationActivityKind.BATTERY_LOW -> Icons.Default.BatteryAlert
+    NotificationActivityKind.SOUND_MODE -> when {
+        activity.title.contains("Silent", ignoreCase = true) || activity.text?.contains("Silent", ignoreCase = true) == true -> Icons.Default.VolumeOff
+        activity.title.contains("Vibrate", ignoreCase = true) || activity.text?.contains("Vibrate", ignoreCase = true) == true -> Icons.Default.Vibration
+        else -> Icons.Default.VolumeUp
+    }
+    NotificationActivityKind.BLUETOOTH -> when {
+        activity.text?.contains("Disconnected", ignoreCase = true) == true -> Icons.Default.BluetoothDisabled
+        else -> Icons.Default.BluetoothConnected
+    }
 }
 
 internal fun activityIconTint(kind: NotificationActivityKind, fallback: Color): Color = when (kind) {
     NotificationActivityKind.CALL -> Color(0xFF4CAF50)
     NotificationActivityKind.TIMER -> Color(0xFFFF9800)
     NotificationActivityKind.NAVIGATION -> Color(0xFF42A5F5)
+    NotificationActivityKind.BATTERY_CHARGING -> Color(0xFF4CAF50)
+    NotificationActivityKind.BATTERY_LOW -> Color(0xFFFF5252)
+    NotificationActivityKind.SOUND_MODE -> Color(0xFFFF9800)
+    NotificationActivityKind.BLUETOOTH -> Color(0xFF29B6F6)
     NotificationActivityKind.PROGRESS -> fallback
 }
 
@@ -503,6 +643,7 @@ internal fun Modifier.verticalActivityLabel(): Modifier = this
 
 @Composable
 internal fun rememberCompactActivityStatus(activity: NotificationActivityInfo): String {
+    if (activity.concurrentStatuses.isNotEmpty()) return activity.concurrentStatuses.joinToString(" • ")
     val chronometer = activity.chronometerBaseElapsedRealtime?.let { rememberChronometerText(activity) }
     return remember(activity, chronometer) {
         chronometer ?: compactStatusFallback(activity)
@@ -510,6 +651,12 @@ internal fun rememberCompactActivityStatus(activity: NotificationActivityInfo): 
 }
 
 internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
+    if (activity.kind == NotificationActivityKind.SOUND_MODE) return ""
+    if (activity.kind == NotificationActivityKind.BLUETOOTH && activity.bluetoothDeviceType != null) {
+        val disconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+        return if (disconnected) "${activity.bluetoothDeviceType} • Disconnected"
+            else listOfNotNull(activity.bluetoothDeviceType, activity.bluetoothBatteryPercent?.let { "$it%" }).joinToString(" • ")
+    }
     // For navigation: NEVER put percentage on the right.
     if (activity.kind == NotificationActivityKind.NAVIGATION) {
         val shortEta = findShortEta(activity.title) ?: findShortEta(activity.text)
@@ -537,6 +684,17 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
         NotificationActivityKind.NAVIGATION -> ""
         NotificationActivityKind.TIMER -> "Timer"
         NotificationActivityKind.PROGRESS -> ""
+        NotificationActivityKind.BATTERY_CHARGING -> "Charging"
+        NotificationActivityKind.BATTERY_LOW -> "Low"
+        NotificationActivityKind.SOUND_MODE -> when {
+            activity.title.contains("Silent", ignoreCase = true) || activity.text?.contains("Silent", ignoreCase = true) == true -> "Silent"
+            activity.title.contains("Vibrate", ignoreCase = true) || activity.text?.contains("Vibrate", ignoreCase = true) == true -> "Vibrate"
+            else -> "Ring"
+        }
+        NotificationActivityKind.BLUETOOTH -> when {
+            activity.text?.contains("Disconnected", ignoreCase = true) == true -> "Disconnected"
+            else -> "Connected"
+        }
     }
 }
 

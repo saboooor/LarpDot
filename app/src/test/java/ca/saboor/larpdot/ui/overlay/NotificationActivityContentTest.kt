@@ -45,6 +45,15 @@ class NotificationActivityContentTest {
     }
 
     @Test
+    fun bluetoothStatusShowsTypeAndOnlyReportedBattery() {
+        val connected = createActivity(kind = NotificationActivityKind.BLUETOOTH, text = "Headphones • Connected")
+            .copy(bluetoothDeviceType = "Headphones", bluetoothBatteryPercent = 72)
+        assertEquals("Headphones • 72%", compactStatusFallback(connected))
+        assertEquals("Headphones", compactStatusFallback(connected.copy(bluetoothBatteryPercent = null)))
+        assertEquals("Headphones • Disconnected", compactStatusFallback(connected.copy(text = "Headphones • Disconnected")))
+    }
+
+    @Test
     fun minimizedIslandOmitsLongDescriptionsForNavigation() {
         val activity = createActivity(
             kind = NotificationActivityKind.NAVIGATION,
@@ -161,13 +170,13 @@ class NotificationActivityContentTest {
     @Test
     fun calculateCompactExtraDpExpandsDynamicallyWithTextWidth() {
         val defaultExtra = calculateActivityCompactExtraDp(0f)
-        assertEquals(80f, defaultExtra, 0.001f)
+        assertEquals(56f, defaultExtra, 0.001f)
 
         val smallExtra = calculateActivityCompactExtraDp(20f)
-        assertEquals(80f, smallExtra, 0.001f)
+        assertEquals(56f, smallExtra, 0.001f)
 
         val largeExtra = calculateActivityCompactExtraDp(65f)
-        assertEquals(166f, largeExtra, 0.001f)
+        assertEquals(142f, largeExtra, 0.001f)
         assertTrue(largeExtra > smallExtra)
     }
 

@@ -16,8 +16,8 @@ class IslandGeometryTest {
 
     @Test fun longTitleStopsAtTheConfiguredLimit() {
         val natural = compactTextMediaWings(60f, 600f, 0f, false)
-        assertEquals(200f, 24f + fitCompactMediaWings(natural, 24f, 400f, 200f, 50f).widthDp, 0.001f)
-        assertEquals(400f, 24f + fitCompactMediaWings(natural, 24f, 400f, 200f, 100f).widthDp, 0.001f)
+        assertEquals(CompactMediaWings(30f, 94f), fitCompactMediaWings(natural, 24f, 400f, 200f, 50f))
+        assertEquals(CompactMediaWings(30f, 188f), fitCompactMediaWings(natural, 24f, 400f, 200f, 100f))
     }
 
     @Test fun announcementFitsEachTextWingAndNestedArtwork() {
@@ -36,13 +36,13 @@ class IslandGeometryTest {
 
     @Test fun compactWidthRespectsTheConfiguredMaximum() {
         val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 200f, 50f)
-        assertEquals(200f, wings.widthDp + 24f, 0.001f)
+        assertEquals(212f, wings.widthDp + 24f, 0.001f)
     }
 
     @Test fun fullWidthKeepsAnOffCenterCameraAnchored() {
         val wings = fitCompactMediaWings(CompactMediaWings(188f, 188f), 24f, 400f, 40f, 100f)
         assertEquals(28f, wings.leadingDp, 0.001f)
-        assertEquals(348f, wings.trailingDp, 0.001f)
+        assertEquals(188f, wings.trailingDp, 0.001f)
         assertEquals(0f, 40f - 12f - wings.leadingDp, 0.001f)
     }
 

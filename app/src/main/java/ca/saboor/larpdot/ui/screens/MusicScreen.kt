@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +28,10 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -133,7 +138,6 @@ fun MusicScreen(
     val expandedGlowSides by OverlayPreferences.expandedGlowSidesFlow.collectAsState()
     val bpmPulseEnabled by OverlayPreferences.bpmPulseEnabledFlow.collectAsState()
     val pulseEntireIslandEnabled by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
-    val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
@@ -150,6 +154,8 @@ fun MusicScreen(
     val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
     val previewDurationMs by PreviewAudioPlayer.durationMs.collectAsState()
     val previewSource by OverlayPreferences.previewAudioSourceFlow.collectAsState()
+    val pulseAmount by OverlayPreferences.pulseAmountFlow.collectAsState()
+    val minimizedNestedBlurredBg by OverlayPreferences.minimizedNestedBlurredBgFlow.collectAsState()
     val liveAmplitudes by LiveAudioVisualizer.liveAmplitudes.collectAsState()
     val isLiveCapturing by LiveAudioVisualizer.isCapturing.collectAsState()
     val liveErrorMessage by LiveAudioVisualizer.errorMessage.collectAsState()
@@ -260,7 +266,7 @@ fun MusicScreen(
                             Text(
                                 text = "Minimized Style",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = when (minimizedStyle) {
@@ -296,18 +302,53 @@ fun MusicScreen(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
-                        ShapePickerSection(
-                            title = "Minimized Shape",
-                            subtitle = "minimized island",
-                            selectedShape = minimizedShape,
-                            rotationDegrees = minimizedRotation,
-                            onShapeSelected = {
-                                OverlayPreferences.setMinimizedAlbumArtShape(context, it)
-                            },
-                            onRotationChanged = {
-                                OverlayPreferences.setMinimizedAlbumArtRotation(context, it)
-                            },
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ShapePickerSection(
+                                title = "Minimized Shape",
+                                subtitle = "minimized island",
+                                selectedShape = minimizedShape,
+                                rotationDegrees = minimizedRotation,
+                                onShapeSelected = {
+                                    OverlayPreferences.setMinimizedAlbumArtShape(context, it)
+                                },
+                                onRotationChanged = {
+                                    OverlayPreferences.setMinimizedAlbumArtRotation(context, it)
+                                },
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(
+                                            context,
+                                            !minimizedNestedBlurredBg
+                                        )
+                                    }
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Blurred Artwork Background",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                                    )
+                                    Text(
+                                        text = "Add blurred background behind nested art that fades into the dot",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Switch(
+                                    checked = minimizedNestedBlurredBg,
+                                    onCheckedChange = {
+                                        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, it)
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -337,7 +378,7 @@ fun MusicScreen(
                             Text(
                                 text = "Expanded Background",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = when (expandedStyle) {
@@ -572,36 +613,7 @@ fun MusicScreen(
                 }
             }
 
-            item {
-                SectionHeader(title = "Expanded Cutout")
-                LarpCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Camera Cover",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = cameraCoverStyle.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            OverlayPreferences.CameraCoverStyle.entries.forEach { style ->
-                                toggleableItem(
-                                    checked = cameraCoverStyle == style,
-                                    label = style.label,
-                                    onCheckedChange = { OverlayPreferences.setCameraCoverStyle(context, style) },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+
         }
 
         if (selectedTabIndex != 2) item {
@@ -773,7 +785,7 @@ fun MusicScreen(
                             Text(
                                 text = "Hide in Music App",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Hide the music island while the active music player application is open",
@@ -814,7 +826,7 @@ fun MusicScreen(
                             Text(
                                 text = "Pulse with BPM",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Rhythmically pulse the dominant color overlay and play/pause button to the track tempo",
@@ -843,7 +855,7 @@ fun MusicScreen(
                             Text(
                                 text = "Pulse Entire Island",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Rhythmically pulse the scale of the entire Dynamic Island to the track tempo",
@@ -857,6 +869,45 @@ fun MusicScreen(
                             onCheckedChange = { isChecked ->
                                 OverlayPreferences.setPulseEntireIslandEnabled(context, isChecked)
                             },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    // Pulse Amount
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Pulse Amount",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                                )
+                                Text(
+                                    text = "Scale factor for BPM pulse intensity (0.25x – 3.0x)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                text = "%.2fx".format(pulseAmount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Slider(
+                            value = pulseAmount,
+                            onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
+                            valueRange = 0.25f..3.0f,
+                            steps = 10,
                         )
                     }
 
@@ -887,7 +938,7 @@ fun MusicScreen(
                                     Text(
                                         text = "Waveform Bands",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                     )
                                     Text(
                                         text = "Number of animated equalizer frequency bars (default: 5)",
@@ -907,7 +958,7 @@ fun MusicScreen(
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                         }
 
@@ -1024,7 +1075,7 @@ fun MusicScreen(
                                 Text(
                                     text = "Visualizer Mode",
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                 )
                                 Text(
                                     text = when (visualizerMode) {
@@ -1121,7 +1172,7 @@ fun MusicScreen(
                                                     "Tempo Beat Sync (No BPM)"
                                                 },
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                             )
                                             Text(
                                                 text = when {
@@ -1182,7 +1233,7 @@ fun MusicScreen(
                                             Text(
                                                 text = "Internal Playback Capture (Digital Loopback)",
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                             )
                                             Text(
                                                 text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
@@ -1265,7 +1316,7 @@ fun MusicScreen(
                                             text = "Preview Audio Source",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                         )
                                         val previewSources = listOf(
                                             OverlayPreferences.PreviewAudioSource.AUTO,
@@ -1347,7 +1398,7 @@ fun MusicScreen(
                                                     Text(
                                                         text = "Processing: ${state.trackTitle}",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                                     )
                                                     Text(
                                                         text = "Downloading 30s preview & decomposing ${state.bandCount} frequency bands offline",
@@ -1372,7 +1423,7 @@ fun MusicScreen(
                                                     Text(
                                                         text = "Successfully Processed: ${state.trackTitle}",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                                     )
                                                     Text(
                                                         text = "Synced from ${state.sourceName} • ${state.frameCount} frames • ${state.bandCount} acoustic bands",
@@ -1415,7 +1466,7 @@ fun MusicScreen(
                                                             Text(
                                                                 text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
                                                                 style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.SemiBold,
+                                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                                             )
                                                             Text(
                                                                 text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
@@ -1460,7 +1511,7 @@ fun MusicScreen(
                                                     Text(
                                                         text = "Could not process: ${state.trackTitle}",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                                     )
                                                     Text(
                                                         text = "${state.reason} • Falling back to simulated waveform",
@@ -1478,6 +1529,7 @@ fun MusicScreen(
                 }
             }
         }
+
         }
     }
 
@@ -1488,7 +1540,7 @@ fun MusicScreen(
                 Text(
                     text = "Performance Warning",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                 )
             },
             text = {
@@ -1507,7 +1559,7 @@ fun MusicScreen(
                     Text(
                         text = "Enable Anyway",
                         color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                 }
             },

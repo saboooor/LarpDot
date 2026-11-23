@@ -1,5 +1,8 @@
 package ca.saboor.larpdot.ui.theme
 
+import ca.saboor.larpdot.service.OverlayPreferences
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,10 +116,30 @@ fun LarpDotTheme(
         else -> LightColorScheme
     }
 
+    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
+    val fontWeight by OverlayPreferences.islandFontWeightFlow.collectAsState()
+    val typography = AppTypography.copy(
+        displayLarge = AppTypography.displayLarge.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        displayMedium = AppTypography.displayMedium.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        displaySmall = AppTypography.displaySmall.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        headlineLarge = AppTypography.headlineLarge.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        headlineMedium = AppTypography.headlineMedium.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        headlineSmall = AppTypography.headlineSmall.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        titleLarge = AppTypography.titleLarge.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        titleMedium = AppTypography.titleMedium.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        titleSmall = AppTypography.titleSmall.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        bodyLarge = AppTypography.bodyLarge.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        bodyMedium = AppTypography.bodyMedium.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        bodySmall = AppTypography.bodySmall.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        labelLarge = AppTypography.labelLarge.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        labelMedium = AppTypography.labelMedium.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+        labelSmall = AppTypography.labelSmall.copy(fontFamily = fontStyle.fontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight(fontWeight)),
+    )
+
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         motionScheme = MotionScheme.expressive(),
-        typography = AppTypography,
+        typography = typography,
         shapes = AppShapes,
         content = content,
     )

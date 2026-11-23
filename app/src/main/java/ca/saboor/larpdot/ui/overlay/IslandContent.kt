@@ -30,7 +30,7 @@ internal fun IslandCompactContent(
             onFlashlightToggle = onFlashlightToggle, isLandscape = landscape, status = model.presentation.status,
         )
         IslandType.NOTIFICATION_ACTIVITY -> if (activity != null) CompactNotificationActivityContent(
-            activity = activity, cutoutDiameterDp = diameter, isLandscape = landscape, status = model.presentation.status,
+            activity = activity, cutoutDiameterDp = diameter, isLandscape = landscape,
         )
     }
 }

@@ -511,16 +511,23 @@ fun calculateAnnouncementExtraDp(
     cutoutDiameterDp: Float,
     albumArtStyle: OverlayPreferences.AlbumArtStyle,
     density: Float,
+    showVisualizer: Boolean = false,
+    visualizerWidthDp: Float = 28f,
+    fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.IslandFontStyle.DEFAULT,
 ): Float {
     val safeDensity = if (density > 0f) density else 1f
     val effectiveTitle = title.ifBlank { "Playing Track" }
     val effectiveArtist = artist.ifBlank { "Media Player" }
 
     val (titleWidthDp, artistWidthDp) = try {
-        val titleTypeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            Typeface.create(Typeface.DEFAULT, 600, false)
-        } else {
-            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        val titleTypeface = try {
+            fontStyle.createTypeface()
+        } catch (_: Throwable) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                Typeface.create(Typeface.DEFAULT, 600, false)
+            } else {
+                Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            }
         }
         val titlePaint = TextPaint().apply {
             textSize = 11.5f * safeDensity
@@ -530,7 +537,7 @@ fun calculateAnnouncementExtraDp(
 
         val artistPaint = TextPaint().apply {
             textSize = 11.5f * safeDensity
-            typeface = Typeface.DEFAULT
+            typeface = titleTypeface
         }
         val aW = artistPaint.measureText(effectiveArtist) / safeDensity
         Pair(tW, aW)
@@ -548,8 +555,8 @@ fun calculateAnnouncementExtraDp(
         8f
     }
 
-    // Right wing: start 2dp (inner) + end 6dp (outer) = 8dp
-    val rightNonTextDp = 8f
+    // Right wing: start 2dp (inner) + end 6dp (outer) = 8dp (+ visualizer width if visible)
+    val rightNonTextDp = 8f + if (showVisualizer) (visualizerWidthDp + 4f) else 0f
 
     val leftNeededDp = leftNonTextDp + titleWidthDp
     val rightNeededDp = rightNonTextDp + artistWidthDp

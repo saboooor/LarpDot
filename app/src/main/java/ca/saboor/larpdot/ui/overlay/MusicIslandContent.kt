@@ -220,6 +220,7 @@ private fun AnnouncementTrackText(
     titleFontSize: Float,
     artistFontSize: Float,
     fadeWidth: Dp,
+    fontFamily: androidx.compose.ui.text.font.FontFamily? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -229,8 +230,9 @@ private fun AnnouncementTrackText(
             text = title.ifBlank { "Playing Track" },
             color = Color.White,
             style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
                 fontSize = titleFontSize.sp,
+                fontFamily = fontFamily,
             ),
             textAlign = TextAlign.Center,
             fadeWidth = fadeWidth,
@@ -241,7 +243,11 @@ private fun AnnouncementTrackText(
         MarqueeText(
             text = artist.ifBlank { "Media Player" },
             color = accentColor.copy(alpha = 0.95f),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = artistFontSize.sp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = artistFontSize.sp,
+                fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+                fontFamily = fontFamily,
+            ),
             textAlign = TextAlign.Center,
             fadeWidth = fadeWidth,
             initialDelayMillis = 600,
@@ -260,19 +266,57 @@ private fun AnnouncementAlbumArt(
     cutoutDiameterDp: Dp,
     isLandscape: Boolean,
     modifier: Modifier = Modifier,
+    minimizedNestedBlurredBg: Boolean = false,
 ) {
     val albumArt = mediaInfo.albumArt ?: return
     val density = LocalDensity.current
     val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
     when (albumArtStyle) {
-        OverlayPreferences.AlbumArtStyle.NESTED -> Image(
-            bitmap = albumArt.asImageBitmap(),
-            contentDescription = null,
-            modifier = modifier
-                .size((cutoutDiameterDp - 8.dp).coerceIn(18.dp, 26.dp))
-                .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
-            contentScale = ContentScale.Crop,
-        )
+        OverlayPreferences.AlbumArtStyle.NESTED -> {
+            val artSize = (cutoutDiameterDp - 8.dp).coerceIn(18.dp, 26.dp)
+            if (minimizedNestedBlurredBg) {
+                Box(
+                    modifier = modifier.size(artSize + 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        bitmap = albumArt.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(10.dp)
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.radialGradient(
+                                        listOf(Color.White.copy(alpha = 0.7f), Color.Transparent)
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                        contentScale = ContentScale.Crop,
+                    )
+                    Image(
+                        bitmap = albumArt.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(artSize)
+                            .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            } else {
+                Image(
+                    bitmap = albumArt.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = modifier
+                        .size(artSize)
+                        .clip(nestedAlbumArtShape(nestedShape, nestedRotation)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
 
         OverlayPreferences.AlbumArtStyle.BASIC_FADED -> Image(
             bitmap = albumArt.asImageBitmap(),
@@ -404,6 +448,9 @@ internal fun CompactIslandContent(
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
     bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
+    pulseAmount: Float = OverlayPreferences.pulseAmountFlow.collectAsState().value,
+    fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
+    minimizedNestedBlurredBg: Boolean = OverlayPreferences.minimizedNestedBlurredBgFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
     trailingWingFraction: Float = 0.5f,
 ) {
@@ -515,7 +562,7 @@ internal fun CompactIslandContent(
                                     text = mediaInfo.title.ifBlank { "Playing Track" },
                                     color = Color.White,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                         fontSize = 11.5.sp,
                                     ),
                                     modifier = Modifier.weight(1f),
@@ -545,7 +592,7 @@ internal fun CompactIslandContent(
                                 text = mediaInfo.title.ifBlank { "Playing Track" },
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                     fontSize = 11.5.sp,
                                 ),
                                 modifier = Modifier
@@ -577,7 +624,7 @@ internal fun CompactIslandContent(
                                         )
                                         onDrawBehind {
                                             val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                                0.16f + (0.22f * bpmPulseState.value)
+                                                0.16f + (0.22f * bpmPulseState.value * pulseAmount)
                                             } else {
                                                 glowAlpha
                                             }
@@ -780,7 +827,7 @@ internal fun CompactIslandContent(
                                 )
                                 onDrawBehind {
                                     val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        0.16f + (0.22f * bpmPulseState.value)
+                                        0.16f + (0.22f * bpmPulseState.value * pulseAmount)
                                     } else {
                                         glowAlpha
                                     }
@@ -991,7 +1038,7 @@ internal fun CompactIslandContent(
                                 )
                                 onDrawBehind {
                                     val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        0.16f + (0.22f * bpmPulseState.value)
+                                        0.16f + (0.22f * bpmPulseState.value * pulseAmount)
                                     } else {
                                         glowAlpha
                                     }
@@ -1082,6 +1129,8 @@ internal fun ExpandedIslandContent(
     backgroundOpacity: Float = OverlayPreferences.expandedBackgroundOpacity.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
+    pulseAmount: Float = OverlayPreferences.pulseAmountFlow.collectAsState().value,
+    fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1579,6 +1628,8 @@ internal fun ExpandedIslandContent(
                 }
             }
         }
+
+
         CameraCover(
             style = cameraCoverStyle,
             centerX = dotCenterXDp,
@@ -1588,7 +1639,7 @@ internal fun ExpandedIslandContent(
 
         // Dominant Color Glow layer (rendered on top of background art, behind player content)
         if (showDominantGlow && (glowSides.left || glowSides.right || glowSides.bottom || glowSides.top)) {
-            val pulse = bpmPulseState.value
+            val pulse = bpmPulseState.value * pulseAmount
             val glowAlpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
                 0.16f + (0.22f * pulse)
             } else {
@@ -1683,13 +1734,21 @@ internal fun ExpandedIslandContent(
                 ) {
                     MarqueeText(
                         text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Normal),
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontFamily = fontStyle.fontFamily,
+                        
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                         color = Color.White,
                     )
                     Spacer(Modifier.height(4.dp))
                     MarqueeText(
                         text = mediaInfo.artist.ifEmpty { "" },
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = fontStyle.fontFamily,
+                        
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                         color = Color.White.copy(alpha = 0.80f),
                     )
                 }
@@ -1727,7 +1786,7 @@ internal fun ExpandedIslandContent(
                             .height(46.dp)
                             .graphicsLayer {
                                 if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                    val scale = 1f + (0.08f * bpmPulseState.value)
+                                    val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
                                     scaleX = scale
                                     scaleY = scale
                                 }
@@ -1886,7 +1945,11 @@ internal fun ExpandedIslandContent(
                     if (elementVisibility.trackInfo) Column(modifier = Modifier.weight(1f)) {
                         MarqueeText(
                             text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = fontStyle.fontFamily,
+                            
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                             color = Color.White,
                             textAlign = TextAlign.Start,
                         )
@@ -1894,7 +1957,11 @@ internal fun ExpandedIslandContent(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MarqueeText(
                                 text = mediaInfo.artist,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = fontStyle.fontFamily,
+                                
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                                 color = Color.White.copy(alpha = 0.72f),
                                 textAlign = TextAlign.Start,
                                 modifier = Modifier.weight(1f, fill = false),
@@ -1955,7 +2022,7 @@ internal fun ExpandedIslandContent(
                                 onHorizontalDrag = { change, _ ->
                                     change.consume()
                                     dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                                },
+                                }
                             )
                         },
                     contentAlignment = Alignment.Center,
@@ -2000,7 +2067,7 @@ internal fun ExpandedIslandContent(
                             .size(width = 68.dp, height = 56.dp)
                             .graphicsLayer {
                                 if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                    val scale = 1f + (0.08f * bpmPulseState.value)
+                                    val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
                                     scaleX = scale
                                     scaleY = scale
                                 }
@@ -2101,14 +2168,22 @@ internal fun ExpandedIslandContent(
                     ) {
                         MarqueeText(
                             text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontFamily = fontStyle.fontFamily,
+                            
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                             color = Color.White,
                         )
                         Spacer(Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MarqueeText(
                                 text = mediaInfo.artist,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = fontStyle.fontFamily,
+                                
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                                 color = Color.White.copy(alpha = 0.62f),
                                 modifier = Modifier.weight(1f, fill = false),
                             )
@@ -2145,7 +2220,11 @@ internal fun ExpandedIslandContent(
                 ) {
                     Text(
                         text = formatTime(mediaInfo.positionMs),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = fontStyle.fontFamily,
+                        
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                         color = Color.White.copy(alpha = 0.55f),
                     )
                     Box(
@@ -2180,7 +2259,11 @@ internal fun ExpandedIslandContent(
                     }
                     Text(
                         text = formatRemainingTime(mediaInfo.positionMs, mediaInfo.durationMs),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = fontStyle.fontFamily,
+                        
+ fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+),
                         color = Color.White.copy(alpha = 0.55f),
                     )
                 }
@@ -2203,7 +2286,7 @@ internal fun ExpandedIslandContent(
                                 .size(46.dp)
                                 .graphicsLayer {
                                     if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        val scale = 1f + (0.08f * bpmPulseState.value)
+                                        val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
                                         scaleX = scale
                                         scaleY = scale
                                     }

@@ -2,6 +2,9 @@ package ca.saboor.larpdot.service
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Typeface
+import android.os.Build
+import androidx.compose.ui.text.font.FontFamily
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.notification.NotificationActivityState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,6 +53,57 @@ object OverlayPreferences {
     private const val KEY_EXPANDED_GLOW_TOP = "expanded_glow_top"
     private const val KEY_BPM_PULSE_ENABLED = "bpm_pulse_enabled"
     private const val KEY_PULSE_ENTIRE_ISLAND_ENABLED = "pulse_entire_island_enabled"
+    private const val KEY_PULSE_AMOUNT = "pulse_amount"
+    const val DEFAULT_PULSE_AMOUNT = 1.0f
+    private const val KEY_ISLAND_FONT_STYLE = "island_font_style"
+    private const val KEY_MINIMIZED_NESTED_BLURRED_BG = "minimized_nested_blurred_bg"
+    private const val KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED = "notification_battery_charging_enabled"
+    private const val KEY_NOTIFICATION_BATTERY_LOW_ENABLED = "notification_battery_low_enabled"
+    private const val KEY_NOTIFICATION_SOUND_MODE_ENABLED = "notification_sound_mode_enabled"
+    private const val KEY_NOTIFICATION_BLUETOOTH_ENABLED = "notification_bluetooth_enabled"
+    private const val KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED = "notification_permanent_short_term_enabled"
+
+    enum class IslandFontStyle(val label: String) {
+        DEFAULT("Default"),
+        SERIF("Serif"),
+        MONOSPACE("Mono"),
+        ROUNDED("Rounded"),
+        CONDENSED("Condensed"),
+        CURSIVE("Cursive"),
+        CASUAL("Casual");
+
+        val fontFamily: FontFamily
+            get() = when (this) {
+                DEFAULT -> FontFamily.Default
+                SERIF -> FontFamily.Serif
+                MONOSPACE -> FontFamily.Monospace
+                ROUNDED -> FontFamily(createTypeface(islandFontWeightFlow.value))
+                CONDENSED -> FontFamily(createTypeface(islandFontWeightFlow.value))
+                CURSIVE -> FontFamily.Cursive
+                CASUAL -> FontFamily(createTypeface(islandFontWeightFlow.value))
+            }
+
+        fun createTypeface(weight: Int = 400, italic: Boolean = false): Typeface {
+            return try {
+                val base = when (this) {
+                    DEFAULT -> Typeface.DEFAULT
+                    SERIF -> Typeface.SERIF
+                    MONOSPACE -> Typeface.MONOSPACE
+                    ROUNDED -> Typeface.create("sans-serif-rounded", Typeface.NORMAL)
+                    CONDENSED -> Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+                    CURSIVE -> Typeface.create("cursive", Typeface.NORMAL)
+                    CASUAL -> Typeface.create("casual", Typeface.NORMAL)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    Typeface.create(base, weight, italic)
+                } else {
+                    Typeface.create(base, if (weight >= 600) Typeface.BOLD else Typeface.NORMAL)
+                }
+            } catch (_: Throwable) {
+                Typeface.DEFAULT
+            }
+        }
+    }
     private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
@@ -317,6 +371,15 @@ object OverlayPreferences {
     private val _previewAudioSourceFlow = MutableStateFlow(PreviewAudioSource.AUTO)
     val previewAudioSourceFlow: StateFlow<PreviewAudioSource> = _previewAudioSourceFlow.asStateFlow()
 
+    private val _islandFontStyleFlow = MutableStateFlow(IslandFontStyle.DEFAULT)
+    val islandFontStyleFlow: StateFlow<IslandFontStyle> = _islandFontStyleFlow.asStateFlow()
+
+    private val _pulseAmountFlow = MutableStateFlow(DEFAULT_PULSE_AMOUNT)
+    val pulseAmountFlow: StateFlow<Float> = _pulseAmountFlow.asStateFlow()
+
+    private val _minimizedNestedBlurredBgFlow = MutableStateFlow(false)
+    val minimizedNestedBlurredBgFlow: StateFlow<Boolean> = _minimizedNestedBlurredBgFlow.asStateFlow()
+
     data class CutoutConfig(
         val isManualEnabled: Boolean = false,
         val offsetX: Float = 0f, // in dp
@@ -351,7 +414,10 @@ object OverlayPreferences {
     private var isShowExpandedDominantColorGlowInitialized = false
     private var isExpandedGlowSidesInitialized = false
     private var isBpmPulseEnabledInitialized = false
-    private var isPulseEntireIslandEnabledInitialized = false
+    private var isPulseEntireIslandInitialized = false
+    private var isPulseAmountInitialized = false
+    private var isIslandFontStyleInitialized = false
+    private var isMinimizedNestedBlurredBgInitialized = false
     private var isCameraCoverStyleInitialized = false
     private var isShowFlashlightIslandInitialized = false
     private var isShowMinimizedFlashlightOutlineInitialized = false
@@ -431,9 +497,13 @@ object OverlayPreferences {
         loadIslandAppearance(context)
         isShowMinimizedProgressOutlineEnabled(context)
         isShowExpandedProgressOutlineEnabled(context)
-        isHideMusicWhenAppOpenEnabled(context)
         isShowMinimizedTitleEnabled(context)
         isShowSongAnnouncementEnabled(context)
+        _islandFontWeightFlow.value = getPrefs(context).getInt("island_font_weight", 400).coerceIn(100, 900)
+        getFlashlightExpandedStyle(context)
+        getIslandFontStyle(context)
+        getPulseAmount(context)
+        isMinimizedNestedBlurredBgEnabled(context)
         getMinimizedAlbumArtStyle(context)
         getExpandedAlbumArtStyle(context)
         isShowExpandedAlbumArtEnabled(context)
@@ -907,11 +977,11 @@ object OverlayPreferences {
     }
 
     fun isPulseEntireIslandEnabled(context: Context): Boolean {
-        if (!isPulseEntireIslandEnabledInitialized) {
+        if (!isPulseEntireIslandInitialized) {
             val prefs = getPrefs(context)
             val enabled = prefs.getBoolean(KEY_PULSE_ENTIRE_ISLAND_ENABLED, false)
             _pulseEntireIslandEnabledFlow.value = enabled
-            isPulseEntireIslandEnabledInitialized = true
+            isPulseEntireIslandInitialized = true
         }
         return _pulseEntireIslandEnabledFlow.value
     }
@@ -919,7 +989,84 @@ object OverlayPreferences {
     fun setPulseEntireIslandEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_PULSE_ENTIRE_ISLAND_ENABLED, enabled).apply()
         _pulseEntireIslandEnabledFlow.value = enabled
-        isPulseEntireIslandEnabledInitialized = true
+        isPulseEntireIslandInitialized = true
+    }
+
+    fun getPulseAmount(context: Context): Float {
+        if (!isPulseAmountInitialized) {
+            val prefs = getPrefs(context)
+            val amount = prefs.getFloat(KEY_PULSE_AMOUNT, DEFAULT_PULSE_AMOUNT)
+            _pulseAmountFlow.value = amount
+            isPulseAmountInitialized = true
+        }
+        return _pulseAmountFlow.value
+    }
+
+    fun setPulseAmount(context: Context, amount: Float) {
+        getPrefs(context).edit().putFloat(KEY_PULSE_AMOUNT, amount).apply()
+        _pulseAmountFlow.value = amount
+        isPulseAmountInitialized = true
+    }
+
+    private val _islandFontWeightFlow = MutableStateFlow(400)
+    val islandFontWeightFlow = _islandFontWeightFlow.asStateFlow()
+
+    fun setIslandFontWeight(context: Context, weight: Int) {
+        val value = weight.coerceIn(100, 900)
+        getPrefs(context).edit().putInt("island_font_weight", value).apply()
+        _islandFontWeightFlow.value = value
+    }
+
+    enum class FlashlightExpandedStyle(val label: String) {
+        BEAM("Beam"), SLIDER("Slider"), BLURRED_BEAM("Blurred beam")
+    }
+    private val _flashlightExpandedStyleFlow = MutableStateFlow(FlashlightExpandedStyle.BEAM)
+    val flashlightExpandedStyleFlow = _flashlightExpandedStyleFlow.asStateFlow()
+
+    fun getFlashlightExpandedStyle(context: Context): FlashlightExpandedStyle {
+        val saved = getPrefs(context).getString("flashlight_expanded_style", null)
+        _flashlightExpandedStyleFlow.value = FlashlightExpandedStyle.entries.firstOrNull { it.name == saved }
+            ?: FlashlightExpandedStyle.BEAM
+        return _flashlightExpandedStyleFlow.value
+    }
+
+    fun setFlashlightExpandedStyle(context: Context, style: FlashlightExpandedStyle) {
+        getPrefs(context).edit().putString("flashlight_expanded_style", style.name).apply()
+        _flashlightExpandedStyleFlow.value = style
+    }
+
+    fun getIslandFontStyle(context: Context): IslandFontStyle {
+        if (!isIslandFontStyleInitialized) {
+            val prefs = getPrefs(context)
+            val name = prefs.getString(KEY_ISLAND_FONT_STYLE, null)
+            _islandFontStyleFlow.value = name?.let { saved ->
+                IslandFontStyle.entries.firstOrNull { it.name == saved }
+            } ?: IslandFontStyle.DEFAULT
+            isIslandFontStyleInitialized = true
+        }
+        return _islandFontStyleFlow.value
+    }
+
+    fun setIslandFontStyle(context: Context, style: IslandFontStyle) {
+        getPrefs(context).edit().putString(KEY_ISLAND_FONT_STYLE, style.name).apply()
+        _islandFontStyleFlow.value = style
+        isIslandFontStyleInitialized = true
+    }
+
+    fun isMinimizedNestedBlurredBgEnabled(context: Context): Boolean {
+        if (!isMinimizedNestedBlurredBgInitialized) {
+            val prefs = getPrefs(context)
+            val enabled = prefs.getBoolean(KEY_MINIMIZED_NESTED_BLURRED_BG, false)
+            _minimizedNestedBlurredBgFlow.value = enabled
+            isMinimizedNestedBlurredBgInitialized = true
+        }
+        return _minimizedNestedBlurredBgFlow.value
+    }
+
+    fun setMinimizedNestedBlurredBgEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_MINIMIZED_NESTED_BLURRED_BG, enabled).apply()
+        _minimizedNestedBlurredBgFlow.value = enabled
+        isMinimizedNestedBlurredBgInitialized = true
     }
 
     fun getCameraCoverStyle(context: Context): CameraCoverStyle {
@@ -1114,6 +1261,16 @@ object OverlayPreferences {
                 navigation = prefs.getBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, true),
                 calls = prefs.getBoolean(KEY_NOTIFICATION_CALLS_ENABLED, true),
                 timers = prefs.getBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, true),
+                batteryCharging = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, true),
+                batteryLow = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, true),
+                soundMode = prefs.getBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, true),
+                bluetooth = prefs.getBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, true),
+                permanentShortTerm = prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false),
+                permanentCharging = prefs.getBoolean("permanent_charging", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
+                permanentLowBattery = prefs.getBoolean("permanent_lowbattery", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
+                permanentSoundMode = prefs.getBoolean("permanent_soundmode", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
+                permanentBluetooth = prefs.getBoolean("permanent_bluetooth", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
+
             )
             isNotificationActivitySettingsInitialized = true
         }
@@ -1130,6 +1287,16 @@ object OverlayPreferences {
             .putBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, settings.navigation)
             .putBoolean(KEY_NOTIFICATION_CALLS_ENABLED, settings.calls)
             .putBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, settings.timers)
+            .putBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, settings.batteryCharging)
+            .putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
+            .putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
+            .putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
+            .putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
+            .putBoolean("permanent_charging", settings.permanentCharging)
+            .putBoolean("permanent_lowbattery", settings.permanentLowBattery)
+            .putBoolean("permanent_soundmode", settings.permanentSoundMode)
+            .putBoolean("permanent_bluetooth", settings.permanentBluetooth)
+
             .apply()
         _notificationActivitySettingsFlow.value = settings
         isNotificationActivitySettingsInitialized = true
