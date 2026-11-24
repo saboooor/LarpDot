@@ -78,7 +78,46 @@ class FeatureServicesTest {
             cameraCoverStyle = OverlayPreferences.CameraCoverStyle.CANOPY,
             islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
             islandFontWeight = 700,
+            minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.PENTAGON,
+            minimizedAlbumArtRotation = 45f,
+            minimizedNestedBlurredBg = true,
+            showExpandedAlbumArt = false,
+            expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.DIAMOND,
+            expandedAlbumArtRotation = 15f,
+            showProgressSquiggles = false,
+            progressBarAccentColor = true,
+            playbackPlayPauseBg = false,
+            playbackSkipBg = true,
+            playbackCornerRadiusDp = 14f,
+            playbackM3ButtonGroup = true,
+            playbackPlayPauseAccent = true,
+            trackInfoShowTitle = true,
+            trackInfoShowArtist = false,
+            trackInfoShowAlbum = true,
+            trackInfoTitleAccent = true,
             showMinimizedTitle = true,
+            expandedGlowLeft = false,
+            expandedGlowRight = true,
+            expandedGlowTop = true,
+            expandedGlowBottom = false,
+            minimizedBpmPulseEnabled = false,
+            expandedBpmPulseEnabled = true,
+            pulseAmount = 1.75f,
+            waveformBandCount = 12,
+            waveformBarWidth = 3.5f,
+            waveformBarSpacing = 2.0f,
+            flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
+            flashlightBeamBlur = true,
+            flashlightBeamAccentColor = false,
+            flashlightTapToToggle = false,
+            islandPriorityOrder = listOf(
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.NAVIGATION,
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.MEDIA,
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.SHORT_TERM_ALERTS,
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.LIVE_ACTIVITIES,
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.PINNED_SHORT_TERM,
+                ca.saboor.larpdot.ui.overlay.IslandPriorityItem.FLASHLIGHT,
+            ),
             cutoutManualEnabled = true,
             cutoutOffsetX = -4f,
             cutoutOffsetY = 6f,
@@ -90,6 +129,33 @@ class FeatureServicesTest {
         assertEquals(original, decoded)
         assertNull(IslandThemePresets.fromJson("not json"))
         assertEquals(4, IslandThemePresets.builtInPresets.size)
+    }
+
+    @Test fun playPauseIconTintAdaptsToAccentLuminance() {
+        assertEquals(
+            androidx.compose.ui.graphics.Color.White,
+            ca.saboor.larpdot.ui.overlay.playPauseIconTint(
+                hasBackground = true,
+                useAccentColor = true,
+                accentColor = androidx.compose.ui.graphics.Color(0xFF1A1025),
+            ),
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFF1B1A1E),
+            ca.saboor.larpdot.ui.overlay.playPauseIconTint(
+                hasBackground = true,
+                useAccentColor = true,
+                accentColor = androidx.compose.ui.graphics.Color(0xFFFFE082),
+            ),
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFF4CAF50),
+            ca.saboor.larpdot.ui.overlay.playPauseIconTint(
+                hasBackground = false,
+                useAccentColor = true,
+                accentColor = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+            ),
+        )
     }
 
     @Test fun bluetoothFilterHidesFindHubTrackersPhonesAndUnbondedPeers() {

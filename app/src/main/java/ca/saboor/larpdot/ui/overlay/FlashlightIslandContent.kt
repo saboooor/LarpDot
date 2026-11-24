@@ -2,13 +2,18 @@ package ca.saboor.larpdot.ui.overlay
 
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
+import android.graphics.BlurMaskFilter
+import android.graphics.LinearGradient
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Path as AndroidPath
+import android.graphics.Shader
 import ca.saboor.larpdot.service.OverlayPreferences
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
-import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import android.os.Build
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -462,6 +467,25 @@ fun ExpandedFlashlightContent(
                 },
             contentAlignment = Alignment.BottomCenter,
         ) {
+            val outerBlurPaint = remember {
+                AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                    style = AndroidPaint.Style.FILL
+                }
+            }
+            val coreBlurPaint = remember {
+                AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                    style = AndroidPaint.Style.FILL
+                }
+            }
+            val nativeBeamPath = remember { AndroidPath() }
+            val nativeCorePath = remember { AndroidPath() }
+            val outerBlurFilter = remember(density) {
+                BlurMaskFilter(with(density) { 14.dp.toPx() }, BlurMaskFilter.Blur.NORMAL)
+            }
+            val coreBlurFilter = remember(density) {
+                BlurMaskFilter(with(density) { 4.dp.toPx() }, BlurMaskFilter.Blur.NORMAL)
+            }
+
             // Light Cone Canvas and Horizontal Slider Bar
             Canvas(
                 modifier = Modifier.fillMaxSize()
@@ -496,29 +520,39 @@ fun ExpandedFlashlightContent(
 
                 if (onOffProgress > 0.002f) {
                     if (beamBlur) {
-                        // Approximate a Gaussian blur in horizontal bands: the light is sharp
-                        // at its source and diffuses progressively toward the wide end.
-                        val beamHeight = (beamOriginY - currentSliderY).coerceAtLeast(1f)
-                        val bands = 24
-                        for (band in 0 until bands) {
-                            val progress = (band + 0.5f) / bands
-                            val radius = 16.dp.toPx() * (1f - progress) * (1f - progress)
-                            clipRect(top = currentSliderY + beamHeight * band / bands,
-                                bottom = currentSliderY + beamHeight * (band + 1) / bands + 0.5f) {
-                                for (sample in -6..6) {
-                                    val weight = kotlin.math.exp(-sample * sample / 8f) / 5.008f
-                                    translate(left = sample * radius / 3f) {
-                                        drawPath(
-                                            path = beamPath,
-                                            brush = Brush.verticalGradient(
-                                                listOf(beamColor.copy(alpha = 0.85f * onOffProgress * weight),
-                                                    beamColor.copy(alpha = 0.12f * onOffProgress * weight)),
-                                                startY = currentSliderY, endY = beamOriginY,
-                                            ),
-                                        )
-                                    }
-                                }
-                            }
+                        nativeBeamPath.rewind()
+                        nativeBeamPath.moveTo(centerX - beamBaseWidth / 2f, beamOriginY)
+                        nativeBeamPath.lineTo(centerX - topBeamWidth / 2f, currentSliderY)
+                        nativeBeamPath.lineTo(centerX + topBeamWidth / 2f, currentSliderY)
+                        nativeBeamPath.lineTo(centerX + beamBaseWidth / 2f, beamOriginY)
+                        nativeBeamPath.close()
+
+                        val coreTopWidth = topBeamWidth * 0.62f
+                        nativeCorePath.rewind()
+                        nativeCorePath.moveTo(centerX - beamBaseWidth * 0.45f, beamOriginY)
+                        nativeCorePath.lineTo(centerX - coreTopWidth / 2f, currentSliderY)
+                        nativeCorePath.lineTo(centerX + coreTopWidth / 2f, currentSliderY)
+                        nativeCorePath.lineTo(centerX + beamBaseWidth * 0.45f, beamOriginY)
+                        nativeCorePath.close()
+
+                        outerBlurPaint.maskFilter = outerBlurFilter
+                        outerBlurPaint.shader = LinearGradient(
+                            0f, currentSliderY, 0f, beamOriginY,
+                            beamColor.copy(alpha = 0.72f * onOffProgress).toArgb(),
+                            beamColor.copy(alpha = 0.10f * onOffProgress).toArgb(),
+                            Shader.TileMode.CLAMP,
+                        )
+                        coreBlurPaint.maskFilter = coreBlurFilter
+                        coreBlurPaint.shader = LinearGradient(
+                            0f, currentSliderY, 0f, beamOriginY,
+                            beamColor.copy(alpha = 0.34f * onOffProgress).toArgb(),
+                            beamColor.copy(alpha = 0.22f * onOffProgress).toArgb(),
+                            Shader.TileMode.CLAMP,
+                        )
+
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawPath(nativeBeamPath, outerBlurPaint)
+                            canvas.nativeCanvas.drawPath(nativeCorePath, coreBlurPaint)
                         }
                     } else {
                     drawPath(

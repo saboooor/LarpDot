@@ -245,11 +245,15 @@ fun LarpDotApp() {
                         cutoutInfo = cutoutInfo,
                         isEnabled = isEnabled,
                     )
-                    Destination.Appearance -> AppearanceScreen()
+                    Destination.Appearance -> AppearanceScreen(
+                        cutoutInfo = cutoutInfo,
+                    )
                     Destination.Music -> MusicScreen(
                         cutoutInfo = cutoutInfo,
                     )
-                    Destination.LiveActivities -> LiveActivitiesScreen()
+                    Destination.LiveActivities -> LiveActivitiesScreen(
+                        cutoutInfo = cutoutInfo,
+                    )
                     Destination.Flashlight -> FlashlightScreen(
                         cutoutInfo = cutoutInfo,
                     )

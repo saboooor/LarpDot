@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +28,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,8 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.IslandThemePresets
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.BackdropBlurStatus
@@ -49,7 +54,10 @@ import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun AppearanceScreen(modifier: Modifier = Modifier) {
+fun AppearanceScreen(
+    cutoutInfo: CutoutInfo,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val fontWeight by OverlayPreferences.islandFontWeightFlow.collectAsState()
@@ -110,6 +118,13 @@ fun AppearanceScreen(modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item(key = "appearance_preview") {
+            ExpandedIslandPreview(
+                cutoutInfo = cutoutInfo,
+                showControls = false,
+            )
+        }
+
         item {
             SectionHeader(title = "Island Background")
             LarpCard {
@@ -302,16 +317,27 @@ fun AppearanceScreen(modifier: Modifier = Modifier) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         OverlayPreferences.IslandFontStyle.entries.forEach { style ->
-                            FilterChip(
-                                selected = islandFontStyle == style,
-                                onClick = { OverlayPreferences.setIslandFontStyle(context, style) },
-                                label = {
-                                    Text(
-                                        text = style.label,
-                                        fontFamily = style.fontFamily,
-                                    )
-                                },
-                            )
+                            ToggleButton(
+                                checked = islandFontStyle == style,
+                                onCheckedChange = { OverlayPreferences.setIslandFontStyle(context, style) },
+                                shapes = ToggleButtonShapes(
+                                    shape = RoundedCornerShape(14.dp),
+                                    pressedShape = RoundedCornerShape(10.dp),
+                                    checkedShape = RoundedCornerShape(20.dp),
+                                ),
+                                colors = ToggleButtonDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = style.label,
+                                    fontFamily = style.fontFamily,
+                                )
+                            }
                         }
                     }
                     Text("Font weight: $fontWeight")

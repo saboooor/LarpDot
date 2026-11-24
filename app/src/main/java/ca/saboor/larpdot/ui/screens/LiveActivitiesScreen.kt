@@ -44,11 +44,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.components.AccentCard
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LiveActivitiesPreview
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import kotlin.math.roundToInt
@@ -64,7 +66,10 @@ private data class ActivityToggleItem(
 )
 
 @Composable
-fun LiveActivitiesScreen(modifier: Modifier = Modifier) {
+fun LiveActivitiesScreen(
+    cutoutInfo: CutoutInfo,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val settings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
@@ -246,6 +251,10 @@ fun LiveActivitiesScreen(modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item(key = "live_activities_preview") {
+            LiveActivitiesPreview(cutoutInfo = cutoutInfo)
+        }
+
         item {
             SectionHeader(title = "Live Activities")
             LarpCard {

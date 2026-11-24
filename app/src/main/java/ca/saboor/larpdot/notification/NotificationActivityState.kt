@@ -103,6 +103,7 @@ data class NotificationActivityInfo(
     val mediaUri: String? = null,
     val mediaMimeType: String? = null,
     val isPinnedShortTerm: Boolean = false,
+    val maneuverIcon: Bitmap? = null,
 ) {
     val progressFraction: Float?
         get() = if (progress != null && progressMax != null && progressMax > 0) {
@@ -441,6 +442,11 @@ object NotificationActivityState {
         }
 
         val appIcon = getOrLoadAppIcon(context, sbn.packageName)
+        val maneuverIcon = if (kind == NotificationActivityKind.NAVIGATION) {
+            runCatching {
+                notification.getLargeIcon()?.loadDrawable(context)?.let { drawableToBitmap(it) }
+            }.getOrNull()
+        } else null
 
         return NotificationActivityInfo(
             key = sbn.key,
@@ -462,6 +468,7 @@ object NotificationActivityState {
                 else NotificationActivityAction(label, action.actionIntent)
             }.take(3),
             appIcon = appIcon,
+            maneuverIcon = maneuverIcon,
         )
     }
 

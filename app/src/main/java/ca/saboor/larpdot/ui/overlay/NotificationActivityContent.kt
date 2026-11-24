@@ -158,12 +158,22 @@ fun ActivityIcon(
             )
         }
         NotificationActivityKind.NAVIGATION -> {
-            Icon(
-                imageVector = LarpIcons.Navigation,
-                contentDescription = activity.appName,
-                tint = activityIconTint(activity.kind, primaryColor),
-                modifier = iconModifier,
-            )
+            val maneuver = activity.maneuverIcon
+            if (maneuver != null) {
+                Image(
+                    bitmap = remember(maneuver) { maneuver.asImageBitmap() },
+                    contentDescription = activity.title.ifBlank { activity.appName },
+                    modifier = iconModifier.clip(iconShape),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Icon(
+                    imageVector = LarpIcons.Navigation,
+                    contentDescription = activity.appName,
+                    tint = activityIconTint(activity.kind, primaryColor),
+                    modifier = iconModifier,
+                )
+            }
         }
         NotificationActivityKind.BATTERY_CHARGING -> {
             Icon(
