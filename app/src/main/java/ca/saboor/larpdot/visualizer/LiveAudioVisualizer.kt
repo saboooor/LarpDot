@@ -112,24 +112,7 @@ object LiveAudioVisualizer {
             bandPeaks = FloatArray(numBands) { 12.0f }
         }
 
-        val cutoffs = when (numBands) {
-            3 -> doubleArrayOf(280.0, 3200.0)
-            4 -> doubleArrayOf(220.0, 1000.0, 4200.0)
-            5 -> doubleArrayOf(180.0, 600.0, 2400.0, 7000.0)
-            6 -> doubleArrayOf(160.0, 450.0, 1400.0, 3800.0, 8500.0)
-            7 -> doubleArrayOf(160.0, 450.0, 1200.0, 3000.0, 6500.0, 12000.0)
-            else -> {
-                val count = (numBands - 1).coerceAtLeast(1)
-                val minFreq = 140.0
-                val maxFreq = 14000.0
-                val logMin = kotlin.math.ln(minFreq)
-                val logMax = kotlin.math.ln(maxFreq)
-                val step = (logMax - logMin) / numBands
-                DoubleArray(count) { idx ->
-                    kotlin.math.exp(logMin + (idx + 1) * step)
-                }
-            }
-        }
+        val cutoffs = crossoverCutoffs(numBands)
 
         val bandSums = FloatArray(numBands)
         val bandCounts = IntArray(numBands)

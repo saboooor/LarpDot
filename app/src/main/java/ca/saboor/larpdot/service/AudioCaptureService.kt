@@ -201,35 +201,8 @@ class AudioCaptureService : Service() {
     }
 
     private suspend fun readAudioLoop(record: AudioRecord, sampleRate: Int, numBands: Int) {
-        val safeBands = numBands.coerceIn(1, 32)
-        val numCutoffs = (safeBands - 1).coerceAtLeast(1)
-        val cutoffs = when (safeBands) {
-            1 -> doubleArrayOf(14000.0)
-            2 -> doubleArrayOf(1000.0)
-            3 -> doubleArrayOf(280.0, 3200.0)
-            4 -> doubleArrayOf(220.0, 1000.0, 4200.0)
-            5 -> doubleArrayOf(180.0, 600.0, 2400.0, 7000.0)
-            6 -> doubleArrayOf(160.0, 450.0, 1400.0, 3800.0, 8500.0)
-            7 -> doubleArrayOf(160.0, 450.0, 1200.0, 3000.0, 6500.0, 12000.0)
-            else -> {
-                val minFreq = 140.0
-                val maxFreq = 14000.0
-                val logMin = kotlin.math.ln(minFreq)
-                val logMax = kotlin.math.ln(maxFreq)
-                val step = (logMax - logMin) / safeBands
-                DoubleArray(numCutoffs) { idx ->
-                    kotlin.math.exp(logMin + (idx + 1) * step)
-                }
-            }
-        }
-
-        val alphas = DoubleArray(numCutoffs) { idx ->
-            1.0 - exp(-2.0 * Math.PI * cutoffs[idx] / sampleRate.toDouble())
-        }
-
-        val lp1 = DoubleArray(numCutoffs)
-        val lp2 = DoubleArray(numCutoffs)
-        val sumSq = DoubleArray(safeBands)
+        val filterBank = ca.saboor.larpdot.visualizer.CrossoverFilterBank(numBands, sampleRate)
+        val safeBands = filterBank.bandCount
 
         // Read in ~23ms chunks (1024 samples at 44.1kHz)
         val shortBuffer = ShortArray(1024)
@@ -248,32 +221,14 @@ class AudioCaptureService : Service() {
             val samplesRead = record.read(shortBuffer, 0, shortBuffer.size)
             if (samplesRead <= 0) continue
 
-            sumSq.fill(0.0)
-
+            filterBank.resetAccumulators()
             for (i in 0 until samplesRead) {
-                val sample = shortBuffer[i].toDouble() / 32768.0
-
-                for (c in 0 until numCutoffs) {
-                    val a = alphas[c]
-                    lp1[c] += a * (sample - lp1[c])
-                    lp2[c] += a * (lp1[c] - lp2[c])
-                }
-
-                val band0 = lp2[0]
-                sumSq[0] += band0 * band0
-
-                for (b in 1 until numCutoffs) {
-                    val bandVal = lp2[b] - lp2[b - 1]
-                    sumSq[b] += bandVal * bandVal
-                }
-
-                val lastBand = sample - lp2[numCutoffs - 1]
-                sumSq[safeBands - 1] += lastBand * lastBand
+                filterBank.processSample(shortBuffer[i].toDouble() / 32768.0)
             }
 
             val rawAmps = FloatArray(safeBands)
             for (b in 0 until safeBands) {
-                val rms = sqrt(sumSq[b] / samplesRead.toDouble()).toFloat()
+                val rms = filterBank.bandRms(b, samplesRead)
                 bandPeaks[b] = max(bandPeaks[b] * 0.990f, max(rms, 0.015f))
                 rawAmps[b] = (rms / bandPeaks[b]).coerceIn(0.04f, 1.0f)
             }

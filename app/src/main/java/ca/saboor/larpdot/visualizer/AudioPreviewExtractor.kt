@@ -421,36 +421,12 @@ object AudioPreviewExtractor {
         }
     }
 
-    private suspend fun downloadToFile(urlString: String, destination: File) =
-        VisualizerHttp.downloadToFile(urlString, destination)
-
     /**
      * Decodes 16-bit PCM audio and separates exactly [numBands] frequency bands
      * using a 2nd-order cascaded IIR crossover filterbank.
      */
     private fun decodeAudioToDynamicBandsRms(audioFile: File, fps: Int, numBands: Int, job: Job?): FloatArray? {
         val safeBands = numBands.coerceIn(1, 32)
-        val numCutoffs = (safeBands - 1).coerceAtLeast(1)
-
-        val cutoffs = when (safeBands) {
-            1 -> doubleArrayOf(14000.0)
-            2 -> doubleArrayOf(1000.0)
-            3 -> doubleArrayOf(250.0, 3500.0)
-            4 -> doubleArrayOf(200.0, 1000.0, 4500.0)
-            5 -> doubleArrayOf(180.0, 600.0, 2400.0, 7000.0)
-            6 -> doubleArrayOf(160.0, 450.0, 1400.0, 3800.0, 8500.0)
-            7 -> doubleArrayOf(160.0, 450.0, 1200.0, 3000.0, 6500.0, 12000.0)
-            else -> {
-                val minFreq = 140.0
-                val maxFreq = 14000.0
-                val logMin = kotlin.math.ln(minFreq)
-                val logMax = kotlin.math.ln(maxFreq)
-                val step = (logMax - logMin) / safeBands
-                DoubleArray(numCutoffs) { idx ->
-                    kotlin.math.exp(logMin + (idx + 1) * step)
-                }
-            }
-        }
 
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -494,17 +470,9 @@ object AudioPreviewExtractor {
                 format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             } else 2
 
-            var alphas = DoubleArray(numCutoffs) { idx ->
-                1.0 - exp(-2.0 * Math.PI * cutoffs[idx] / sampleRate.toDouble())
-            }
+            val filterBank = CrossoverFilterBank(safeBands, sampleRate)
+            var samplesPerFrame = (sampleRate / fps).takeIf { it > 0 } ?: (44100 / fps)
 
-            var samplesPerFrame = sampleRate / fps
-            if (samplesPerFrame <= 0) samplesPerFrame = 44100 / fps
-
-            val lp1 = DoubleArray(numCutoffs)
-            val lp2 = DoubleArray(numCutoffs)
-
-            val sumSq = DoubleArray(safeBands)
             var currentCount = 0
             val timeoutUs = 8000L
 
@@ -560,38 +528,14 @@ object AudioPreviewExtractor {
                             }
                             // Average stereo channels into clean mono signal
                             val monoSample = (sampleL + sampleR) / 2
-                            val s = monoSample.toDouble() / Short.MAX_VALUE.toDouble()
-
-                            for (c in 0 until numCutoffs) {
-                                val a = alphas[c]
-                                lp1[c] += a * (s - lp1[c])
-                                lp2[c] += a * (lp1[c] - lp2[c])
-                            }
-
-                            // Dynamic Crossover decomposition across exactly safeBands
-                            // Band 0: Low-pass below cutoff 0
-                            val b0 = lp2[0]
-                            sumSq[0] += b0 * b0
-
-                            // Intermediate bands: Band-pass between cutoff c-1 and cutoff c
-                            for (c in 1 until numCutoffs) {
-                                val bandSample = lp2[c] - lp2[c - 1]
-                                sumSq[c] += bandSample * bandSample
-                            }
-
-                            // Last band: High-pass above last cutoff
-                            val bLast = s - lp2[numCutoffs - 1]
-                            sumSq[numCutoffs] += bLast * bLast
-
+                            filterBank.processSample(monoSample.toDouble() / Short.MAX_VALUE.toDouble())
                             currentCount++
 
                             if (currentCount >= samplesPerFrame) {
-                                val countD = currentCount.toDouble()
                                 for (k in 0 until safeBands) {
-                                    val rms = sqrt(sumSq[k] / countD).toFloat()
-                                    result.add(rms)
-                                    sumSq[k] = 0.0
+                                    result.add(filterBank.bandRms(k, currentCount))
                                 }
+                                filterBank.resetAccumulators()
                                 currentCount = 0
                             }
                         }
@@ -601,23 +545,18 @@ object AudioPreviewExtractor {
                     val newFormat = codec.outputFormat
                     if (newFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                         sampleRate = newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        alphas = DoubleArray(numCutoffs) { idx ->
-                            1.0 - exp(-2.0 * Math.PI * cutoffs[idx] / sampleRate.toDouble())
-                        }
+                        filterBank.updateSampleRate(sampleRate)
                     }
                     if (newFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                         channelCount = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                     }
-                    samplesPerFrame = sampleRate / fps
-                    if (samplesPerFrame <= 0) samplesPerFrame = 44100 / fps
+                    samplesPerFrame = (sampleRate / fps).takeIf { it > 0 } ?: (44100 / fps)
                 }
             }
 
             if (currentCount > 0) {
-                val countD = currentCount.toDouble()
                 for (k in 0 until safeBands) {
-                    val rms = sqrt(sumSq[k] / countD).toFloat()
-                    result.add(rms)
+                    result.add(filterBank.bandRms(k, currentCount))
                 }
             }
 

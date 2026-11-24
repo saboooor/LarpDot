@@ -217,9 +217,7 @@ object SystemEventManager {
         val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) > 0
         val charging = plugged || status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val pct = if (level >= 0 && scale > 0) (level * 100 / scale) else 0
+        val pct = extractBatteryPercent(intent)
 
         if (!charging) {
             if (isChargingActive) {
@@ -266,9 +264,7 @@ object SystemEventManager {
         batteryIntent: Intent? = null,
     ) {
         val statusIntent = batteryIntent ?: context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = statusIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = statusIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        val pct = if (level >= 0 && scale > 0) (level * 100 / scale) else 0
+        val pct = extractBatteryPercent(statusIntent)
         val voltageMv = statusIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
 
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
@@ -438,10 +434,12 @@ object SystemEventManager {
         NotificationActivityState.removeSystemActivity(key)
     }
 
-    private fun getBatteryPercentage(context: Context): Int {
-        val batteryStatus = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    private fun getBatteryPercentage(context: Context): Int =
+        extractBatteryPercent(context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)))
+
+    private fun extractBatteryPercent(intent: Intent?): Int {
+        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         return if (level >= 0 && scale > 0) (level * 100 / scale) else 0
     }
 
@@ -539,6 +537,7 @@ object SystemEventManager {
 }
 
 private val RAW_MAC_REGEX = Regex("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+private val LE_PREFIX_REGEX = Regex("^LE[_\\-\\s]+", RegexOption.IGNORE_CASE)
 
 private val ACCESSORY_PROFILE_SHORT_UUIDS = setOf(
     "110b", // A2DP Audio Sink (headphones, earbuds, speakers, car)
@@ -624,5 +623,5 @@ internal fun resolveFriendlyBluetoothName(alias: String?, rawName: String?): Str
         return cleanAlias
     }
     val candidate = cleanAlias ?: cleanRaw ?: return "Bluetooth Device"
-    return candidate.replace(Regex("^LE[_\\-\\s]+", RegexOption.IGNORE_CASE), "").trim().ifEmpty { candidate }
+    return candidate.replace(LE_PREFIX_REGEX, "").trim().ifEmpty { candidate }
 }
