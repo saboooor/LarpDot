@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.components
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.SystemClock
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -32,9 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.notification.NotificationActivityAction
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.service.OverlayPreferences
@@ -56,6 +60,7 @@ private enum class LiveActivityPreviewSample(val label: String) {
     NAVIGATION("Nav"),
     BLUETOOTH("BT"),
     CHARGING("Charge"),
+    PROGRESS("Download"),
     TIMER("Timer"),
     CALL("Call"),
 }
@@ -66,13 +71,22 @@ fun LiveActivitiesPreview(
     cutoutInfo: CutoutInfo,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     var selectedSampleIndex by remember { mutableIntStateOf(0) }
     val selectedSample = LiveActivityPreviewSample.entries[selectedSampleIndex]
 
+    val noopPendingIntent = remember(context) {
+        PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent("${context.packageName}.PREVIEW_NOOP").setPackage(context.packageName),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
     val nowElapsed = remember { SystemClock.elapsedRealtime() }
-    val sampleActivity = remember(selectedSample, nowElapsed) {
+    val sampleActivity = remember(selectedSample, nowElapsed, noopPendingIntent) {
         when (selectedSample) {
             LiveActivityPreviewSample.NAVIGATION -> NotificationActivityInfo(
                 key = "preview_nav",
@@ -88,7 +102,7 @@ fun LiveActivitiesPreview(
                 chronometerCountsDown = false,
                 postedAtMillis = 1L,
                 contentIntent = null,
-                actions = emptyList(),
+                actions = listOf(NotificationActivityAction("End trip", noopPendingIntent)),
             )
             LiveActivityPreviewSample.BLUETOOTH -> NotificationActivityInfo(
                 key = "preview_bt",
@@ -116,6 +130,22 @@ fun LiveActivitiesPreview(
                 text = "76% • 27W • 18m left",
                 kind = NotificationActivityKind.BATTERY_CHARGING,
                 progress = 76,
+                progressMax = 100,
+                progressIndeterminate = false,
+                chronometerBaseElapsedRealtime = null,
+                chronometerCountsDown = false,
+                postedAtMillis = 1L,
+                contentIntent = null,
+                actions = emptyList(),
+            )
+            LiveActivityPreviewSample.PROGRESS -> NotificationActivityInfo(
+                key = "preview_progress",
+                packageName = "com.android.providers.downloads",
+                appName = "Downloads",
+                title = "Downloading update",
+                text = "68% • 142 MB of 210 MB",
+                kind = NotificationActivityKind.PROGRESS,
+                progress = 68,
                 progressMax = 100,
                 progressIndeterminate = false,
                 chronometerBaseElapsedRealtime = null,

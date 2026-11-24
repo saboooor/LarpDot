@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -28,6 +29,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
@@ -35,12 +37,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.service.IslandBackupConfig
 import ca.saboor.larpdot.service.IslandThemePresets
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
@@ -70,6 +75,7 @@ fun AppearanceScreen(
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
     val blurStatus = rememberBackdropBlurStatus()
+    var showResetDialog by remember { mutableStateOf(false) }
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -387,8 +393,49 @@ fun AppearanceScreen(
                             Text("Import JSON")
                         }
                     }
+                    OutlinedButton(
+                        onClick = { showResetDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(LarpIcons.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Reset to Defaults")
+                    }
                 }
             }
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            icon = { Icon(LarpIcons.RestartAlt, contentDescription = null) },
+            title = { Text("Reset settings?") },
+            text = {
+                Text(
+                    "This restores default appearance, music, flashlight, and priority settings. Your camera cutout calibration will be kept.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        IslandThemePresets.applyToPreferences(
+                            context = context,
+                            config = IslandBackupConfig(),
+                            includeCutout = false,
+                        )
+                        showResetDialog = false
+                        Toast.makeText(context, "Reset to defaults", Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }

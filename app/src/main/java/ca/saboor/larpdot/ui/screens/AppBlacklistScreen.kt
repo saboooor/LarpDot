@@ -26,9 +26,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +62,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.components.ConnectedButtonGroup
 import ca.saboor.larpdot.ui.components.LarpCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -76,6 +78,7 @@ private enum class BlacklistFilter(val label: String, val icon: ImageVector) {
     BLACKLISTED("Blacklisted", LarpIcons.Block),
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppBlacklistScreen(
     onBack: () -> Unit,
@@ -294,18 +297,30 @@ fun AppBlacklistScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Filter Tabs
-        ConnectedButtonGroup(
-            items = BlacklistFilter.entries,
-            selectedIndex = selectedFilterIndex,
-            onItemSelected = { selectedFilterIndex = it },
-            label = { filter ->
-                when (filter) {
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+        ) {
+            BlacklistFilter.entries.forEachIndexed { index, filter ->
+                val filterLabel = when (filter) {
                     BlacklistFilter.ALL -> "All (${appList.size})"
                     BlacklistFilter.BLACKLISTED -> "Blacklisted (${blacklistedPackages.size})"
                 }
-            },
-            icon = { it.icon },
-        )
+                toggleableItem(
+                    checked = selectedFilterIndex == index,
+                    label = filterLabel,
+                    icon = {
+                        Icon(
+                            imageVector = filter.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    onCheckedChange = { selectedFilterIndex = index },
+                    weight = 1f,
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 

@@ -63,16 +63,14 @@ internal fun EqualizerWaveform(
 
     val visualizerMode by OverlayPreferences.visualizerModeFlow.collectAsState()
     val realAmplitudes by AudioPreviewExtractor.currentAmplitudes.collectAsState()
-    val liveAmplitudes by LiveAudioVisualizer.liveAmplitudes.collectAsState()
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     val isPreviewPlaying by PreviewAudioPlayer.isPlaying.collectAsState()
-    val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
 
     val effectiveIsPlaying = isPreviewPlaying || mediaInfo.isPlaying
 
     if (visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
         LiveTrackVisualizer(
-            amplitudes = liveAmplitudes,
+            amplitudesProvider = { LiveAudioVisualizer.liveAmplitudes.value },
             isPlaying = effectiveIsPlaying,
             accentColor = gradientStart,
             secondaryColor = gradientEnd,
@@ -89,11 +87,13 @@ internal fun EqualizerWaveform(
     if ((isPreviewPlaying || visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) &&
         realAmplitudes != null && realAmplitudes!!.isNotEmpty()
     ) {
-        val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
-        val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else if (mediaInfo.hasMedia) livePositionMs else mediaInfo.positionMs
         TrackVisualizer(
             amplitudes = realAmplitudes!!,
-            currentPositionMs = effectivePositionMs,
+            positionMsProvider = {
+                if (isPreviewPlaying) PreviewAudioPlayer.currentPositionMs.value
+                else if (mediaInfo.hasMedia) MediaPlaybackState.positionMs.value
+                else mediaInfo.positionMs
+            },
             isPlaying = effectiveIsPlaying,
             accentColor = gradientStart,
             secondaryColor = gradientEnd,
@@ -108,11 +108,13 @@ internal fun EqualizerWaveform(
     }
 
     if (visualizerMode == OverlayPreferences.VisualizerMode.BPM) {
-        val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
-        val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else if (mediaInfo.hasMedia) livePositionMs else mediaInfo.positionMs
         BpmVisualizer(
             bpm = currentBpm,
-            currentPositionMs = effectivePositionMs,
+            positionMsProvider = {
+                if (isPreviewPlaying) PreviewAudioPlayer.currentPositionMs.value
+                else if (mediaInfo.hasMedia) MediaPlaybackState.positionMs.value
+                else mediaInfo.positionMs
+            },
             isPlaying = effectiveIsPlaying,
             accentColor = gradientStart,
             secondaryColor = gradientEnd,
@@ -129,8 +131,9 @@ internal fun EqualizerWaveform(
         rememberInfiniteTransition(label = "eq_transition")
     } else null
 
-    // Soft opacity transition: vibrant full color during playback, gently subdued when paused
-    val playAlpha by animateFloatAsState(
+    // Soft opacity transition: vibrant full color during playback, gently subdued when paused.
+    // Kept as State<Float> and read strictly inside WaveformCanvas draw phase to avoid per-frame recompositions.
+    val playAlphaState = animateFloatAsState(
         targetValue = if (effectiveIsPlaying) 1.0f else 0.50f,
         animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "eq_alpha",
@@ -138,25 +141,25 @@ internal fun EqualizerWaveform(
 
     val normalizedBarCount = barCount.coerceAtLeast(0)
     val restingFraction = (minHeight.value / maxHeightDp).coerceIn(0.10f, 0.35f)
-    val heights = (0 until normalizedBarCount).map { index ->
-        val normalizedIndex = index.toFloat() / normalizedBarCount.coerceAtLeast(2).toFloat()
+    val animatedFractionStates = (0 until normalizedBarCount).map { index ->
         val initialFraction = (0.18f + (index * 0.037f % 0.18f)).coerceIn(0.18f, 0.35f)
         val targetFraction = (0.56f + ((index * 0.173f) % 0.44f)).coerceIn(0.56f, 1f)
-        val animatedFraction = if (infiniteTransition != null) {
-            infiniteTransition.animateFloat(
-                initialValue = initialFraction,
-                targetValue = targetFraction,
-                animationSpec = infiniteRepeatable(
-                    animation = LarpMotion.timing(
-                        durationMillis = 540 + ((index * 137) % 460),
-                        easing = FastOutSlowInEasing,
-                    ),
-                    repeatMode = RepeatMode.Reverse,
+        infiniteTransition?.animateFloat(
+            initialValue = initialFraction,
+            targetValue = targetFraction,
+            animationSpec = infiniteRepeatable(
+                animation = LarpMotion.timing(
+                    durationMillis = 540 + ((index * 137) % 460),
+                    easing = FastOutSlowInEasing,
                 ),
-                label = "eq_$index",
-            ).value
-        } else restingFraction
-        val playProgress by animateFloatAsState(
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "eq_$index",
+        )
+    }
+    val playProgressStates = (0 until normalizedBarCount).map { index ->
+        val normalizedIndex = index.toFloat() / normalizedBarCount.coerceAtLeast(2).toFloat()
+        animateFloatAsState(
             targetValue = if (effectiveIsPlaying) 1f else 0f,
             animationSpec = if (effectiveIsPlaying) {
                 LarpMotion.quickSpring(
@@ -171,7 +174,6 @@ internal fun EqualizerWaveform(
             },
             label = "play_$index",
         )
-        restingFraction + (animatedFraction - restingFraction) * playProgress.coerceAtLeast(0f)
     }
 
     val widthPx = with(LocalDensity.current) { totalWidth.toPx() }
@@ -179,14 +181,19 @@ internal fun EqualizerWaveform(
         val barWidthPx = barWidth.toPx()
         val stepPx = barWidthPx + barSpacing.toPx()
         val left = (size.width - widthPx) / 2f
-        heights.forEachIndexed { index, fraction ->
+        val playAlpha = playAlphaState.value
+        val cornerRadiusPx = barCornerRadius.toPx()
+        for (index in 0 until normalizedBarCount) {
+            val animatedFraction = animatedFractionStates[index]?.value ?: restingFraction
+            val playProgress = playProgressStates[index].value.coerceAtLeast(0f)
+            val fraction = restingFraction + (animatedFraction - restingFraction) * playProgress
             val heightPx = (maxHeightDp * fraction).dp.coerceAtLeast(minHeight).toPx()
             drawRoundRect(
                 brush = gradient,
                 alpha = playAlpha,
                 topLeft = Offset(left + index * stepPx, (size.height - heightPx) / 2f),
                 size = Size(barWidthPx, heightPx),
-                cornerRadius = CornerRadius(barCornerRadius.toPx()),
+                cornerRadius = CornerRadius(cornerRadiusPx),
             )
         }
     }

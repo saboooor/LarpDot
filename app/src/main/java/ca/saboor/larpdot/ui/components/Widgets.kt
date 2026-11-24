@@ -10,7 +10,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,22 +18,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,10 +39,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
@@ -197,8 +187,8 @@ fun StatusPill(
     activeColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val dotAlpha by if (pulse) {
+    val dotAlphaState = if (pulse) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
         infiniteTransition.animateFloat(
             initialValue = 0.35f,
             targetValue = 1f,
@@ -209,7 +199,7 @@ fun StatusPill(
             label = "dot_alpha",
         )
     } else {
-        remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        null
     }
 
     Row(
@@ -225,9 +215,10 @@ fun StatusPill(
         Box(
             modifier = Modifier
                 .size(8.dp)
+                .graphicsLayer { alpha = if (active) (dotAlphaState?.value ?: 1f) else 1f }
                 .clip(CircleShape)
                 .background(
-                    if (active) activeColor.copy(alpha = dotAlpha) else MaterialTheme.colorScheme.outline
+                    if (active) activeColor else MaterialTheme.colorScheme.outline
                 )
         )
         Text(
@@ -236,60 +227,6 @@ fun StatusPill(
             fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             color = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-/**
- * Connected Button Group using Material 3 Expressive APIs.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun <T> ConnectedButtonGroup(
-    items: List<T>,
-    selectedIndex: Int,
-    onItemSelected: (Int) -> Unit,
-    label: (T) -> String,
-    icon: (T) -> ImageVector?,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-    ) {
-        items.forEachIndexed { index, item ->
-            val shapes = when (index) {
-                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-            }
-            ToggleButton(
-                checked = selectedIndex == index,
-                onCheckedChange = { if (it) onItemSelected(index) },
-                shapes = shapes,
-                modifier = Modifier.semantics { role = Role.RadioButton },
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                ) {
-                    val itemIcon = icon(item)
-                    if (itemIcon != null) {
-                        Icon(
-                            imageVector = itemIcon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    Text(
-                        text = label(item),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-        }
     }
 }
 

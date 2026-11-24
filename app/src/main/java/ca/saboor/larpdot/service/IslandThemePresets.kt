@@ -80,6 +80,72 @@ data class IslandPreset(
 object IslandThemePresets {
     private const val BACKUP_VERSION = 2
 
+    private val KNOWN_BACKUP_KEYS = setOf(
+        "version",
+        "bubbleStyle",
+        "smallerBubbles",
+        "minimizedMaxWidthPercent",
+        "islandCornerRadius",
+        "islandSquircleEnabled",
+        "expandedBackgroundOpacity",
+        "backdropBlurEnabled",
+        "backdropBlurRadius",
+        "cameraCoverStyle",
+        "islandFontStyle",
+        "islandFontWeight",
+        "minimizedAlbumArtStyle",
+        "minimizedAlbumArtShape",
+        "minimizedAlbumArtRotation",
+        "minimizedNestedBlurredBg",
+        "expandedAlbumArtStyle",
+        "showExpandedAlbumArt",
+        "expandedAlbumArtShape",
+        "expandedAlbumArtRotation",
+        "expandedPlayerLayout",
+        "showProgressSquiggles",
+        "progressBarAccentColor",
+        "playbackPlayPauseBg",
+        "playbackSkipBg",
+        "playbackCornerRadiusDp",
+        "playbackM3ButtonGroup",
+        "playbackPlayPauseAccent",
+        "trackInfoShowTitle",
+        "trackInfoShowArtist",
+        "trackInfoShowAlbum",
+        "trackInfoTitleAccent",
+        "showMinimizedTitle",
+        "showMinimizedVisualizer",
+        "showMinimizedProgressOutline",
+        "showExpandedProgressOutline",
+        "albumArtGlowEnabled",
+        "showMinimizedDominantGlow",
+        "showExpandedDominantGlow",
+        "expandedGlowLeft",
+        "expandedGlowRight",
+        "expandedGlowTop",
+        "expandedGlowBottom",
+        "bpmPulseEnabled",
+        "minimizedBpmPulseEnabled",
+        "expandedBpmPulseEnabled",
+        "pulseAmount",
+        "pulseEntireIslandEnabled",
+        "waveformBandCount",
+        "waveformBarWidth",
+        "waveformBarSpacing",
+        "showDotRightSideInfo",
+        "showMinimizedFlashlightOutline",
+        "showExpandedFlashlightOutline",
+        "flashlightExpandedStyle",
+        "flashlightBeamBlur",
+        "flashlightBeamAccentColor",
+        "flashlightTapToToggle",
+        "islandPriorityOrder",
+        "cutoutManualEnabled",
+        "cutoutOffsetX",
+        "cutoutOffsetY",
+        "cutoutDiameterDp",
+    )
+
     val builtInPresets: List<IslandPreset> = listOf(
         IslandPreset(
             id = "pixel_expressive",
@@ -277,6 +343,7 @@ object IslandThemePresets {
         val trimmed = raw.trim()
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
         val fields = parseFlatJsonObject(trimmed) ?: return null
+        if (fields.keys.none { it in KNOWN_BACKUP_KEYS }) return null
         val defaults = IslandBackupConfig()
         val legacyBpmPulse = fields["bpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.bpmPulseEnabled
         val rawPriority = fields["islandPriorityOrder"]

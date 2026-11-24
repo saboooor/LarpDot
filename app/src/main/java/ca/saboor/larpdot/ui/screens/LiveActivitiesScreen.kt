@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -561,29 +560,43 @@ private fun ActivityToggleTile(
             }
         }
         if (item.permanent != null && item.onPermanentChange != null) {
-            FilterChip(
-                selected = item.permanent,
+            ToggleButton(
+                checked = item.permanent,
                 enabled = item.checked,
-                onClick = { item.onPermanentChange.invoke(!item.permanent) },
+                onCheckedChange = { item.onPermanentChange.invoke(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(32.dp),
-                label = {
+                    .height(34.dp),
+                shapes = ToggleButtonShapes(
+                    shape = RoundedCornerShape(10.dp),
+                    pressedShape = RoundedCornerShape(8.dp),
+                    checkedShape = RoundedCornerShape(16.dp),
+                ),
+                colors = ToggleButtonDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Icon(
+                        imageVector = LarpIcons.PushPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
                     Text(
                         text = if (item.permanent) "Pinned" else "Auto-dismiss",
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = LarpIcons.PushPin,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                },
-            )
+                }
+            }
         }
     }
 }

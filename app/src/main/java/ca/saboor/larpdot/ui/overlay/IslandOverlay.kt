@@ -855,7 +855,7 @@ internal fun SecondaryDotContent(
     val innerPadding = iconInset
     val contentShift = 0.dp
     val iconScale = (minOf(bubbleWidth, bubbleHeight) / bubbleThickness).coerceIn(0f, 1f)
-    val pulseAlpha = if (type == IslandType.FLASHLIGHT) {
+    val pulseAlphaState = if (type == IslandType.FLASHLIGHT) {
         val infiniteTransition = rememberInfiniteTransition(label = "dot_torch_pulse")
         infiniteTransition.animateFloat(
             initialValue = 0.65f,
@@ -865,8 +865,8 @@ internal fun SecondaryDotContent(
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "pulse_alpha",
-        ).value
-    } else 1f
+        )
+    } else null
     val activityRadial = if (type == IslandType.NOTIFICATION_ACTIVITY) {
         activityRadialProgress(notificationActivity, activitySettings.progressOutline, primaryColor)
     } else null
@@ -927,8 +927,10 @@ internal fun SecondaryDotContent(
                         Icon(
                             imageVector = LarpIcons.FlashlightOn,
                             contentDescription = "Flashlight Active",
-                            tint = flashlightAccent.copy(alpha = pulseAlpha),
-                            modifier = Modifier.size(dotRingIconSize),
+                            tint = flashlightAccent,
+                            modifier = Modifier
+                                .size(dotRingIconSize)
+                                .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
                         )
                         RadialProgressRing(
                             progress = flashlightFraction,
@@ -941,8 +943,10 @@ internal fun SecondaryDotContent(
                     Icon(
                         imageVector = LarpIcons.FlashlightOn,
                         contentDescription = "Flashlight Active",
-                        tint = flashlightAccent.copy(alpha = pulseAlpha),
-                        modifier = Modifier.size(bubbleIconSize),
+                        tint = flashlightAccent,
+                        modifier = Modifier
+                            .size(bubbleIconSize)
+                            .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
                     )
                 }
             }

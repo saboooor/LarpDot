@@ -128,7 +128,15 @@ class FeatureServicesTest {
         assertNotNull(decoded)
         assertEquals(original, decoded)
         assertNull(IslandThemePresets.fromJson("not json"))
+        assertNull(IslandThemePresets.fromJson("""{"foo": "bar", "baz": 123}"""))
         assertEquals(4, IslandThemePresets.builtInPresets.size)
+    }
+
+    @Test fun fullscreenAccessibilityThrottleCoalescesRapidBursts() {
+        assertEquals(0L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_000L, lastRunMs = 0L))
+        assertEquals(0L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_120L, lastRunMs = 1_000L))
+        assertEquals(80L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_040L, lastRunMs = 1_000L))
+        assertEquals(120L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_000L, lastRunMs = 1_000L))
     }
 
     @Test fun playPauseIconTintAdaptsToAccentLuminance() {

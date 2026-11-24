@@ -8,8 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -49,6 +49,39 @@ fun TrackVisualizer(
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
     secondaryColor: Color = accentColor,
+) = TrackVisualizer(
+    amplitudes = amplitudes,
+    positionMsProvider = { currentPositionMs },
+    isPlaying = isPlaying,
+    accentColor = accentColor,
+    modifier = modifier,
+    fps = fps,
+    barCount = barCount,
+    barWidth = barWidth,
+    barSpacing = barSpacing,
+    maxHeight = maxHeight,
+    minHeight = minHeight,
+    secondaryColor = secondaryColor,
+)
+
+/**
+ * Lambda-backed variant that reads live position inside DrawScope so callers
+ * do not recompose on every playback tick.
+ */
+@Composable
+fun TrackVisualizer(
+    amplitudes: FloatArray,
+    positionMsProvider: () -> Long,
+    isPlaying: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    fps: Int = 60,
+    barCount: Int = 5,
+    barWidth: Dp = 2.4.dp,
+    barSpacing: Dp = 2.dp,
+    maxHeight: Dp = 15.dp,
+    minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -56,6 +89,7 @@ fun TrackVisualizer(
     val maxHeightPx = with(density) { maxHeight.toPx() }
     val minHeightPx = with(density) { minHeight.toPx() }
     val heightSpanPx = maxHeightPx - minHeightPx
+    val latestPositionProvider by rememberUpdatedState(positionMsProvider)
 
     // Staggered musical equalizer ceilings for any number of bands
     val weights = remember(barCount) {
@@ -75,8 +109,8 @@ fun TrackVisualizer(
         }
     }
 
-    // Playback state spring transition
-    val playProgress by animateFloatAsState(
+    // Playback state spring transition (read inside draw phase)
+    val playProgressState = animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
         animationSpec = if (isPlaying) {
             LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
@@ -86,7 +120,7 @@ fun TrackVisualizer(
         label = "tv_play_spring",
     )
 
-    val playAlpha by animateFloatAsState(
+    val playAlphaState = animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.45f,
         animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "tv_alpha",
@@ -100,13 +134,8 @@ fun TrackVisualizer(
         }
     }
 
-    var lastReportedPos by remember { mutableLongStateOf(currentPositionMs) }
-    var lastReportedTime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-
-    if (currentPositionMs != lastReportedPos) {
-        lastReportedPos = currentPositionMs
-        lastReportedTime = SystemClock.elapsedRealtime()
-    }
+    // [0] = lastReportedPos, [1] = lastReportedTime; updated strictly inside DrawScope.
+    val anchorPosAndTime = remember { longArrayOf(-1L, 0L) }
 
     // Dynamic ballistic smoothing buffer sized to barCount
     val safeCount = barCount.coerceAtLeast(1)
@@ -118,6 +147,8 @@ fun TrackVisualizer(
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         // Subscribe to display refresh loop
         val _tick = vsyncClock
+        val playProgress = playProgressState.value
+        val playAlpha = playAlphaState.value
 
         val bandsInArray = if (barCount > 0 && amplitudes.isNotEmpty() && amplitudes.size % barCount == 0) {
             barCount
@@ -146,8 +177,13 @@ fun TrackVisualizer(
 
         // Exact playback time interpolated from hardware clock
         val now = SystemClock.elapsedRealtime()
-        val elapsed = if (isPlaying) (now - lastReportedTime).coerceIn(0L, 1000L) else 0L
-        val exactMs = (lastReportedPos + elapsed).coerceAtLeast(0L)
+        val livePos = latestPositionProvider()
+        if (anchorPosAndTime[0] != livePos) {
+            anchorPosAndTime[0] = livePos
+            anchorPosAndTime[1] = now
+        }
+        val elapsed = if (isPlaying) (now - anchorPosAndTime[1]).coerceIn(0L, 1000L) else 0L
+        val exactMs = (anchorPosAndTime[0] + elapsed).coerceAtLeast(0L)
 
         // Deterministic frame calculation
         val exactFrame = (exactMs.toFloat() / 1000f) * fps.toFloat()
@@ -232,6 +268,35 @@ fun LiveTrackVisualizer(
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
     secondaryColor: Color = accentColor,
+) = LiveTrackVisualizer(
+    amplitudesProvider = { amplitudes },
+    isPlaying = isPlaying,
+    accentColor = accentColor,
+    modifier = modifier,
+    barCount = barCount,
+    barWidth = barWidth,
+    barSpacing = barSpacing,
+    maxHeight = maxHeight,
+    minHeight = minHeight,
+    secondaryColor = secondaryColor,
+)
+
+/**
+ * Lambda-backed variant that polls live device audio amplitudes inside DrawScope
+ * on hardware vsync without triggering per-frame recompositions.
+ */
+@Composable
+fun LiveTrackVisualizer(
+    amplitudesProvider: () -> FloatArray?,
+    isPlaying: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    barCount: Int = 5,
+    barWidth: Dp = 2.4.dp,
+    barSpacing: Dp = 2.dp,
+    maxHeight: Dp = 15.dp,
+    minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -239,6 +304,7 @@ fun LiveTrackVisualizer(
     val maxHeightPx = with(density) { maxHeight.toPx() }
     val minHeightPx = with(density) { minHeight.toPx() }
     val heightSpanPx = maxHeightPx - minHeightPx
+    val latestAmplitudesProvider by rememberUpdatedState(amplitudesProvider)
 
     val weights = remember(barCount) {
         when (barCount) {
@@ -257,7 +323,7 @@ fun LiveTrackVisualizer(
         }
     }
 
-    val playProgress by animateFloatAsState(
+    val playProgressState = animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
         animationSpec = if (isPlaying) {
             LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
@@ -267,7 +333,7 @@ fun LiveTrackVisualizer(
         label = "live_play_spring",
     )
 
-    val playAlpha by animateFloatAsState(
+    val playAlphaState = animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.45f,
         animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "live_alpha",
@@ -287,11 +353,13 @@ fun LiveTrackVisualizer(
     val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
+        val playProgress = playProgressState.value
+        val playAlpha = playAlphaState.value
 
         var currentX = (size.width - totalWidth) / 2f
         val centerY = size.height / 2f
 
-        val live = amplitudes
+        val live = latestAmplitudesProvider()
         if (live == null || live.isEmpty() || !isPlaying) {
             for (i in 0 until barCount) {
                 drawRoundRect(

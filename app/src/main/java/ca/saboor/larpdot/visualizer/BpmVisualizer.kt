@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.isActive
@@ -65,6 +66,37 @@ fun BpmVisualizer(
     maxHeight: Dp = 15.dp,
     minHeight: Dp = 2.8.dp,
     secondaryColor: Color = accentColor,
+) = BpmVisualizer(
+    bpm = bpm,
+    positionMsProvider = { currentPositionMs },
+    isPlaying = isPlaying,
+    accentColor = accentColor,
+    modifier = modifier,
+    barCount = barCount,
+    barWidth = barWidth,
+    barSpacing = barSpacing,
+    maxHeight = maxHeight,
+    minHeight = minHeight,
+    secondaryColor = secondaryColor,
+)
+
+/**
+ * Lambda-backed variant that reads playback position inside the draw phase so callers
+ * do not recompose on every position tick.
+ */
+@Composable
+fun BpmVisualizer(
+    bpm: Float?,
+    positionMsProvider: () -> Long,
+    isPlaying: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    barCount: Int = 5,
+    barWidth: Dp = 2.4.dp,
+    barSpacing: Dp = 2.dp,
+    maxHeight: Dp = 15.dp,
+    minHeight: Dp = 2.8.dp,
+    secondaryColor: Color = accentColor,
 ) {
     val density = LocalDensity.current
     val barWidthPx = with(density) { barWidth.toPx() }
@@ -72,6 +104,7 @@ fun BpmVisualizer(
     val maxHeightPx = with(density) { maxHeight.toPx() }
     val minHeightPx = with(density) { minHeight.toPx() }
     val heightSpanPx = maxHeightPx - minHeightPx
+    val latestPositionProvider by rememberUpdatedState(positionMsProvider)
 
     val hasResolvedBpm = bpm != null && bpm > 0f
     val isBpmActive = isPlaying && hasResolvedBpm
@@ -94,8 +127,8 @@ fun BpmVisualizer(
         }
     }
 
-    // Playback state spring transition
-    val playProgress by animateFloatAsState(
+    // Playback state spring transition (read inside draw phase to avoid per-frame recompositions)
+    val playProgressState = animateFloatAsState(
         targetValue = if (isBpmActive) 1f else 0f,
         animationSpec = if (isBpmActive) {
             LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
@@ -105,7 +138,7 @@ fun BpmVisualizer(
         label = "bpm_play_spring",
     )
 
-    val playAlpha by animateFloatAsState(
+    val playAlphaState = animateFloatAsState(
         targetValue = if (isBpmActive) 1.0f else 0.45f,
         animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "bpm_alpha",
@@ -119,15 +152,8 @@ fun BpmVisualizer(
         }
     }
 
-    var lastReportedPos by remember { mutableLongStateOf(currentPositionMs) }
-    var lastReportedTime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-
-    val nowAnchor = SystemClock.elapsedRealtime()
-    val expectedAnchorMs = lastReportedPos + if (isPlaying) (nowAnchor - lastReportedTime) else 0L
-    if (abs(currentPositionMs - expectedAnchorMs) > 600L) {
-        lastReportedPos = currentPositionMs
-        lastReportedTime = nowAnchor
-    }
+    // [0] = lastReportedPos, [1] = lastReportedTime; updated strictly inside DrawScope.
+    val anchorPosAndTime = remember { longArrayOf(-1L, 0L) }
 
     // Ballistic smoothing buffer dynamically sized to barCount
     val safeCount = barCount.coerceAtLeast(1)
@@ -140,10 +166,23 @@ fun BpmVisualizer(
     val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
+        val playProgress = playProgressState.value
+        val playAlpha = playAlphaState.value
 
         val now = SystemClock.elapsedRealtime()
-        val elapsed = if (isPlaying) (now - lastReportedTime).coerceAtLeast(0L) else 0L
-        val exactMs = (lastReportedPos + elapsed).coerceAtLeast(0L)
+        val livePos = latestPositionProvider()
+        if (anchorPosAndTime[0] < 0L) {
+            anchorPosAndTime[0] = livePos
+            anchorPosAndTime[1] = now
+        } else {
+            val expectedAnchorMs = anchorPosAndTime[0] + if (isPlaying) (now - anchorPosAndTime[1]).coerceAtLeast(0L) else 0L
+            if (abs(livePos - expectedAnchorMs) > 600L) {
+                anchorPosAndTime[0] = livePos
+                anchorPosAndTime[1] = now
+            }
+        }
+        val elapsed = if (isPlaying) (now - anchorPosAndTime[1]).coerceAtLeast(0L) else 0L
+        val exactMs = (anchorPosAndTime[0] + elapsed).coerceAtLeast(0L)
 
         val currentBeatExact = exactMs.toDouble() / beatDurationMs
         val beatIndex = currentBeatExact.toInt()

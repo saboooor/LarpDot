@@ -63,6 +63,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -150,7 +151,7 @@ fun CompactFlashlightContent(
     val compactRingInset = ((cutoutDiameterDp - compactRingDiameter) / 2f).coerceAtLeast(3.dp)
 
     val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
+    val pulseAlphaState = infiniteTransition.animateFloat(
         initialValue = 0.65f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
@@ -164,8 +165,10 @@ fun CompactFlashlightContent(
         Icon(
             imageVector = LarpIcons.FlashlightOn,
             contentDescription = "Flashlight Active",
-            tint = accentColor.copy(alpha = pulseAlpha),
-            modifier = Modifier.size(18.dp),
+            tint = accentColor,
+            modifier = Modifier
+                .size(18.dp)
+                .graphicsLayer { alpha = pulseAlphaState.value },
         )
     }
 

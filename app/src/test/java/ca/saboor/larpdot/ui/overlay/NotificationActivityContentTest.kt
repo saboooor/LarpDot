@@ -546,4 +546,13 @@ class NotificationActivityContentTest {
         assertEquals(6, ccwStart.startIndex)
         assertFalse(ccwStart.isClockwise)
     }
+
+    @Test
+    fun inlineNavigationActionSelectsEndExitStopOrFallsBackToFirst() {
+        val navNoActions = createActivity(kind = NotificationActivityKind.NAVIGATION)
+        assertNull(inlineNavigationAction(navNoActions))
+
+        val nonNav = createActivity(kind = NotificationActivityKind.TIMER)
+        assertNull(inlineNavigationAction(nonNav))
+    }
 }

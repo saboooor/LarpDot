@@ -6,14 +6,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
-import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,17 +33,45 @@ class DotAccessibilityService : AccessibilityService() {
     private var serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
     private val flashlightBroadcast = FlashlightBroadcastRegistration()
+    private var fullscreenCheckJob: Job? = null
+    private var pendingFullscreenPackage: String? = null
+    private var lastFullscreenCheckMs: Long = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         ForegroundAppTracker.updateFromAccessibility(event)
         if (OverlayPreferences.hideInFullscreenFlow.value) {
-            FullscreenStateTracker.updateFromAccessibilityWindows(
-                context = this,
-                windows = runCatching { windows }.getOrNull(),
-                foregroundPackage = event.packageName?.toString(),
-            )
+            scheduleFullscreenCheck(event.packageName?.toString())
         }
+    }
+
+    private fun scheduleFullscreenCheck(foregroundPackage: String?) {
+        pendingFullscreenPackage = foregroundPackage
+        val nowMs = SystemClock.elapsedRealtime()
+        val delayMs = fullscreenCheckDelayMs(nowMs = nowMs, lastRunMs = lastFullscreenCheckMs)
+        if (delayMs == 0L) {
+            fullscreenCheckJob?.cancel()
+            fullscreenCheckJob = null
+            runFullscreenCheck(nowMs)
+            return
+        }
+        if (fullscreenCheckJob?.isActive == true) return
+        fullscreenCheckJob = serviceScope.launch {
+            delay(delayMs)
+            fullscreenCheckJob = null
+            if (OverlayPreferences.hideInFullscreenFlow.value) {
+                runFullscreenCheck(SystemClock.elapsedRealtime())
+            }
+        }
+    }
+
+    private fun runFullscreenCheck(nowMs: Long) {
+        lastFullscreenCheckMs = nowMs
+        FullscreenStateTracker.updateFromAccessibilityWindows(
+            context = this,
+            windows = runCatching { windows }.getOrNull(),
+            foregroundPackage = pendingFullscreenPackage,
+        )
     }
 
     override fun onInterrupt() {
@@ -97,6 +126,8 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        fullscreenCheckJob?.cancel()
+        fullscreenCheckJob = null
         serviceJob.cancel()
         if (instance == this) instance = null
         _isServiceConnected.value = false
@@ -108,6 +139,8 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        fullscreenCheckJob?.cancel()
+        fullscreenCheckJob = null
         if (instance == this) instance = null
         _isServiceConnected.value = false
         flashlightBroadcast.unregister(this)
@@ -118,6 +151,18 @@ class DotAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        internal const val FULLSCREEN_CHECK_MIN_INTERVAL_MS = 120L
+
+        internal fun fullscreenCheckDelayMs(
+            nowMs: Long,
+            lastRunMs: Long,
+            minIntervalMs: Long = FULLSCREEN_CHECK_MIN_INTERVAL_MS,
+        ): Long {
+            if (lastRunMs <= 0L) return 0L
+            val elapsed = (nowMs - lastRunMs).coerceAtLeast(0L)
+            return (minIntervalMs - elapsed).coerceAtLeast(0L)
+        }
+
         var instance: DotAccessibilityService? = null
             private set
 
