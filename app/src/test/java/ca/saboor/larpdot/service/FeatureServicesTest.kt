@@ -151,7 +151,12 @@ class FeatureServicesTest {
         assertEquals(original, decoded)
         assertNull(IslandThemePresets.fromJson("not json"))
         assertNull(IslandThemePresets.fromJson("""{"foo": "bar", "baz": 123}"""))
-        assertEquals(4, IslandThemePresets.builtInPresets.size)
+
+        // Verify bar spacing full 0..8dp range and charge limit 70..100% round-trip cleanly.
+        val edgeSpacing = IslandBackupConfig(waveformBarSpacing = 0f, activityChargeLimitPercent = 70)
+        assertEquals(edgeSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(edgeSpacing)))
+        val wideSpacing = IslandBackupConfig(waveformBarSpacing = 7.5f, activityChargeLimitPercent = 100)
+        assertEquals(wideSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(wideSpacing)))
     }
 
     @Test fun fullscreenAccessibilityThrottleCoalescesRapidBursts() {

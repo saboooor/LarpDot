@@ -128,313 +128,345 @@ fun HomeScreen(
         }
         item {
             SectionHeader(title = "Island Priority")
-            LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "When multiple islands are active, higher items stay on the main island and lower ones move to side dots.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (islandPriorityOrder != DEFAULT_ISLAND_PRIORITY_ORDER) {
-                        TextButton(
-                            onClick = {
-                                OverlayPreferences.setIslandPriorityOrder(context, DEFAULT_ISLAND_PRIORITY_ORDER)
-                            },
-                        ) {
-                            Text("Reset")
-                        }
-                    }
-                }
+            IslandPriorityCard(
+                islandPriorityOrder = islandPriorityOrder,
+                onOrderChange = { OverlayPreferences.setIslandPriorityOrder(context, it) },
+            )
+        }
+        item {
+            SectionHeader(title = "Island Behavior")
+            IslandBehaviorCard(
+                minimizedMaxWidth = minimizedMaxWidth,
+                tapToExpand = tapToExpand,
+                holdToExpandDurationMs = holdToExpandDurationMs,
+                hideWhenScreenOff = hideWhenScreenOff,
+                hideOnLockScreen = hideOnLockScreen,
+                hideInFullscreen = hideInFullscreen,
+                hideInLandscape = hideInLandscape,
+                showDotRightSideInfo = showDotRightSideInfo,
+                appBlacklistEnabled = appBlacklistEnabled,
+                blacklistedCount = blacklistedPackages.size,
+                onOpenBlacklist = { showBlacklistScreen = true },
+            )
+        }
+    }
+}
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    islandPriorityOrder.forEachIndexed { index, item ->
-                        val isTop = index == 0
-                        val itemIcon = when (item) {
-                            IslandPriorityItem.SHORT_TERM_ALERTS -> LarpIcons.BatteryChargingFull
-                            IslandPriorityItem.LIVE_ACTIVITIES -> LarpIcons.NotificationsActive
-                            IslandPriorityItem.MEDIA -> LarpIcons.MusicNote
-                            IslandPriorityItem.PINNED_SHORT_TERM -> LarpIcons.PushPin
-                            IslandPriorityItem.NAVIGATION -> LarpIcons.Navigation
-                            IslandPriorityItem.FLASHLIGHT -> LarpIcons.FlashlightOn
-                        }
+@Composable
+private fun IslandPriorityCard(
+    islandPriorityOrder: List<IslandPriorityItem>,
+    onOrderChange: (List<IslandPriorityItem>) -> Unit,
+) {
+    LarpCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "When multiple islands are active, higher items stay on the main island and lower ones move to side dots.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (islandPriorityOrder != DEFAULT_ISLAND_PRIORITY_ORDER) {
+                TextButton(onClick = { onOrderChange(DEFAULT_ISLAND_PRIORITY_ORDER) }) {
+                    Text("Reset")
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            islandPriorityOrder.forEachIndexed { index, item ->
+                val isTop = index == 0
+                val itemIcon = when (item) {
+                    IslandPriorityItem.SHORT_TERM_ALERTS -> LarpIcons.BatteryChargingFull
+                    IslandPriorityItem.LIVE_ACTIVITIES -> LarpIcons.NotificationsActive
+                    IslandPriorityItem.MEDIA -> LarpIcons.MusicNote
+                    IslandPriorityItem.PINNED_SHORT_TERM -> LarpIcons.PushPin
+                    IslandPriorityItem.NAVIGATION -> LarpIcons.Navigation
+                    IslandPriorityItem.FLASHLIGHT -> LarpIcons.FlashlightOn
+                }
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isTop) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = CircleShape,
                             color = if (isTop) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                MaterialTheme.colorScheme.surfaceContainerHighest
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.size(24.dp),
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "${index + 1}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
                                     color = if (isTop) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHighest
-                                    },
-                                    modifier = Modifier.size(24.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "${index + 1}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isTop) {
-                                                MaterialTheme.colorScheme.onPrimary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    imageVector = itemIcon,
-                                    contentDescription = null,
-                                    tint = if (isTop) {
-                                        MaterialTheme.colorScheme.primary
+                                        MaterialTheme.colorScheme.onPrimary
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
-                                    modifier = Modifier.size(20.dp),
                                 )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            }
+                        }
+                        Icon(
+                            imageVector = itemIcon,
+                            contentDescription = null,
+                            tint = if (isTop) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = item.label,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (isTop) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                                     ) {
                                         Text(
-                                            text = item.label,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        if (isTop) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                            ) {
-                                                Text(
-                                                    text = "Main",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Text(
-                                        text = item.subtitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = {
-                                            if (index > 0) {
-                                                val updated = islandPriorityOrder.toMutableList()
-                                                val moved = updated.removeAt(index)
-                                                updated.add(index - 1, moved)
-                                                OverlayPreferences.setIslandPriorityOrder(context, updated)
-                                            }
-                                        },
-                                        enabled = index > 0,
-                                        modifier = Modifier.size(36.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = LarpIcons.KeyboardArrowUp,
-                                            contentDescription = "Move ${item.label} up",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            if (index < islandPriorityOrder.lastIndex) {
-                                                val updated = islandPriorityOrder.toMutableList()
-                                                val moved = updated.removeAt(index)
-                                                updated.add(index + 1, moved)
-                                                OverlayPreferences.setIslandPriorityOrder(context, updated)
-                                            }
-                                        },
-                                        enabled = index < islandPriorityOrder.lastIndex,
-                                        modifier = Modifier.size(36.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = LarpIcons.KeyboardArrowDown,
-                                            contentDescription = "Move ${item.label} down",
-                                            modifier = Modifier.size(20.dp),
+                                            text = "Main",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                         )
                                     }
                                 }
+                            }
+                            Text(
+                                text = item.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    if (index > 0) {
+                                        val updated = islandPriorityOrder.toMutableList()
+                                        updated.add(index - 1, updated.removeAt(index))
+                                        onOrderChange(updated)
+                                    }
+                                },
+                                enabled = index > 0,
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    imageVector = LarpIcons.KeyboardArrowUp,
+                                    contentDescription = "Move ${item.label} up",
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (index < islandPriorityOrder.lastIndex) {
+                                        val updated = islandPriorityOrder.toMutableList()
+                                        updated.add(index + 1, updated.removeAt(index))
+                                        onOrderChange(updated)
+                                    }
+                                },
+                                enabled = index < islandPriorityOrder.lastIndex,
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    imageVector = LarpIcons.KeyboardArrowDown,
+                                    contentDescription = "Move ${item.label} down",
+                                    modifier = Modifier.size(20.dp),
+                                )
                             }
                         }
                     }
                 }
             }
         }
-        item {
-            SectionHeader(title = "Island Behavior")
-            LarpCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CutoutSliderRow(
-                        label = "Maximum minimized side width", value = minimizedMaxWidth,
-                        valueRange = 40f..100f, unit = "%",
-                        onValueChange = { OverlayPreferences.setMinimizedMaxWidthPercent(context, it) },
-                        onNudge = { OverlayPreferences.setMinimizedMaxWidthPercent(context, minimizedMaxWidth + it) },
-                    )
-                    Text("Limits each side independently. 100% allows each side to reach its screen edge, reserving space for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
-                }
+    }
+}
 
-                LarpDivider()
+@Composable
+private fun IslandBehaviorCard(
+    minimizedMaxWidth: Float,
+    tapToExpand: Boolean,
+    holdToExpandDurationMs: Int,
+    hideWhenScreenOff: Boolean,
+    hideOnLockScreen: Boolean,
+    hideInFullscreen: Boolean,
+    hideInLandscape: Boolean,
+    showDotRightSideInfo: Boolean,
+    appBlacklistEnabled: Boolean,
+    blacklistedCount: Int,
+    onOpenBlacklist: () -> Unit,
+) {
+    val context = LocalContext.current
+    LarpCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CutoutSliderRow(
+                label = "Maximum minimized side width", value = minimizedMaxWidth,
+                valueRange = 40f..100f, unit = "%",
+                onValueChange = { OverlayPreferences.setMinimizedMaxWidthPercent(context, it) },
+                onNudge = { OverlayPreferences.setMinimizedMaxWidthPercent(context, minimizedMaxWidth + it) },
+            )
+            Text(
+                "Limits each side independently. 100% allows each side to reach its screen edge, reserving space for nearby bubbles.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
-                LarpSwitchRow(
-                    title = "Tap to Expand",
-                    subtitle = "Tap expands island, hold-tap opens player",
-                    icon = LarpIcons.TouchApp,
-                    checked = tapToExpand,
-                    onCheckedChange = { OverlayPreferences.setTapToExpandEnabled(context, it) },
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Tap to Expand",
+            subtitle = "Tap expands island, hold-tap opens player",
+            icon = LarpIcons.TouchApp,
+            checked = tapToExpand,
+            onCheckedChange = { OverlayPreferences.setTapToExpandEnabled(context, it) },
+        )
+
+        CutoutSliderRow(
+            label = "Hold Duration to Expand",
+            value = holdToExpandDurationMs.toFloat(),
+            valueRange = OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS.toFloat()..OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS.toFloat(),
+            unit = "ms",
+            onValueChange = { raw ->
+                val snapped = ((raw / 25f).roundToInt() * 25)
+                OverlayPreferences.setHoldToExpandDurationMs(context, snapped)
+            },
+            onNudge = { delta ->
+                OverlayPreferences.setHoldToExpandDurationMs(context, holdToExpandDurationMs + delta * 25)
+            },
+        )
+        Text(
+            text = "How long to press and hold the minimized island before it expands",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide When Phone Is Off",
+            subtitle = "Dismiss the island overlay whenever the screen turns off",
+            icon = LarpIcons.PowerSettingsNew,
+            checked = hideWhenScreenOff,
+            onCheckedChange = { OverlayPreferences.setHideWhenScreenOffEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide on Lock Screen",
+            subtitle = "Dismiss the island overlay while the device is locked",
+            icon = LarpIcons.Lock,
+            checked = hideOnLockScreen,
+            onCheckedChange = { OverlayPreferences.setHideOnLockScreenEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide in Fullscreen & Games",
+            subtitle = "Auto-hide during immersive video players and games (requires Accessibility)",
+            icon = LarpIcons.Fullscreen,
+            checked = hideInFullscreen,
+            onCheckedChange = { OverlayPreferences.setHideInFullscreenEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide in Landscape",
+            subtitle = "Automatically hide the island whenever the phone rotates horizontally",
+            icon = LarpIcons.ScreenRotation,
+            checked = hideInLandscape,
+            onCheckedChange = { OverlayPreferences.setHideInLandscapeEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Show Right Side Info on Dots",
+            subtitle = "Show info alongside icons on secondary dots, making them mini pills",
+            icon = LarpIcons.MoreHoriz,
+            checked = showDotRightSideInfo,
+            onCheckedChange = { OverlayPreferences.setShowDotRightSideInfoEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        // App Blacklist
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .clickable(onClick = onOpenBlacklist),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    imageVector = LarpIcons.Block,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
                 )
-
-                CutoutSliderRow(
-                    label = "Hold Duration to Expand",
-                    value = holdToExpandDurationMs.toFloat(),
-                    valueRange = OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS.toFloat()..OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS.toFloat(),
-                    unit = "ms",
-                    onValueChange = { raw ->
-                        val snapped = ((raw / 25f).roundToInt() * 25)
-                        OverlayPreferences.setHoldToExpandDurationMs(context, snapped)
-                    },
-                    onNudge = { delta ->
-                        OverlayPreferences.setHoldToExpandDurationMs(context, holdToExpandDurationMs + delta * 25)
-                    },
-                )
-                Text(
-                    text = "How long to press and hold the minimized island before it expands",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                LarpDivider()
-
-                LarpSwitchRow(
-                    title = "Hide When Phone Is Off",
-                    subtitle = "Dismiss the island overlay whenever the screen turns off",
-                    icon = LarpIcons.PowerSettingsNew,
-                    checked = hideWhenScreenOff,
-                    onCheckedChange = { OverlayPreferences.setHideWhenScreenOffEnabled(context, it) },
-                )
-
-                LarpDivider()
-
-                LarpSwitchRow(
-                    title = "Hide on Lock Screen",
-                    subtitle = "Dismiss the island overlay while the device is locked",
-                    icon = LarpIcons.Lock,
-                    checked = hideOnLockScreen,
-                    onCheckedChange = { OverlayPreferences.setHideOnLockScreenEnabled(context, it) },
-                )
-
-                LarpDivider()
-
-                LarpSwitchRow(
-                    title = "Hide in Fullscreen & Games",
-                    subtitle = "Auto-hide during immersive video players and games (requires Accessibility)",
-                    icon = LarpIcons.Fullscreen,
-                    checked = hideInFullscreen,
-                    onCheckedChange = { OverlayPreferences.setHideInFullscreenEnabled(context, it) },
-                )
-
-                LarpDivider()
-
-                LarpSwitchRow(
-                    title = "Hide in Landscape",
-                    subtitle = "Automatically hide the island whenever the phone rotates horizontally",
-                    icon = LarpIcons.ScreenRotation,
-                    checked = hideInLandscape,
-                    onCheckedChange = { OverlayPreferences.setHideInLandscapeEnabled(context, it) },
-                )
-
-                LarpDivider()
-
-                LarpSwitchRow(
-                    title = "Show Right Side Info on Dots",
-                    subtitle = "Show info alongside icons on secondary dots, making them mini pills",
-                    icon = LarpIcons.MoreHoriz,
-                    checked = showDotRightSideInfo,
-                    onCheckedChange = { OverlayPreferences.setShowDotRightSideInfoEnabled(context, it) },
-                )
-
-                LarpDivider()
-
-                // App Blacklist
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.medium)
-                        .clickable { showBlacklistScreen = true },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.Block,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "App Blacklist",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            val count = blacklistedPackages.size
-                            val statusText = if (!appBlacklistEnabled) {
-                                "Disabled • All apps allowed"
-                            } else if (count == 0) {
-                                "None ignored • Tap to configure"
-                            } else {
-                                "$count app${if (count == 1) "" else "s"} ignored • Tap to configure"
-                            }
-                            Text(
-                                text = "Ignore media & notifications from selected apps",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = statusText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                Column {
+                    Text(text = "App Blacklist", style = MaterialTheme.typography.titleMedium)
+                    val statusText = when {
+                        !appBlacklistEnabled -> "Disabled • All apps allowed"
+                        blacklistedCount == 0 -> "None ignored • Tap to configure"
+                        else -> "$blacklistedCount app${if (blacklistedCount == 1) "" else "s"} ignored • Tap to configure"
                     }
-
-                    Icon(
-                        imageVector = LarpIcons.ArrowForwardIos,
-                        contentDescription = "Configure App Blacklist",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
+                    Text(
+                        text = "Ignore media & notifications from selected apps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
+
+            Icon(
+                imageVector = LarpIcons.ArrowForwardIos,
+                contentDescription = "Configure App Blacklist",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

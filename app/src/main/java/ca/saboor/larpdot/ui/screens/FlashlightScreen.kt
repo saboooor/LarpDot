@@ -7,11 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +58,7 @@ import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -169,12 +165,7 @@ fun FlashlightScreen(
             .clipToBounds(),
         label = "flashlight_screen_view",
         transitionSpec = {
-            val direction = if (targetState) 1 else -1
-            val enter = fadeIn(LarpMotion.timing(250, delayMillis = 20, easing = LarpMotion.standard)) +
-                slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * slideTravel }
-            val exit = fadeOut(LarpMotion.fade(160)) +
-                slideOutHorizontally(LarpMotion.fade(200)) { -direction * slideTravel / 2 }
-            (enter togetherWith exit).using(null)
+            LarpMotion.horizontalSlideTransition(if (targetState) 1 else -1, slideTravel)
         },
     ) { isSettingsOpen ->
         if (!isSettingsOpen) {
@@ -420,31 +411,11 @@ private fun FlashlightSettingsPage(
     Column(
         modifier = Modifier.fillMaxSize(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = LarpIcons.ArrowBack,
-                    contentDescription = "Back",
-                )
-            }
-            Column {
-                Text(
-                    text = "Flashlight Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = "Island integration, boost, and hardware",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        LarpSubPageTopBar(
+            title = "Flashlight Settings",
+            subtitle = "Island integration, boost, and hardware",
+            onBack = onBack,
+        )
 
         LazyColumn(
             modifier = Modifier

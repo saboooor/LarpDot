@@ -31,8 +31,6 @@ import java.io.FileOutputStream
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.exp
-import kotlin.math.sqrt
 
 /**
  * Extraction status reporting for UI feedback and preview audio playback.
@@ -306,7 +304,7 @@ object AudioPreviewExtractor {
             }
 
             try {
-                downloadToFile(previewUrl, audioFile)
+                VisualizerHttp.downloadToFile(previewUrl, audioFile)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

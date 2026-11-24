@@ -434,11 +434,9 @@ internal fun SecondaryMusicDotContent(
                         .size(bubbleThickness),
                     contentAlignment = Alignment.Center,
                 ) {
-                    RadialProgressRing(
+                    CompactMusicProgressRing(
                         progressProvider = musicProgressProvider,
-                        color = accentColor,
-                        trackColor = Color.White.copy(alpha = 0.28f),
-                        strokeWidth = 2.dp,
+                        accentColor = accentColor,
                         shape = dotArtworkShape,
                         modifier = Modifier
                             .fillMaxSize()
@@ -497,11 +495,9 @@ internal fun SecondaryMusicDotContent(
                 contentAlignment = Alignment.Center,
             ) {
                 artworkNode()
-                RadialProgressRing(
+                CompactMusicProgressRing(
                     progressProvider = musicProgressProvider,
-                    color = accentColor,
-                    trackColor = Color.White.copy(alpha = 0.28f),
-                    strokeWidth = 2.dp,
+                    accentColor = accentColor,
                     shape = leadingShape,
                     modifier = Modifier.fillMaxSize(),
                 )

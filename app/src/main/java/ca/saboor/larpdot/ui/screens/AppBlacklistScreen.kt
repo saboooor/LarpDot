@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -164,51 +165,22 @@ fun AppBlacklistScreen(
             .padding(horizontal = 16.dp),
     ) {
         // Navigation Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = LarpIcons.ArrowBack,
-                        contentDescription = "Back",
-                    )
+        LarpSubPageTopBar(
+            title = "App Blacklist",
+            subtitle = if (blacklistedPackages.isEmpty()) {
+                "No apps blacklisted"
+            } else {
+                "${blacklistedPackages.size} app${if (blacklistedPackages.size == 1) "" else "s"} blacklisted"
+            },
+            onBack = onBack,
+            trailing = if (blacklistedPackages.isNotEmpty()) {
+                {
+                    TextButton(onClick = { OverlayPreferences.clearBlacklistedPackages(context) }) {
+                        Text("Clear All")
+                    }
                 }
-                Column {
-                    Text(
-                        text = "App Blacklist",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = if (blacklistedPackages.isEmpty()) {
-                            "No apps blacklisted"
-                        } else {
-                            "${blacklistedPackages.size} app${if (blacklistedPackages.size == 1) "" else "s"} blacklisted"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            if (blacklistedPackages.isNotEmpty()) {
-                TextButton(
-                    onClick = {
-                        OverlayPreferences.clearBlacklistedPackages(context)
-                    },
-                ) {
-                    Text("Clear All")
-                }
-            }
-        }
+            } else null,
+        )
 
         // Master Switch Card
         LarpCard {

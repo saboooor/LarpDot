@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.ui.theme
 
 import android.os.Build
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -12,6 +13,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -48,6 +51,22 @@ internal object LarpMotion {
         expandVertically(resize(), expandFrom = Alignment.Top)
     val conceal = fadeOut(fade(150)) +
         shrinkVertically(resize(), shrinkTowards = Alignment.Top)
+
+    fun horizontalSlideTransition(
+        direction: Int,
+        travelPx: Int,
+        enterDelayMillis: Int = 20,
+    ): ContentTransform {
+        val enter = fadeIn(timing(250, delayMillis = enterDelayMillis, easing = standard)) +
+            slideInHorizontally(timing(280, easing = settle)) { direction * travelPx }
+        val exit = fadeOut(fade(160)) +
+            slideOutHorizontally(fade(200)) { -direction * travelPx / 2 }
+        return ContentTransform(
+            targetContentEnter = enter,
+            initialContentExit = exit,
+            sizeTransform = null,
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

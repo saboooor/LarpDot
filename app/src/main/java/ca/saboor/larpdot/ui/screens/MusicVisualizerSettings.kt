@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -70,6 +71,10 @@ internal fun VisualizerSettingsContent(
     screenCaptureLauncher: ActivityResultLauncher<Intent>,
     onRequestAudioPreviewWarning: () -> Unit,
 ) {
+    val requestLiveAudioCapture: () -> Unit = {
+        mediaProjectionManager?.createScreenCaptureIntent()?.let(screenCaptureLauncher::launch)
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -123,10 +128,7 @@ internal fun VisualizerSettingsContent(
                 modifier = Modifier.size(24.dp),
             )
             Column {
-                Text(
-                    text = "Visualizer Mode",
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                Text(text = "Visualizer Mode", style = MaterialTheme.typography.titleMedium)
                 Text(
                     text = when (visualizerMode) {
                         OverlayPreferences.VisualizerMode.SIMULATED -> "Sinusoidal wave oscillation"
@@ -140,17 +142,11 @@ internal fun VisualizerSettingsContent(
             }
         }
 
-        val visualizerModes = listOf(
-            OverlayPreferences.VisualizerMode.SIMULATED,
-            OverlayPreferences.VisualizerMode.BPM,
-            OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
-            OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
-        )
         ButtonGroup(
             modifier = Modifier.fillMaxWidth(),
             overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
         ) {
-            visualizerModes.forEach { mode ->
+            OverlayPreferences.VisualizerMode.entries.forEach { mode ->
                 toggleableItem(
                     checked = visualizerMode == mode,
                     label = when (mode) {
@@ -160,24 +156,23 @@ internal fun VisualizerSettingsContent(
                         OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "Preview"
                     },
                     onCheckedChange = {
-                        if (mode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
-                            if (visualizerMode != mode) {
-                                onRequestAudioPreviewWarning()
+                        when (mode) {
+                            OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> {
+                                if (visualizerMode != mode) onRequestAudioPreviewWarning()
                             }
-                        } else if (mode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
-                            if (!isLiveCapturing) {
-                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                if (captureIntent != null) {
-                                    screenCaptureLauncher.launch(captureIntent)
+                            OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> {
+                                if (!isLiveCapturing) {
+                                    requestLiveAudioCapture()
+                                } else {
+                                    OverlayPreferences.setVisualizerMode(context, mode)
+                                    PreviewAudioPlayer.stop()
                                 }
-                            } else {
+                            }
+                            else -> {
                                 OverlayPreferences.setVisualizerMode(context, mode)
                                 PreviewAudioPlayer.stop()
+                                LiveAudioVisualizer.stop(context)
                             }
-                        } else {
-                            OverlayPreferences.setVisualizerMode(context, mode)
-                            PreviewAudioPlayer.stop()
-                            LiveAudioVisualizer.stop(context)
                         }
                     },
                     weight = 1f,
@@ -190,62 +185,13 @@ internal fun VisualizerSettingsContent(
             enter = LarpMotion.reveal,
             exit = LarpMotion.conceal,
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.Speed,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (isBpmResolved && currentBpm != null) {
-                                    "Tempo Beat Sync (${currentBpm.toInt()} BPM)"
-                                } else {
-                                    "Tempo Beat Sync (No BPM)"
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = when {
-                                    isBpmDetecting -> "Detecting track tempo..."
-                                    isBpmResolved && detectedSource != null -> "${detectedBpmTrack ?: "Track"} • Verified via $detectedSource"
-                                    isBpmResolved && currentBpm != null -> "${detectedBpmTrack ?: "Track"} • ${currentBpm.toInt()} BPM"
-                                    else -> "BPM could not be resolved (pulsing inactive)"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (isBpmDetecting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Synthesizes kick drums on bass bars, snares on center bars, and hi-hats on treble bars in lockstep with the song tempo. Smooth, lightweight, and zero battery drain.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            BpmVisualizerStatusCard(
+                currentBpm = currentBpm,
+                isBpmResolved = isBpmResolved,
+                isBpmDetecting = isBpmDetecting,
+                detectedBpmTrack = detectedBpmTrack,
+                detectedSource = detectedSource,
+            )
         }
 
         AnimatedVisibility(
@@ -253,88 +199,14 @@ internal fun VisualizerSettingsContent(
             enter = LarpMotion.reveal,
             exit = LarpMotion.conceal,
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.GraphicEq,
-                            contentDescription = null,
-                            tint = if (isLiveCapturing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Internal Playback Capture (Digital Loopback)",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
-                                else (liveErrorMessage ?: "Screen/Audio recording permission required"),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (liveErrorMessage != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (isLiveCapturing) {
-                            LiveTrackVisualizer(
-                                amplitudes = liveAmplitudes,
-                                isPlaying = true,
-                                accentColor = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(width = 44.dp, height = 24.dp),
-                                barCount = waveformBandCount,
-                            )
-                        }
-                    }
-
-                    if (!isLiveCapturing) {
-                        Button(
-                            onClick = {
-                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                if (captureIntent != null) {
-                                    screenCaptureLauncher.launch(captureIntent)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(LarpIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("Grant Permission & Start Live Capture", modifier = Modifier.padding(start = 8.dp))
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                LiveAudioVisualizer.stop(context)
-                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.SIMULATED)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(LarpIcons.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("Stop Live Capture", modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-
-                    Text(
-                        text = "Captures internal digital audio playback (Android 10+) using the system screen/audio recording method. Directly streams from Spotify, YouTube Music, Apple Music, or any app with zero mic noise, zero 30s limit, and 0ms latency.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            DeviceAudioCaptureCard(
+                context = context,
+                isLiveCapturing = isLiveCapturing,
+                liveAmplitudes = liveAmplitudes,
+                liveErrorMessage = liveErrorMessage,
+                waveformBandCount = waveformBandCount,
+                onStartCapture = requestLiveAudioCapture,
+            )
         }
 
         AnimatedVisibility(
@@ -342,219 +214,367 @@ internal fun VisualizerSettingsContent(
             enter = LarpMotion.reveal,
             exit = LarpMotion.conceal,
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            AudioPreviewStatusCard(
+                context = context,
+                previewSource = previewSource,
+                extractionState = extractionState,
+                isPreviewPlaying = isPreviewPlaying,
+                previewPositionMs = previewPositionMs,
+                previewDurationMs = previewDurationMs,
+                isLiveCapturing = isLiveCapturing,
+                nowPlaying = nowPlaying,
+                waveformBandCount = waveformBandCount,
+                onRequestLiveCapture = requestLiveAudioCapture,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VisualizerModeInfoCard(
+    verticalSpacing: androidx.compose.ui.unit.Dp = 10.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun BpmVisualizerStatusCard(
+    currentBpm: Float?,
+    isBpmResolved: Boolean,
+    isBpmDetecting: Boolean,
+    detectedBpmTrack: String?,
+    detectedSource: String?,
+) {
+    VisualizerModeInfoCard(verticalSpacing = 8.dp) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = LarpIcons.Speed,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isBpmResolved && currentBpm != null) {
+                        "Tempo Beat Sync (${currentBpm.toInt()} BPM)"
+                    } else {
+                        "Tempo Beat Sync (No BPM)"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = when {
+                        isBpmDetecting -> "Detecting track tempo..."
+                        isBpmResolved && detectedSource != null -> "${detectedBpmTrack ?: "Track"} • Verified via $detectedSource"
+                        isBpmResolved && currentBpm != null -> "${detectedBpmTrack ?: "Track"} • ${currentBpm.toInt()} BPM"
+                        else -> "BPM could not be resolved (pulsing inactive)"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (isBpmDetecting) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+        Text(
+            text = "Synthesizes kick drums on bass bars, snares on center bars, and hi-hats on treble bars in lockstep with the song tempo. Smooth, lightweight, and zero battery drain.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun DeviceAudioCaptureCard(
+    context: Context,
+    isLiveCapturing: Boolean,
+    liveAmplitudes: FloatArray?,
+    liveErrorMessage: String?,
+    waveformBandCount: Int,
+    onStartCapture: () -> Unit,
+) {
+    VisualizerModeInfoCard(verticalSpacing = 10.dp) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = LarpIcons.GraphicEq,
+                contentDescription = null,
+                tint = if (isLiveCapturing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Internal Playback Capture (Digital Loopback)",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
+                    else (liveErrorMessage ?: "Screen/Audio recording permission required"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (liveErrorMessage != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (isLiveCapturing) {
+                LiveTrackVisualizer(
+                    amplitudes = liveAmplitudes,
+                    isPlaying = true,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(width = 44.dp, height = 24.dp),
+                    barCount = waveformBandCount,
+                )
+            }
+        }
+
+        if (!isLiveCapturing) {
+            Button(onClick = onStartCapture, modifier = Modifier.fillMaxWidth()) {
+                Icon(LarpIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Grant Permission & Start Live Capture", modifier = Modifier.padding(start = 8.dp))
+            }
+        } else {
+            Button(
+                onClick = {
+                    LiveAudioVisualizer.stop(context)
+                    OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.SIMULATED)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "Preview Audio Source",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        val previewSources = listOf(
-                            OverlayPreferences.PreviewAudioSource.AUTO,
-                            OverlayPreferences.PreviewAudioSource.DEEZER,
-                            OverlayPreferences.PreviewAudioSource.ITUNES,
-                            OverlayPreferences.PreviewAudioSource.DEVICE,
-                        )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            previewSources.forEach { source ->
-                                toggleableItem(
-                                    checked = previewSource == source,
-                                    label = source.title,
-                                    onCheckedChange = {
-                                        if (source == OverlayPreferences.PreviewAudioSource.DEVICE) {
-                                            if (!isLiveCapturing) {
-                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                                if (captureIntent != null) {
-                                                    screenCaptureLauncher.launch(captureIntent)
-                                                }
-                                            } else {
-                                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.DEVICE_AUDIO)
-                                                PreviewAudioPlayer.stop()
-                                            }
-                                        } else {
-                                            OverlayPreferences.setPreviewAudioSource(context, source)
-                                            PreviewAudioPlayer.stop()
-                                            val curTitle = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
-                                            val curArtist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
-                                            AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
-                                        }
-                                    },
-                                    weight = 1f,
-                                )
+                Icon(LarpIcons.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Stop Live Capture", modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+
+        Text(
+            text = "Captures internal digital audio playback (Android 10+) using the system screen/audio recording method. Directly streams from Spotify, YouTube Music, Apple Music, or any app with zero mic noise, zero 30s limit, and 0ms latency.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun AudioPreviewStatusCard(
+    context: Context,
+    previewSource: OverlayPreferences.PreviewAudioSource,
+    extractionState: ExtractionState,
+    isPreviewPlaying: Boolean,
+    previewPositionMs: Long,
+    previewDurationMs: Long,
+    isLiveCapturing: Boolean,
+    nowPlaying: MediaTrackInfo,
+    waveformBandCount: Int,
+    onRequestLiveCapture: () -> Unit,
+) {
+    VisualizerModeInfoCard(verticalSpacing = 12.dp) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Preview Audio Source",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth(),
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+            ) {
+                OverlayPreferences.PreviewAudioSource.entries.forEach { source ->
+                    toggleableItem(
+                        checked = previewSource == source,
+                        label = source.title,
+                        onCheckedChange = {
+                            if (source == OverlayPreferences.PreviewAudioSource.DEVICE) {
+                                if (!isLiveCapturing) {
+                                    onRequestLiveCapture()
+                                } else {
+                                    OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.DEVICE_AUDIO)
+                                    PreviewAudioPlayer.stop()
+                                }
+                            } else {
+                                OverlayPreferences.setPreviewAudioSource(context, source)
+                                PreviewAudioPlayer.stop()
+                                val curTitle = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
+                                val curArtist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
+                                AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
                             }
-                        }
+                        },
+                        weight = 1f,
+                    )
+                }
+            }
+            Text(
+                text = previewSource.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        LarpDivider()
+
+        when (extractionState) {
+            is ExtractionState.Idle -> {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = LarpIcons.HourglassEmpty,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = "Waiting for song playback to analyze audio...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            is ExtractionState.Processing -> {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Column {
                         Text(
-                            text = previewSource.subtitle,
+                            text = "Processing: ${extractionState.trackTitle}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = "Downloading 30s preview & decomposing ${extractionState.bandCount} frequency bands offline",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+            }
+            is ExtractionState.Success -> {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = LarpIcons.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Column {
+                        Text(
+                            text = "Successfully Processed: ${extractionState.trackTitle}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = "Synced from ${extractionState.sourceName} • ${extractionState.frameCount} frames • ${extractionState.bandCount} acoustic bands",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
+                val audioSource = extractionState.audioFilePath ?: extractionState.previewUrl
+                if (audioSource != null) {
                     LarpDivider()
-                    when (extractionState) {
-                        is ExtractionState.Idle -> {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = { PreviewAudioPlayer.togglePlayback(context, audioSource) },
+                                modifier = Modifier.size(36.dp),
                             ) {
                                 Icon(
-                                    imageVector = LarpIcons.HourglassEmpty,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
+                                    imageVector = if (isPreviewPlaying) LarpIcons.Pause else LarpIcons.PlayArrow,
+                                    contentDescription = if (isPreviewPlaying) "Pause Preview" else "Play Preview",
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
                                 Text(
-                                    text = "Waiting for song playback to analyze audio...",
+                                    text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
-                        is ExtractionState.Processing -> {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Column {
-                                    Text(
-                                        text = "Processing: ${extractionState.trackTitle}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        text = "Downloading 30s preview & decomposing ${extractionState.bandCount} frequency bands offline",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                        is ExtractionState.Success -> {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = LarpIcons.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4CAF50),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Successfully Processed: ${extractionState.trackTitle}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        text = "Synced from ${extractionState.sourceName} • ${extractionState.frameCount} frames • ${extractionState.bandCount} acoustic bands",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
+                        Icon(
+                            imageVector = LarpIcons.VolumeUp,
+                            contentDescription = null,
+                            tint = if (isPreviewPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
 
-                            val audioSource = extractionState.audioFilePath ?: extractionState.previewUrl
-                            if (audioSource != null) {
-                                LarpDivider()
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        FilledTonalIconButton(
-                                            onClick = {
-                                                PreviewAudioPlayer.togglePlayback(context, audioSource)
-                                            },
-                                            modifier = Modifier.size(36.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isPreviewPlaying) LarpIcons.Pause else LarpIcons.PlayArrow,
-                                                contentDescription = if (isPreviewPlaying) "Pause Preview" else "Play Preview",
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                        }
-
-                                        Column {
-                                            Text(
-                                                text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                            )
-                                            Text(
-                                                text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-
-                                    Icon(
-                                        imageVector = LarpIcons.VolumeUp,
-                                        contentDescription = null,
-                                        tint = if (isPreviewPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-
-                                LinearProgressIndicator(
-                                    progress = {
-                                        if (previewDurationMs > 0) (previewPositionMs.toFloat() / previewDurationMs).coerceIn(0f, 1f) else 0f
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                )
-                            }
-                        }
-                        is ExtractionState.Failed -> {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = LarpIcons.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Could not process: ${extractionState.trackTitle}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        text = "${extractionState.reason} • Falling back to simulated waveform",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
+                    LinearProgressIndicator(
+                        progress = {
+                            if (previewDurationMs > 0) (previewPositionMs.toFloat() / previewDurationMs).coerceIn(0f, 1f) else 0f
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                    )
+                }
+            }
+            is ExtractionState.Failed -> {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = LarpIcons.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Column {
+                        Text(
+                            text = "Could not process: ${extractionState.trackTitle}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = "${extractionState.reason} • Falling back to simulated waveform",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

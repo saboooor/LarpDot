@@ -7,11 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,7 +22,6 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +54,7 @@ import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.LarpToggleTile
 import ca.saboor.larpdot.ui.components.MusicPreviewElement
@@ -205,12 +200,7 @@ fun MusicScreen(
             .clipToBounds(),
         label = "music_screen_view",
         transitionSpec = {
-            val direction = if (targetState) 1 else -1
-            val enter = fadeIn(LarpMotion.timing(250, delayMillis = 20, easing = LarpMotion.standard)) +
-                slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * slideTravel }
-            val exit = fadeOut(LarpMotion.fade(160)) +
-                slideOutHorizontally(LarpMotion.fade(200)) { -direction * slideTravel / 2 }
-            (enter togetherWith exit).using(null)
+            LarpMotion.horizontalSlideTransition(if (targetState) 1 else -1, slideTravel)
         },
     ) { isSettingsOpen ->
         if (!isSettingsOpen) {
@@ -393,31 +383,11 @@ private fun MusicSettingsPage(
     Column(
         modifier = Modifier.fillMaxSize(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = LarpIcons.ArrowBack,
-                    contentDescription = "Back",
-                )
-            }
-            Column {
-                Text(
-                    text = "Music Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = "Minimized, expanded, and playback options",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        LarpSubPageTopBar(
+            title = "Music Settings",
+            subtitle = "Minimized, expanded, and playback options",
+            onBack = onBack,
+        )
 
         LazyColumn(
             modifier = Modifier

@@ -102,134 +102,61 @@ fun ActivityIcon(
     modifier: Modifier = Modifier.size(18.dp),
     iconShape: Shape = RoundedCornerShape(4.dp),
 ) {
-    val isDownload = isCertainDownload(activity)
-    val appIcon = activity.appIcon
     val primaryColor = MaterialTheme.colorScheme.primary
+    val maneuver = activity.maneuverIcon
+    val appIcon = activity.appIcon
 
-    val iconModifier = modifier
-
-    when (activity.kind) {
-        NotificationActivityKind.CALL -> {
-            Icon(
-                imageVector = LarpIcons.Call,
-                contentDescription = activity.appName,
-                tint = activityIconTint(activity.kind, primaryColor),
-                modifier = iconModifier,
+    when {
+        activity.kind == NotificationActivityKind.NAVIGATION && maneuver != null -> {
+            Image(
+                bitmap = remember(maneuver) { maneuver.asImageBitmap() },
+                contentDescription = activity.title.ifBlank { activity.appName },
+                modifier = modifier.clip(iconShape),
+                contentScale = ContentScale.Fit,
             )
         }
-        NotificationActivityKind.TIMER -> {
-            Icon(
-                imageVector = LarpIcons.Timer,
-                contentDescription = activity.appName,
-                tint = activityIconTint(activity.kind, primaryColor),
-                modifier = iconModifier,
+        activity.kind == NotificationActivityKind.SCREENSHOT && appIcon != null -> {
+            Image(
+                bitmap = remember(appIcon) { appIcon.asImageBitmap() },
+                contentDescription = activity.title,
+                modifier = modifier.clip(RoundedCornerShape(4.dp)),
+                contentScale = ContentScale.Crop,
             )
         }
-        NotificationActivityKind.NAVIGATION -> {
-            val maneuver = activity.maneuverIcon
-            if (maneuver != null) {
-                Image(
-                    bitmap = remember(maneuver) { maneuver.asImageBitmap() },
-                    contentDescription = activity.title.ifBlank { activity.appName },
-                    modifier = iconModifier.clip(iconShape),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                Icon(
-                    imageVector = LarpIcons.Navigation,
-                    contentDescription = activity.appName,
-                    tint = activityIconTint(activity.kind, primaryColor),
-                    modifier = iconModifier,
-                )
+        activity.kind == NotificationActivityKind.PROGRESS && !isCertainDownload(activity) && appIcon != null -> {
+            Image(
+                bitmap = remember(appIcon) { appIcon.asImageBitmap() },
+                contentDescription = activity.appName,
+                modifier = modifier.clip(iconShape),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        else -> {
+            val tint = when (activity.kind) {
+                NotificationActivityKind.SOUND_MODE -> when {
+                    activity.title.contains("Silent", ignoreCase = true) -> Color(0xFFFF5252)
+                    activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
+                    else -> Color(0xFF4CAF50)
+                }
+                NotificationActivityKind.BLUETOOTH -> {
+                    val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+                    if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor
+                }
+                else -> activityIconTint(activity.kind, primaryColor)
             }
-        }
-        NotificationActivityKind.BATTERY_CHARGING -> {
-            Icon(
-                imageVector = LarpIcons.BatteryChargingFull,
-                contentDescription = activity.appName,
-                tint = activityIconTint(activity.kind, primaryColor),
-                modifier = iconModifier,
-            )
-        }
-        NotificationActivityKind.BATTERY_LOW -> {
-            Icon(
-                imageVector = LarpIcons.BatteryAlert,
-                contentDescription = activity.appName,
-                tint = activityIconTint(activity.kind, primaryColor),
-                modifier = iconModifier,
-            )
-        }
-        NotificationActivityKind.SOUND_MODE -> {
-            val icon = activityIcon(activity)
-            val tint = when {
-                activity.title.contains("Silent", ignoreCase = true) -> Color(0xFFFF5252)
-                activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
-                else -> Color(0xFF4CAF50)
+            val description = when (activity.kind) {
+                NotificationActivityKind.BLUETOOTH,
+                NotificationActivityKind.AUDIO_OUTPUT,
+                NotificationActivityKind.SCREENSHOT,
+                -> activity.title
+                else -> activity.appName
             }
             Icon(
-                imageVector = icon,
-                contentDescription = activity.appName,
+                imageVector = activityIcon(activity),
+                contentDescription = description,
                 tint = tint,
-                modifier = iconModifier,
+                modifier = modifier,
             )
-        }
-        NotificationActivityKind.BLUETOOTH -> {
-            val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
-            Icon(
-                imageVector = activityIcon(activity),
-                contentDescription = activity.title,
-                tint = if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor,
-                modifier = iconModifier,
-            )
-        }
-        NotificationActivityKind.AUDIO_OUTPUT -> {
-            Icon(
-                imageVector = activityIcon(activity),
-                contentDescription = activity.title,
-                tint = primaryColor,
-                modifier = iconModifier,
-            )
-        }
-        NotificationActivityKind.SCREENSHOT -> {
-            if (appIcon != null) {
-                Image(
-                    bitmap = appIcon.asImageBitmap(),
-                    contentDescription = activity.title,
-                    modifier = iconModifier.clip(RoundedCornerShape(4.dp)),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Icon(
-                    imageVector = LarpIcons.Screenshot,
-                    contentDescription = activity.title,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = iconModifier,
-                )
-            }
-        }
-        NotificationActivityKind.PROGRESS -> {
-            if (isDownload) {
-                Icon(
-                    imageVector = LarpIcons.Download,
-                    contentDescription = activity.appName,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = iconModifier,
-                )
-            } else if (appIcon != null) {
-                Image(
-                    bitmap = appIcon.asImageBitmap(),
-                    contentDescription = activity.appName,
-                    modifier = iconModifier.clip(iconShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Icon(
-                    imageVector = LarpIcons.Notifications,
-                    contentDescription = activity.appName,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = iconModifier,
-                )
-            }
         }
     }
 }

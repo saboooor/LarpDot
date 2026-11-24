@@ -54,7 +54,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 /**
  * Checks if Notification Access (NotificationListenerService) is enabled for the app.
  */
-private fun hasNotificationAccess(context: Context): Boolean {
+internal fun hasNotificationAccess(context: Context): Boolean {
     val enabledListeners = NotificationManagerCompat.getEnabledListenerPackages(context)
     if (enabledListeners.contains(context.packageName)) return true
     val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")

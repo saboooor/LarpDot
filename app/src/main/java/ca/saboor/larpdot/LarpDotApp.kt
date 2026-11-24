@@ -5,11 +5,6 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -233,11 +228,7 @@ fun LarpDotApp() {
                 label = "root_tab",
                 transitionSpec = {
                     val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    val enter = fadeIn(LarpMotion.timing(250, delayMillis = 30, easing = LarpMotion.standard)) +
-                        slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * tabTravel }
-                    val exit = fadeOut(LarpMotion.fade(160)) +
-                        slideOutHorizontally(LarpMotion.fade(200)) { -direction * tabTravel / 2 }
-                    (enter togetherWith exit).using(null)
+                    LarpMotion.horizontalSlideTransition(direction, tabTravel, enterDelayMillis = 30)
                 },
             ) { destination ->
                 when (destination) {

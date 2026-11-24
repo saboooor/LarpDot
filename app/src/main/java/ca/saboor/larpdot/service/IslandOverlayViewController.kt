@@ -11,7 +11,6 @@ import android.os.Looper
 import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
@@ -49,8 +48,6 @@ import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.ui.overlay.IslandSlot
 import ca.saboor.larpdot.ui.overlay.builtInIslandSlots
 import ca.saboor.larpdot.ui.overlay.IslandStack
-import ca.saboor.larpdot.ui.overlay.builtInIslandStack
-import ca.saboor.larpdot.ui.overlay.hasCompactStatusContent
 import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

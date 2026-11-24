@@ -1,6 +1,5 @@
 package ca.saboor.larpdot.ui.components
 
-import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -114,10 +113,7 @@ fun ExpandedIslandPreview(
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
 
-    val hasNotificationAccess = remember(context) {
-        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-        flat != null && flat.contains(context.packageName)
-    }
+    val hasNotificationAccess = remember(context) { hasNotificationAccess(context) }
 
     val sampleTrack = remember {
         val sampleArt = DominantColorExtractor.createSampleArtwork("Starboy")

@@ -30,9 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.exp
 import kotlin.math.max
-import kotlin.math.sqrt
 
 /**
  * Foreground service capturing internal system audio playback (Android 10+)
