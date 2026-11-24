@@ -1,5 +1,7 @@
 package ca.saboor.larpdot
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -20,8 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -57,6 +57,7 @@ import ca.saboor.larpdot.navigation.Destination
 import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
+import ca.saboor.larpdot.ui.screens.AppearanceScreen
 import ca.saboor.larpdot.ui.screens.FlashlightScreen
 import ca.saboor.larpdot.ui.screens.HomeScreen
 import ca.saboor.larpdot.ui.screens.LiveActivitiesScreen
@@ -75,8 +76,6 @@ fun LarpDotApp() {
 
     var isEnabled by rememberSaveable { mutableStateOf(OverlayPreferences.isOverlayEnabled(context)) }
     var showSetupDialog by remember { mutableStateOf(false) }
-    var musicTabIndex by rememberSaveable { mutableStateOf(0) }
-    var flashlightTabIndex by rememberSaveable { mutableStateOf(0) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
 
@@ -189,7 +188,7 @@ fun LarpDotApp() {
                                 shape = MaterialTheme.shapes.small,
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
+                                    imageVector = LarpIcons.Settings,
                                     contentDescription = null,
                                     modifier = Modifier.size(15.dp),
                                 )
@@ -246,16 +245,13 @@ fun LarpDotApp() {
                         cutoutInfo = cutoutInfo,
                         isEnabled = isEnabled,
                     )
+                    Destination.Appearance -> AppearanceScreen()
                     Destination.Music -> MusicScreen(
                         cutoutInfo = cutoutInfo,
-                        selectedTabIndex = musicTabIndex,
-                        onTabSelected = { musicTabIndex = it },
                     )
                     Destination.LiveActivities -> LiveActivitiesScreen()
                     Destination.Flashlight -> FlashlightScreen(
                         cutoutInfo = cutoutInfo,
-                        selectedTabIndex = flashlightTabIndex,
-                        onTabSelected = { flashlightTabIndex = it },
                     )
                 }
             }

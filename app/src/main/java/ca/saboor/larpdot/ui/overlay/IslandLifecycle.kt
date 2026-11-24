@@ -34,3 +34,56 @@ class IslandLifecycle<K>(private val scope: () -> CoroutineScope) {
         active.clear()
     }
 }
+
+/** Temporarily suppresses a swiped-up provider until its underlying session or identity changes. */
+class IslandDismissalTracker {
+    private var dismissedMediaToken: String? = null
+    private var dismissedFlashlightSession: Long? = null
+    private val dismissedActivities = mutableSetOf<String>()
+
+    fun dismissMedia(token: String) {
+        if (token.isNotBlank()) dismissedMediaToken = token
+    }
+
+    fun isMediaDismissed(token: String?): Boolean {
+        if (token.isNullOrBlank()) {
+            dismissedMediaToken = null
+            return false
+        }
+        if (dismissedMediaToken != null && dismissedMediaToken != token) {
+            dismissedMediaToken = null
+        }
+        return dismissedMediaToken == token
+    }
+
+    fun dismissFlashlight(sessionTime: Long) {
+        dismissedFlashlightSession = sessionTime
+    }
+
+    fun isFlashlightDismissed(isOn: Boolean, sessionTime: Long): Boolean {
+        if (!isOn) {
+            dismissedFlashlightSession = null
+            return false
+        }
+        if (dismissedFlashlightSession != null && dismissedFlashlightSession != sessionTime) {
+            dismissedFlashlightSession = null
+        }
+        return dismissedFlashlightSession == sessionTime
+    }
+
+    fun dismissActivity(key: String) {
+        if (key.isNotBlank()) dismissedActivities.add(key)
+    }
+
+    fun isActivityDismissed(key: String?): Boolean = key != null && key in dismissedActivities
+
+    fun pruneActivities(activeKeys: Set<String>) {
+        dismissedActivities.retainAll(activeKeys)
+    }
+
+    fun clear() {
+        dismissedMediaToken = null
+        dismissedFlashlightSession = null
+        dismissedActivities.clear()
+    }
+}

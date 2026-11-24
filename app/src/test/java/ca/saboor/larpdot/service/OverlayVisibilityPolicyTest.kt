@@ -103,4 +103,64 @@ class OverlayVisibilityPolicyTest {
         )
         assertTrue(shouldShow)
     }
+
+    @Test
+    fun overlayHidesInFullscreenWhenConfigured() {
+        assertFalse(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isTorchOn = false,
+                showTorchIsland = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isFullscreen = true,
+                hideInFullscreen = true,
+            )
+        )
+        assertTrue(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isTorchOn = false,
+                showTorchIsland = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isFullscreen = true,
+                hideInFullscreen = false,
+            )
+        )
+    }
+
+    @Test
+    fun overlayHidesInLandscapeWhenConfigured() {
+        assertFalse(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isTorchOn = false,
+                showTorchIsland = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isLandscape = true,
+                hideInLandscape = true,
+            )
+        )
+        assertTrue(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isTorchOn = false,
+                showTorchIsland = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isLandscape = false,
+                hideInLandscape = true,
+            )
+        )
+    }
 }

@@ -104,4 +104,30 @@ class IslandGeometryTest {
         assertEquals(IslandPanelPlacement(0f, 14f),
             islandPanelPlacement(400f, 1000f, 200f, 20f, 12f, 300f, 200f, false))
     }
+
+    @Test fun activeTouchBoundsFitOnlyExpandedCardWhenExpandedAndClearWhenEmpty() {
+        val compact = Rect(120f, 14f, 280f, 46f)
+        val secondary = Rect(290f, 14f, 322f, 46f)
+        val expanded = Rect(40f, 14f, 360f, 120f)
+
+        // Expanded mode covers only the expanded card itself (not the full 460dp draw window)
+        assertEquals(
+            listOf(expanded),
+            activeIslandTouchBounds(isExpanded = true, expandedBounds = expanded, compactBounds = compact, secondaryBounds = listOf(secondary)),
+        )
+        // Before expanded bounds measure on frame 0, falls back to compact bounds
+        assertEquals(
+            listOf(compact),
+            activeIslandTouchBounds(isExpanded = true, expandedBounds = null, compactBounds = compact, secondaryBounds = listOf(secondary)),
+        )
+        // Collapsed / dismissing uses compact + secondary bounds only
+        assertEquals(
+            listOf(compact, secondary),
+            activeIslandTouchBounds(isExpanded = false, expandedBounds = expanded, compactBounds = compact, secondaryBounds = listOf(secondary)),
+        )
+        // No compact bounds after collapse returns empty so the touch window is removed
+        assertTrue(
+            activeIslandTouchBounds(isExpanded = false, expandedBounds = expanded, compactBounds = null, secondaryBounds = emptyList()).isEmpty(),
+        )
+    }
 }

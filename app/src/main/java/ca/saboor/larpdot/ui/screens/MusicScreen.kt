@@ -1,109 +1,103 @@
 package ca.saboor.larpdot.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.app.Activity
+import android.content.Context
+import android.media.projection.MediaProjectionManager
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.app.Activity
-import android.content.Context
-import android.media.projection.MediaProjectionManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.TextButton
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.DisposableEffect
-import ca.saboor.larpdot.media.MediaPlaybackState
-import ca.saboor.larpdot.service.AudioCaptureService
-import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
-import ca.saboor.larpdot.visualizer.BpmDetector
-import ca.saboor.larpdot.visualizer.ExtractionState
-import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
-import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
-import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
-import ca.saboor.larpdot.cutout.CutoutInfo
-import ca.saboor.larpdot.service.ForegroundAppTracker
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.service.AudioCaptureService
+import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.components.LarpCard
-import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
-import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.MusicPreviewElement
+import ca.saboor.larpdot.ui.components.SectionHeader
+import ca.saboor.larpdot.ui.theme.LarpIcons
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import ca.saboor.larpdot.ui.theme.motionItem
+import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
+import ca.saboor.larpdot.visualizer.BpmDetector
+import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
+import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
+
+private data class MusicElementToggle(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val checked: Boolean,
+    val onCheckedChange: (Boolean) -> Unit,
+)
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MusicScreen(
     cutoutInfo: CutoutInfo,
-    selectedTabIndex: Int,
-    onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val slideTravel = with(LocalDensity.current) { 24.dp.roundToPx() }
+    var showMusicSettings by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showMusicSettings) {
+        showMusicSettings = false
+    }
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
@@ -126,7 +120,9 @@ fun MusicScreen(
     val albumArtGlow by OverlayPreferences.albumArtGlowFlow.collectAsState()
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showProgressSquiggles by OverlayPreferences.showProgressSquigglesFlow.collectAsState()
-    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val progressBarAccentColor by OverlayPreferences.progressBarAccentColorFlow.collectAsState()
+    val playbackControlsStyle by OverlayPreferences.playbackControlsStyleFlow.collectAsState()
+    val trackInfoStyle by OverlayPreferences.trackInfoStyleFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
     val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
     val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
@@ -135,7 +131,8 @@ fun MusicScreen(
     val showMinimizedDominantGlow by OverlayPreferences.showMinimizedDominantColorGlowFlow.collectAsState()
     val showExpandedDominantGlow by OverlayPreferences.showExpandedDominantColorGlowFlow.collectAsState()
     val expandedGlowSides by OverlayPreferences.expandedGlowSidesFlow.collectAsState()
-    val bpmPulseEnabled by OverlayPreferences.bpmPulseEnabledFlow.collectAsState()
+    val minimizedBpmPulseEnabled by OverlayPreferences.minimizedBpmPulseEnabledFlow.collectAsState()
+    val expandedBpmPulseEnabled by OverlayPreferences.expandedBpmPulseEnabledFlow.collectAsState()
     val pulseEntireIslandEnabled by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
@@ -146,8 +143,8 @@ fun MusicScreen(
     val detectedBpmTrack by BpmDetector.detectedTrack.collectAsState()
     val detectedSource by BpmDetector.detectedSource.collectAsState()
     val isBpmDetecting by BpmDetector.isDetecting.collectAsState()
-    val hqVisualizerEnabled by OverlayPreferences.hqVisualizerEnabledFlow.collectAsState()
     var showHqWarningDialog by remember { mutableStateOf(false) }
+    var selectedPreviewElement by remember { mutableStateOf<MusicPreviewElement?>(null) }
     val extractionState by AudioPreviewExtractor.extractionState.collectAsState()
     val isPreviewPlaying by PreviewAudioPlayer.isPlaying.collectAsState()
     val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
@@ -180,7 +177,16 @@ fun MusicScreen(
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
 
-    LaunchedEffect(nowPlaying.title, nowPlaying.artist, visualizerMode, waveformBandCount, previewSource, bpmPulseEnabled, pulseEntireIslandEnabled) {
+    LaunchedEffect(
+        nowPlaying.title,
+        nowPlaying.artist,
+        visualizerMode,
+        waveformBandCount,
+        previewSource,
+        minimizedBpmPulseEnabled,
+        expandedBpmPulseEnabled,
+        pulseEntireIslandEnabled,
+    ) {
         val title = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
         val artist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
         if (visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
@@ -188,7 +194,7 @@ fun MusicScreen(
         } else {
             AudioPreviewExtractor.syncTrack(context, title, artist, false, waveformBandCount, previewSource)
         }
-        if (visualizerMode == OverlayPreferences.VisualizerMode.BPM || bpmPulseEnabled || pulseEntireIslandEnabled) {
+        if (visualizerMode == OverlayPreferences.VisualizerMode.BPM || minimizedBpmPulseEnabled || expandedBpmPulseEnabled || pulseEntireIslandEnabled) {
             BpmDetector.syncTrack(title, artist)
         }
     }
@@ -197,1343 +203,138 @@ fun MusicScreen(
         OverlayPreferences.initializeMusicSettings(context)
     }
 
-    val minimizedStyles = listOf(
-        OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-        OverlayPreferences.AlbumArtStyle.BLENDED,
-        OverlayPreferences.AlbumArtStyle.NESTED,
-    )
-    val expandedStyleRow1 = listOf(
-        OverlayPreferences.ExpandedBackgroundStyle.NONE,
-        OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED,
-        OverlayPreferences.ExpandedBackgroundStyle.BLENDED,
-    )
-    val expandedStyleRow2 = listOf(
-        OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND,
-        OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
-    )
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item(key = "preview") {
-            IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.MUSIC)
-        }
-
-        item(key = "tabs") {
-            PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { onTabSelected(0) },
-                    text = { Text("Minimized") },
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { onTabSelected(1) },
-                    text = { Text("Expanded") },
-                )
-                Tab(
-                    selected = selectedTabIndex == 2,
-                    onClick = { onTabSelected(2) },
-                    text = { Text("Overview") },
-                )
-            }
-        }
-
-        // Minimized Island Presentation
-        if (selectedTabIndex == 0) {
-            motionItem("minimized_art") {
-            SectionHeader(title = "Minimized Island Art")
-            LarpCard {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+    AnimatedContent(
+        targetState = showMusicSettings,
+        modifier = modifier
+            .fillMaxSize()
+            .clipToBounds(),
+        label = "music_screen_view",
+        transitionSpec = {
+            val direction = if (targetState) 1 else -1
+            val enter = fadeIn(LarpMotion.timing(250, delayMillis = 20, easing = LarpMotion.standard)) +
+                slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * slideTravel }
+            val exit = fadeOut(LarpMotion.fade(160)) +
+                slideOutHorizontally(LarpMotion.fade(200)) { -direction * slideTravel / 2 }
+            (enter togetherWith exit).using(null)
+        },
+    ) { isSettingsOpen ->
+        if (!isSettingsOpen) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "preview_top_bar") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoSizeSelectSmall,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Minimized Style",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = when (minimizedStyle) {
-                                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear edge fade into capsule pill"
-                                    OverlayPreferences.AlbumArtStyle.BLENDED -> "Smooth gradient blend with ambient glow"
-                                    OverlayPreferences.AlbumArtStyle.NESTED -> "Crisp nested album art thumbnail"
-                                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> "Artwork fills the pill wing"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        minimizedStyles.forEach { style ->
-                            toggleableItem(
-                                checked = minimizedStyle == style,
-                                label = style.label,
-                                onCheckedChange = {
-                                    OverlayPreferences.setMinimizedAlbumArtStyle(context, style)
-                                },
-                                weight = 1f,
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(
-                        visible = minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED,
-                        enter = LarpMotion.reveal,
-                        exit = LarpMotion.conceal,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ShapePickerSection(
-                                title = "Minimized Shape",
-                                subtitle = "minimized island",
-                                selectedShape = minimizedShape,
-                                rotationDegrees = minimizedRotation,
-                                onShapeSelected = {
-                                    OverlayPreferences.setMinimizedAlbumArtShape(context, it)
-                                },
-                                onRotationChanged = {
-                                    OverlayPreferences.setMinimizedAlbumArtRotation(context, it)
-                                },
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(
-                                            context,
-                                            !minimizedNestedBlurredBg
-                                        )
-                                    }
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Blurred Artwork Background",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                    )
-                                    Text(
-                                        text = "Add blurred background behind nested art that fades into the dot",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Switch(
-                                    checked = minimizedNestedBlurredBg,
-                                    onCheckedChange = {
-                                        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, it)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            }
-        } else if (selectedTabIndex == 1) {
-
-            // Expanded Island Presentation
-            motionItem("expanded_art") {
-                SectionHeader(title = "Expanded Island Art")
-                LarpCard {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Expanded Background",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = when (expandedStyle) {
-                                    OverlayPreferences.ExpandedBackgroundStyle.NONE -> "Plain black island background"
-                                    OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED -> "Linear faded background card cover"
-                                    OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> "Curved gradient blend with dominant backdrop"
-                                    OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND -> "Artwork fills the entire island card"
-                                    OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> "Blurred artwork fills the entire island card"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        expandedStyleRow1.forEach { style ->
-                            toggleableItem(
-                                checked = expandedStyle == style,
-                                label = style.label,
-                                onCheckedChange = {
-                                    OverlayPreferences.setExpandedAlbumArtStyle(context, style)
-                                },
-                                weight = 1f,
-                            )
-                        }
-                    }
-
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        expandedStyleRow2.forEach { style ->
-                            toggleableItem(
-                                checked = expandedStyle == style,
-                                label = style.label,
-                                onCheckedChange = {
-                                    OverlayPreferences.setExpandedAlbumArtStyle(context, style)
-                                },
-                                weight = 1f,
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Show Album Art", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Show the cover beside the track title",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = showExpandedAlbumArt,
-                            onCheckedChange = {
-                                OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it)
-                            },
-                        )
-                    }
-
-                    AnimatedVisibility(
-                        visible = showExpandedAlbumArt,
-                        enter = LarpMotion.reveal,
-                        exit = LarpMotion.conceal,
-                    ) {
-                        ShapePickerSection(
-                            title = "Album Art Shape",
-                            subtitle = "expanded album art",
-                            selectedShape = expandedShape,
-                            rotationDegrees = expandedRotation,
-                            onShapeSelected = {
-                                OverlayPreferences.setExpandedAlbumArtShape(context, it)
-                            },
-                            onRotationChanged = {
-                                OverlayPreferences.setExpandedAlbumArtRotation(context, it)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Dominant Color Glow", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Ambient colored edge glow adapted from artwork",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = showExpandedDominantGlow,
-                            onCheckedChange = {
-                                OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, it)
-                            },
-                        )
-                    }
-
-                    AnimatedVisibility(
-                        visible = showExpandedDominantGlow,
-                        enter = LarpMotion.reveal,
-                        exit = LarpMotion.conceal,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "Glow Sides",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                toggleableItem(
-                                    checked = expandedGlowSides.left,
-                                    label = "Left",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(left = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.right,
-                                    label = "Right",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(right = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.bottom,
-                                    label = "Bottom",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(bottom = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.top,
-                                    label = "Top",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(top = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-                    }
-                    }
-                }
-            }
-
-            motionItem("expanded_shape") {
-                SectionHeader(title = "Player Layout")
-                LarpCard {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            text = when (expandedPlayerLayout) {
-                                OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS ->
-                                    "Familiar Android media controls with a prominent play button"
-                                OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE ->
-                                    "Expressive shapes, connected controls, and a compact hierarchy"
-                                OverlayPreferences.ExpandedPlayerLayout.IPHONE ->
-                                    "Artwork-first layout with centered Apple-style playback controls"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            OverlayPreferences.ExpandedPlayerLayout.entries.forEach { layout ->
-                                toggleableItem(
-                                    checked = expandedPlayerLayout == layout,
-                                    label = layout.label,
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedPlayerLayout(context, layout)
-                                    },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Progress Squiggles", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "Animate the progress bar with a wavy line",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                checked = showProgressSquiggles,
-                                onCheckedChange = {
-                                    OverlayPreferences.setShowProgressSquigglesEnabled(context, it)
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-
-        }
-
-        if (selectedTabIndex != 2) motionItem(key = if (selectedTabIndex == 0) "minimized_elements" else "expanded_elements") {
-            SectionHeader(title = if (selectedTabIndex == 0) "Minimized Elements" else "Expanded Elements")
-            LarpCard {
-                val albumArtGlowOption = Triple("Album Art Glow", albumArtGlow) { enabled: Boolean ->
-                    OverlayPreferences.setAlbumArtGlowEnabled(context, enabled)
-                }
-                val visibilityOptions: List<Triple<String, Boolean, (Boolean) -> Unit>> =
-                    if (selectedTabIndex == 0) {
-                        listOf(
-                            Triple("Song Title", showMinimizedTitle) { enabled ->
-                                OverlayPreferences.setShowMinimizedTitleEnabled(context, enabled)
-                            },
-                            Triple("Song Change Announcement", showSongAnnouncement) { enabled ->
-                                OverlayPreferences.setShowSongAnnouncementEnabled(context, enabled)
-                            },
-                            Triple("Visualizer", showMinimizedVisualizer) { enabled ->
-                                OverlayPreferences.setShowMinimizedVisualizerEnabled(context, enabled)
-                            },
-                            Triple("Progress Outline", showMinimizedProgressOutline) { enabled ->
-                                OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, enabled)
-                            },
-                            albumArtGlowOption,
-                            Triple("Dominant Color Glow", showMinimizedDominantGlow) { enabled ->
-                                OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, enabled)
-                            },
-                            Triple("Pulse with BPM", bpmPulseEnabled) { enabled ->
-                                OverlayPreferences.setBpmPulseEnabled(context, enabled)
-                            },
-                            Triple("Pulse Entire Island", pulseEntireIslandEnabled) { enabled ->
-                                OverlayPreferences.setPulseEntireIslandEnabled(context, enabled)
-                            },
-                        )
-                    } else {
-                        listOf(
-                            Triple("Track Information", expandedElementVisibility.trackInfo) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(trackInfo = enabled),
-                                )
-                            },
-                            Triple("Visualizer", expandedElementVisibility.visualizer) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(visualizer = enabled),
-                                )
-                            },
-                            Triple("Progress Bar", expandedElementVisibility.progress) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(progress = enabled),
-                                )
-                            },
-                            Triple("Main Player Controls", expandedElementVisibility.mainControls) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(mainControls = enabled),
-                                )
-                            },
-                            Triple("App Action Buttons", expandedElementVisibility.appActions) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(appActions = enabled),
-                                )
-                            },
-                            Triple("BPM", expandedElementVisibility.bpm) { enabled ->
-                                OverlayPreferences.setExpandedElementVisibility(
-                                    context,
-                                    expandedElementVisibility.copy(bpm = enabled),
-                                )
-                            },
-                            Triple("Progress Outline", showExpandedProgressOutline) { enabled ->
-                                OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, enabled)
-                            },
-                            albumArtGlowOption,
-                            Triple("Dominant Color Glow", showExpandedDominantGlow) { enabled ->
-                                OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, enabled)
-                            },
-                            Triple("Pulse with BPM", bpmPulseEnabled) { enabled ->
-                                OverlayPreferences.setBpmPulseEnabled(context, enabled)
-                            },
-                            Triple("Pulse Entire Island", pulseEntireIslandEnabled) { enabled ->
-                                OverlayPreferences.setPulseEntireIslandEnabled(context, enabled)
-                            },
-                        )
-                    }
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    visibilityOptions.forEachIndexed { index, (label, checked, onCheckedChange) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(label, style = MaterialTheme.typography.titleMedium)
-                            Switch(checked = checked, onCheckedChange = onCheckedChange)
-                        }
-                        if (selectedTabIndex == 1 && label == "Dominant Color Glow" && checked) {
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                toggleableItem(
-                                    checked = expandedGlowSides.left,
-                                    label = "Left",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(left = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.right,
-                                    label = "Right",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(right = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.bottom,
-                                    label = "Bottom",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(bottom = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                                toggleableItem(
-                                    checked = expandedGlowSides.top,
-                                    label = "Top",
-                                    onCheckedChange = {
-                                        OverlayPreferences.setExpandedGlowSides(
-                                            context,
-                                            expandedGlowSides.copy(top = it),
-                                        )
-                                    },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-                        if (index < visibilityOptions.lastIndex) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                        }
-                    }
-                }
-            }
-        }
-
-        if (selectedTabIndex == 2) {
-        // Display Options Card
-        motionItem("overview") {
-            SectionHeader(title = "Display Options")
-            LarpCard {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    // Hide in Music App
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Hide in Music App",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Hide the music island while the active music player application is open",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        Switch(
-                            checked = hideMusicWhenAppOpen,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    if (hideMusicWhenAppOpen) {
-                        Text(
-                            if (usageAccessGranted) "Usage access is enabled. The music island returns when you leave the player."
-                            else "Allow usage access to detect when your active player is open without accessibility access.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
-                            Text(if (usageAccessGranted) "Manage usage access" else "Grant usage access")
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Pulse with BPM
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Pulse with BPM",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Rhythmically pulse the dominant color overlay and play/pause button to the track tempo",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        Switch(
-                            checked = bpmPulseEnabled,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setBpmPulseEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Pulse Entire Island
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Pulse Entire Island",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Rhythmically pulse the scale of the entire Dynamic Island to the track tempo",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        Switch(
-                            checked = pulseEntireIslandEnabled,
-                            onCheckedChange = { isChecked ->
-                                OverlayPreferences.setPulseEntireIslandEnabled(context, isChecked)
-                            },
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Pulse Amount
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Pulse Amount",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                )
-                                Text(
-                                    text = "Scale factor for BPM pulse intensity (0.25x – 3.0x)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Text(
-                                text = "%.2fx".format(pulseAmount),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        Slider(
-                            value = pulseAmount,
-                            onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
-                            valueRange = 0.25f..3.0f,
-                            steps = 10,
-                        )
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    // Waveform Equalizer Bands
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.GraphicEq,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Waveform Bands",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                    )
-                                    Text(
-                                        text = "Number of animated equalizer frequency bars (default: 5)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = if (waveformBandCount == 0) {
-                                    "Off"
-                                } else if (waveformBandCount == OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT) {
-                                    "5 (Default)"
-                                } else {
-                                    "$waveformBandCount Bands"
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                        }
-
-                        val bandSliderState = remember {
-                            SliderState(
-                                value = waveformBandCount.toFloat(),
-                                steps = 29,
-                                trackRange = 0f..30f,
-                            )
-                        }
-                        bandSliderState.value = waveformBandCount.toFloat()
-                        Slider(
-                            state = bandSliderState,
-                            onValueChange = {
-                                OverlayPreferences.setWaveformBandCount(context, it.roundToInt())
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "Bar Width",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                                Text(
-                                    text = "${"%.1f".format(waveformBarWidth)} dp",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            val widthSliderState = remember {
-                                SliderState(
-                                    value = waveformBarWidth,
-                                    trackRange = 0.5f..6f,
-                                )
-                            }
-                            widthSliderState.value = waveformBarWidth
-                            Slider(
-                                state = widthSliderState,
-                                onValueChange = {
-                                    OverlayPreferences.setWaveformBarWidth(
-                                        context,
-                                        (it * 10f).roundToInt() / 10f,
-                                    )
-                                },
-                            )
-                        }
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "Bar Spacing",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                                Text(
-                                    text = "${"%.1f".format(waveformBarSpacing)} dp",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            val spacingSliderState = remember {
-                                SliderState(
-                                    value = waveformBarSpacing,
-                                    trackRange = 0f..8f,
-                                )
-                            }
-                            spacingSliderState.value = waveformBarSpacing
-                            Slider(
-                                state = spacingSliderState,
-                                onValueChange = {
-                                    OverlayPreferences.setWaveformBarSpacing(
-                                        context,
-                                        (it * 10f).roundToInt() / 10f,
-                                    )
-                                },
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                        // Visualizer Mode Selector
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        FilledTonalIconButton(
+                            onClick = { showMusicSettings = true },
                         ) {
                             Icon(
-                                imageVector = when (visualizerMode) {
-                                    OverlayPreferences.VisualizerMode.SIMULATED -> Icons.Default.GraphicEq
-                                    OverlayPreferences.VisualizerMode.BPM -> Icons.Default.Speed
-                                    OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> Icons.Default.GraphicEq
-                                    OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> Icons.Default.Audiotrack
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
+                                imageVector = LarpIcons.Settings,
+                                contentDescription = "Music Settings",
                             )
-                            Column {
-                                Text(
-                                    text = "Visualizer Mode",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                )
-                                Text(
-                                    text = when (visualizerMode) {
-                                        OverlayPreferences.VisualizerMode.SIMULATED -> "Sinusoidal wave oscillation"
-                                        OverlayPreferences.VisualizerMode.BPM -> "BPM tempo-locked rhythm section (0% CPU)"
-                                        OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> "Real-time internal playback stream directly from phone (0ms latency)"
-                                        OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "30s preview dynamic frequency bands"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        // ButtonGroup for 4 modes
-                        val visualizerModes = listOf(
-                            OverlayPreferences.VisualizerMode.SIMULATED,
-                            OverlayPreferences.VisualizerMode.BPM,
-                            OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
-                            OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
-                        )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            visualizerModes.forEach { mode ->
-                                toggleableItem(
-                                    checked = visualizerMode == mode,
-                                    label = when (mode) {
-                                        OverlayPreferences.VisualizerMode.SIMULATED -> "Simulated"
-                                        OverlayPreferences.VisualizerMode.BPM -> "BPM"
-                                        OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> "Phone Audio"
-                                        OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "Preview"
-                                    },
-                                    onCheckedChange = {
-                                        if (mode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) {
-                                            if (visualizerMode != mode) {
-                                                showHqWarningDialog = true
-                                            }
-                                        } else if (mode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
-                                            if (!isLiveCapturing) {
-                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                                if (captureIntent != null) {
-                                                    screenCaptureLauncher.launch(captureIntent)
-                                                }
-                                            } else {
-                                                OverlayPreferences.setVisualizerMode(context, mode)
-                                                PreviewAudioPlayer.stop()
-                                            }
-                                        } else {
-                                            OverlayPreferences.setVisualizerMode(context, mode)
-                                            PreviewAudioPlayer.stop()
-                                            LiveAudioVisualizer.stop(context)
-                                        }
-                                    },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-
-                        // BPM Status Card
-                        AnimatedVisibility(
-                            visible = visualizerMode == OverlayPreferences.VisualizerMode.BPM,
-                            enter = LarpMotion.reveal,
-                            exit = LarpMotion.conceal,
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp)),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Speed,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = if (isBpmResolved && currentBpm != null) {
-                                                    "Tempo Beat Sync (${currentBpm!!.toInt()} BPM)"
-                                                } else {
-                                                    "Tempo Beat Sync (No BPM)"
-                                                },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                            )
-                                            Text(
-                                                text = when {
-                                                    isBpmDetecting -> "Detecting track tempo..."
-                                                    isBpmResolved && detectedSource != null -> "${detectedBpmTrack ?: "Track"} • Verified via $detectedSource"
-                                                    isBpmResolved && currentBpm != null -> "${detectedBpmTrack ?: "Track"} • ${currentBpm!!.toInt()} BPM"
-                                                    else -> "BPM could not be resolved (pulsing inactive)"
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        if (isBpmDetecting) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = "Synthesizes kick drums on bass bars, snares on center bars, and hi-hats on treble bars in lockstep with the song tempo. Smooth, lightweight, and zero battery drain.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-
-                        // Direct Device Audio (Screen/Audio Capture via MediaProjection) Card
-                        AnimatedVisibility(
-                            visible = visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO,
-                            enter = LarpMotion.reveal,
-                            exit = LarpMotion.conceal,
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp)),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.GraphicEq,
-                                            contentDescription = null,
-                                            tint = if (isLiveCapturing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Internal Playback Capture (Digital Loopback)",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                            )
-                                            Text(
-                                                text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
-                                                else (liveErrorMessage ?: "Screen/Audio recording permission required"),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (liveErrorMessage != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        if (isLiveCapturing) {
-                                            LiveTrackVisualizer(
-                                                amplitudes = liveAmplitudes,
-                                                isPlaying = true,
-                                                accentColor = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(width = 44.dp, height = 24.dp),
-                                                barCount = waveformBandCount,
-                                            )
-                                        }
-                                    }
-
-                                    if (!isLiveCapturing) {
-                                        Button(
-                                            onClick = {
-                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                                if (captureIntent != null) {
-                                                    screenCaptureLauncher.launch(captureIntent)
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        ) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Text("Grant Permission & Start Live Capture", modifier = Modifier.padding(start = 8.dp))
-                                        }
-                                    } else {
-                                        Button(
-                                            onClick = {
-                                                LiveAudioVisualizer.stop(context)
-                                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.SIMULATED)
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                            ),
-                                            modifier = Modifier.fillMaxWidth(),
-                                        ) {
-                                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Text("Stop Live Capture", modifier = Modifier.padding(start = 8.dp))
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Captures internal digital audio playback (Android 10+) using the system screen/audio recording method. Directly streams from Spotify, YouTube Music, Apple Music, or any app with zero mic noise, zero 30s limit, and 0ms latency.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-
-                        // Song Processing Status & Audio Preview Player
-                        AnimatedVisibility(
-                            visible = visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
-                            enter = LarpMotion.reveal,
-                            exit = LarpMotion.conceal,
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp)),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    // Preview Source Selector
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = "Preview Audio Source",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                        )
-                                        val previewSources = listOf(
-                                            OverlayPreferences.PreviewAudioSource.AUTO,
-                                            OverlayPreferences.PreviewAudioSource.DEEZER,
-                                            OverlayPreferences.PreviewAudioSource.ITUNES,
-                                            OverlayPreferences.PreviewAudioSource.DEVICE,
-                                        )
-                                        ButtonGroup(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                                        ) {
-                                            previewSources.forEach { source ->
-                                                toggleableItem(
-                                                    checked = previewSource == source,
-                                                    label = source.title,
-                                                    onCheckedChange = {
-                                                        if (source == OverlayPreferences.PreviewAudioSource.DEVICE) {
-                                                            if (!isLiveCapturing) {
-                                                                val captureIntent = mediaProjectionManager?.createScreenCaptureIntent()
-                                                                if (captureIntent != null) {
-                                                                    screenCaptureLauncher.launch(captureIntent)
-                                                                }
-                                                            } else {
-                                                                OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.DEVICE_AUDIO)
-                                                                PreviewAudioPlayer.stop()
-                                                            }
-                                                        } else {
-                                                            OverlayPreferences.setPreviewAudioSource(context, source)
-                                                            PreviewAudioPlayer.stop()
-                                                            val curTitle = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
-                                                            val curArtist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
-                                                            AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
-                                                        }
-                                                    },
-                                                    weight = 1f,
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = previewSource.subtitle,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                    )
-                                    when (val state = extractionState) {
-                                        is ExtractionState.Idle -> {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.HourglassEmpty,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(18.dp),
-                                                )
-                                                Text(
-                                                    text = "Waiting for song playback to analyze audio...",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
-                                        is ExtractionState.Processing -> {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(18.dp),
-                                                    strokeWidth = 2.dp,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                )
-                                                Column {
-                                                    Text(
-                                                        text = "Processing: ${state.trackTitle}",
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                                    )
-                                                    Text(
-                                                        text = "Downloading 30s preview & decomposing ${state.bandCount} frequency bands offline",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        is ExtractionState.Success -> {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = androidx.compose.ui.graphics.Color(0xFF4CAF50),
-                                                    modifier = Modifier.size(20.dp),
-                                                )
-                                                Column {
-                                                    Text(
-                                                        text = "Successfully Processed: ${state.trackTitle}",
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                                    )
-                                                    Text(
-                                                        text = "Synced from ${state.sourceName} • ${state.frameCount} frames • ${state.bandCount} acoustic bands",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    )
-                                                }
-                                            }
-
-                                            val audioSource = state.audioFilePath ?: state.previewUrl
-                                            if (audioSource != null) {
-                                                HorizontalDivider(
-                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                                )
-
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                ) {
-                                                    Row(
-                                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        modifier = Modifier.weight(1f),
-                                                    ) {
-                                                        FilledTonalIconButton(
-                                                            onClick = {
-                                                                PreviewAudioPlayer.togglePlayback(context, audioSource)
-                                                            },
-                                                            modifier = Modifier.size(36.dp),
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                                                contentDescription = if (isPreviewPlaying) "Pause Preview" else "Play Preview",
-                                                                modifier = Modifier.size(20.dp),
-                                                            )
-                                                        }
-
-                                                        Column {
-                                                            Text(
-                                                                text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                                            )
-                                                            Text(
-                                                                text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            )
-                                                        }
-                                                    }
-
-                                                    Icon(
-                                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                                        contentDescription = null,
-                                                        tint = if (isPreviewPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                                        modifier = Modifier.size(20.dp),
-                                                    )
-                                                }
-
-                                                LinearProgressIndicator(
-                                                    progress = {
-                                                        if (previewDurationMs > 0) (previewPositionMs.toFloat() / previewDurationMs).coerceIn(0f, 1f) else 0f
-                                                    },
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(2.dp)),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                                )
-                                            }
-                                        }
-                                        is ExtractionState.Failed -> {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ErrorOutline,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(20.dp),
-                                                )
-                                                Column {
-                                                    Text(
-                                                        text = "Could not process: ${state.trackTitle}",
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                                    )
-                                                    Text(
-                                                        text = "${state.reason} • Falling back to simulated waveform",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
-            }
-        }
 
+                item(key = "player_layout") {
+                    ButtonGroup(
+                        modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    ) {
+                        OverlayPreferences.ExpandedPlayerLayout.entries.forEach { layout ->
+                            toggleableItem(
+                                checked = expandedPlayerLayout == layout,
+                                label = layout.label,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedPlayerLayout(context, layout)
+                                },
+                                weight = 1f,
+                            )
+                        }
+                    }
+                }
+
+                item(key = "preview") {
+                    IslandPreview(
+                        cutoutInfo = cutoutInfo,
+                        type = IslandPreviewType.MUSIC,
+                        selectedMusicElement = selectedPreviewElement,
+                        onMusicElementClick = { element ->
+                            selectedPreviewElement = if (selectedPreviewElement == element) null else element
+                        },
+                    )
+                }
+
+                selectedPreviewElement?.let { activeElement ->
+                    motionItem(key = "preview_inspector_${activeElement.name}") {
+                        MusicPreviewInspectorCard(
+                            element = activeElement,
+                            onDismiss = { selectedPreviewElement = null },
+                            context = context,
+                            minimizedStyle = minimizedStyle,
+                            minimizedShape = minimizedShape,
+                            minimizedRotation = minimizedRotation,
+                            minimizedNestedBlurredBg = minimizedNestedBlurredBg,
+                            showMinimizedProgressOutline = showMinimizedProgressOutline,
+                            showExpandedAlbumArt = showExpandedAlbumArt,
+                            expandedShape = expandedShape,
+                            expandedRotation = expandedRotation,
+                            showExpandedProgressOutline = showExpandedProgressOutline,
+                            albumArtGlow = albumArtGlow,
+                            expandedElementVisibility = expandedElementVisibility,
+                            showProgressSquiggles = showProgressSquiggles,
+                            progressBarAccentColor = progressBarAccentColor,
+                            playbackControlsStyle = playbackControlsStyle,
+                            trackInfoStyle = trackInfoStyle,
+                            expandedStyle = expandedStyle,
+                            showMinimizedDominantGlow = showMinimizedDominantGlow,
+                            minimizedBpmPulseEnabled = minimizedBpmPulseEnabled,
+                            showExpandedDominantGlow = showExpandedDominantGlow,
+                            expandedGlowSides = expandedGlowSides,
+                            expandedBpmPulseEnabled = expandedBpmPulseEnabled,
+                            waveformBandCount = waveformBandCount,
+                            waveformBarWidth = waveformBarWidth,
+                            waveformBarSpacing = waveformBarSpacing,
+                            visualizerMode = visualizerMode,
+                            previewSource = previewSource,
+                            extractionState = extractionState,
+                            isPreviewPlaying = isPreviewPlaying,
+                            previewPositionMs = previewPositionMs,
+                            previewDurationMs = previewDurationMs,
+                            currentBpm = currentBpm,
+                            isBpmResolved = isBpmResolved,
+                            isBpmDetecting = isBpmDetecting,
+                            detectedBpmTrack = detectedBpmTrack,
+                            detectedSource = detectedSource,
+                            isLiveCapturing = isLiveCapturing,
+                            liveAmplitudes = liveAmplitudes,
+                            liveErrorMessage = liveErrorMessage,
+                            nowPlaying = nowPlaying,
+                            mediaProjectionManager = mediaProjectionManager,
+                            screenCaptureLauncher = screenCaptureLauncher,
+                            onRequestAudioPreviewWarning = { showHqWarningDialog = true },
+                        )
+                    }
+                }
+            }
+        } else {
+            MusicSettingsPage(
+                context = context,
+                showMinimizedTitle = showMinimizedTitle,
+                showSongAnnouncement = showSongAnnouncement,
+                pulseEntireIslandEnabled = pulseEntireIslandEnabled,
+                showExpandedAlbumArt = showExpandedAlbumArt,
+                expandedElementVisibility = expandedElementVisibility,
+                hideMusicWhenAppOpen = hideMusicWhenAppOpen,
+                usageAccessGranted = usageAccessGranted,
+                pulseAmount = pulseAmount,
+                onBack = { showMusicSettings = false },
+            )
         }
     }
 
@@ -1544,7 +345,7 @@ fun MusicScreen(
                 Text(
                     text = "Performance Warning",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                 )
             },
             text = {
@@ -1558,12 +359,12 @@ fun MusicScreen(
                     onClick = {
                         OverlayPreferences.setVisualizerMode(context, OverlayPreferences.VisualizerMode.AUDIO_PREVIEW)
                         showHqWarningDialog = false
-                    }
+                    },
                 ) {
                     Text(
                         text = "Enable Anyway",
                         color = MaterialTheme.colorScheme.error,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                 }
             },
@@ -1571,7 +372,7 @@ fun MusicScreen(
                 TextButton(
                     onClick = {
                         showHqWarningDialog = false
-                    }
+                    },
                 ) {
                     Text("Cancel")
                 }
@@ -1580,9 +381,373 @@ fun MusicScreen(
     }
 }
 
-private fun formatPreviewTime(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0)
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MusicSettingsPage(
+    context: Context,
+    showMinimizedTitle: Boolean,
+    showSongAnnouncement: Boolean,
+    pulseEntireIslandEnabled: Boolean,
+    showExpandedAlbumArt: Boolean,
+    expandedElementVisibility: OverlayPreferences.ExpandedElementVisibility,
+    hideMusicWhenAppOpen: Boolean,
+    usageAccessGranted: Boolean,
+    pulseAmount: Float,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = LarpIcons.ArrowBack,
+                    contentDescription = "Back",
+                )
+            }
+            Column {
+                Text(
+                    text = "Music Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                )
+                Text(
+                    text = "Minimized, expanded, and playback options",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            motionItem(key = "minimized_right_side") {
+                SectionHeader(title = "Minimized Right Side")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = if (showMinimizedTitle) {
+                                "Scrolling track title on the right side of the minimized pill"
+                            } else {
+                                "Animated audio bars on the right side of the minimized pill"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            toggleableItem(
+                                checked = !showMinimizedTitle,
+                                label = "Visualizer",
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowMinimizedTitleEnabled(context, false)
+                                    OverlayPreferences.setShowMinimizedVisualizerEnabled(context, true)
+                                },
+                                weight = 1f,
+                            )
+                            toggleableItem(
+                                checked = showMinimizedTitle,
+                                label = "Song Title",
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowMinimizedTitleEnabled(context, true)
+                                    OverlayPreferences.setShowMinimizedVisualizerEnabled(context, false)
+                                },
+                                weight = 1f,
+                            )
+                        }
+                    }
+                }
+            }
+
+            motionItem(key = "minimized_elements") {
+                SectionHeader(title = "Minimized Elements")
+                LarpCard {
+                    MusicElementToggleGrid(
+                        items = listOf(
+                            MusicElementToggle(
+                                title = "Song Change",
+                                subtitle = "Announce new track",
+                                icon = LarpIcons.NotificationsActive,
+                                checked = showSongAnnouncement,
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowSongAnnouncementEnabled(context, it)
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "Pulse Island",
+                                subtitle = "Beat-sync pill scale",
+                                icon = LarpIcons.Vibration,
+                                checked = pulseEntireIslandEnabled,
+                                onCheckedChange = {
+                                    OverlayPreferences.setPulseEntireIslandEnabled(context, it)
+                                },
+                            ),
+                        ),
+                    )
+                }
+            }
+
+            motionItem(key = "expanded_elements") {
+                SectionHeader(title = "Expanded Elements")
+                LarpCard {
+                    MusicElementToggleGrid(
+                        items = listOf(
+                            MusicElementToggle(
+                                title = "Album Art",
+                                subtitle = "Show cover artwork",
+                                icon = LarpIcons.PhotoLibrary,
+                                checked = showExpandedAlbumArt,
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it)
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "Track Info",
+                                subtitle = "Title & artist",
+                                icon = LarpIcons.MusicNote,
+                                checked = expandedElementVisibility.trackInfo,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(trackInfo = it),
+                                    )
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "Visualizer",
+                                subtitle = "Audio bars",
+                                icon = LarpIcons.GraphicEq,
+                                checked = expandedElementVisibility.visualizer,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(visualizer = it),
+                                    )
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "Progress Bar",
+                                subtitle = "Seekable scrubber",
+                                icon = LarpIcons.Tune,
+                                checked = expandedElementVisibility.progress,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(progress = it),
+                                    )
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "Player Controls",
+                                subtitle = "Prev, play & next",
+                                icon = LarpIcons.PlayArrow,
+                                checked = expandedElementVisibility.mainControls,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(mainControls = it),
+                                    )
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "App Actions",
+                                subtitle = "Like, shuffle & more",
+                                icon = LarpIcons.Apps,
+                                checked = expandedElementVisibility.appActions,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(appActions = it),
+                                    )
+                                },
+                            ),
+                            MusicElementToggle(
+                                title = "BPM Chip",
+                                subtitle = "Track tempo badge",
+                                icon = LarpIcons.Speed,
+                                checked = expandedElementVisibility.bpm,
+                                onCheckedChange = {
+                                    OverlayPreferences.setExpandedElementVisibility(
+                                        context,
+                                        expandedElementVisibility.copy(bpm = it),
+                                    )
+                                },
+                            ),
+                        ),
+                    )
+                }
+            }
+
+            motionItem(key = "overview") {
+                SectionHeader(title = "Display Options")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Hide in Music App",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                )
+                                Text(
+                                    text = "Hide the music island while the active music player application is open",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            Switch(
+                                checked = hideMusicWhenAppOpen,
+                                onCheckedChange = { isChecked ->
+                                    OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, isChecked)
+                                },
+                            )
+                        }
+
+                        if (hideMusicWhenAppOpen) {
+                            Text(
+                                if (usageAccessGranted) "Usage access is enabled. The music island returns when you leave the player."
+                                else "Allow usage access to detect when your active player is open without accessibility access.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
+                                Text(if (usageAccessGranted) "Manage usage access" else "Grant usage access")
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Pulse Amount",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                    )
+                                    Text(
+                                        text = "Scale factor for BPM pulse intensity (0.25x – 3.0x)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text(
+                                    text = "%.2fx".format(pulseAmount),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            val pulseSliderState = remember {
+                                SliderState(
+                                    value = pulseAmount,
+                                    steps = 10,
+                                    trackRange = 0.25f..3.0f,
+                                )
+                            }
+                            pulseSliderState.value = pulseAmount
+                            Slider(
+                                state = pulseSliderState,
+                                onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MusicElementToggleGrid(
+    items: List<MusicElementToggle>,
+    columns: Int = 2,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items.chunked(columns).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                rowItems.forEach { item ->
+                    ToggleButton(
+                        checked = item.checked,
+                        onCheckedChange = item.onCheckedChange,
+                        modifier = Modifier.weight(1f),
+                        shapes = ToggleButtonShapes(
+                            shape = RoundedCornerShape(16.dp),
+                            pressedShape = RoundedCornerShape(12.dp),
+                            checkedShape = RoundedCornerShape(22.dp),
+                        ),
+                        colors = ToggleButtonDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalAlignment = Alignment.Start,
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Text(
+                                text = item.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = item.subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                repeat(columns - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
 }

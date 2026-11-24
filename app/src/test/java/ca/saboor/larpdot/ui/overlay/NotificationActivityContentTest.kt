@@ -1,16 +1,18 @@
 package ca.saboor.larpdot.ui.overlay
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Timer
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
+import ca.saboor.larpdot.notification.NotificationActivitySettings
+import ca.saboor.larpdot.service.isPermanentShortTermAlert
+import ca.saboor.larpdot.service.resolveFriendlyBluetoothName
+import ca.saboor.larpdot.service.selectAutoExpandShortTermAlert
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,12 +47,30 @@ class NotificationActivityContentTest {
     }
 
     @Test
-    fun bluetoothStatusShowsTypeAndOnlyReportedBattery() {
-        val connected = createActivity(kind = NotificationActivityKind.BLUETOOTH, text = "Headphones • Connected")
+    fun bluetoothStatusShowsPercentageOnlyAndUsesDeviceSpecificIcons() {
+        val headphones = createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "WH-1000XM5", text = "Headphones • Connected")
             .copy(bluetoothDeviceType = "Headphones", bluetoothBatteryPercent = 72)
-        assertEquals("Headphones • 72%", compactStatusFallback(connected))
-        assertEquals("Headphones", compactStatusFallback(connected.copy(bluetoothBatteryPercent = null)))
-        assertEquals("Headphones • Disconnected", compactStatusFallback(connected.copy(text = "Headphones • Disconnected")))
+        assertEquals("72%", compactStatusFallback(headphones))
+        assertEquals("", compactStatusFallback(headphones.copy(bluetoothBatteryPercent = null)))
+        assertEquals("", compactStatusFallback(headphones.copy(text = "Headphones • Disconnected")))
+        assertEquals(LarpIcons.Headphones, activityIcon(headphones))
+
+        val earbuds = createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Pixel Buds Pro", text = "Earbuds • Connected")
+            .copy(bluetoothDeviceType = "Earbuds", bluetoothBatteryPercent = 85)
+        assertEquals("85%", compactStatusFallback(earbuds))
+        assertEquals(LarpIcons.Earbuds, activityIcon(earbuds))
+
+        val watch = createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Pixel Watch 3", text = "Watch • Connected")
+            .copy(bluetoothDeviceType = "Watch", bluetoothBatteryPercent = 64)
+        assertEquals("64%", compactStatusFallback(watch))
+        assertEquals(LarpIcons.Watch, activityIcon(watch))
+
+        assertEquals(LarpIcons.Speaker, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "JBL Flip").copy(bluetoothDeviceType = "Speaker")))
+        assertEquals(LarpIcons.DirectionsCar, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Car Audio").copy(bluetoothDeviceType = "Car audio")))
+        assertEquals(LarpIcons.SportsEsports, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "DualSense").copy(bluetoothDeviceType = "Controller")))
+        assertEquals(LarpIcons.Keyboard, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Keychron K2").copy(bluetoothDeviceType = "Keyboard")))
+        assertEquals(LarpIcons.BluetoothConnected, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Unknown Device", text = "Bluetooth • Connected")))
+        assertEquals(LarpIcons.BluetoothDisabled, activityIcon(createActivity(kind = NotificationActivityKind.BLUETOOTH, title = "Unknown Device", text = "Bluetooth • Disconnected")))
     }
 
     @Test
@@ -123,6 +143,7 @@ class NotificationActivityContentTest {
             progressMax = 100,
         )
         assertEquals("", compactStatusFallback(navWithProgressFraction))
+        assertNull(activityRadialProgress(navWithProgressFraction, progressRingEnabled = true, primaryColor = Color.White))
 
         val navWithPercentText = createActivity(
             kind = NotificationActivityKind.NAVIGATION,
@@ -137,6 +158,11 @@ class NotificationActivityContentTest {
             text = "15 min remaining (12 miles)",
         )
         assertEquals("15 min", compactStatusFallback(navWithEtaAndPercent))
+        assertEquals("15m", formatCompactActivityDisplayStatus(NotificationActivityKind.NAVIGATION, "15 min"))
+        assertEquals("1h25m", formatCompactActivityDisplayStatus(NotificationActivityKind.NAVIGATION, "1 hr 25 min"))
+        assertEquals("2.5mi", formatCompactActivityDisplayStatus(NotificationActivityKind.NAVIGATION, "2.5 miles"))
+        assertEquals("3.2km", formatCompactActivityDisplayStatus(NotificationActivityKind.NAVIGATION, "3.2 km"))
+        assertEquals("15 min", formatCompactActivityDisplayStatus(NotificationActivityKind.TIMER, "15 min"))
     }
 
     @Test
@@ -178,6 +204,17 @@ class NotificationActivityContentTest {
         val largeExtra = calculateActivityCompactExtraDp(65f)
         assertEquals(142f, largeExtra, 0.001f)
         assertTrue(largeExtra > smallExtra)
+
+        val navEmpty = compactNavigationWings(0f)
+        assertEquals(28f, navEmpty.leadingDp, 0.001f)
+        assertEquals(28f, navEmpty.trailingDp, 0.001f)
+        assertEquals(0.5f, navEmpty.trailingFraction, 0.001f)
+
+        val navEta = compactNavigationWings(24f)
+        assertEquals(28f, navEta.leadingDp, 0.001f)
+        assertEquals(36f, navEta.trailingDp, 0.001f)
+        assertEquals(64f, navEta.widthDp, 0.001f)
+        assertEquals(36f / 64f, navEta.trailingFraction, 0.001f)
     }
 
     @Test
@@ -289,7 +326,7 @@ class NotificationActivityContentTest {
             kind = NotificationActivityKind.PROGRESS,
             title = "Downloading offline maps",
         )
-        assertEquals(Icons.Default.Download, activityIcon(certainDownload))
+        assertEquals(LarpIcons.Download, activityIcon(certainDownload))
 
         val genericProgress = createActivity(
             kind = NotificationActivityKind.PROGRESS,
@@ -297,16 +334,16 @@ class NotificationActivityContentTest {
             text = "75%",
         )
         // Generic progress that is not a download falls back to Notifications icon (when appIcon is not drawn)
-        assertEquals(Icons.Default.Notifications, activityIcon(genericProgress))
+        assertEquals(LarpIcons.Notifications, activityIcon(genericProgress))
 
         val callActivity = createActivity(kind = NotificationActivityKind.CALL)
-        assertEquals(Icons.Default.Call, activityIcon(callActivity))
+        assertEquals(LarpIcons.Call, activityIcon(callActivity))
 
         val timerActivity = createActivity(kind = NotificationActivityKind.TIMER)
-        assertEquals(Icons.Default.Timer, activityIcon(timerActivity))
+        assertEquals(LarpIcons.Timer, activityIcon(timerActivity))
 
         val navActivity = createActivity(kind = NotificationActivityKind.NAVIGATION)
-        assertEquals(Icons.Default.Navigation, activityIcon(navActivity))
+        assertEquals(LarpIcons.Navigation, activityIcon(navActivity))
     }
 
     @Test
@@ -322,5 +359,191 @@ class NotificationActivityContentTest {
         val nonPercent = formatCompactStatus("15 min")
         assertEquals("15 min", nonPercent.text)
         assertTrue(nonPercent.spanStyles.isEmpty())
+    }
+
+    @Test
+    fun activityIconTintUsesMaterialYouForNonSemanticKinds() {
+        val materialYou = androidx.compose.ui.graphics.Color(0xFFD0BCFF)
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.BLUETOOTH, materialYou))
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.AUDIO_OUTPUT, materialYou))
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.TIMER, materialYou))
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.NAVIGATION, materialYou))
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.PROGRESS, materialYou))
+        assertEquals(materialYou, activityIconTint(NotificationActivityKind.SCREENSHOT, materialYou))
+
+        // Semantic status colors stay distinct
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF4CAF50), activityIconTint(NotificationActivityKind.CALL, materialYou))
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF4CAF50), activityIconTint(NotificationActivityKind.BATTERY_CHARGING, materialYou))
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFF5252), activityIconTint(NotificationActivityKind.BATTERY_LOW, materialYou))
+    }
+
+    @Test
+    fun bluetoothExpandedSubtitleOmitsRedundantBluetoothConnectedText() {
+        val earbudsWithBattery = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Pixel Buds Pro",
+            text = "Earbuds • Connected",
+        ).copy(bluetoothDeviceType = "Earbuds", bluetoothBatteryPercent = 85)
+        assertEquals("Earbuds", activitySubtitle(earbudsWithBattery))
+        assertEquals(85, batteryPercentOf(earbudsWithBattery))
+
+        val genericWithBattery = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Audio Device",
+            text = "Bluetooth • Connected",
+        ).copy(bluetoothDeviceType = "Bluetooth", bluetoothBatteryPercent = 90)
+        assertEquals("", activitySubtitle(genericWithBattery))
+        assertEquals(90, batteryPercentOf(genericWithBattery))
+
+        val genericNoBattery = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Audio Device",
+            text = "Bluetooth • Connected",
+        ).copy(bluetoothDeviceType = "Bluetooth", bluetoothBatteryPercent = null)
+        assertEquals("", activitySubtitle(genericNoBattery))
+        assertEquals(null, batteryPercentOf(genericNoBattery))
+
+        val disconnected = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Pixel Buds Pro",
+            text = "Earbuds • Disconnected",
+        ).copy(bluetoothDeviceType = "Earbuds", bluetoothBatteryPercent = 85)
+        assertEquals("Disconnected", activitySubtitle(disconnected))
+        assertEquals(null, batteryPercentOf(disconnected))
+
+        val charging = createActivity(
+            kind = NotificationActivityKind.BATTERY_CHARGING,
+            title = "Fast Charging",
+            text = "72% • 25W • 28m left",
+            progress = 72,
+            progressMax = 100,
+        )
+        assertEquals(72, batteryPercentOf(charging))
+        assertEquals("25W • 28m left", activitySubtitle(charging))
+
+        val lowBattery = createActivity(
+            kind = NotificationActivityKind.BATTERY_LOW,
+            title = "Low Battery",
+            text = "15% remaining • Connect charger",
+            progress = 15,
+            progressMax = 100,
+        )
+        assertEquals(15, batteryPercentOf(lowBattery))
+        assertEquals("Connect charger", activitySubtitle(lowBattery))
+
+        val download = createActivity(
+            kind = NotificationActivityKind.PROGRESS,
+            title = "Downloading file.zip",
+            text = "50%",
+            progress = 50,
+            progressMax = 100,
+        )
+        assertEquals(null, batteryPercentOf(download))
+    }
+
+    @Test
+    fun shortTermAutoExpandSelectsNewAndModeChangedAlertsOnly() {
+        val bt = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Pixel Buds Pro",
+            text = "Earbuds • Connected",
+        ).copy(key = "system_bluetooth_1", postedAtMillis = 2000L)
+        val soundRing = createActivity(
+            kind = NotificationActivityKind.SOUND_MODE,
+            title = "Ring Mode",
+            text = "Calls and alerts will ring",
+        ).copy(key = "system_sound_mode", postedAtMillis = 3000L)
+        val soundSilent = soundRing.copy(title = "Silent Mode", postedAtMillis = 4000L)
+        val charging = createActivity(
+            kind = NotificationActivityKind.BATTERY_CHARGING,
+            title = "Charging",
+            text = "51%",
+        ).copy(key = "system_battery_charging", postedAtMillis = 5000L)
+
+        // Disabled setting never auto-expands
+        assertEquals(null, selectAutoExpandShortTermAlert(listOf(bt), emptyMap(), expandEnabled = false) { false })
+
+        // Brand-new alert triggers expansion
+        assertEquals(bt, selectAutoExpandShortTermAlert(listOf(bt), emptyMap(), expandEnabled = true) { false })
+
+        // Already-seen charging update with same title does not re-expand
+        assertEquals(
+            null,
+            selectAutoExpandShortTermAlert(
+                listOf(charging.copy(text = "52%")),
+                mapOf("system_battery_charging" to "Charging"),
+                expandEnabled = true,
+            ) { false },
+        )
+
+        // Sound mode title change triggers expansion even when key already existed
+        assertEquals(
+            soundSilent,
+            selectAutoExpandShortTermAlert(
+                listOf(soundSilent),
+                mapOf("system_sound_mode" to "Ring Mode"),
+                expandEnabled = true,
+            ) { false },
+        )
+
+        // Permanent short-term detection respects per-alert pin flags
+        val pinnedSettings = NotificationActivitySettings(permanentCharging = true, permanentBluetooth = false)
+        assertTrue(isPermanentShortTermAlert(charging, pinnedSettings))
+        assertFalse(isPermanentShortTermAlert(bt, pinnedSettings))
+    }
+
+    @Test
+    fun expandedActivityIconSpansLeftOfCutoutOnlyWhenSpaceExistsInPortrait() {
+        // Centered portrait punch-hole (e.g. Pixel / Galaxy)
+        assertTrue(shouldSpanActivityIconLeftOfCutout(isLandscape = false, topInsetDp = 33f, cutoutCenterXDp = 206f, cutoutDiameterDp = 26f))
+        // Landscape sits beside the cutout (topInset = 0)
+        assertFalse(shouldSpanActivityIconLeftOfCutout(isLandscape = true, topInsetDp = 0f, cutoutCenterXDp = 206f, cutoutDiameterDp = 26f))
+        // Top-left corner punch-hole doesn't have room to its left
+        assertFalse(shouldSpanActivityIconLeftOfCutout(isLandscape = false, topInsetDp = 30f, cutoutCenterXDp = 28f, cutoutDiameterDp = 24f))
+    }
+
+    @Test
+    fun resolveFriendlyBluetoothNamePrefersAndroidAliasOverRawHardwareName() {
+        assertEquals(
+            "Saboor's Pixel Watch 5",
+            resolveFriendlyBluetoothName(alias = "Saboor's Pixel Watch 5", rawName = "Pixel Watch 5 806S"),
+        )
+        assertEquals(
+            "WH-1000XM5",
+            resolveFriendlyBluetoothName(alias = "LE_WH-1000XM5", rawName = "LE_WH-1000XM5"),
+        )
+        assertEquals(
+            "Pixel Buds Pro",
+            resolveFriendlyBluetoothName(alias = null, rawName = "Pixel Buds Pro"),
+        )
+        assertEquals(
+            "Bluetooth Device",
+            resolveFriendlyBluetoothName(alias = "  ", rawName = null),
+        )
+    }
+
+    @Test
+    fun shapeProgressStartFindsTwelveOClockAndWindingDirection() {
+        val center = androidx.compose.ui.geometry.Offset(50f, 50f)
+        // Clockwise square starting at top-left: index 1 is top-center (12 o'clock).
+        val cwSquare = listOf(
+            androidx.compose.ui.geometry.Offset(0f, 0f),
+            androidx.compose.ui.geometry.Offset(50f, 0f),
+            androidx.compose.ui.geometry.Offset(100f, 0f),
+            androidx.compose.ui.geometry.Offset(100f, 50f),
+            androidx.compose.ui.geometry.Offset(100f, 100f),
+            androidx.compose.ui.geometry.Offset(50f, 100f),
+            androidx.compose.ui.geometry.Offset(0f, 100f),
+            androidx.compose.ui.geometry.Offset(0f, 50f),
+        )
+        val cwStart = findShapeTopStartAndWinding(cwSquare, center)
+        assertEquals(1, cwStart.startIndex)
+        assertTrue(cwStart.isClockwise)
+
+        // Counter-clockwise square: top-center is at index 7, winding is CCW.
+        val ccwSquare = cwSquare.reversed()
+        val ccwStart = findShapeTopStartAndWinding(ccwSquare, center)
+        assertEquals(6, ccwStart.startIndex)
+        assertFalse(ccwStart.isClockwise)
     }
 }

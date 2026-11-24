@@ -2,4 +2,6 @@
     <string name="app_name">LarpDot</string>
     <string name="accessibility_service_description">Allows LarpDot to display the Dynamic Island over the notification pull-down panel and lock screen.</string>
     <string name="accessibility_service_summary">Dynamic Island overlay</string>
+    <string name="qs_tile_label">Dynamic Island</string>
+    <string name="hold_in_island_label">Hold in Island</string>
 </resources>

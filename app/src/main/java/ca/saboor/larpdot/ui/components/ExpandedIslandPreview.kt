@@ -22,10 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +53,7 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactIslandContent
+import ca.saboor.larpdot.ui.overlay.compactRadialGaugeExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.configuredCompactMediaWings
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
@@ -68,6 +65,17 @@ enum class IslandPreviewMode {
     MINIMIZED,
     EXPANDED,
     BOTH,
+}
+
+enum class MusicPreviewElement {
+    MINIMIZED_ALBUM_ART,
+    MINIMIZED_BACKGROUND,
+    EXPANDED_ALBUM_ART,
+    EXPANDED_BACKGROUND,
+    TRACK_INFO,
+    VISUALIZER,
+    PROGRESS_BAR,
+    PLAYBACK_CONTROLS,
 }
 
 /**
@@ -82,6 +90,8 @@ fun ExpandedIslandPreview(
     previewMode: IslandPreviewMode = IslandPreviewMode.BOTH,
     showControls: Boolean = true,
     titleBar: Boolean = false,
+    selectedElement: MusicPreviewElement? = null,
+    onElementClick: ((MusicPreviewElement) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -95,6 +105,7 @@ fun ExpandedIslandPreview(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
+    val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
@@ -121,6 +132,7 @@ fun ExpandedIslandPreview(
         MediaTrackInfo(
             title = "Starboy",
             artist = "The Weeknd",
+            album = "Starboy",
             albumArt = sampleArt,
             isPlaying = true,
             positionMs = 64000L,
@@ -132,6 +144,7 @@ fun ExpandedIslandPreview(
 
     // Always display realistic media so styles, shapes, blur, and waveforms are immediately visible
     val previewTrack = if (nowPlaying.hasMedia) nowPlaying else sampleTrack
+    val previewPositionMs = if (nowPlaying.hasMedia) livePositionMs else sampleTrack.positionMs
     val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
     val pulseAmount by OverlayPreferences.pulseAmountFlow.collectAsState()
     val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
@@ -139,7 +152,7 @@ fun ExpandedIslandPreview(
     val isBpmResolved by BpmDetector.isResolved.collectAsState()
     val bpmPulseState = rememberBpmPulse(
         bpm = if (isBpmResolved) currentBpm else (if (!nowPlaying.hasMedia) 120f else null),
-        currentPositionMs = previewTrack.positionMs,
+        currentPositionMs = previewPositionMs,
         isPlaying = previewTrack.isPlaying,
         enabled = pulseEntireIsland,
     )
@@ -151,7 +164,10 @@ fun ExpandedIslandPreview(
     val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
     val compactExtraDp = when (minimizedStyle) {
         OverlayPreferences.AlbumArtStyle.BLENDED -> compactPillThickness * 3
-        OverlayPreferences.AlbumArtStyle.NESTED -> compactPillThickness + nestedArtSize
+        OverlayPreferences.AlbumArtStyle.NESTED -> maxOf(
+            compactPillThickness + nestedArtSize,
+            if (showMinimizedProgressOutline) compactRadialGaugeExtraDp(compactPillThickness) else 0.dp,
+        )
         else -> 60.dp
     }
     val visualizerWidthDp = if (showMinimizedVisualizer) {
@@ -178,7 +194,7 @@ fun ExpandedIslandPreview(
     )
 
     val progressFraction = if (previewTrack.durationMs > 0) {
-        (previewTrack.positionMs.toFloat() / previewTrack.durationMs).coerceIn(0f, 1f)
+        (previewPositionMs.toFloat() / previewTrack.durationMs).coerceIn(0f, 1f)
     } else 0f
 
     val animatedProgress by animateFloatAsState(
@@ -292,12 +308,14 @@ fun ExpandedIslandPreview(
                         }
                         .then(
                             Modifier.islandFluidProgressBorder(
-                                progressFraction = if (showMinimizedProgressOutline) animatedProgress else 0f,
+                                progressFraction = 0f,
                                 cornerRadius = compactCornerRadius,
                                 shape = RoundedCornerShape(compactCornerRadius),
-                                strokeWidth = 0.75.dp,
-                                trackColor = Color(0x30FFFFFF),
-                                progressColor = previewTrack.dominantColor,
+                                strokeWidth = if (selectedElement == MusicPreviewElement.MINIMIZED_BACKGROUND) 1.5.dp else 0.75.dp,
+                                trackColor = if (selectedElement == MusicPreviewElement.MINIMIZED_BACKGROUND) {
+                                    MaterialTheme.colorScheme.primary
+                                } else Color(0x30FFFFFF),
+                                progressColor = Color.Transparent,
                             )
                         ),
                     shape = RoundedCornerShape(compactCornerRadius),
@@ -319,6 +337,19 @@ fun ExpandedIslandPreview(
                             trailingWingFraction = mediaWings.trailingFraction,
                             pulseAmount = pulseAmount,
                             fontStyle = islandFontStyle,
+                            showProgressRing = showMinimizedProgressOutline,
+                            progressProvider = { animatedProgress },
+                            onAlbumArtClick = onElementClick?.let { callback ->
+                                { callback(MusicPreviewElement.MINIMIZED_ALBUM_ART) }
+                            },
+                            onVisualizerClick = onElementClick?.let { callback ->
+                                { callback(MusicPreviewElement.VISUALIZER) }
+                            },
+                            onBackgroundClick = onElementClick?.let { callback ->
+                                { callback(MusicPreviewElement.MINIMIZED_BACKGROUND) }
+                            },
+                            highlightAlbumArt = selectedElement == MusicPreviewElement.MINIMIZED_ALBUM_ART,
+                            highlightVisualizer = selectedElement == MusicPreviewElement.VISUALIZER,
                         )
                         // Hardware camera cutout visualizer centered between wings
                         Box(
@@ -344,22 +375,16 @@ fun ExpandedIslandPreview(
                 modifier = Modifier
                     .width(previewCardWidth)
                     .height(previewHeight)
-                    .graphicsLayer {
-                        val pulse = bpmPulseState.value * pulseAmount
-                        if (pulseEntireIsland && previewTrack.isPlaying && pulse > 0f) {
-                            val scale = 1f + (0.02f * pulse)
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                    }
                     .then(
                         Modifier.islandFluidProgressBorder(
-                            progressFraction = if (showExpandedProgressOutline) animatedProgress else 0f,
+                            progressFraction = 0f,
                             cornerRadius = expandedCornerRadiusDp,
                             shape = containerShape,
-                            strokeWidth = 0.75.dp,
-                            trackColor = Color(0x30FFFFFF),
-                            progressColor = previewTrack.dominantColor,
+                            strokeWidth = if (selectedElement == MusicPreviewElement.EXPANDED_BACKGROUND) 1.5.dp else 0.75.dp,
+                            trackColor = if (selectedElement == MusicPreviewElement.EXPANDED_BACKGROUND) {
+                                MaterialTheme.colorScheme.primary
+                            } else Color(0x30FFFFFF),
+                            progressColor = Color.Transparent,
                         )
                     ),
                 shape = containerShape,
@@ -374,12 +399,34 @@ fun ExpandedIslandPreview(
                         mediaInfo = previewTrack,
                         cutoutDiameterDp = cutoutDiameterDp,
                         isExpanded = true,
-                        onCollapse = { /* In-app preview */ },
+                        onCollapse = { onElementClick?.invoke(MusicPreviewElement.EXPANDED_BACKGROUND) },
                         cutoutInfo = cutoutInfo,
                         cardHorizontalMarginDp = previewHorizontalMarginDp,
                         waveformBandCount = waveformBandCount,
                         pulseAmount = pulseAmount,
                         fontStyle = islandFontStyle,
+                        showExpandedProgressRing = showExpandedProgressOutline,
+                        progressProvider = { animatedProgress },
+                        onAlbumArtClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.EXPANDED_ALBUM_ART) }
+                        },
+                        onTrackInfoClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.TRACK_INFO) }
+                        },
+                        onVisualizerClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.VISUALIZER) }
+                        },
+                        onProgressBarClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.PROGRESS_BAR) }
+                        },
+                        onPlaybackControlsClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.PLAYBACK_CONTROLS) }
+                        },
+                        highlightAlbumArt = selectedElement == MusicPreviewElement.EXPANDED_ALBUM_ART,
+                        highlightTrackInfo = selectedElement == MusicPreviewElement.TRACK_INFO,
+                        highlightVisualizer = selectedElement == MusicPreviewElement.VISUALIZER,
+                        highlightProgressBar = selectedElement == MusicPreviewElement.PROGRESS_BAR,
+                        highlightPlaybackControls = selectedElement == MusicPreviewElement.PLAYBACK_CONTROLS,
                     )
 
                     // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
@@ -404,6 +451,14 @@ fun ExpandedIslandPreview(
                     )
                 }
             }
+            }
+            if (onElementClick != null) {
+                Text(
+                    text = "Tap any element or empty space on the preview to customize",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
             }
         }
 

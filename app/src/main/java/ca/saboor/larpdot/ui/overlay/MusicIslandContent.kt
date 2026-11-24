@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.overlay
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.Crossfade
@@ -19,8 +21,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -37,13 +39,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,7 +101,9 @@ import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
+import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.AudioOutputChip
 import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
 import ca.saboor.larpdot.visualizer.BpmChip
 import ca.saboor.larpdot.visualizer.BpmDetector
@@ -256,6 +255,460 @@ private fun AnnouncementTrackText(
 }
 
 @Composable
+private fun CompactMusicNestedArtwork(
+    bitmap: Bitmap,
+    size: Dp,
+    shape: Shape,
+    artworkGlow: AlbumArtGlowState,
+    artworkAnchor: ArtworkAnchor?,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+        contentDescription = null,
+        modifier = modifier
+            .size(size)
+            .albumArtGlow(artworkGlow, artworkAnchor)
+            .clip(shape)
+            .artworkTile(
+                artworkAnchor,
+                ArtworkStyle(shape = shape),
+            ),
+        contentScale = ContentScale.Crop,
+    )
+}
+
+@Composable
+private fun CompactMusicBasicFadedArtwork(
+    bitmap: Bitmap,
+    isLandscape: Boolean,
+    artworkGlow: AlbumArtGlowState,
+    artworkAnchor: ArtworkAnchor?,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+        contentDescription = null,
+        modifier = modifier
+            .albumArtGlow(artworkGlow, artworkAnchor)
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    brush = if (isLandscape) {
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.White,
+                                1.00f to Color.Transparent,
+                            ),
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.White,
+                                1.00f to Color.Transparent,
+                            ),
+                        )
+                    },
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+            .artworkTile(
+                artworkAnchor,
+                ArtworkStyle(fadeVertically = isLandscape),
+            ),
+        contentScale = ContentScale.Crop,
+    )
+}
+
+@Composable
+private fun CompactMusicBlendedArtwork(
+    bitmap: Bitmap,
+    isLandscape: Boolean,
+    dotRadiusPx: Float,
+    artworkGlow: AlbumArtGlowState,
+    artworkAnchor: ArtworkAnchor?,
+    extraBleedDp: Dp = 6.dp,
+    modifier: Modifier = Modifier,
+) {
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val side = minOf(imageBitmap.width, imageBitmap.height)
+    val cropX = (imageBitmap.width - side) / 2
+    val cropY = (imageBitmap.height - side) / 2
+    val eighth = (side / 8).coerceAtLeast(1)
+
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .then(
+                if (extraBleedDp > 0.dp) {
+                    Modifier.layout { measurable, constraints ->
+                        val extraPx = extraBleedDp.roundToPx()
+                        if (isLandscape) {
+                            val placeable = measurable.measure(
+                                constraints.copy(
+                                    minHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                    maxHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
+                                ),
+                            )
+                            layout(placeable.width.coerceAtLeast(0), constraints.maxHeight.coerceAtLeast(0)) {
+                                placeable.place(0, 0)
+                            }
+                        } else {
+                            val placeable = measurable.measure(
+                                constraints.copy(
+                                    minWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                    maxWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
+                                ),
+                            )
+                            layout(constraints.maxWidth.coerceAtLeast(0), placeable.height.coerceAtLeast(0)) {
+                                placeable.place(0, 0)
+                            }
+                        }
+                    }
+                } else Modifier
+            )
+            .progressiveBlur(
+                direction = if (isLandscape) 1 else 0,
+                startFraction = 0.65f,
+                maxBlurDp = 24.dp,
+                dotRadiusPx = dotRadiusPx,
+            )
+            .artworkTile(artworkAnchor, firstSquare = true),
+    ) {
+        if (isLandscape) {
+            val w = size.width
+            val artH = w
+            val refH = (size.height - artH).coerceAtLeast(0f)
+            if (refH > 0.5f) {
+                scale(scaleX = 1f, scaleY = -1f, pivot = Offset(w / 2f, artH + refH / 2f)) {
+                    drawImage(
+                        image = imageBitmap,
+                        srcOffset = IntOffset(cropX, cropY + side - eighth),
+                        srcSize = IntSize(side, eighth),
+                        dstOffset = IntOffset(0, artH.roundToInt()),
+                        dstSize = IntSize(w.roundToInt(), refH.roundToInt()),
+                    )
+                }
+            }
+            drawBlendedAlbumArtGlow(artworkGlow, isLandscape = true, artworkAnchor)
+            if (artworkAnchor?.isMoving() != true) drawImage(
+                image = imageBitmap,
+                srcOffset = IntOffset(cropX, cropY),
+                srcSize = IntSize(side, side),
+                dstOffset = IntOffset.Zero,
+                dstSize = IntSize(w.roundToInt(), artH.roundToInt()),
+            )
+        } else {
+            val h = size.height
+            val artW = h
+            val refW = (size.width - artW).coerceAtLeast(0f)
+            if (refW > 0.5f) {
+                scale(scaleX = -1f, scaleY = 1f, pivot = Offset(artW + refW / 2f, h / 2f)) {
+                    drawImage(
+                        image = imageBitmap,
+                        srcOffset = IntOffset(cropX + side - eighth, cropY),
+                        srcSize = IntSize(eighth, side),
+                        dstOffset = IntOffset(artW.roundToInt(), 0),
+                        dstSize = IntSize(refW.roundToInt(), h.roundToInt()),
+                    )
+                }
+            }
+            drawBlendedAlbumArtGlow(artworkGlow, isLandscape = false, artworkAnchor)
+            if (artworkAnchor?.isMoving() != true) drawImage(
+                image = imageBitmap,
+                srcOffset = IntOffset(cropX, cropY),
+                srcSize = IntSize(side, side),
+                dstOffset = IntOffset.Zero,
+                dstSize = IntSize(artW.roundToInt(), h.roundToInt()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactMusicArtworkPlaceholder(
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape,
+    nestedRotation: Float,
+    pillThickness: Dp,
+    minNestedSize: Dp = 16.dp,
+    sizeOverride: Dp? = null,
+    modifier: Modifier = Modifier,
+) {
+    val materialYouPrimary = MaterialTheme.colorScheme.primary
+    val placeholderSize = sizeOverride ?: if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+        (pillThickness - 8.dp).coerceIn(minNestedSize, 24.dp)
+    } else {
+        pillThickness.coerceIn(minNestedSize, 32.dp)
+    }
+    val placeholderShape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+        nestedAlbumArtShape(nestedShape, nestedRotation)
+    } else {
+        RoundedCornerShape(6.dp)
+    }
+    Box(
+        modifier = modifier
+            .size(placeholderSize)
+            .clip(placeholderShape)
+            .background(materialYouPrimary.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = LarpIcons.MusicNote,
+            contentDescription = "Music artwork placeholder",
+            tint = materialYouPrimary,
+            modifier = Modifier.size(placeholderSize * 0.58f),
+        )
+    }
+}
+
+@Composable
+internal fun SecondaryMusicDotContent(
+    mediaInfo: MediaTrackInfo,
+    bubbleWidth: Dp,
+    bubbleHeight: Dp,
+    bubbleThickness: Dp,
+    isMiniPill: Boolean,
+    isLandscape: Boolean,
+    beforeMain: Boolean,
+    bubbleStyle: OverlayPreferences.BubbleStyle,
+    artworkAnchor: ArtworkAnchor? = null,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
+    nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
+    showProgressRing: Boolean = OverlayPreferences.showProgressOutlineFlow.collectAsState().value,
+) {
+    val artworkGlow = rememberAlbumArtGlow(mediaInfo)
+    val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
+    val density = LocalDensity.current
+    val dotRadiusPx = with(density) { (bubbleThickness / 2f).toPx() }
+    val extraSpan = if (isLandscape) (bubbleHeight - bubbleWidth).coerceAtLeast(0.dp) else (bubbleWidth - bubbleHeight).coerceAtLeast(0.dp)
+    val isPillShaped = isMiniPill && extraSpan > 4.dp
+    val grouped = bubbleStyle == OverlayPreferences.BubbleStyle.MATERIAL_3
+    val outerPadding = 8.dp
+    val innerPadding = if (grouped) 6.dp else outerPadding
+    val ringDiameter = compactBatteryRingDiameter(bubbleThickness)
+    val hasMusicProgressRing = showProgressRing && mediaInfo.hasMedia && mediaInfo.durationMs > 0L
+    val contentShift = if (grouped && !isPillShaped && !hasMusicProgressRing) 1.5.dp else 0.dp
+    val iconScale = (minOf(bubbleWidth, bubbleHeight) / bubbleThickness).coerceIn(0f, 1f)
+    val nestedArtSize = (bubbleThickness - 12.dp).coerceIn(14.dp, 24.dp)
+    val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
+    val livePositionMs = rememberLiveMediaPositionMs(mediaInfo)
+    val musicProgressProvider: () -> Float = {
+        if (mediaInfo.durationMs > 0L) (livePositionMs.value.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f) else 0f
+    }
+
+    val trailingEqualizer = @Composable {
+        EqualizerWaveform(
+            mediaInfo = mediaInfo,
+            maxHeightDp = 11.5f,
+            barCount = 3,
+            barWidth = 2.5.dp,
+            barSpacing = 1.5.dp,
+        )
+    }
+
+    val albumArt = mediaInfo.albumArt
+    val isEdgeToEdgeArtwork = albumArt != null && albumArtStyle != OverlayPreferences.AlbumArtStyle.NESTED
+
+    if (isEdgeToEdgeArtwork) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (albumArtStyle) {
+                OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
+                    CompactMusicBasicFadedArtwork(
+                        bitmap = albumArt,
+                        isLandscape = isLandscape,
+                        artworkGlow = artworkGlow,
+                        artworkAnchor = artworkAnchor,
+                        modifier = if (isLandscape) {
+                            Modifier
+                                .align(if (isPillShaped) Alignment.TopCenter else Alignment.Center)
+                                .fillMaxWidth()
+                                .aspectRatio(1f, matchHeightConstraintsFirst = false)
+                        } else {
+                            Modifier
+                                .align(if (isPillShaped) Alignment.CenterStart else Alignment.Center)
+                                .fillMaxHeight()
+                                .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                        },
+                    )
+                }
+                OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+                OverlayPreferences.AlbumArtStyle.BLENDED -> {
+                    if (isPillShaped) {
+                        CompactMusicBlendedArtwork(
+                            bitmap = albumArt,
+                            isLandscape = isLandscape,
+                            dotRadiusPx = dotRadiusPx,
+                            artworkGlow = artworkGlow,
+                            artworkAnchor = artworkAnchor,
+                            extraBleedDp = 0.dp,
+                        )
+                    } else {
+                        Image(
+                            bitmap = remember(albumArt) { albumArt.asImageBitmap() },
+                            contentDescription = "Music Artwork",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .artworkTile(artworkAnchor, ArtworkStyle(shape = CircleShape)),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
+                }
+                OverlayPreferences.AlbumArtStyle.NESTED -> Unit
+            }
+            if (hasMusicProgressRing) {
+                val dotArtworkShape = if (!isPillShaped && grouped) {
+                    groupedIslandShape(bubbleThickness / 2f, !beforeMain, beforeMain, isLandscape)
+                } else CircleShape
+                Box(
+                    modifier = Modifier
+                        .align(
+                            when {
+                                !isPillShaped -> Alignment.Center
+                                isLandscape -> Alignment.TopCenter
+                                else -> Alignment.CenterStart
+                            }
+                        )
+                        .size(bubbleThickness),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    RadialProgressRing(
+                        progressProvider = musicProgressProvider,
+                        color = accentColor,
+                        trackColor = Color.White.copy(alpha = 0.28f),
+                        strokeWidth = 2.dp,
+                        shape = dotArtworkShape,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(1.dp),
+                    )
+                }
+            }
+            if (isPillShaped) {
+                Box(
+                    modifier = Modifier
+                        .align(if (isLandscape) Alignment.BottomCenter else Alignment.CenterEnd)
+                        .padding(
+                            bottom = if (isLandscape) (if (beforeMain) innerPadding else outerPadding) else 0.dp,
+                            end = if (!isLandscape) (if (beforeMain) innerPadding else outerPadding) else 0.dp,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    trailingEqualizer()
+                }
+            }
+        }
+        return
+    }
+
+    val leadingContent = @Composable {
+        val shapedArtSize = if (hasMusicProgressRing) ringDiameter else nestedArtSize
+        val innerArtSize = if (hasMusicProgressRing) (shapedArtSize - 5.dp).coerceAtLeast(11.dp) else nestedArtSize
+        val leadingShape = if (albumArt != null || albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
+            artworkShape
+        } else {
+            RoundedCornerShape(6.dp)
+        }
+        val artworkNode = @Composable {
+            if (albumArt != null) {
+                CompactMusicNestedArtwork(
+                    bitmap = albumArt,
+                    size = innerArtSize,
+                    shape = artworkShape,
+                    artworkGlow = artworkGlow,
+                    artworkAnchor = artworkAnchor,
+                )
+            } else {
+                CompactMusicArtworkPlaceholder(
+                    albumArtStyle = albumArtStyle,
+                    nestedShape = nestedShape,
+                    nestedRotation = nestedRotation,
+                    pillThickness = bubbleThickness,
+                    minNestedSize = if (hasMusicProgressRing) 11.dp else 14.dp,
+                    sizeOverride = if (hasMusicProgressRing) innerArtSize else null,
+                )
+            }
+        }
+        if (hasMusicProgressRing) {
+            Box(
+                modifier = Modifier.size(shapedArtSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                artworkNode()
+                RadialProgressRing(
+                    progressProvider = musicProgressProvider,
+                    color = accentColor,
+                    trackColor = Color.White.copy(alpha = 0.28f),
+                    strokeWidth = 2.dp,
+                    shape = leadingShape,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        } else {
+            artworkNode()
+        }
+    }
+
+    if (isLandscape) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset(y = if (beforeMain) contentShift else -contentShift)
+                .then(
+                    if (isPillShaped) Modifier.padding(
+                        top = if (beforeMain) outerPadding else innerPadding,
+                        bottom = if (beforeMain) innerPadding else outerPadding,
+                    ) else Modifier
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = if (isPillShaped) Arrangement.SpaceBetween else Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier.scale(iconScale),
+                contentAlignment = Alignment.Center,
+            ) {
+                leadingContent()
+            }
+            if (isPillShaped) {
+                Box(contentAlignment = Alignment.Center) {
+                    trailingEqualizer()
+                }
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset(x = if (beforeMain) contentShift else -contentShift)
+                .then(
+                    if (isPillShaped) Modifier.padding(
+                        start = if (beforeMain) outerPadding else innerPadding,
+                        end = if (beforeMain) innerPadding else outerPadding,
+                    ) else Modifier
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (isPillShaped) Arrangement.SpaceBetween else Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier.scale(iconScale),
+                contentAlignment = Alignment.Center,
+            ) {
+                leadingContent()
+            }
+            if (isPillShaped) {
+                Box(contentAlignment = Alignment.Center) {
+                    trailingEqualizer()
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
@@ -270,15 +723,22 @@ internal fun CompactIslandContent(
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
-    bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
+    bpmPulseEnabled: Boolean = OverlayPreferences.minimizedBpmPulseEnabledFlow.collectAsState().value,
     pulseAmount: Float = OverlayPreferences.pulseAmountFlow.collectAsState().value,
     fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
     minimizedNestedBlurredBg: Boolean = OverlayPreferences.minimizedNestedBlurredBgFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
     trailingWingFraction: Float = 0.5f,
     artworkAnchor: ArtworkAnchor? = null,
+    showProgressRing: Boolean = OverlayPreferences.showProgressOutlineFlow.collectAsState().value,
+    progressProvider: (() -> Float)? = null,
+    onAlbumArtClick: (() -> Unit)? = null,
+    onVisualizerClick: (() -> Unit)? = null,
+    onBackgroundClick: (() -> Unit)? = null,
+    highlightAlbumArt: Boolean = false,
+    highlightVisualizer: Boolean = false,
 ) {
-    val artworkGlow = albumArtGlowColor(mediaInfo)
+    val artworkGlow = rememberAlbumArtGlow(mediaInfo)
     val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -305,9 +765,15 @@ internal fun CompactIslandContent(
             BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
         }
     }
+    val liveMediaPositionMs = rememberLiveMediaPositionMs(mediaInfo, useLiveStream = progressProvider == null)
+    val musicProgressProvider: () -> Float = progressProvider ?: {
+        if (mediaInfo.durationMs > 0L) (liveMediaPositionMs.value.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f) else 0f
+    }
+    val hasMusicProgressRing = showProgressRing && mediaInfo.hasMedia && mediaInfo.durationMs > 0L
+    val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
     val bpmPulseState = rememberBpmPulse(
         bpm = currentBpm,
-        currentPositionMs = mediaInfo.positionMs,
+        positionMsProvider = { liveMediaPositionMs.value },
         isPlaying = mediaInfo.isPlaying,
         enabled = bpmPulseEnabled,
     )
@@ -317,7 +783,8 @@ internal fun CompactIslandContent(
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(Color.Black)
+                .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Top Wing: Album art based on chosen AlbumArtStyle
@@ -327,25 +794,36 @@ internal fun CompactIslandContent(
                         // The camera spans the full thickness; padding belongs to the wing content.
                         val compactPillThickness = cutoutDiameterDp
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+                        val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
+                        val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.BottomCenter,
                         ) {
-                            Image(
-                                bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(albumArtSize)
-                                    .albumArtGlow(artworkGlow, artworkAnchor)
-                                    .clip(artworkShape)
-                                    .artworkTile(
-                                        artworkAnchor,
-                                        ArtworkStyle(shape = artworkShape),
-                                    ),
-                                contentScale = ContentScale.Crop,
-                            )
+                            Box(
+                                modifier = Modifier.size(renderedArtSize),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CompactMusicNestedArtwork(
+                                    bitmap = mediaInfo.albumArt,
+                                    size = innerArtSize,
+                                    shape = artworkShape,
+                                    artworkGlow = artworkGlow,
+                                    artworkAnchor = artworkAnchor,
+                                )
+                                if (hasMusicProgressRing) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        shape = artworkShape,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                         }
                     }
                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
@@ -355,110 +833,70 @@ internal fun CompactIslandContent(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.BottomCenter,
                         ) {
-                            Image(
-                                bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                contentDescription = null,
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .aspectRatio(1f, matchHeightConstraintsFirst = false)
-                                    .albumArtGlow(artworkGlow, artworkAnchor)
-                                    .graphicsLayer {
-                                        compositingStrategy = CompositingStrategy.Offscreen
-                                    }
-                                    .drawWithContent {
-                                        drawContent()
-                                        drawRect(
-                                            brush = Brush.verticalGradient(
-                                                colorStops = arrayOf(
-                                                    0.00f to Color.White,
-                                                    1.00f to Color.Transparent,
-                                                )
-                                            ),
-                                            blendMode = BlendMode.DstIn,
-                                        )
-                                    }
-                                    .artworkTile(
-                                        artworkAnchor,
-                                        ArtworkStyle(fadeVertically = true),
-                                    ),
-                                contentScale = ContentScale.Crop,
-                            )
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = false),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CompactMusicBasicFadedArtwork(
+                                    bitmap = mediaInfo.albumArt,
+                                    isLandscape = true,
+                                    artworkGlow = artworkGlow,
+                                    artworkAnchor = artworkAnchor,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                if (hasMusicProgressRing) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(1.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                     OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
                     OverlayPreferences.AlbumArtStyle.BLENDED -> {
-                        Column(
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Top,
+                            contentAlignment = Alignment.TopCenter,
                         ) {
-                            val bitmap = mediaInfo.albumArt.asImageBitmap()
-                            val side = minOf(bitmap.width, bitmap.height)
-                            val cropX = (bitmap.width - side) / 2
-                            val cropY = (bitmap.height - side) / 2
-                            val eighth = side / 8
-
-                            // Primary Art (spanning island width) + Flipped 1/8 Reflection up to the dot with curved progressive blur
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .layout { measurable, constraints ->
-                                        val extraPx = 6.dp.roundToPx()
-                                        val placeable = measurable.measure(
-                                            constraints.copy(
-                                                minHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
-                                                maxHeight = (constraints.maxHeight + extraPx).coerceAtLeast(0),
-                                            )
-                                        )
-                                        layout(placeable.width.coerceAtLeast(0), constraints.maxHeight.coerceAtLeast(0)) {
-                                            placeable.place(0, 0)
-                                        }
-                                    }
-                                    .progressiveBlur(
-                                        direction = 1,
-                                        startFraction = 0.65f,
-                                        maxBlurDp = 24.dp,
-                                        dotRadiusPx = dotRadiusPx,
-                                    )
-                                    .artworkTile(artworkAnchor, firstSquare = true),
-                            ) {
-                                val w = size.width
-                                val artH = w
-                                val refH = size.height - artH
-                                if (artworkAnchor?.isMoving() != true) drawImage(
-                                    image = bitmap,
-                                    srcOffset = IntOffset(cropX, cropY),
-                                    srcSize = IntSize(side, side),
-                                    dstOffset = IntOffset.Zero,
-                                    dstSize = IntSize(w.roundToInt(), artH.roundToInt()),
-                                )
-                                scale(scaleX = 1f, scaleY = -1f, pivot = Offset(w / 2f, artH + refH / 2f)) {
-                                    drawImage(
-                                        image = bitmap,
-                                        srcOffset = IntOffset(cropX, cropY + side - eighth),
-                                        srcSize = IntSize(side, eighth),
-                                        dstOffset = IntOffset(0, artH.roundToInt()),
-                                        dstSize = IntSize(w.roundToInt(), refH.roundToInt()),
+                            CompactMusicBlendedArtwork(
+                                bitmap = mediaInfo.albumArt,
+                                isLandscape = true,
+                                dotRadiusPx = dotRadiusPx,
+                                artworkGlow = artworkGlow,
+                                artworkAnchor = artworkAnchor,
+                            )
+                            if (hasMusicProgressRing) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .size(cutoutDiameterDp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(1.dp),
                                     )
                                 }
-                                drawBlendedAlbumArtGlow(artworkGlow, isLandscape, artworkAnchor)
                             }
                         }
                     }
                 }
             } else {
-                val placeholderSize = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                    (cutoutDiameterDp - 8.dp).coerceIn(16.dp, 24.dp)
-                } else {
-                    cutoutDiameterDp.coerceIn(20.dp, 32.dp)
-                }
-                val placeholderShape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                    nestedAlbumArtShape(nestedShape, nestedRotation)
-                } else {
-                    RoundedCornerShape(6.dp)
-                }
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = if (
@@ -467,18 +905,26 @@ internal fun CompactIslandContent(
                     ) Alignment.Center else Alignment.BottomCenter,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(placeholderSize)
-                            .clip(placeholderShape)
-                            .background(materialYouPrimary.copy(alpha = 0.18f)),
+                        modifier = if (hasMusicProgressRing) Modifier.size(compactRingDiameter) else Modifier,
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.MusicNote,
-                            contentDescription = "Music artwork placeholder",
-                            tint = materialYouPrimary,
-                            modifier = Modifier.size(placeholderSize * 0.58f),
+                        CompactMusicArtworkPlaceholder(
+                            albumArtStyle = albumArtStyle,
+                            nestedShape = nestedShape,
+                            nestedRotation = nestedRotation,
+                            pillThickness = cutoutDiameterDp,
+                            sizeOverride = if (hasMusicProgressRing) (compactRingDiameter - 5.dp).coerceAtLeast(11.dp) else null,
                         )
+                        if (hasMusicProgressRing) {
+                            RadialProgressRing(
+                                progressProvider = musicProgressProvider,
+                                color = accentColor,
+                                trackColor = Color.White.copy(alpha = 0.28f),
+                                strokeWidth = 2.dp,
+                                shape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) artworkShape else RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
             }
@@ -546,10 +992,17 @@ internal fun CompactIslandContent(
     } else {
         // Portrait Mode: Horizontal Dynamic Island Pill
         val leadingWingFraction = 1f - trailingWingFraction
+        val albumArtWingInteraction = Modifier
+            .then(if (onAlbumArtClick != null) Modifier.clickable(onClick = onAlbumArtClick) else Modifier)
+            .then(
+                if (highlightAlbumArt) Modifier.border(1.5.dp, materialYouPrimary, RoundedCornerShape(topStart = cutoutDiameterDp / 2f, bottomStart = cutoutDiameterDp / 2f))
+                else Modifier
+            )
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(Color.Black)
+                .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Left Wing: Album art based on chosen AlbumArtStyle, with announcement title inserted in front
@@ -559,11 +1012,14 @@ internal fun CompactIslandContent(
                         // The camera spans the full thickness; padding belongs to the wing content.
                         val compactPillThickness = cutoutDiameterDp
                         val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-                        val artStartInset = ((compactPillThickness - albumArtSize) / 2f).coerceAtLeast(6.dp)
+                        val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
+                        val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
+                        val artStartInset = ((compactPillThickness - renderedArtSize) / 2f).coerceAtLeast(3.dp)
                         Row(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
                                 .fillMaxHeight()
+                                .then(albumArtWingInteraction)
                                 .padding(
                                     start = if (showAnnouncementText) artStartInset else 0.dp,
                                     end = if (showAnnouncementText) 2.dp else 0.dp,
@@ -571,19 +1027,28 @@ internal fun CompactIslandContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.End,
                         ) {
-                            Image(
-                                bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(albumArtSize)
-                                    .albumArtGlow(artworkGlow, artworkAnchor)
-                                    .clip(artworkShape)
-                                    .artworkTile(
-                                        artworkAnchor,
-                                        ArtworkStyle(shape = artworkShape),
-                                    ),
-                                contentScale = ContentScale.Crop,
-                            )
+                            Box(
+                                modifier = Modifier.size(renderedArtSize),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CompactMusicNestedArtwork(
+                                    bitmap = mediaInfo.albumArt,
+                                    size = innerArtSize,
+                                    shape = artworkShape,
+                                    artworkGlow = artworkGlow,
+                                    artworkAnchor = artworkAnchor,
+                                )
+                                if (hasMusicProgressRing) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        shape = artworkShape,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                             if (showAnnouncementText) {
                                 MarqueeText(
                                     text = mediaInfo.title.ifBlank { "Playing Track" },
@@ -608,38 +1073,36 @@ internal fun CompactIslandContent(
                         Box(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
-                                .fillMaxHeight(),
+                                .fillMaxHeight()
+                                .then(albumArtWingInteraction),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Image(
-                                bitmap = mediaInfo.albumArt.asImageBitmap(),
-                                contentDescription = null,
+                            Box(
                                 modifier = Modifier
                                     .align(if (showAnnouncementText) Alignment.CenterStart else Alignment.CenterEnd)
                                     .fillMaxHeight()
-                                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                                    .albumArtGlow(artworkGlow, artworkAnchor)
-                                    .graphicsLayer {
-                                        compositingStrategy = CompositingStrategy.Offscreen
-                                    }
-                                    .drawWithContent {
-                                        drawContent()
-                                        drawRect(
-                                            brush = Brush.horizontalGradient(
-                                                colorStops = arrayOf(
-                                                    0.00f to Color.White,
-                                                    1.00f to Color.Transparent,
-                                                )
-                                            ),
-                                            blendMode = BlendMode.DstIn,
-                                        )
-                                    }
-                                    .artworkTile(
-                                        artworkAnchor,
-                                        ArtworkStyle(fadeVertically = false),
-                                    ),
-                                contentScale = ContentScale.Crop,
-                            )
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = true),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CompactMusicBasicFadedArtwork(
+                                    bitmap = mediaInfo.albumArt,
+                                    isLandscape = false,
+                                    artworkGlow = artworkGlow,
+                                    artworkAnchor = artworkAnchor,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                if (hasMusicProgressRing) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(1.dp),
+                                    )
+                                }
+                            }
                             if (showAnnouncementText) {
                                 Box(
                                     modifier = Modifier
@@ -672,59 +1135,34 @@ internal fun CompactIslandContent(
                         Box(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
-                                .fillMaxHeight(),
+                                .fillMaxHeight()
+                                .then(albumArtWingInteraction),
                             contentAlignment = Alignment.Center,
                         ) {
-                            val bitmap = mediaInfo.albumArt.asImageBitmap()
-                            val side = minOf(bitmap.width, bitmap.height)
-                            val cropX = (bitmap.width - side) / 2
-                            val cropY = (bitmap.height - side) / 2
-                            val eighth = side / 8
-
-                            // Primary Art (spanning island height) + Flipped 1/8 Reflection up to the dot with curved progressive blur
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .layout { measurable, constraints ->
-                                        val extraPx = 6.dp.roundToPx()
-                                        val placeable = measurable.measure(
-                                            constraints.copy(
-                                                minWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
-                                                maxWidth = (constraints.maxWidth + extraPx).coerceAtLeast(0),
-                                            )
-                                        )
-                                        layout(constraints.maxWidth.coerceAtLeast(0), placeable.height.coerceAtLeast(0)) {
-                                            placeable.place(0, 0)
-                                        }
-                                    }
-                                    .progressiveBlur(
-                                        direction = 0,
-                                        startFraction = 0.65f,
-                                        maxBlurDp = 24.dp,
-                                        dotRadiusPx = dotRadiusPx,
-                                    )
-                                    .artworkTile(artworkAnchor, firstSquare = true),
-                            ) {
-                                val h = size.height
-                                val artW = h
-                                val refW = size.width - artW
-                                if (artworkAnchor?.isMoving() != true) drawImage(
-                                    image = bitmap,
-                                    srcOffset = IntOffset(cropX, cropY),
-                                    srcSize = IntSize(side, side),
-                                    dstOffset = IntOffset.Zero,
-                                    dstSize = IntSize(artW.roundToInt(), h.roundToInt()),
-                                )
-                                scale(scaleX = -1f, scaleY = 1f, pivot = Offset(artW + refW / 2f, h / 2f)) {
-                                    drawImage(
-                                        image = bitmap,
-                                        srcOffset = IntOffset(cropX + side - eighth, cropY),
-                                        srcSize = IntSize(eighth, side),
-                                        dstOffset = IntOffset(artW.roundToInt(), 0),
-                                        dstSize = IntSize(refW.roundToInt(), h.roundToInt()),
+                            CompactMusicBlendedArtwork(
+                                bitmap = mediaInfo.albumArt,
+                                isLandscape = false,
+                                dotRadiusPx = dotRadiusPx,
+                                artworkGlow = artworkGlow,
+                                artworkAnchor = artworkAnchor,
+                            )
+                            if (hasMusicProgressRing) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .size(cutoutDiameterDp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    RadialProgressRing(
+                                        progressProvider = musicProgressProvider,
+                                        color = accentColor,
+                                        trackColor = Color.White.copy(alpha = 0.28f),
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(1.dp),
                                     )
                                 }
-                                drawBlendedAlbumArtGlow(artworkGlow, isLandscape, artworkAnchor)
                             }
                             if (showAnnouncementText) {
                                 Box(
@@ -755,18 +1193,11 @@ internal fun CompactIslandContent(
                     }
                 }
             } else {
-                val placeholderSize = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                    (cutoutDiameterDp - 8.dp).coerceIn(16.dp, 24.dp)
-                } else {
-                    cutoutDiameterDp.coerceIn(20.dp, 32.dp)
-                }
-                val placeholderShape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) {
-                    nestedAlbumArtShape(nestedShape, nestedRotation)
-                } else {
-                    RoundedCornerShape(6.dp)
-                }
                 Box(
-                    modifier = Modifier.weight(leadingWingFraction).fillMaxHeight(),
+                    modifier = Modifier
+                        .weight(leadingWingFraction)
+                        .fillMaxHeight()
+                        .then(albumArtWingInteraction),
                     contentAlignment = if (
                         showAnnouncementText ||
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
@@ -793,18 +1224,26 @@ internal fun CompactIslandContent(
                         )
                     } else {
                         Box(
-                            modifier = Modifier
-                                .size(placeholderSize)
-                                .clip(placeholderShape)
-                                .background(materialYouPrimary.copy(alpha = 0.18f)),
+                            modifier = if (hasMusicProgressRing) Modifier.size(compactRingDiameter) else Modifier,
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.MusicNote,
-                                contentDescription = "Music artwork placeholder",
-                                tint = materialYouPrimary,
-                                modifier = Modifier.size(placeholderSize * 0.58f),
+                            CompactMusicArtworkPlaceholder(
+                                albumArtStyle = albumArtStyle,
+                                nestedShape = nestedShape,
+                                nestedRotation = nestedRotation,
+                                pillThickness = cutoutDiameterDp,
+                                sizeOverride = if (hasMusicProgressRing) (compactRingDiameter - 5.dp).coerceAtLeast(11.dp) else null,
                             )
+                            if (hasMusicProgressRing) {
+                                RadialProgressRing(
+                                    progressProvider = musicProgressProvider,
+                                    color = accentColor,
+                                    trackColor = Color.White.copy(alpha = 0.28f),
+                                    strokeWidth = 2.dp,
+                                    shape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) artworkShape else RoundedCornerShape(6.dp),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                     }
                 }
@@ -822,10 +1261,25 @@ internal fun CompactIslandContent(
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
             ) 0.dp else -(compactPillThickness / if (waveformBandCount >= 6) 16f else 8f)
+            val compactVisualizerVisible = showVisualizer && !(!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank())
             Box(
                 modifier = Modifier
                     .weight(trailingWingFraction)
                     .fillMaxHeight()
+                    .then(
+                        if (onVisualizerClick != null && compactVisualizerVisible) {
+                            Modifier.clickable(onClick = onVisualizerClick)
+                        } else Modifier
+                    )
+                    .then(
+                        if (highlightVisualizer && compactVisualizerVisible) {
+                            Modifier.border(
+                                1.5.dp,
+                                materialYouPrimary,
+                                RoundedCornerShape(topEnd = cutoutDiameterDp / 2f, bottomEnd = cutoutDiameterDp / 2f),
+                            )
+                        } else Modifier
+                    )
                     .then(
                         if (showDominantGlow) {
                             Modifier.drawWithCache {
@@ -938,11 +1392,15 @@ internal fun ExpandedIslandContent(
     modifier: Modifier = Modifier,
     cutoutInfo: CutoutInfo? = null,
     cardHorizontalMarginDp: Dp = 14.dp,
+    topContentInset: Dp = 0.dp,
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
     artworkAnchor: ArtworkAnchor? = null,
     playerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.expandedPlayerLayoutFlow.collectAsState().value,
     showProgressSquiggles: Boolean = OverlayPreferences.showProgressSquigglesFlow.collectAsState().value,
+    progressBarAccentColor: Boolean = OverlayPreferences.progressBarAccentColorFlow.collectAsState().value,
+    playbackControlsStyle: OverlayPreferences.PlaybackControlsStyle = OverlayPreferences.playbackControlsStyleFlow.collectAsState().value,
+    trackInfoStyle: OverlayPreferences.TrackInfoStyle = OverlayPreferences.trackInfoStyleFlow.collectAsState().value,
     elementVisibility: OverlayPreferences.ExpandedElementVisibility = OverlayPreferences.expandedElementVisibilityFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState().value,
@@ -951,12 +1409,24 @@ internal fun ExpandedIslandContent(
     cameraCoverStyle: OverlayPreferences.CameraCoverStyle = OverlayPreferences.cameraCoverStyleFlow.collectAsState().value,
     backgroundOpacity: Float = OverlayPreferences.expandedBackgroundOpacity.collectAsState().value,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
-    bpmPulseEnabled: Boolean = OverlayPreferences.bpmPulseEnabledFlow.collectAsState().value,
+    bpmPulseEnabled: Boolean = OverlayPreferences.expandedBpmPulseEnabledFlow.collectAsState().value,
     pulseAmount: Float = OverlayPreferences.pulseAmountFlow.collectAsState().value,
     fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
+    showExpandedProgressRing: Boolean = OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState().value,
+    progressProvider: (() -> Float)? = null,
+    onAlbumArtClick: (() -> Unit)? = null,
+    onVisualizerClick: (() -> Unit)? = null,
+    onProgressBarClick: (() -> Unit)? = null,
+    onPlaybackControlsClick: (() -> Unit)? = null,
+    onTrackInfoClick: (() -> Unit)? = null,
+    highlightAlbumArt: Boolean = false,
+    highlightVisualizer: Boolean = false,
+    highlightProgressBar: Boolean = false,
+    highlightPlaybackControls: Boolean = false,
+    highlightTrackInfo: Boolean = false,
 ) {
     val context = LocalContext.current
-    val artworkGlow = albumArtGlowColor(mediaInfo)
+    val artworkGlow = rememberAlbumArtGlow(mediaInfo)
     val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -968,9 +1438,10 @@ internal fun ExpandedIslandContent(
             BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
         }
     }
+    val livePositionMs = rememberLiveMediaPositionMs(mediaInfo, useLiveStream = progressProvider == null)
     val bpmPulseState = rememberBpmPulse(
         bpm = currentBpm,
-        currentPositionMs = mediaInfo.positionMs,
+        positionMsProvider = { livePositionMs.value },
         isPlaying = mediaInfo.isPlaying,
         enabled = bpmPulseEnabled,
     )
@@ -986,15 +1457,24 @@ internal fun ExpandedIslandContent(
         label = "album_art_playback_alpha",
     )
 
-    val progressFraction = if (mediaInfo.durationMs > 0) {
-        (mediaInfo.positionMs.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
-    } else 0f
-
     // Interactive scrub state
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
 
-    val activeFraction = if (isDragging) dragFraction else progressFraction
+    val activeFractionProvider: () -> Float = {
+        if (isDragging) {
+            dragFraction
+        } else if (progressProvider != null) {
+            progressProvider()
+        } else if (mediaInfo.durationMs > 0) {
+            (livePositionMs.value.toFloat() / mediaInfo.durationMs).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+    }
+    val expandedArtProgressProvider = if (showExpandedProgressRing && mediaInfo.hasMedia && mediaInfo.durationMs > 0L) {
+        activeFractionProvider
+    } else null
 
     val cardDragOffsetAnim = remember { androidx.compose.animation.core.Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
@@ -1030,74 +1510,48 @@ internal fun ExpandedIslandContent(
                 }
             }
             .pointerInput(mediaInfo.hasMedia) {
+                if (!mediaInfo.hasMedia) return@pointerInput
                 var totalDragX = 0f
-                var totalDragY = 0f
                 var hasTriggered = false
                 val swipeThresholdPx = with(density) { 32.dp.toPx() }
+                fun resetDrag() {
+                    totalDragX = 0f
+                    hasTriggered = false
+                    coroutineScope.launch {
+                        cardDragOffsetAnim.animateTo(
+                            targetValue = 0f,
+                            animationSpec = LarpMotion.release,
+                        )
+                    }
+                }
 
-                detectDragGestures(
+                detectHorizontalDragGestures(
                     onDragStart = {
                         totalDragX = 0f
-                        totalDragY = 0f
                         hasTriggered = false
                     },
-                    onDragEnd = {
-                        totalDragX = 0f
-                        totalDragY = 0f
-                        hasTriggered = false
+                    onDragEnd = { resetDrag() },
+                    onDragCancel = { resetDrag() },
+                    onHorizontalDrag = { change, dragAmount ->
+                        totalDragX += dragAmount
+                        val damped = (totalDragX * 0.10f).coerceIn(-maxCardDragOffsetPx, maxCardDragOffsetPx)
                         coroutineScope.launch {
-                            cardDragOffsetAnim.animateTo(
-                                targetValue = 0f,
-                                animationSpec = LarpMotion.release,
-                            )
+                            cardDragOffsetAnim.snapTo(damped)
                         }
-                    },
-                    onDragCancel = {
-                        totalDragX = 0f
-                        totalDragY = 0f
-                        hasTriggered = false
-                        coroutineScope.launch {
-                            cardDragOffsetAnim.animateTo(
-                                targetValue = 0f,
-                                animationSpec = LarpMotion.release,
-                            )
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        totalDragX += dragAmount.x
-                        totalDragY += dragAmount.y
-
-                        // Live interactive translation: move card slightly with the finger
-                        if (mediaInfo.hasMedia && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY)) {
-                            val damped = (totalDragX * 0.10f).coerceIn(-maxCardDragOffsetPx, maxCardDragOffsetPx)
-                            coroutineScope.launch {
-                                cardDragOffsetAnim.snapTo(damped)
-                            }
-                        }
-
                         if (!hasTriggered) {
-                            // Drag up to collapse
-                            if (totalDragY < -20f && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.3f) {
-                                hasTriggered = true
-                                change.consume()
-                                onCollapse()
-                            }
-                            // Swipe right on music to skip next
-                            else if (mediaInfo.hasMedia && totalDragX > swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                            if (totalDragX > swipeThresholdPx) {
                                 hasTriggered = true
                                 change.consume()
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 MediaPlaybackState.skipNext()
-                            }
-                            // Swipe left on music to go to previous track
-                            else if (mediaInfo.hasMedia && totalDragX < -swipeThresholdPx && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.3f) {
+                            } else if (totalDragX < -swipeThresholdPx) {
                                 hasTriggered = true
                                 change.consume()
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 MediaPlaybackState.skipPrevious()
                             }
                         }
-                    }
+                    },
                 )
             }
             .pointerInput(Unit) {
@@ -1454,7 +1908,6 @@ internal fun ExpandedIslandContent(
             }
         }
 
-
         CameraCover(
             style = cameraCoverStyle,
             centerX = dotCenterXDp,
@@ -1511,20 +1964,31 @@ internal fun ExpandedIslandContent(
         if (playerLayout == OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS) Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = if (topContentInset > 0.dp) 0.dp else 14.dp,
+                    bottom = 20.dp,
+                ),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             // Row 1: Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(32.dp),
+                    .height(maxOf(32.dp, topContentInset)),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
             ) {
                 if (elementVisibility.bpm && currentBpm != null) {
                     BpmChip(bpm = currentBpm)
                 }
+                AudioOutputChip(
+                    onClick = {
+                        AudioOutputTracker.openOutputSwitcher(context)
+                        onCollapse()
+                    },
+                )
             }
 
             // Row 2: Track Title & Artist (Left) + Visualizer stacked above Play/Pause Button (Right)
@@ -1538,11 +2002,19 @@ internal fun ExpandedIslandContent(
                     ExpandedArtwork(
                         artwork = mediaInfo.albumArt,
                         anchor = artworkAnchor,
-                        glowColor = artworkGlow,
+                        glow = artworkGlow,
                         shape = artworkShape,
                         opacity = { albumArtPlaybackAlpha },
+                        progressProvider = expandedArtProgressProvider,
+                        progressColor = accentColor,
+                        progressStrokeWidth = 2.5.dp,
                         modifier = Modifier
                             .size(56.dp)
+                            .then(
+                                if (highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, artworkShape)
+                                else Modifier
+                            )
+                            .then(if (onAlbumArtClick != null) Modifier.clickable(onClick = onAlbumArtClick) else Modifier)
                             .graphicsLayer {
                                 scaleX = albumArtPlaybackScale
                                 scaleY = albumArtPlaybackScale
@@ -1553,32 +2025,21 @@ internal fun ExpandedIslandContent(
                     Spacer(Modifier.width(14.dp))
                 }
 
-                if (elementVisibility.trackInfo) Column(
+                if (elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+                    mediaInfo = mediaInfo,
+                    trackInfoStyle = trackInfoStyle,
+                    accentColor = accentColor,
+                    fontStyle = fontStyle,
+                    titleTextStyle = MaterialTheme.typography.headlineSmall,
+                    artistTextStyle = MaterialTheme.typography.titleMedium,
+                    artistAlpha = 0.80f,
+                    titleArtistSpacing = 4.dp,
+                    onClick = { onTrackInfoClick?.invoke() ?: openPlayerApp(context, mediaInfo) },
+                    highlight = highlightTrackInfo,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(end = 16.dp)
-                        .clickable { openPlayerApp(context, mediaInfo) },
-                ) {
-                    MarqueeText(
-                        text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontFamily = fontStyle.fontFamily,
-                        
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    MarqueeText(
-                        text = mediaInfo.artist.ifEmpty { "" },
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = fontStyle.fontFamily,
-                        
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                        color = Color.White.copy(alpha = 0.80f),
-                    )
-                }
+                        .padding(end = 16.dp),
+                )
 
                 // Controls Column: 5-bar visualizer in a fixed container stacked directly above the Play/Pause button
                 if (elementVisibility.visualizer || elementVisibility.mainControls) Column(
@@ -1587,7 +2048,15 @@ internal fun ExpandedIslandContent(
                 ) {
                     if (elementVisibility.visualizer) Box(
                         modifier = Modifier
-                            .height(20.dp),
+                            .height(20.dp)
+                            .then(
+                                if (highlightVisualizer) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                else Modifier
+                            )
+                            .then(
+                                if (onVisualizerClick != null) Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onVisualizerClick)
+                                else Modifier
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         EqualizerWaveform(
@@ -1601,29 +2070,49 @@ internal fun ExpandedIslandContent(
                         )
                     }
                     if (elementVisibility.visualizer && elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
-                    // Native Android 13/14 M3 wide pill Play/Pause button
-                    if (elementVisibility.mainControls) Surface(
-                        onClick = { MediaPlaybackState.togglePlayPause() },
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.94f),
-                        modifier = Modifier
-                            .width(64.dp)
-                            .height(46.dp)
-                            .graphicsLayer {
-                                if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                    val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                            },
-                        shadowElevation = 2.dp,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            PlaybackIcon(
-                                playing = mediaInfo.isPlaying,
-                                tint = Color(0xFF1B1A1E),
-                                size = 26.dp,
-                            )
+                    if (elementVisibility.mainControls) {
+                        val playOuter = playbackControlsStyle.cornerRadiusDp.dp
+                        val playInner = (playbackControlsStyle.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
+                        val playShape = RoundedCornerShape(
+                            if (playbackControlsStyle.material3ButtonGroup) playInner else playOuter
+                        )
+                        val hasPlayBg = playbackControlsStyle.playPauseBackground
+                        val usePlayAccent = playbackControlsStyle.playPauseAccentColor
+                        val playBgColor = if (hasPlayBg) {
+                            if (usePlayAccent) accentColor else Color.White.copy(alpha = 0.94f)
+                        } else Color.Transparent
+                        val playIconTint = if (hasPlayBg) {
+                            Color(0xFF1B1A1E)
+                        } else if (usePlayAccent) {
+                            accentColor
+                        } else Color.White
+                        Surface(
+                            onClick = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
+                            shape = playShape,
+                            color = playBgColor,
+                            modifier = Modifier
+                                .width(64.dp)
+                                .height(46.dp)
+                                .then(
+                                    if (highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, playShape)
+                                    else Modifier
+                                )
+                                .graphicsLayer {
+                                    if (bpmPulseEnabled && mediaInfo.isPlaying) {
+                                        val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                                },
+                            shadowElevation = if (hasPlayBg) 2.dp else 0.dp,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                PlaybackIcon(
+                                    playing = mediaInfo.isPlaying,
+                                    tint = playIconTint,
+                                    size = 26.dp,
+                                )
+                            }
                         }
                     }
                 }
@@ -1634,76 +2123,82 @@ internal fun ExpandedIslandContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (elementVisibility.mainControls) IconButton(
-                    onClick = { MediaPlaybackState.skipPrevious() },
-                    modifier = Modifier.size(36.dp),
+                val skipOuter = playbackControlsStyle.cornerRadiusDp.dp
+                val skipInner = (playbackControlsStyle.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
+                val prevShape = if (playbackControlsStyle.material3ButtonGroup) {
+                    RoundedCornerShape(topStart = skipOuter, bottomStart = skipOuter, topEnd = skipInner, bottomEnd = skipInner)
+                } else RoundedCornerShape(skipOuter)
+                val nextShape = if (playbackControlsStyle.material3ButtonGroup) {
+                    RoundedCornerShape(topStart = skipInner, bottomStart = skipInner, topEnd = skipOuter, bottomEnd = skipOuter)
+                } else RoundedCornerShape(skipOuter)
+                val skipBgColor = if (playbackControlsStyle.skipBackground) Color.White.copy(alpha = 0.14f) else Color.Transparent
+
+                if (elementVisibility.mainControls) Surface(
+                    onClick = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
+                    shape = prevShape,
+                    color = skipBgColor,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .then(
+                            if (highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, prevShape)
+                            else Modifier
+                        ),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous track",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp),
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = LarpIcons.SkipPrevious,
+                            contentDescription = "Previous track",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
 
-                if (elementVisibility.progress) Box(
+                if (elementVisibility.progress) ExpandedMusicProgressBar(
+                    durationMs = mediaInfo.durationMs,
+                    isPlaying = mediaInfo.isPlaying,
+                    activeFractionProvider = activeFractionProvider,
+                    accentColor = accentColor,
+                    useAccentColor = progressBarAccentColor,
+                    showSquiggles = showProgressSquiggles,
+                    onDragStart = { fraction ->
+                        isDragging = true
+                        dragFraction = fraction
+                    },
+                    onDragChange = { fraction -> dragFraction = fraction },
+                    onDragEnd = { fraction ->
+                        if (mediaInfo.durationMs > 0) {
+                            MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
+                        }
+                        isDragging = false
+                    },
+                    onDragCancel = { isDragging = false },
+                    onProgressBarClick = onProgressBarClick,
+                    highlight = highlightProgressBar,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 4.dp)
-                        .height(32.dp)
-                        .pointerInput(mediaInfo.durationMs) {
-                            detectTapGestures { offset ->
-                                if (mediaInfo.durationMs > 0) {
-                                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                                    MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
-                                }
-                            }
-                        }
-                        .pointerInput(mediaInfo.durationMs) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
-                                },
-                                onDragEnd = {
-                                    if (mediaInfo.durationMs > 0) {
-                                        MediaPlaybackState.seekTo((dragFraction * mediaInfo.durationMs).toLong())
-                                    }
-                                    isDragging = false
-                                },
-                                onDragCancel = {
-                                    isDragging = false
-                                },
-                                onHorizontalDrag = { change, _ ->
-                                    change.consume()
-                                    dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    LinearWavyProgressIndicator(
-                        progress = { activeFraction },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp),
-                        color = accentColor,
-                        trackColor = accentColor.copy(alpha = 0.32f),
-                        amplitude = { if (showProgressSquiggles) if (mediaInfo.isPlaying) 0.5f else 0.15f else 0f },
-                        wavelength = 28.dp,
-                    )
-                }
+                        .padding(horizontal = 4.dp),
+                )
 
-                if (elementVisibility.mainControls) IconButton(
-                    onClick = { MediaPlaybackState.skipNext() },
-                    modifier = Modifier.size(36.dp),
+                if (elementVisibility.mainControls) Surface(
+                    onClick = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+                    shape = nextShape,
+                    color = skipBgColor,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .then(
+                            if (highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, nextShape)
+                            else Modifier
+                        ),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next track",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp),
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = LarpIcons.SkipNext,
+                            contentDescription = "Next track",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
 
                 if (elementVisibility.appActions) mediaInfo.sessionActions
@@ -1739,7 +2234,12 @@ internal fun ExpandedIslandContent(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 20.dp, end = 20.dp, top = 34.dp, bottom = 24.dp),
+                    .padding(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = if (topContentInset > 0.dp) topContentInset else 18.dp,
+                        bottom = 20.dp,
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
             ) {
@@ -1747,61 +2247,62 @@ internal fun ExpandedIslandContent(
                     ExpandedArtwork(
                         artwork = mediaInfo.albumArt,
                         anchor = artworkAnchor,
-                        glowColor = artworkGlow,
+                        glow = artworkGlow,
                         shape = artworkShape,
                         opacity = { albumArtPlaybackAlpha },
+                        progressProvider = expandedArtProgressProvider,
+                        progressColor = accentColor,
+                        progressStrokeWidth = 3.5.dp,
+                        progressGap = 3.dp,
                         modifier = Modifier
                             .size(140.dp)
+                            .then(
+                                if (highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, artworkShape)
+                                else Modifier
+                            )
                             .graphicsLayer {
                                 scaleX = albumArtPlaybackScale
                                 scaleY = albumArtPlaybackScale
                                 alpha = albumArtPlaybackAlpha
                                 compositingStrategy = CompositingStrategy.ModulateAlpha
                             }
-                            .clickable { openPlayerApp(context, mediaInfo) },
+                            .clickable { onAlbumArtClick?.invoke() ?: openPlayerApp(context, mediaInfo) },
                     )
                 }
 
                 if (elementVisibility.trackInfo || elementVisibility.visualizer) Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { openPlayerApp(context, mediaInfo) },
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (elementVisibility.trackInfo) Column(modifier = Modifier.weight(1f)) {
-                        MarqueeText(
-                            text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = fontStyle.fontFamily,
-                            
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                            color = Color.White,
-                            textAlign = TextAlign.Start,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            MarqueeText(
-                                text = mediaInfo.artist,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = fontStyle.fontFamily,
-                                
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                                color = Color.White.copy(alpha = 0.72f),
-                                textAlign = TextAlign.Start,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                            if (elementVisibility.bpm && currentBpm != null) {
-                                Spacer(Modifier.width(6.dp))
-                                BpmChip(bpm = currentBpm)
-                            }
-                        }
-                    }
+                    if (elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+                        mediaInfo = mediaInfo,
+                        trackInfoStyle = trackInfoStyle,
+                        accentColor = accentColor,
+                        fontStyle = fontStyle,
+                        titleTextStyle = MaterialTheme.typography.titleMedium,
+                        artistTextStyle = MaterialTheme.typography.bodyMedium,
+                        artistAlpha = 0.72f,
+                        titleArtistSpacing = 2.dp,
+                        textAlign = TextAlign.Start,
+                        bpmChip = if (elementVisibility.bpm && currentBpm != null) {
+                            { BpmChip(bpm = currentBpm) }
+                        } else null,
+                        onClick = { onTrackInfoClick?.invoke() ?: openPlayerApp(context, mediaInfo) },
+                        highlight = highlightTrackInfo,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
                     if (elementVisibility.visualizer) Box(
                         modifier = Modifier
                             .size(width = 72.dp, height = 20.dp)
+                            .then(
+                                if (highlightVisualizer) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                else Modifier
+                            )
+                            .then(
+                                if (onVisualizerClick != null) Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onVisualizerClick)
+                                else Modifier
+                            )
                             .padding(end = 14.dp),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
@@ -1816,119 +2317,50 @@ internal fun ExpandedIslandContent(
                     }
                 }
 
-                if (elementVisibility.progress) Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(24.dp)
-                        .pointerInput(mediaInfo.durationMs) {
-                            detectTapGestures { offset ->
-                                if (mediaInfo.durationMs > 0) {
-                                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                                    MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
-                                }
-                            }
+                if (elementVisibility.progress) ExpandedMusicProgressBar(
+                    durationMs = mediaInfo.durationMs,
+                    isPlaying = mediaInfo.isPlaying,
+                    activeFractionProvider = activeFractionProvider,
+                    accentColor = accentColor,
+                    useAccentColor = progressBarAccentColor,
+                    showSquiggles = showProgressSquiggles,
+                    onDragStart = { fraction ->
+                        isDragging = true
+                        dragFraction = fraction
+                    },
+                    onDragChange = { fraction -> dragFraction = fraction },
+                    onDragEnd = { fraction ->
+                        if (mediaInfo.durationMs > 0) {
+                            MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
                         }
-                        .pointerInput(mediaInfo.durationMs) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
-                                },
-                                onDragEnd = {
-                                    if (mediaInfo.durationMs > 0) {
-                                        MediaPlaybackState.seekTo((dragFraction * mediaInfo.durationMs).toLong())
-                                    }
-                                    isDragging = false
-                                },
-                                onDragCancel = {
-                                    isDragging = false
-                                },
-                                onHorizontalDrag = { change, _ ->
-                                    change.consume()
-                                    dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    LinearWavyProgressIndicator(
-                        progress = { activeFraction },
-                        modifier = Modifier.fillMaxWidth().height(12.dp),
-                        color = accentColor,
-                        trackColor = Color.White.copy(alpha = 0.18f),
-                        amplitude = { if (showProgressSquiggles) if (mediaInfo.isPlaying) 0.55f else 0.12f else 0f },
-                        wavelength = 24.dp,
-                    )
-                }
+                        isDragging = false
+                    },
+                    onDragCancel = { isDragging = false },
+                    onProgressBarClick = onProgressBarClick,
+                    highlight = highlightProgressBar,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
-                if (elementVisibility.mainControls) Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Surface(
-                        onClick = { MediaPlaybackState.skipPrevious() },
-                        modifier = Modifier.size(width = 60.dp, height = 50.dp),
-                        shape = RoundedCornerShape(
-                            topStart = 25.dp,
-                            bottomStart = 25.dp,
-                            topEnd = 8.dp,
-                            bottomEnd = 8.dp,
-                        ),
-                        color = Color.White.copy(alpha = 0.14f),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.SkipPrevious,
-                                "Previous track",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                    }
-                    Surface(
-                        onClick = { MediaPlaybackState.togglePlayPause() },
-                        modifier = Modifier
-                            .size(width = 68.dp, height = 56.dp)
-                            .graphicsLayer {
-                                if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                    val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                            },
-                        shape = RoundedCornerShape(10.dp),
-                        color = accentColor,
-                        shadowElevation = 2.dp,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            PlaybackIcon(
-                                playing = mediaInfo.isPlaying,
-                                tint = Color.Black,
-                                size = 31.dp,
-                            )
-                        }
-                    }
-                    Surface(
-                        onClick = { MediaPlaybackState.skipNext() },
-                        modifier = Modifier.size(width = 60.dp, height = 50.dp),
-                        shape = RoundedCornerShape(
-                            topStart = 8.dp,
-                            bottomStart = 8.dp,
-                            topEnd = 25.dp,
-                            bottomEnd = 25.dp,
-                        ),
-                        color = Color.White.copy(alpha = 0.14f),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.SkipNext,
-                                "Next track",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                    }
-                }
+                if (elementVisibility.mainControls) ExpandedPlaybackControlsRow(
+                    isPlaying = mediaInfo.isPlaying,
+                    accentColor = accentColor,
+                    style = playbackControlsStyle,
+                    skipWidth = 60.dp,
+                    skipHeight = 50.dp,
+                    skipIconSize = 28.dp,
+                    playWidth = 68.dp,
+                    playHeight = 56.dp,
+                    playIconSize = 31.dp,
+                    defaultSpacing = 8.dp,
+                    bpmPulseScale = {
+                        if (bpmPulseEnabled && mediaInfo.isPlaying) 1f + (0.08f * bpmPulseState.value * pulseAmount)
+                        else 1f
+                    },
+                    onPrevious = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
+                    onPlayPause = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
+                    onNext = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+                    highlight = highlightPlaybackControls,
+                )
 
                 if (elementVisibility.appActions && materialSessionActions.isNotEmpty()) {
                     Row(
@@ -1965,20 +2397,32 @@ internal fun ExpandedIslandContent(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 18.dp),
+                    .padding(
+                        start = 22.dp,
+                        end = 22.dp,
+                        top = if (topContentInset > 0.dp) topContentInset else 16.dp,
+                        bottom = 18.dp,
+                    ),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Spacer(Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (showAlbumArt && mediaInfo.albumArt != null) {
                         ExpandedArtwork(
                             artwork = mediaInfo.albumArt,
                             anchor = artworkAnchor,
-                            glowColor = artworkGlow,
+                            glow = artworkGlow,
                             shape = RoundedCornerShape(12.dp),
                             opacity = { albumArtPlaybackAlpha },
+                            progressProvider = expandedArtProgressProvider,
+                            progressColor = accentColor,
+                            progressStrokeWidth = 2.5.dp,
                             modifier = Modifier
                                 .size(64.dp)
+                                .then(
+                                    if (highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                    else Modifier
+                                )
+                                .then(if (onAlbumArtClick != null) Modifier.clickable(onClick = onAlbumArtClick) else Modifier)
                                 .graphicsLayer {
                                     scaleX = albumArtPlaybackScale
                                     scaleY = albumArtPlaybackScale
@@ -1988,40 +2432,34 @@ internal fun ExpandedIslandContent(
                         )
                         Spacer(Modifier.width(14.dp))
                     }
-                    if (elementVisibility.trackInfo) Column(
-                        modifier = Modifier.weight(1f).clickable { openPlayerApp(context, mediaInfo) },
-                    ) {
-                        MarqueeText(
-                            text = mediaInfo.title.ifEmpty { "No Media Playing" },
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontFamily = fontStyle.fontFamily,
-                            
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                            color = Color.White,
-                        )
-                        Spacer(Modifier.height(3.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            MarqueeText(
-                                text = mediaInfo.artist,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = fontStyle.fontFamily,
-                                
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                                color = Color.White.copy(alpha = 0.62f),
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                            if (elementVisibility.bpm && currentBpm != null) {
-                                Spacer(Modifier.width(6.dp))
-                                BpmChip(bpm = currentBpm)
-                            }
-                        }
-                    }
+                    if (elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+                        mediaInfo = mediaInfo,
+                        trackInfoStyle = trackInfoStyle,
+                        accentColor = accentColor,
+                        fontStyle = fontStyle,
+                        titleTextStyle = MaterialTheme.typography.titleLarge,
+                        artistTextStyle = MaterialTheme.typography.bodyMedium,
+                        artistAlpha = 0.62f,
+                        titleArtistSpacing = 3.dp,
+                        bpmChip = if (elementVisibility.bpm && currentBpm != null) {
+                            { BpmChip(bpm = currentBpm) }
+                        } else null,
+                        onClick = { onTrackInfoClick?.invoke() ?: openPlayerApp(context, mediaInfo) },
+                        highlight = highlightTrackInfo,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (elementVisibility.trackInfo && elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
                     if (elementVisibility.visualizer) Box(
                         modifier = Modifier
                             .size(width = 72.dp, height = 20.dp)
+                            .then(
+                                if (highlightVisualizer) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                else Modifier
+                            )
+                            .then(
+                                if (onVisualizerClick != null) Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onVisualizerClick)
+                                else Modifier
+                            )
                             .padding(end = 14.dp),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
@@ -2041,53 +2479,42 @@ internal fun ExpandedIslandContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        text = formatTime(mediaInfo.positionMs),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = fontStyle.fontFamily,
-                        
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                        color = Color.White.copy(alpha = 0.55f),
+                    val timeTextStyle = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = fontStyle.fontFamily,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
                     )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(18.dp)
-                            .pointerInput(mediaInfo.durationMs) {
-                                detectTapGestures { offset ->
-                                    if (mediaInfo.durationMs > 0) {
-                                        MediaPlaybackState.seekTo(
-                                            ((offset.x / size.width).coerceIn(0f, 1f) * mediaInfo.durationMs).toLong()
-                                        )
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        LinearWavyProgressIndicator(
-                            progress = { activeFraction },
-                            modifier = Modifier.fillMaxWidth().height(5.dp),
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.22f),
-                            amplitude = {
-                                if (showProgressSquiggles) {
-                                    if (mediaInfo.isPlaying) 0.45f else 0.1f
-                                } else {
-                                    0f
-                                }
-                            },
-                            wavelength = 24.dp,
-                        )
-                    }
-                    Text(
-                        text = formatRemainingTime(mediaInfo.positionMs, mediaInfo.durationMs),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = fontStyle.fontFamily,
-                        
- fontWeight = androidx.compose.ui.text.font.FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-),
-                        color = Color.White.copy(alpha = 0.55f),
+                    MediaTimeLabel(
+                        positionState = livePositionMs,
+                        format = ::formatTime,
+                        style = timeTextStyle,
+                    )
+                    ExpandedMusicProgressBar(
+                        durationMs = mediaInfo.durationMs,
+                        isPlaying = mediaInfo.isPlaying,
+                        activeFractionProvider = activeFractionProvider,
+                        accentColor = accentColor,
+                        useAccentColor = progressBarAccentColor,
+                        showSquiggles = showProgressSquiggles,
+                        onDragStart = { fraction ->
+                            isDragging = true
+                            dragFraction = fraction
+                        },
+                        onDragChange = { fraction -> dragFraction = fraction },
+                        onDragEnd = { fraction ->
+                            if (mediaInfo.durationMs > 0) {
+                                MediaPlaybackState.seekTo((fraction * mediaInfo.durationMs).toLong())
+                            }
+                            isDragging = false
+                        },
+                        onDragCancel = { isDragging = false },
+                        onProgressBarClick = onProgressBarClick,
+                        highlight = highlightProgressBar,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MediaTimeLabel(
+                        positionState = livePositionMs,
+                        format = { pos -> formatRemainingTime(pos, mediaInfo.durationMs) },
+                        style = timeTextStyle,
                     )
                 }
 
@@ -2095,36 +2522,27 @@ internal fun ExpandedIslandContent(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (elementVisibility.mainControls) Row(
+                    if (elementVisibility.mainControls) ExpandedPlaybackControlsRow(
+                        isPlaying = mediaInfo.isPlaying,
+                        accentColor = accentColor,
+                        style = playbackControlsStyle,
+                        skipWidth = if (playbackControlsStyle.material3ButtonGroup || playbackControlsStyle.skipBackground) 44.dp else 38.dp,
+                        skipHeight = 40.dp,
+                        skipIconSize = 25.dp,
+                        playWidth = if (playbackControlsStyle.material3ButtonGroup || playbackControlsStyle.playPauseBackground) 52.dp else 46.dp,
+                        playHeight = 46.dp,
+                        playIconSize = 30.dp,
+                        defaultSpacing = 12.dp,
+                        bpmPulseScale = {
+                            if (bpmPulseEnabled && mediaInfo.isPlaying) 1f + (0.08f * bpmPulseState.value * pulseAmount)
+                            else 1f
+                        },
+                        onPrevious = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
+                        onPlayPause = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
+                        onNext = { onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+                        highlight = highlightPlaybackControls,
                         modifier = Modifier.align(Alignment.Center),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        IconButton(onClick = { MediaPlaybackState.skipPrevious() }, modifier = Modifier.size(38.dp)) {
-                            Icon(Icons.Default.SkipPrevious, "Previous track", tint = Color.White, modifier = Modifier.size(25.dp))
-                        }
-                        IconButton(
-                            onClick = { MediaPlaybackState.togglePlayPause() },
-                            modifier = Modifier
-                                .size(46.dp)
-                                .graphicsLayer {
-                                    if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        val scale = 1f + (0.08f * bpmPulseState.value * pulseAmount)
-                                        scaleX = scale
-                                        scaleY = scale
-                                    }
-                                },
-                        ) {
-                            PlaybackIcon(
-                                playing = mediaInfo.isPlaying,
-                                tint = Color.White,
-                                size = 32.dp,
-                            )
-                        }
-                        IconButton(onClick = { MediaPlaybackState.skipNext() }, modifier = Modifier.size(38.dp)) {
-                            Icon(Icons.Default.SkipNext, "Next track", tint = Color.White, modifier = Modifier.size(25.dp))
-                        }
-                    }
+                    )
 
                     if (elementVisibility.appActions) mediaInfo.sessionActions
                         .filter { it.iconResourceId != 0 && it.iconPackageName != null }
@@ -2180,6 +2598,19 @@ internal fun openPlayerApp(context: Context, track: MediaTrackInfo) {
     }
 }
 
+@Composable
+private fun MediaTimeLabel(
+    positionState: androidx.compose.runtime.State<Long>,
+    format: (Long) -> String,
+    style: androidx.compose.ui.text.TextStyle,
+) {
+    Text(
+        text = format(positionState.value),
+        style = style,
+        color = Color.White.copy(alpha = 0.55f),
+    )
+}
+
 internal fun formatTime(ms: Long): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
     val min = totalSec / 60
@@ -2200,7 +2631,7 @@ internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
 private fun PlaybackIcon(playing: Boolean, tint: Color, size: Dp) {
     Crossfade(playing, animationSpec = LarpMotion.fade(145), label = "play_pause") { isPlaying ->
         Icon(
-            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            imageVector = if (isPlaying) LarpIcons.Pause else LarpIcons.PlayArrow,
             contentDescription = if (isPlaying) "Pause" else "Play",
             tint = tint,
             modifier = Modifier.size(size),
@@ -2208,30 +2639,311 @@ private fun PlaybackIcon(playing: Boolean, tint: Color, size: Dp) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ExpandedMusicProgressBar(
+    durationMs: Long,
+    isPlaying: Boolean,
+    activeFractionProvider: () -> Float,
+    accentColor: Color,
+    useAccentColor: Boolean,
+    showSquiggles: Boolean,
+    onDragStart: (Float) -> Unit,
+    onDragChange: (Float) -> Unit,
+    onDragEnd: (Float) -> Unit,
+    onDragCancel: () -> Unit,
+    onProgressBarClick: (() -> Unit)? = null,
+    highlight: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val activeColor = if (useAccentColor) accentColor else Color.White
+    val trackColor = if (useAccentColor) accentColor.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.22f)
+    Box(
+        modifier = modifier
+            .height(28.dp)
+            .then(
+                if (highlight) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                else Modifier
+            )
+            .then(
+                if (onProgressBarClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onProgressBarClick)
+                } else {
+                    Modifier
+                        .pointerInput(durationMs) {
+                            detectTapGestures { offset ->
+                                if (durationMs > 0) {
+                                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                    MediaPlaybackState.seekTo((fraction * durationMs).toLong())
+                                }
+                            }
+                        }
+                        .pointerInput(durationMs) {
+                            var latestFraction = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset ->
+                                    latestFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                    onDragStart(latestFraction)
+                                },
+                                onDragEnd = { onDragEnd(latestFraction) },
+                                onDragCancel = onDragCancel,
+                                onHorizontalDrag = { change, _ ->
+                                    change.consume()
+                                    latestFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                    onDragChange(latestFraction)
+                                },
+                            )
+                        }
+                }
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        LinearWavyProgressIndicator(
+            progress = activeFractionProvider,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp),
+            color = activeColor,
+            trackColor = trackColor,
+            amplitude = { if (showSquiggles) if (isPlaying) 0.5f else 0.12f else 0f },
+            wavelength = 24.dp,
+        )
+    }
+}
+
+@Composable
+private fun ExpandedTrackInfoColumn(
+    mediaInfo: MediaTrackInfo,
+    trackInfoStyle: OverlayPreferences.TrackInfoStyle,
+    accentColor: Color,
+    fontStyle: OverlayPreferences.IslandFontStyle,
+    titleTextStyle: androidx.compose.ui.text.TextStyle,
+    artistTextStyle: androidx.compose.ui.text.TextStyle,
+    artistAlpha: Float,
+    titleArtistSpacing: Dp,
+    onClick: () -> Unit,
+    highlight: Boolean = false,
+    textAlign: TextAlign? = null,
+    bpmChip: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
+    val showArtistRow = trackInfoStyle.showArtist || bpmChip != null
+    val showAlbumRow = trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (highlight) Modifier
+                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                else Modifier
+            )
+            .clickable(onClick = onClick),
+    ) {
+        if (trackInfoStyle.showTitle) {
+            MarqueeText(
+                text = mediaInfo.title.ifEmpty { "No Media Playing" },
+                style = titleTextStyle.copy(
+                    fontFamily = fontStyle.fontFamily,
+                    fontWeight = fontWeight,
+                ),
+                color = if (trackInfoStyle.titleAccentColor) accentColor else Color.White,
+                textAlign = textAlign ?: TextAlign.Start,
+            )
+        }
+        if (showArtistRow) {
+            if (trackInfoStyle.showTitle) Spacer(Modifier.height(titleArtistSpacing))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (trackInfoStyle.showArtist) {
+                    MarqueeText(
+                        text = mediaInfo.artist,
+                        style = artistTextStyle.copy(
+                            fontFamily = fontStyle.fontFamily,
+                            fontWeight = fontWeight,
+                        ),
+                        color = Color.White.copy(alpha = artistAlpha),
+                        textAlign = textAlign ?: TextAlign.Start,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                if (bpmChip != null) {
+                    if (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) {
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    bpmChip()
+                }
+            }
+        }
+        if (showAlbumRow) {
+            if (trackInfoStyle.showTitle || showArtistRow) Spacer(Modifier.height(2.dp))
+            MarqueeText(
+                text = mediaInfo.album,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = fontStyle.fontFamily,
+                    fontWeight = fontWeight,
+                ),
+                color = Color.White.copy(alpha = 0.58f),
+                textAlign = textAlign ?: TextAlign.Start,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandedPlaybackControlsRow(
+    isPlaying: Boolean,
+    accentColor: Color,
+    style: OverlayPreferences.PlaybackControlsStyle,
+    skipWidth: Dp,
+    skipHeight: Dp,
+    skipIconSize: Dp,
+    playWidth: Dp,
+    playHeight: Dp,
+    playIconSize: Dp,
+    defaultSpacing: Dp,
+    bpmPulseScale: () -> Float,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    highlight: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val outerRadius = style.cornerRadiusDp.dp
+    val innerRadius = (style.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
+    val isGroup = style.material3ButtonGroup
+    val prevShape = if (isGroup) {
+        RoundedCornerShape(topStart = outerRadius, bottomStart = outerRadius, topEnd = innerRadius, bottomEnd = innerRadius)
+    } else RoundedCornerShape(outerRadius)
+    val playShape = RoundedCornerShape(if (isGroup) innerRadius else outerRadius)
+    val nextShape = if (isGroup) {
+        RoundedCornerShape(topStart = innerRadius, bottomStart = innerRadius, topEnd = outerRadius, bottomEnd = outerRadius)
+    } else RoundedCornerShape(outerRadius)
+    val skipBgColor = if (style.skipBackground) Color.White.copy(alpha = 0.14f) else Color.Transparent
+    val playBgColor = if (style.playPauseBackground) {
+        if (style.playPauseAccentColor) accentColor else Color.White.copy(alpha = 0.94f)
+    } else Color.Transparent
+    val playTint = if (style.playPauseBackground) {
+        Color(0xFF1B1A1E)
+    } else if (style.playPauseAccentColor) {
+        accentColor
+    } else Color.White
+
+    Row(
+        modifier = modifier
+            .then(
+                if (highlight) Modifier
+                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(outerRadius + 4.dp))
+                    .padding(3.dp)
+                else Modifier
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (isGroup) 3.dp else defaultSpacing),
+    ) {
+        Surface(
+            onClick = onPrevious,
+            modifier = Modifier.size(width = skipWidth, height = skipHeight),
+            shape = prevShape,
+            color = skipBgColor,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = LarpIcons.SkipPrevious,
+                    contentDescription = "Previous track",
+                    tint = Color.White,
+                    modifier = Modifier.size(skipIconSize),
+                )
+            }
+        }
+        Surface(
+            onClick = onPlayPause,
+            modifier = Modifier
+                .size(width = playWidth, height = playHeight)
+                .graphicsLayer {
+                    val scale = bpmPulseScale()
+                    scaleX = scale
+                    scaleY = scale
+                },
+            shape = playShape,
+            color = playBgColor,
+            shadowElevation = if (style.playPauseBackground) 2.dp else 0.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                PlaybackIcon(
+                    playing = isPlaying,
+                    tint = playTint,
+                    size = playIconSize,
+                )
+            }
+        }
+        Surface(
+            onClick = onNext,
+            modifier = Modifier.size(width = skipWidth, height = skipHeight),
+            shape = nextShape,
+            color = skipBgColor,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = LarpIcons.SkipNext,
+                    contentDescription = "Next track",
+                    tint = Color.White,
+                    modifier = Modifier.size(skipIconSize),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ExpandedArtwork(
     artwork: Bitmap,
     anchor: ArtworkAnchor?,
-    glowColor: Color,
+    glow: AlbumArtGlowState,
     shape: Shape,
     opacity: () -> Float,
     modifier: Modifier = Modifier,
+    progressProvider: (() -> Float)? = null,
+    progressColor: Color = Color.White,
+    progressStrokeWidth: Dp = 3.dp,
+    progressGap: Dp = 2.dp,
 ) {
-    AnimatedContent(
-        targetState = artwork,
-        modifier = modifier
-            .albumArtGlow(glowColor, anchor)
-            .clip(shape)
-            .artworkTile(anchor, ArtworkStyle(shape), opacity),
-        transitionSpec = { fadeOverPrevious(250) },
-        label = "album_art",
-    ) { bitmap ->
-        Image(
-            bitmap = remember(bitmap) { bitmap.asImageBitmap() },
-            contentDescription = "Album art",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        if (progressProvider != null) {
+            RadialProgressRing(
+                progressProvider = progressProvider,
+                color = progressColor,
+                trackColor = Color.White.copy(alpha = 0.28f),
+                strokeWidth = progressStrokeWidth,
+                shape = shape,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        AnimatedContent(
+            targetState = artwork,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (progressProvider != null) Modifier.padding(progressStrokeWidth + progressGap)
+                    else Modifier
+                )
+                .albumArtGlow(glow, anchor)
+                .clip(shape)
+                .artworkTile(anchor, ArtworkStyle(shape), opacity),
+            transitionSpec = { fadeOverPrevious(250) },
+            label = "album_art",
+        ) { bitmap ->
+            Image(
+                bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+                contentDescription = "Album art",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
     }
 }
 

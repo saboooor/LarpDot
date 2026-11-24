@@ -1,10 +1,18 @@
 package ca.saboor.larpdot.ui.components
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import ca.saboor.larpdot.service.ForegroundAppTracker
+import ca.saboor.larpdot.service.ScreenshotPocketManager
+import ca.saboor.larpdot.service.SystemEventManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,12 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -84,6 +86,22 @@ fun PermissionsSetupDialog(
     }
 
     var usageAccessGranted by remember { mutableStateOf(ForegroundAppTracker.refreshUsageAccess(context)) }
+    var bluetoothGranted by remember { mutableStateOf(SystemEventManager.hasBluetoothPermission(context)) }
+    var photosGranted by remember { mutableStateOf(ScreenshotPocketManager.hasPermission(context)) }
+
+    val bluetoothLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        bluetoothGranted = granted || SystemEventManager.hasBluetoothPermission(context)
+        if (bluetoothGranted) SystemEventManager.syncConnectedBluetoothDevices(context)
+    }
+
+    val photosLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        photosGranted = granted || ScreenshotPocketManager.hasPermission(context)
+        if (photosGranted) ScreenshotPocketManager.syncObserver(context)
+    }
 
     // Automatically refresh permission status when user returns from settings
     DisposableEffect(lifecycleOwner) {
@@ -93,6 +111,8 @@ fun PermissionsSetupDialog(
                 notificationAccessGranted = hasNotificationAccess(context)
                 overlayGranted = hasOverlayPermission(context)
                 accessibilityGranted = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
+                bluetoothGranted = SystemEventManager.hasBluetoothPermission(context)
+                photosGranted = ScreenshotPocketManager.hasPermission(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -117,7 +137,7 @@ fun PermissionsSetupDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Security,
+                        imageVector = LarpIcons.Security,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(20.dp),
@@ -147,7 +167,7 @@ fun PermissionsSetupDialog(
                 PermissionSetupCard(
                     title = "Access to Notifications",
                     description = "Enables notification listener access to read and react to incoming system notifications.",
-                    icon = Icons.Default.NotificationsActive,
+                    icon = LarpIcons.NotificationsActive,
                     isGranted = notificationAccessGranted,
                     onGrantClick = {
                         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
@@ -159,7 +179,7 @@ fun PermissionsSetupDialog(
                 PermissionSetupCard(
                     title = "Display Over Other Apps",
                     description = "Allows the app to display floating overlays and on-screen controls on top of other applications.",
-                    icon = Icons.Default.Layers,
+                    icon = LarpIcons.Layers,
                     isGranted = overlayGranted,
                     onGrantClick = {
                         val intent = Intent(
@@ -173,7 +193,7 @@ fun PermissionsSetupDialog(
                 PermissionSetupCard(
                     title = "Usage Access (Optional)",
                     description = "Hide the music island while the app providing the current media session is open.",
-                    icon = Icons.Default.Layers,
+                    icon = LarpIcons.Layers,
                     isGranted = usageAccessGranted,
                     onGrantClick = { ForegroundAppTracker.openUsageAccessSettings(context) },
                 )
@@ -181,11 +201,35 @@ fun PermissionsSetupDialog(
                 // 3. Accessibility Service (Draw over Notification Panel & Lock Screen)
                 PermissionSetupCard(
                     title = "Accessibility Service (Lock Screen & Shade)",
-                    description = "Allows the Dynamic Island to stay visible when swiping down the notification panel and on the lock screen (like mtisland).",
-                    icon = Icons.Default.Security,
+                    description = "Allows the Dynamic Island to stay visible when swiping down the notification panel, on the lock screen, and auto-hide in fullscreen apps.",
+                    icon = LarpIcons.Security,
                     isGranted = accessibilityGranted,
                     onGrantClick = {
                         ca.saboor.larpdot.service.DotAccessibilityService.openAccessibilitySettings(context)
+                    },
+                )
+
+                // 4. Nearby Devices (Bluetooth alerts & battery level)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PermissionSetupCard(
+                        title = "Nearby Devices (Bluetooth Alerts)",
+                        description = "Required on Android 12+ to detect Bluetooth earbuds, watches, and battery levels.",
+                        icon = LarpIcons.Bluetooth,
+                        isGranted = bluetoothGranted,
+                        onGrantClick = {
+                            bluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        },
+                    )
+                }
+
+                // 5. Photos Access (Zero-step Screenshot Pocket)
+                PermissionSetupCard(
+                    title = "Photos Access (Screenshot Pocket)",
+                    description = "Automatically catch new screenshots in the island for 1-tap share, copy, or delete.",
+                    icon = LarpIcons.PhotoLibrary,
+                    isGranted = photosGranted,
+                    onGrantClick = {
+                        photosLauncher.launch(ScreenshotPocketManager.requiredPermission())
                     },
                 )
             }
@@ -258,7 +302,7 @@ private fun PermissionSetupCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
-                        imageVector = if (isGranted) Icons.Default.Check else Icons.Default.Close,
+                        imageVector = if (isGranted) LarpIcons.Check else LarpIcons.Close,
                         contentDescription = null,
                         tint = if (isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(12.dp),

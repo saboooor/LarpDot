@@ -1,10 +1,9 @@
 package ca.saboor.larpdot.ui.screens
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.material3.FilterChip
-import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,31 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.BubbleChart
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -51,17 +31,22 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
@@ -69,38 +54,31 @@ import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
-import ca.saboor.larpdot.ui.overlay.FlashlightAmber
-import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
+import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
 import ca.saboor.larpdot.ui.theme.LarpMotion
+import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
     cutoutInfo: CutoutInfo,
     isEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
-    val fontWeight by OverlayPreferences.islandFontWeightFlow.collectAsState()
-    val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
     val context = LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
     val holdToExpandDurationMs by OverlayPreferences.holdToExpandDurationMsFlow.collectAsState()
-    val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
     val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
-    val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
-    val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
-    val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
-    val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
-    val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
-    val blurStatus = ca.saboor.larpdot.ui.overlay.rememberBackdropBlurStatus()
-    val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
+    val hideInFullscreen by OverlayPreferences.hideInFullscreenFlow.collectAsState()
+    val hideInLandscape by OverlayPreferences.hideInLandscapeFlow.collectAsState()
     val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
+    val islandPriorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
     val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
     val blacklistedPackages by OverlayPreferences.blacklistedPackagesFlow.collectAsState()
     var showBlacklistScreen by rememberSaveable { mutableStateOf(false) }
@@ -117,14 +95,15 @@ fun HomeScreen(
         OverlayPreferences.isTapToExpandEnabled(context)
         OverlayPreferences.getHoldToExpandDurationMs(context)
         OverlayPreferences.loadIslandAppearance(context)
-        OverlayPreferences.getBubbleStyle(context)
-        OverlayPreferences.areSmallerBubblesEnabled(context)
         OverlayPreferences.isDebugModeEnabled(context)
         OverlayPreferences.isAppBlacklistEnabled(context)
         OverlayPreferences.getBlacklistedPackages(context)
         OverlayPreferences.isHideWhenScreenOffEnabled(context)
         OverlayPreferences.isHideOnLockScreenEnabled(context)
+        OverlayPreferences.isHideInFullscreenEnabled(context)
+        OverlayPreferences.isHideInLandscapeEnabled(context)
         OverlayPreferences.isShowDotRightSideInfoEnabled(context)
+        OverlayPreferences.getIslandPriorityOrder(context)
         FlashlightController.init(context)
     }
 
@@ -136,98 +115,6 @@ fun HomeScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Camera Cutout Information & Manual Alignment Card
-            item {
-                SectionHeader(title = "Expanded Cutout")
-                LarpCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Camera Cover",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                        )
-                        Text(
-                            text = cameraCoverStyle.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            OverlayPreferences.CameraCoverStyle.entries.forEach { style ->
-                                toggleableItem(
-                                    checked = cameraCoverStyle == style,
-                                    label = style.label,
-                                    onCheckedChange = { OverlayPreferences.setCameraCoverStyle(context, style) },
-                                    weight = 1f,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        item {
-            SectionHeader(title = "Typography")
-                LarpCard {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FormatSize,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Column {
-                                Text(
-                                    text = "Island Font Style",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                )
-                                Text(
-                                    text = "Font family applied to island tracks, artists, and live notifications",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OverlayPreferences.IslandFontStyle.entries.forEach { style ->
-                                FilterChip(
-                                    selected = islandFontStyle == style,
-                                    onClick = { OverlayPreferences.setIslandFontStyle(context, style) },
-                                    label = {
-                                        Text(
-                                            text = style.label,
-                                            fontFamily = style.fontFamily,
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                        Text("Font weight: $fontWeight")
-                        Slider(
-                            value = fontWeight.toFloat(),
-                            onValueChange = { OverlayPreferences.setIslandFontWeight(context, (it / 100).roundToInt() * 100) },
-                            valueRange = 100f..900f,
-                            steps = 7,
-                        )
-                    }
-                }
-            }
         item {
             SectionHeader(title = "Cutout Alignment")
             CutoutAlignmentCard(
@@ -239,64 +126,169 @@ fun HomeScreen(
                 },
             )
         }
-
-        // Island Customization & Interaction Options
         item {
-            SectionHeader(title = "Island Background")
+            SectionHeader(title = "Island Priority")
             LarpCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "When multiple islands are active, higher items stay on the main island and lower ones move to side dots.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (islandPriorityOrder != DEFAULT_ISLAND_PRIORITY_ORDER) {
+                        TextButton(
+                            onClick = {
+                                OverlayPreferences.setIslandPriorityOrder(context, DEFAULT_ISLAND_PRIORITY_ORDER)
+                            },
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                }
+
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CutoutSliderRow(
-                        label = "Expanded corner radius", value = cornerRadius,
-                        valueRange = 0f..100f, unit = "dp",
-                        onValueChange = { OverlayPreferences.setIslandCornerRadius(context, it) },
-                        onNudge = { OverlayPreferences.setIslandCornerRadius(context, cornerRadius + it) },
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Squircle corners", modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = squircleEnabled && !blurEnabled,
-                            enabled = !blurEnabled,
-                            onCheckedChange = { OverlayPreferences.setIslandSquircleEnabled(context, it) },
-                        )
-                    }
-                    AnimatedVisibility(blurEnabled, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
-                        Text("Turn off backdrop blur to enable squircle corners.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    CutoutSliderRow(
-                        label = "Expanded background opacity", value = backgroundOpacity * 100f,
-                        valueRange = 0f..100f, unit = "%",
-                        onValueChange = { OverlayPreferences.setExpandedBackgroundOpacity(context, it / 100f) },
-                        onNudge = { OverlayPreferences.setExpandedBackgroundOpacity(context, backgroundOpacity + it / 100f) },
-                    )
-                    Text("The minimized island and camera cover stay opaque.", style = MaterialTheme.typography.bodySmall)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Backdrop blur", modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
-                            enabled = blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
-                            onCheckedChange = { OverlayPreferences.setBackdropBlurEnabled(context, it) },
-                        )
-                    }
-                    Text(blurStatus.description, style = MaterialTheme.typography.bodySmall)
-                    AnimatedVisibility(
-                        visible = blurEnabled && blurStatus == ca.saboor.larpdot.ui.overlay.BackdropBlurStatus.AVAILABLE,
-                        enter = LarpMotion.reveal,
-                        exit = LarpMotion.conceal,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CutoutSliderRow(
-                                label = "Blur amount", value = blurRadius, valueRange = 5f..120f, unit = "dp",
-                                onValueChange = { OverlayPreferences.setBackdropBlurRadius(context, it) },
-                                onNudge = { OverlayPreferences.setBackdropBlurRadius(context, blurRadius + it * 5f) },
-                            )
-                            Text("Lower the background opacity to see the blur.", style = MaterialTheme.typography.bodySmall)
+                    islandPriorityOrder.forEachIndexed { index, item ->
+                        val isTop = index == 0
+                        val itemIcon = when (item) {
+                            IslandPriorityItem.SHORT_TERM_ALERTS -> LarpIcons.BatteryChargingFull
+                            IslandPriorityItem.LIVE_ACTIVITIES -> LarpIcons.NotificationsActive
+                            IslandPriorityItem.MEDIA -> LarpIcons.MusicNote
+                            IslandPriorityItem.PINNED_SHORT_TERM -> LarpIcons.PushPin
+                            IslandPriorityItem.NAVIGATION -> LarpIcons.Navigation
+                            IslandPriorityItem.FLASHLIGHT -> LarpIcons.FlashlightOn
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isTop) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isTop) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                    },
+                                    modifier = Modifier.size(24.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "${index + 1}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isTop) {
+                                                MaterialTheme.colorScheme.onPrimary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = itemIcon,
+                                    contentDescription = null,
+                                    tint = if (isTop) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Text(
+                                            text = item.label,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (isTop) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                            ) {
+                                                Text(
+                                                    text = "Main",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = item.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = {
+                                            if (index > 0) {
+                                                val updated = islandPriorityOrder.toMutableList()
+                                                val moved = updated.removeAt(index)
+                                                updated.add(index - 1, moved)
+                                                OverlayPreferences.setIslandPriorityOrder(context, updated)
+                                            }
+                                        },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(36.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = LarpIcons.KeyboardArrowUp,
+                                            contentDescription = "Move ${item.label} up",
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (index < islandPriorityOrder.lastIndex) {
+                                                val updated = islandPriorityOrder.toMutableList()
+                                                val moved = updated.removeAt(index)
+                                                updated.add(index + 1, moved)
+                                                OverlayPreferences.setIslandPriorityOrder(context, updated)
+                                            }
+                                        },
+                                        enabled = index < islandPriorityOrder.lastIndex,
+                                        modifier = Modifier.size(36.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = LarpIcons.KeyboardArrowDown,
+                                            contentDescription = "Move ${item.label} down",
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
         item {
-            SectionHeader(title = "Island Customization")
+            SectionHeader(title = "Island Behavior")
             LarpCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CutoutSliderRow(
@@ -306,29 +298,6 @@ fun HomeScreen(
                         onNudge = { OverlayPreferences.setMinimizedMaxWidthPercent(context, minimizedMaxWidth + it) },
                     )
                     Text("Limits each side independently. 100% allows each side to reach its screen edge, reserving space for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        text = "Bubble Style",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                    )
-                    Text(
-                        text = "Shape of the island and nearby bubbles",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        OverlayPreferences.BubbleStyle.entries.forEach { style ->
-                            toggleableItem(
-                                checked = bubbleStyle == style,
-                                label = style.label,
-                                onCheckedChange = { OverlayPreferences.setBubbleStyle(context, style) },
-                                weight = 1f,
-                            )
-                        }
-                    }
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -344,44 +313,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.BubbleChart,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Smaller Bubbles",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Reduce secondary bubble thickness by 20%",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = smallerBubbles,
-                        onCheckedChange = { OverlayPreferences.setSmallerBubblesEnabled(context, it) },
-                    )
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.TouchApp,
+                            imageVector = LarpIcons.TouchApp,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -441,7 +373,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PowerSettingsNew,
+                            imageVector = LarpIcons.PowerSettingsNew,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -482,7 +414,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = LarpIcons.Lock,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -511,6 +443,88 @@ fun HomeScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
+                // Hide in Fullscreen & Games
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = LarpIcons.Fullscreen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Hide in Fullscreen & Games",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                            )
+                            Text(
+                                text = "Auto-hide during immersive video players and games (requires Accessibility)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = hideInFullscreen,
+                        onCheckedChange = { isChecked ->
+                            OverlayPreferences.setHideInFullscreenEnabled(context, isChecked)
+                        },
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // Hide in Landscape
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = LarpIcons.ScreenRotation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
+                            Text(
+                                text = "Hide in Landscape",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                            )
+                            Text(
+                                text = "Automatically hide the island whenever the phone rotates horizontally",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = hideInLandscape,
+                        onCheckedChange = { isChecked ->
+                            OverlayPreferences.setHideInLandscapeEnabled(context, isChecked)
+                        },
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
                 // Show Right Side Info on Dots (Mini Pill)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -523,7 +537,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.MoreHoriz,
+                            imageVector = LarpIcons.MoreHoriz,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -567,7 +581,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Block,
+                            imageVector = LarpIcons.Block,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -600,7 +614,7 @@ fun HomeScreen(
                     }
 
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        imageVector = LarpIcons.ArrowForwardIos,
                         contentDescription = "Configure App Blacklist",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp),
@@ -632,7 +646,7 @@ private fun CutoutAlignmentCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Tune,
+                    imageVector = LarpIcons.Tune,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp),
@@ -699,7 +713,7 @@ private fun CutoutAlignmentCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
-                    imageVector = Icons.Default.BugReport,
+                    imageVector = LarpIcons.BugReport,
                     contentDescription = null,
                     tint = if (isDebugMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp),
@@ -792,7 +806,7 @@ private fun CutoutAlignmentCard(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.RestartAlt,
+                        imageVector = LarpIcons.RestartAlt,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -805,7 +819,7 @@ private fun CutoutAlignmentCard(
 }
 
 @Composable
-private fun CutoutSliderRow(
+internal fun CutoutSliderRow(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
@@ -844,7 +858,7 @@ private fun CutoutSliderRow(
                 onClick = { onNudge(-1) },
                 modifier = Modifier.size(32.dp),
             ) {
-                Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
+                Icon(LarpIcons.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
             }
 
             val sliderState = remember(valueRange) {
@@ -864,7 +878,7 @@ private fun CutoutSliderRow(
                 onClick = { onNudge(1) },
                 modifier = Modifier.size(32.dp),
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
+                Icon(LarpIcons.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
             }
         }
     }

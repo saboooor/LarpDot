@@ -28,7 +28,8 @@ object ScreenStateTracker {
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     _isScreenOn.value = false
-                    _isDeviceLocked.value = true
+                    val km = context?.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                    _isDeviceLocked.value = km?.let { it.isKeyguardLocked || it.isKeyguardSecure } ?: true
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     _isDeviceLocked.value = false

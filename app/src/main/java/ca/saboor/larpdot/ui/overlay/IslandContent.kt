@@ -32,6 +32,7 @@ internal fun IslandCompactContent(
         )
         IslandType.NOTIFICATION_ACTIVITY -> if (activity != null) CompactNotificationActivityContent(
             activity = activity, cutoutDiameterDp = diameter, isLandscape = landscape,
+            trailingWingFraction = trailingWingFraction,
         )
     }
 }

@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.screens
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,10 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.RotateRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -264,7 +262,7 @@ internal fun ShapePickerSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.RotateRight,
+                    imageVector = LarpIcons.RotateRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp),
@@ -314,7 +312,7 @@ internal fun ShapePickerSection(
                 modifier = Modifier.size(36.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Remove,
+                    imageVector = LarpIcons.Remove,
                     contentDescription = "Rotate Counter-Clockwise",
                     modifier = Modifier.size(18.dp),
                 )
@@ -342,7 +340,7 @@ internal fun ShapePickerSection(
                 modifier = Modifier.size(36.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = LarpIcons.Add,
                     contentDescription = "Rotate Clockwise",
                     modifier = Modifier.size(18.dp),
                 )

@@ -113,7 +113,7 @@ internal fun Modifier.artworkTile(
 internal fun TravelingArtwork(
     bitmap: ImageBitmap,
     motion: IslandArtworkMotion,
-    glowColor: Color,
+    glow: AlbumArtGlowState,
     isLandscape: Boolean = false,
     modifier: Modifier,
 ) {
@@ -151,7 +151,7 @@ internal fun TravelingArtwork(
         val opacity = lerp(motion.compact.opacity(), motion.expanded.opacity(), progress)
         val styleMix = ((progress - 0.15f) / 0.7f).coerceIn(0f, 1f)
         translate(tileCenter.x - tileSize.width / 2f, tileCenter.y - tileSize.height / 2f) {
-            drawMovingAlbumArtGlow(glowColor, tileSize, opacity)
+            drawMovingAlbumArtGlow(glow, tileSize, opacity)
             if (start.style == end.style) {
                 drawArtwork(bitmap, tileSize, start.style, opacity)
             } else {

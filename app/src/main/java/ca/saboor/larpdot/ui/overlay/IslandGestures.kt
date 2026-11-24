@@ -3,12 +3,14 @@ package ca.saboor.larpdot.ui.overlay
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -21,6 +23,7 @@ internal data class IslandDragActions(
     val onHorizontal: ((Float) -> Unit)? = null,
     val onSwipe: ((Boolean) -> Unit)? = null,
     val onDown: (() -> Unit)? = null,
+    val onUp: (() -> Unit)? = null,
     val onFinish: () -> Unit = {},
 )
 
@@ -111,11 +114,57 @@ internal fun Modifier.islandDragGestures(
                         triggered = true
                         change.consume()
                         session.onDown?.invoke()
+                    } else if (!triggered && y < -20f * density && -y > abs(x) * 1.3f && session.onUp != null) {
+                        triggered = true
+                        change.consume()
+                        session.onUp?.invoke()
                     }
                 },
             )
         } finally {
             finish()
         }
+    }
+}
+
+/**
+ * Shared swipe-up collapse recognizer for expanded islands. Uses [detectVerticalDragGestures] so
+ * horizontal drags (track skipping, sliders) remain independent.
+ */
+@Composable
+internal fun Modifier.expandedIslandSwipeToCollapse(
+    identity: Any,
+    enabled: Boolean,
+    onCollapse: () -> Unit,
+): Modifier {
+    val currentCollapse by rememberUpdatedState(onCollapse)
+    val density = LocalDensity.current.density
+    return pointerInput(identity, enabled) {
+        if (!enabled) return@pointerInput
+        var totalDragY = 0f
+        var collapsed = false
+        val thresholdPx = 24f * density
+        detectVerticalDragGestures(
+            onDragStart = {
+                totalDragY = 0f
+                collapsed = false
+            },
+            onDragEnd = {
+                totalDragY = 0f
+                collapsed = false
+            },
+            onDragCancel = {
+                totalDragY = 0f
+                collapsed = false
+            },
+            onVerticalDrag = { change, dragAmount ->
+                totalDragY += dragAmount
+                if (!collapsed && totalDragY < -thresholdPx) {
+                    collapsed = true
+                    change.consume()
+                    currentCollapse()
+                }
+            },
+        )
     }
 }

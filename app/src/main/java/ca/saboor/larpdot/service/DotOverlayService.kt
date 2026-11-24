@@ -38,6 +38,7 @@ class DotOverlayService : Service() {
 
         ScreenStateTracker.init(this)
         ForegroundAppTracker.init(this)
+        FullscreenStateTracker.updateOrientation(resources.configuration)
 
         flashlightBroadcast.register(this)
 
@@ -91,6 +92,7 @@ class DotOverlayService : Service() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        FullscreenStateTracker.updateOrientation(newConfig)
         overlayController?.onConfigurationChanged(newConfig)
     }
 

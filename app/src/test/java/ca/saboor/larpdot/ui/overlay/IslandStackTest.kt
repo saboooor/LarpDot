@@ -233,4 +233,130 @@ class IslandStackTest {
         assertEquals(0.5f, wings.trailingFraction, 0.001f)
     }
 
+    @Test fun customPriorityOrderControlsMainIslandWinner() {
+        val musicFirst = listOf(
+            IslandPriorityItem.MEDIA,
+            IslandPriorityItem.SHORT_TERM_ALERTS,
+            IslandPriorityItem.LIVE_ACTIVITIES,
+            IslandPriorityItem.NAVIGATION,
+            IslandPriorityItem.FLASHLIGHT,
+        )
+        val stack = builtInIslandStack(
+            music = true,
+            flashlight = true,
+            activity = true,
+            activityHasRightWing = true,
+            activityKind = ca.saboor.larpdot.notification.NotificationActivityKind.BATTERY_CHARGING,
+            priorityOrder = musicFirst,
+        )
+        assertEquals(IslandType.MEDIA, stack.primary?.content)
+        assertEquals(listOf(IslandType.NOTIFICATION_ACTIVITY, IslandType.FLASHLIGHT), stack.secondary.map { it.content })
+
+        val navOverMusic = listOf(
+            IslandPriorityItem.NAVIGATION,
+            IslandPriorityItem.MEDIA,
+            IslandPriorityItem.SHORT_TERM_ALERTS,
+            IslandPriorityItem.LIVE_ACTIVITIES,
+            IslandPriorityItem.FLASHLIGHT,
+        )
+        val navStack = builtInIslandStack(
+            music = true,
+            flashlight = false,
+            activity = true,
+            activityHasRightWing = true,
+            activityKind = ca.saboor.larpdot.notification.NotificationActivityKind.NAVIGATION,
+            priorityOrder = navOverMusic,
+        )
+        assertEquals(IslandType.NOTIFICATION_ACTIVITY, navStack.primary?.content)
+        assertEquals(listOf(IslandType.MEDIA), navStack.secondary.map { it.content })
+    }
+
+    @Test fun pinnedShortTermAlertYieldsToMusicWhileAutoDismissAlertWinsMain() {
+        val pinnedBt = ca.saboor.larpdot.notification.NotificationActivityInfo(
+            key = "system_bluetooth_watch", packageName = "android", appName = "System",
+            title = "Saboor's Pixel Watch 5", text = "Watch • Connected",
+            kind = ca.saboor.larpdot.notification.NotificationActivityKind.BLUETOOTH,
+            progress = null, progressMax = null, progressIndeterminate = false,
+            chronometerBaseElapsedRealtime = null, chronometerCountsDown = false,
+            postedAtMillis = 1L, contentIntent = null, actions = emptyList(),
+            bluetoothBatteryPercent = 85, isPinnedShortTerm = true,
+        )
+        val autoDismissSound = pinnedBt.copy(
+            key = "system_sound_mode", title = "Silent Mode", text = "Calls and alerts muted",
+            kind = ca.saboor.larpdot.notification.NotificationActivityKind.SOUND_MODE,
+            bluetoothBatteryPercent = null, isPinnedShortTerm = false, postedAtMillis = 2L,
+        )
+
+        // Default order: Music beats Pinned Bluetooth, putting Pinned Bluetooth in a side dot
+        val withPinnedOnly = builtInIslandSlots(
+            music = true,
+            flashlight = false,
+            activity = pinnedBt,
+            shortTerms = listOf(pinnedBt),
+        )
+        assertEquals(IslandSlot(IslandType.MEDIA), withPinnedOnly.primary?.content)
+        assertEquals(listOf(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "system_bluetooth_watch")), withPinnedOnly.secondary.map { it.content })
+
+        // Auto-dismiss alert beats both Music and Pinned Bluetooth
+        val withAutoDismiss = builtInIslandSlots(
+            music = true,
+            flashlight = false,
+            activity = autoDismissSound,
+            shortTerms = listOf(autoDismissSound, pinnedBt),
+        )
+        assertEquals(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "system_sound_mode"), withAutoDismiss.primary?.content)
+        assertEquals(
+            listOf(
+                IslandSlot(IslandType.MEDIA),
+                IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "system_bluetooth_watch"),
+            ),
+            withAutoDismiss.secondary.map { it.content },
+        )
+    }
+
+    @Test fun normalizeIslandPriorityOrderDeduplicatesAndAppendsMissingEntries() {
+        val normalized = normalizeIslandPriorityOrder(
+            listOf(IslandPriorityItem.FLASHLIGHT, IslandPriorityItem.FLASHLIGHT, IslandPriorityItem.MEDIA),
+        )
+        assertEquals(
+            listOf(
+                IslandPriorityItem.FLASHLIGHT,
+                IslandPriorityItem.MEDIA,
+                IslandPriorityItem.SHORT_TERM_ALERTS,
+                IslandPriorityItem.LIVE_ACTIVITIES,
+                IslandPriorityItem.PINNED_SHORT_TERM,
+                IslandPriorityItem.NAVIGATION,
+            ),
+            normalized,
+        )
+    }
+
+    @Test fun bluetoothAndNavigationResolveToDistinctPrimaryAndSecondaryActivities() {
+        val nav = ca.saboor.larpdot.notification.NotificationActivityInfo(
+            key = "maps_nav", packageName = "com.google.android.apps.maps", appName = "Maps",
+            title = "15 min", text = "Turn right on Main St",
+            kind = ca.saboor.larpdot.notification.NotificationActivityKind.NAVIGATION,
+            progress = null, progressMax = null, progressIndeterminate = false,
+            chronometerBaseElapsedRealtime = null, chronometerCountsDown = false,
+            postedAtMillis = 1L, contentIntent = null, actions = emptyList(),
+        )
+        val pinnedBt = nav.copy(
+            key = "system_bluetooth_buds", packageName = "android", appName = "System",
+            title = "Pixel Buds Pro", text = "Earbuds • Connected",
+            kind = ca.saboor.larpdot.notification.NotificationActivityKind.BLUETOOTH,
+            bluetoothBatteryPercent = 80, isPinnedShortTerm = true, postedAtMillis = 2L,
+        )
+
+        val stack = builtInIslandSlots(
+            music = false,
+            flashlight = false,
+            activity = nav,
+            shortTerms = listOf(pinnedBt),
+        )
+        assertEquals(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "system_bluetooth_buds"), stack.primary?.content)
+        assertEquals(listOf(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "maps_nav")), stack.secondary.map { it.content })
+        assertEquals(pinnedBt, resolveIslandSlotActivity(stack.primary?.content, nav, listOf(pinnedBt)))
+        assertEquals(nav, resolveIslandSlotActivity(stack.secondary.first().content, nav, listOf(pinnedBt)))
+    }
+
 }

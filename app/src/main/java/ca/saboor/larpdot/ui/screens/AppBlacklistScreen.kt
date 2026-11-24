@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.screens
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -24,14 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -78,8 +72,8 @@ private data class AppEntry(
 )
 
 private enum class BlacklistFilter(val label: String, val icon: ImageVector) {
-    ALL("All Apps", Icons.Default.Apps),
-    BLACKLISTED("Blacklisted", Icons.Default.Block),
+    ALL("All Apps", LarpIcons.Apps),
+    BLACKLISTED("Blacklisted", LarpIcons.Block),
 }
 
 @Composable
@@ -182,7 +176,7 @@ fun AppBlacklistScreen(
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = LarpIcons.ArrowBack,
                         contentDescription = "Back",
                     )
                 }
@@ -228,7 +222,7 @@ fun AppBlacklistScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Block,
+                        imageVector = LarpIcons.Block,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp),
@@ -270,7 +264,7 @@ fun AppBlacklistScreen(
             },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = LarpIcons.Search,
                     contentDescription = "Search",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -279,7 +273,7 @@ fun AppBlacklistScreen(
                 if (searchQuery.isNotEmpty()) {
                     IconButton(onClick = { searchQuery = "" }) {
                         Icon(
-                            imageVector = Icons.Default.Clear,
+                            imageVector = LarpIcons.Clear,
                             contentDescription = "Clear search",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -351,7 +345,7 @@ fun AppBlacklistScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Icon(
-                        imageVector = if (searchQuery.isNotEmpty()) Icons.Default.SearchOff else Icons.Default.Block,
+                        imageVector = if (searchQuery.isNotEmpty()) LarpIcons.SearchOff else LarpIcons.Block,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.outline,
@@ -490,7 +484,7 @@ private fun AppIcon(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Default.Android,
+                imageVector = LarpIcons.Android,
                 contentDescription = label,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp),

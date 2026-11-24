@@ -43,4 +43,34 @@ class IslandLifecycleTest {
         assertFalse(callback)
         IslandType.entries.forEach { assertFalse(lifecycle.isActive(it)) }
     }
+
+    @Test fun dismissedMediaStaysHiddenUntilTrackChanges() {
+        val tracker = IslandDismissalTracker()
+        tracker.dismissMedia("spotify|Starboy|The Weeknd")
+        assertTrue(tracker.isMediaDismissed("spotify|Starboy|The Weeknd"))
+        assertFalse(tracker.isMediaDismissed("spotify|Blinding Lights|The Weeknd"))
+        // Once cleared by a track change, returning to the prior track shows it again.
+        assertFalse(tracker.isMediaDismissed("spotify|Starboy|The Weeknd"))
+    }
+
+    @Test fun dismissedFlashlightClearsWhenTurnedOffOrNewSessionStarts() {
+        val tracker = IslandDismissalTracker()
+        tracker.dismissFlashlight(1000L)
+        assertTrue(tracker.isFlashlightDismissed(isOn = true, sessionTime = 1000L))
+        assertFalse(tracker.isFlashlightDismissed(isOn = false, sessionTime = 1000L))
+        assertFalse(tracker.isFlashlightDismissed(isOn = true, sessionTime = 1000L))
+
+        tracker.dismissFlashlight(2000L)
+        assertFalse(tracker.isFlashlightDismissed(isOn = true, sessionTime = 2500L))
+    }
+
+    @Test fun dismissedActivityPrunesWhenNotificationEnds() {
+        val tracker = IslandDismissalTracker()
+        tracker.dismissActivity("download:1")
+        assertTrue(tracker.isActivityDismissed("download:1"))
+        tracker.pruneActivities(setOf("download:1", "timer:2"))
+        assertTrue(tracker.isActivityDismissed("download:1"))
+        tracker.pruneActivities(setOf("timer:2"))
+        assertFalse(tracker.isActivityDismissed("download:1"))
+    }
 }

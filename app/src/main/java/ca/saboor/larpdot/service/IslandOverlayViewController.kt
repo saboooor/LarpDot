@@ -17,6 +17,7 @@ import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -24,19 +25,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.ui.overlay.CompactIslandFrame
 import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
+import ca.saboor.larpdot.ui.overlay.IslandDismissalTracker
 import ca.saboor.larpdot.ui.overlay.IslandLifecycle
+import ca.saboor.larpdot.ui.overlay.activeIslandTouchBounds
+import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandTouchRegion
 import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.IslandSurfaceOverlay
+import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
+import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.ui.overlay.IslandSlot
 import ca.saboor.larpdot.ui.overlay.builtInIslandSlots
@@ -47,6 +55,7 @@ import ca.saboor.larpdot.ui.theme.LarpDotTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -121,16 +130,56 @@ class IslandOverlayViewController(
     private val secondarySurfaceScales = mutableStateMapOf<IslandSlot, Float>()
     private val secondarySurfaceStretches = mutableStateMapOf<IslandSlot, Float>()
     private var expansionSourceFrame by mutableStateOf<CompactIslandFrame?>(null)
+    private var expandedCardBounds by mutableStateOf<Rect?>(null)
     private var expansionSourceScale by mutableFloatStateOf(1f)
     private var expansionSourceStretch by mutableFloatStateOf(0f)
+    private var autoExpandedActivityKey by mutableStateOf<String?>(null)
+    private var retainedExpandedActivity by mutableStateOf<NotificationActivityInfo?>(null)
+    private val seenShortTermTitles = mutableMapOf<String, String>()
+    private var autoCollapseJob: Job? = null
+    private val dismissalTracker = IslandDismissalTracker()
+    private var dismissalRevision by mutableIntStateOf(0)
+    private var idleHideJob: Job? = null
 
+    private fun mediaDismissToken(track: MediaTrackInfo): String? =
+        if (!track.hasMedia) null else "${track.playerPackageName.orEmpty()}|${track.title}|${track.artist}"
 
-    private fun currentStack(): IslandStack<IslandSlot> = builtInIslandSlots(
-        music = isMusicActive && MediaPlaybackState.currentTrack.value.hasMedia && !ForegroundAppTracker.shouldHideMedia.value,
-        flashlight = isFlashlightActive && OverlayPreferences.showFlashlightIslandFlow.value,
-        activity = NotificationActivityState.current.value,
-        shortTerms = NotificationActivityState.shortTermActivities.value,
-    )
+    private fun dismissIsland(type: IslandType, slot: IslandSlot?) {
+        when (type) {
+            IslandType.MEDIA -> mediaDismissToken(MediaPlaybackState.currentTrack.value)?.let(dismissalTracker::dismissMedia)
+            IslandType.FLASHLIGHT -> dismissalTracker.dismissFlashlight(FlashlightController.lastFlashlightOnTime)
+            IslandType.NOTIFICATION_ACTIVITY -> {
+                val key = slot?.activityKey
+                    ?: currentStack().primary?.content?.activityKey
+                    ?: NotificationActivityState.current.value?.key
+                if (key != null) dismissalTracker.dismissActivity(key)
+            }
+        }
+        dismissalRevision++
+        updateOverlayLayout()
+    }
+
+    private fun currentStack(): IslandStack<IslandSlot> {
+        val track = MediaPlaybackState.currentTrack.value
+        val primaryActivity = NotificationActivityState.current.value
+        val shortTerms = NotificationActivityState.shortTermActivities.value
+        val activeKeys = buildSet {
+            primaryActivity?.key?.let(::add)
+            shortTerms.forEach { add(it.key) }
+        }
+        dismissalTracker.pruneActivities(activeKeys)
+        val musicVisible = isMusicActive && track.hasMedia && !ForegroundAppTracker.shouldHideMedia.value &&
+            !dismissalTracker.isMediaDismissed(mediaDismissToken(track))
+        val flashlightVisible = isFlashlightActive && OverlayPreferences.showFlashlightIslandFlow.value &&
+            !dismissalTracker.isFlashlightDismissed(FlashlightController.isFlashlightOn.value, FlashlightController.lastFlashlightOnTime)
+        return builtInIslandSlots(
+            music = musicVisible,
+            flashlight = flashlightVisible,
+            activity = primaryActivity?.takeUnless { dismissalTracker.isActivityDismissed(it.key) },
+            shortTerms = shortTerms.filterNot { dismissalTracker.isActivityDismissed(it.key) },
+            priorityOrder = OverlayPreferences.islandPriorityOrderFlow.value,
+        )
+    }
 
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
     val expandedType: StateFlow<IslandType> = _expandedType.asStateFlow()
@@ -203,7 +252,7 @@ class IslandOverlayViewController(
             }
 
             setContent {
-                LarpDotTheme {
+                LarpDotTheme(darkTheme = true) {
                     val mediaTrack by MediaPlaybackState.currentTrack.collectAsState()
                     val isMusicActiveNow by MediaPlaybackState.isMusicActive.collectAsState()
                     val hideMedia by ForegroundAppTracker.shouldHideMedia.collectAsState()
@@ -212,13 +261,32 @@ class IslandOverlayViewController(
                     val activeCutout = currentCutoutInfo ?: cutout
                     val primaryActivity by NotificationActivityState.current.collectAsState()
                     val shortTermActivities by NotificationActivityState.shortTermActivities.collectAsState()
-                    val currentActivity = primaryActivity
+                    @Suppress("UNUSED_VARIABLE")
+                    val rev = dismissalRevision
+                    val activeKeys = buildSet {
+                        primaryActivity?.key?.let(::add)
+                        shortTermActivities.forEach { add(it.key) }
+                    }
+                    dismissalTracker.pruneActivities(activeKeys)
+                    val isMusicAllowed = !dismissalTracker.isMediaDismissed(mediaDismissToken(mediaTrack))
+                    val isFlashlightVisible = isFlashlightOn && showFlashlightIsland &&
+                        !dismissalTracker.isFlashlightDismissed(isFlashlightOn, FlashlightController.lastFlashlightOnTime)
+                    val currentActivity = primaryActivity?.takeUnless { dismissalTracker.isActivityDismissed(it.key) }
+                    val visibleShortTerms = shortTermActivities.filterNot { dismissalTracker.isActivityDismissed(it.key) }
                     val activeExpandedType by expandedType.collectAsState()
+                    val priorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
                     val stack = builtInIslandSlots(
-                        mediaTrack.hasMedia && isMusicActiveNow && !hideMedia,
-                        isFlashlightOn && showFlashlightIsland, primaryActivity, shortTermActivities,
+                        mediaTrack.hasMedia && isMusicActiveNow && !hideMedia && isMusicAllowed,
+                        isFlashlightVisible, currentActivity, visibleShortTerms,
+                        priorityOrder = priorityOrder,
                     )
-                    val compactType = stack.primary?.content?.type
+                    val compactSlot = stack.primary?.content
+                    val compactType = compactSlot?.type
+                    val primaryStackActivity = ca.saboor.larpdot.ui.overlay.resolveIslandSlotActivity(
+                        slot = compactSlot,
+                        primaryActivity = currentActivity,
+                        shortTerms = visibleShortTerms,
+                    ) ?: currentActivity
                     val secondaryTypes = stack.secondary.map { it.content }
                     LaunchedEffect(compactType) {
                         if (compactType == null) compactSurfaceFrame = null
@@ -239,12 +307,15 @@ class IslandOverlayViewController(
                         CompactIslandOverlay(
                             cutoutInfo = activeCutout,
                             mediaInfo = mediaTrack,
+                            isMusicAllowed = isMusicAllowed,
                             notificationActivity = currentActivity,
-                            isFlashlightOn = isFlashlightOn && showFlashlightIsland,
+                            shortTermActivities = visibleShortTerms,
+                            isFlashlightOn = isFlashlightVisible,
                             isExpanded = morphing,
                             hideCompactStack = isCompactSurfaceHidden && selectedSlot == null,
                             hiddenSecondarySlot = selectedSlot.takeIf { isCompactSurfaceHidden },
                             onExpand = ::expandOverlay,
+                            onDismiss = ::dismissIsland,
                             onCompactFrameChanged = { frame ->
                                 if (compactSurfaceFrame != frame) {
                                     val boundsChanged = compactSurfaceFrame?.bounds != frame.bounds
@@ -284,10 +355,13 @@ class IslandOverlayViewController(
                             } else {
                                 compactSurfaceFrame.takeIf { compactType == activeExpandedType }
                             }
+                            val activeAutoExpanded = autoExpandedActivityKey?.let { key ->
+                                visibleShortTerms.firstOrNull { it.key == key }
+                            }
                             IslandSurfaceOverlay(
                                 cutoutInfo = activeCutout,
                                 mediaInfo = mediaTrack,
-                                notificationActivity = slot?.activity ?: currentActivity,
+                                notificationActivity = activeAutoExpanded ?: slot?.activity ?: primaryStackActivity ?: retainedExpandedActivity,
                                 expandedType = activeExpandedType,
                                 fromTinyDot = slot != null,
                                 isExpanded = isIslandExpanded,
@@ -298,6 +372,12 @@ class IslandOverlayViewController(
                                     if (isIslandExpanded) isCompactSurfaceHidden = true
                                 },
                                 onExitFinished = ::finishCollapse,
+                                onExpandedBoundsChanged = { bounds ->
+                                    if (expandedCardBounds != bounds) {
+                                        expandedCardBounds = bounds
+                                        scheduleTouchLayout()
+                                    }
+                                },
                                 compactPressScale = expansionSourceScale,
                                 compactStretch = expansionSourceStretch,
                             )
@@ -341,14 +421,21 @@ class IslandOverlayViewController(
             rotationDisplayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
             lastDisplayRotation = rotationDisplayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation
             rotationDisplayManager?.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
-            observeMediaState()
-            observeFlashlightState()
-            observeNotificationActivityState()
-            observeCutoutConfig()
             OverlayPreferences.isDebugModeEnabled(context)
             OverlayPreferences.isShowFlashlightIslandEnabled(context)
             OverlayPreferences.isFlashlightTapToToggleEnabled(context)
+            OverlayPreferences.getNotificationActivitySettings(context)
+            OverlayPreferences.getIslandPriorityOrder(context)
             OverlayPreferences.initializeMusicSettings(context)
+            seenShortTermTitles.clear()
+            NotificationActivityState.shortTermActivities.value.forEach { seenShortTermTitles[it.key] = it.title }
+            observeMediaState()
+            observeFlashlightState()
+            observeNotificationActivityState()
+            observeShortTermActivities()
+            observePriorityOrder()
+            observeDebugMode()
+            observeCutoutConfig()
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -357,6 +444,24 @@ class IslandOverlayViewController(
     }
 
     private fun expandOverlay(type: IslandType, slot: IslandSlot?, source: CompactIslandFrame) {
+        expandOverlayInternal(
+            type = type,
+            slot = slot,
+            source = source,
+            autoExpandedKey = null,
+            initialActivity = slot?.activity
+                ?: currentStack().primary?.content?.activity
+                ?: NotificationActivityState.current.value,
+        )
+    }
+
+    private fun expandOverlayInternal(
+        type: IslandType,
+        slot: IslandSlot?,
+        source: CompactIslandFrame,
+        autoExpandedKey: String?,
+        initialActivity: NotificationActivityInfo?,
+    ) {
         if (!isOverlayAdded || isOverlayMorphing || isIslandExpanded) return
 
         MediaPlaybackState.dismissSongAnnouncement()
@@ -364,34 +469,118 @@ class IslandOverlayViewController(
 
         _expandedType.value = type
         selectedSlot = slot
+        autoExpandedActivityKey = autoExpandedKey
+        retainedExpandedActivity = initialActivity
         expansionSourceFrame = source
+        expandedCardBounds = null
         expansionSourceScale = if (slot == null) compactPressScale else secondarySurfaceScales[slot] ?: 1f
         expansionSourceStretch = if (slot == null) compactStretch else secondarySurfaceStretches[slot] ?: 0f
         isIslandExpanded = true
         isOverlayMorphing = true
 
+        syncDrawWindowVisibility()
         layoutTouchWindow()
     }
 
+    private fun cutoutOriginFrame(cutout: CutoutInfo): CompactIslandFrame {
+        val density = context.resources.displayMetrics.density
+        val camera = islandCameraGeometry(cutout.radiusPx, density)
+        val sizePx = camera.diameter * density
+        val left = cutout.centerX - sizePx / 2f
+        val top = cutout.centerY - sizePx / 2f
+        return CompactIslandFrame(
+            bounds = Rect(left, top, left + sizePx, top + sizePx),
+        )
+    }
+
+    private fun autoExpandShortTermAlert(
+        info: NotificationActivityInfo,
+        settings: NotificationActivitySettings,
+    ) {
+        if (!isOverlayAdded) return
+        val cutout = currentCutoutInfo ?: return
+        if (isIslandExpanded && autoExpandedActivityKey == null) return
+
+        autoCollapseJob?.cancel()
+        autoCollapseJob = null
+        autoExpandedActivityKey = info.key
+        retainedExpandedActivity = info
+
+        if (isIslandExpanded) {
+            _expandedType.value = IslandType.NOTIFICATION_ACTIVITY
+        } else if (!isOverlayMorphing) {
+            expandOverlayInternal(
+                type = IslandType.NOTIFICATION_ACTIVITY,
+                slot = null,
+                source = compactSurfaceFrame ?: cutoutOriginFrame(cutout),
+                autoExpandedKey = info.key,
+                initialActivity = info,
+            )
+        }
+
+        if (isPermanentShortTermAlert(info, settings)) {
+            autoCollapseJob = controllerScope.launch {
+                delay(3_500L)
+                if (isIslandExpanded && autoExpandedActivityKey == info.key) {
+                    collapseOverlay()
+                }
+            }
+        }
+    }
+
     fun collapseOverlay() {
+        autoCollapseJob?.cancel()
+        autoCollapseJob = null
         if (!isOverlayAdded || !isIslandExpanded) return
 
         isIslandExpanded = false
         isOverlayMorphing = true
+        expandedCardBounds = null
+        layoutTouchWindow()
     }
 
     private fun finishCollapse() {
         if (!isOverlayAdded || isIslandExpanded || !isOverlayMorphing) return
         isCompactSurfaceHidden = false
         selectedSlot = null
+        autoExpandedActivityKey = null
+        retainedExpandedActivity = null
         isOverlayMorphing = false
         expansionSourceFrame = null
+        expandedCardBounds = null
         expansionSourceScale = 1f
         expansionSourceStretch = 0f
-        if (isMusicActive || isFlashlightActive || isNotificationActivityActive) {
+        if (currentStack().ordered.isNotEmpty()) {
             layoutTouchWindow()
         } else {
             removeTouchWindow()
+        }
+        syncDrawWindowVisibility()
+    }
+
+    /** Hide the 460dp translucent draw surface when completely idle so SurfaceFlinger skips compositing it. */
+    private fun syncDrawWindowVisibility() {
+        val view = compactView ?: return
+        val active = currentStack().ordered.isNotEmpty() ||
+            isIslandExpanded ||
+            isOverlayMorphing ||
+            OverlayPreferences.isDebugModeFlow.value
+        if (active) {
+            idleHideJob?.cancel()
+            idleHideJob = null
+            if (view.visibility != View.VISIBLE) view.visibility = View.VISIBLE
+        } else if (view.visibility != View.GONE && idleHideJob?.isActive != true) {
+            idleHideJob = controllerScope.launch {
+                delay(420L)
+                if (isOverlayAdded &&
+                    currentStack().ordered.isEmpty() &&
+                    !isIslandExpanded &&
+                    !isOverlayMorphing &&
+                    !OverlayPreferences.isDebugModeFlow.value
+                ) {
+                    compactView?.visibility = View.GONE
+                }
+            }
         }
     }
 
@@ -410,35 +599,38 @@ class IslandOverlayViewController(
         val wm = windowManager ?: return
         val view = touchView ?: return
 
-        val tParams = if (isIslandExpanded || isOverlayMorphing) {
-            createExpandedTouchLayoutParams()
-        } else {
-            // Compose owns geometry. Use the actual animated bounds instead of estimating
-            // every provider's size again in the window controller.
-            val stack = currentStack()
-            val bounds = buildList {
-                if (stack.primary != null) compactSurfaceFrame?.bounds?.let { add(it) }
-                stack.secondary.forEach { candidate ->
-                    secondarySurfaceFrames[candidate.content]?.bounds?.let { add(it) }
-                }
-            }
-            val region = islandTouchRegion(
-                bounds, 6f * context.resources.displayMetrics.density,
-            ) ?: return
-            WindowManager.LayoutParams(
-                region.width, region.height, windowType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT,
-            ).apply {
-                gravity = Gravity.TOP or Gravity.LEFT
-                x = region.left + (compactWindowParams?.x ?: 0)
-                y = region.top + (compactWindowParams?.y ?: 0)
-                windowAnimations = 0
-                applyCutoutMode(this)
-            }
+        // One shared touch-region path for both compact and expanded islands.
+        // Expanded mode sizes touchView strictly to the expanded card and uses
+        // FLAG_WATCH_OUTSIDE_TOUCH so taps outside the card both collapse it and pass through.
+        val stack = currentStack()
+        val secondaryBounds = stack.secondary.mapNotNull { secondarySurfaceFrames[it.content]?.bounds }
+        val bounds = activeIslandTouchBounds(
+            isExpanded = isIslandExpanded,
+            expandedBounds = expandedCardBounds,
+            compactBounds = if (stack.primary != null) compactSurfaceFrame?.bounds else null,
+            secondaryBounds = secondaryBounds,
+        )
+        val region = islandTouchRegion(
+            bounds, 6f * context.resources.displayMetrics.density,
+        )
+        if (region == null) {
+            removeTouchWindow()
+            return
+        }
+        val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        val tParams = WindowManager.LayoutParams(
+            region.width, region.height, windowType,
+            if (isIslandExpanded) baseFlags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH else baseFlags,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = region.left + (compactWindowParams?.x ?: 0)
+            y = region.top + (compactWindowParams?.y ?: 0)
+            windowAnimations = 0
+            applyCutoutMode(this)
         }
         val oldParams = touchWindowParams
         val geometryChanged = oldParams == null || oldParams.width != tParams.width ||
@@ -469,28 +661,7 @@ class IslandOverlayViewController(
             e.printStackTrace()
         }
         touchAdded = false
-    }
-
-    private fun createExpandedTouchLayoutParams(): WindowManager.LayoutParams {
-        val draw = compactWindowParams
-        val density = context.resources.displayMetrics.density
-        return WindowManager.LayoutParams(
-            draw?.width ?: context.resources.displayMetrics.widthPixels,
-            draw?.height ?: (460f * density).toInt(),
-            windowType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = draw?.x ?: 0
-            y = draw?.y ?: 0
-            windowAnimations = 0
-            applyCutoutMode(this)
-        }
+        touchWindowParams = null
     }
 
     private fun createExpandedLayoutParams(cutout: CutoutInfo): WindowManager.LayoutParams {
@@ -574,17 +745,14 @@ class IslandOverlayViewController(
             }
         }
 
-        val hasActiveMusic = isMusicActive
-        val hasFlashlight = isFlashlightActive
-        val hasActivity = isNotificationActivityActive
-        val shouldShowDotOnly = !hasActiveMusic && !hasFlashlight && !hasActivity
-        val shouldShowTouch = (!shouldShowDotOnly || isIslandExpanded || isOverlayMorphing) && isOverlayAdded
+        val hasVisibleIsland = currentStack().ordered.isNotEmpty()
+        val shouldShowTouch = (hasVisibleIsland || isIslandExpanded) && isOverlayAdded
         if (shouldShowTouch) {
             layoutTouchWindow()
         } else {
             removeTouchWindow()
         }
-
+        syncDrawWindowVisibility()
     }
 
     private fun observeMediaState() {
@@ -604,6 +772,58 @@ class IslandOverlayViewController(
         controllerScope.launch {
             NotificationActivityState.current.collectLatest {
                 updateVisibility(VisibilityKey.ACTIVITY, it != null)
+            }
+        }
+    }
+
+    private fun observeShortTermActivities() {
+        controllerScope.launch {
+            NotificationActivityState.shortTermActivities.collectLatest { shortTerms ->
+                val settings = OverlayPreferences.notificationActivitySettingsFlow.value
+                val activeAutoKey = autoExpandedActivityKey
+                if (activeAutoKey != null) {
+                    val liveAuto = shortTerms.firstOrNull {
+                        it.key == activeAutoKey && !dismissalTracker.isActivityDismissed(it.key)
+                    }
+                    if (liveAuto != null) {
+                        retainedExpandedActivity = liveAuto
+                    } else if (isIslandExpanded) {
+                        collapseOverlay()
+                    }
+                }
+                val activeSlot = selectedSlot
+                if (isIslandExpanded && activeSlot?.activityKey != null) {
+                    val stillPresent = currentStack().ordered.any { it.content == activeSlot }
+                    if (!stillPresent) collapseOverlay()
+                }
+                val candidate = selectAutoExpandShortTermAlert(
+                    shortTerms = shortTerms,
+                    seenSignatures = seenShortTermTitles,
+                    expandEnabled = settings.expandShortTermAlerts,
+                    isDismissed = dismissalTracker::isActivityDismissed,
+                )
+                seenShortTermTitles.clear()
+                shortTerms.forEach { seenShortTermTitles[it.key] = it.title }
+                if (candidate != null) {
+                    autoExpandShortTermAlert(candidate, settings)
+                }
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observePriorityOrder() {
+        controllerScope.launch {
+            OverlayPreferences.islandPriorityOrderFlow.collectLatest {
+                updateOverlayLayout()
+            }
+        }
+    }
+
+    private fun observeDebugMode() {
+        controllerScope.launch {
+            OverlayPreferences.isDebugModeFlow.collectLatest {
+                syncDrawWindowVisibility()
             }
         }
     }
@@ -652,6 +872,12 @@ class IslandOverlayViewController(
         rotationDisplayManager = null
         lastDisplayRotation = null
         controllerJob.cancel()
+        idleHideJob?.cancel()
+        idleHideJob = null
+        autoCollapseJob?.cancel()
+        autoCollapseJob = null
+        seenShortTermTitles.clear()
+        dismissalTracker.clear()
         islandLifecycle.clear()
         isSongAnnouncementActive = false
         isIslandExpanded = false
@@ -664,9 +890,12 @@ class IslandOverlayViewController(
         secondarySurfaceScales.clear()
         secondarySurfaceStretches.clear()
         expansionSourceFrame = null
+        expandedCardBounds = null
         expansionSourceScale = 1f
         expansionSourceStretch = 0f
         selectedSlot = null
+        autoExpandedActivityKey = null
+        retainedExpandedActivity = null
 
         removeTouchWindow()
         touchView = null
@@ -685,4 +914,36 @@ class IslandOverlayViewController(
         }
 
     }
+}
+
+internal fun selectAutoExpandShortTermAlert(
+    shortTerms: List<NotificationActivityInfo>,
+    seenSignatures: Map<String, String>,
+    expandEnabled: Boolean,
+    isDismissed: (String) -> Boolean,
+): NotificationActivityInfo? {
+    if (!expandEnabled) return null
+    return shortTerms
+        .filter { !isDismissed(it.key) }
+        .filter { info ->
+            val previousTitle = seenSignatures[info.key]
+            previousTitle == null ||
+                ((info.kind == NotificationActivityKind.SOUND_MODE || info.kind == NotificationActivityKind.AUDIO_OUTPUT) &&
+                    previousTitle != info.title)
+        }
+        .maxByOrNull { it.postedAtMillis }
+}
+
+internal fun isPermanentShortTermAlert(
+    info: NotificationActivityInfo,
+    settings: NotificationActivitySettings,
+): Boolean = when (info.kind) {
+    NotificationActivityKind.BATTERY_CHARGING -> info.key == "system_battery_charging" && settings.permanentCharging
+    NotificationActivityKind.BATTERY_LOW -> settings.permanentLowBattery
+    NotificationActivityKind.SOUND_MODE -> settings.permanentSoundMode
+    NotificationActivityKind.BLUETOOTH -> settings.permanentBluetooth &&
+        info.text?.contains("Disconnected", ignoreCase = true) != true
+    NotificationActivityKind.AUDIO_OUTPUT -> settings.permanentAudioOutput
+    NotificationActivityKind.SCREENSHOT -> settings.permanentScreenshotPocket
+    else -> false
 }

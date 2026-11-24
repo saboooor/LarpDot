@@ -27,8 +27,10 @@ object BpmDetector {
     private const val TAG = "BpmDetector"
     const val DEFAULT_BPM = 120f
     private const val PREFS_NAME = "bpm_cache_v2"
+    private const val MAX_CACHE_ENTRIES = 500
 
     private val bpmCache = ConcurrentHashMap<String, Float>()
+    private val failedKeys = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var appContext: Context? = null
 
@@ -53,18 +55,21 @@ object BpmDetector {
 
     fun init(context: Context) {
         val app = context.applicationContext
+        if (appContext != null) return
         appContext = app
-        try {
-            val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            for ((key, value) in prefs.all) {
-                if (value is Float) {
-                    bpmCache[key] = value
-                } else if (value is Number) {
-                    bpmCache[key] = value.toFloat()
+        scope.launch {
+            try {
+                val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                for ((key, value) in prefs.all) {
+                    if (value is Float) {
+                        bpmCache[key] = value
+                    } else if (value is Number) {
+                        bpmCache[key] = value.toFloat()
+                    }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed reading bpm preferences: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed reading bpm preferences: ${e.message}")
         }
     }
 
@@ -97,6 +102,16 @@ object BpmDetector {
             return
         }
 
+        if (key in failedKeys) {
+            lastKey = key
+            _currentBpm.value = null
+            _isResolved.value = false
+            _detectedTrack.value = "$title • ${artist ?: ""}"
+            _detectedSource.value = null
+            _isDetecting.value = false
+            return
+        }
+
         activeJob?.cancel()
         lastKey = key
         _isDetecting.value = true
@@ -108,6 +123,7 @@ object BpmDetector {
             if (isActive) {
                 if (detected != null) {
                     val (effectiveBpm, sourceName) = detected
+                    failedKeys.remove(key)
                     bpmCache[key] = effectiveBpm
                     saveToDisk(key, effectiveBpm)
                     _currentBpm.value = effectiveBpm
@@ -115,6 +131,7 @@ object BpmDetector {
                     _detectedTrack.value = "$title • ${artist ?: ""}"
                     _detectedSource.value = sourceName
                 } else {
+                    failedKeys.add(key)
                     _currentBpm.value = null
                     _isResolved.value = false
                     _detectedTrack.value = "$title • ${artist ?: ""}"
@@ -128,13 +145,33 @@ object BpmDetector {
     private fun saveToDisk(key: String, bpm: Float) {
         appContext?.let { ctx ->
             try {
-                ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit()
-                    .putFloat(key, bpm)
-                    .apply()
+                val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                if (bpmCache.size > MAX_CACHE_ENTRIES) {
+                    val excess = bpmCache.keys.filter { it != key }.take(bpmCache.size - MAX_CACHE_ENTRIES)
+                    excess.forEach { oldKey ->
+                        bpmCache.remove(oldKey)
+                        editor.remove(oldKey)
+                    }
+                }
+                editor.putFloat(key, bpm).apply()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed saving BPM to disk: ${e.message}")
             }
+        }
+    }
+
+    private fun fetchUrlText(urlString: String): String {
+        val conn = URL(urlString).openConnection() as HttpURLConnection
+        return try {
+            conn.connectTimeout = 4000
+            conn.readTimeout = 4000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
+            conn.instanceFollowRedirects = true
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
         }
     }
 
@@ -160,16 +197,7 @@ object BpmDetector {
     private fun fetchReccoBeatsBpm(cleanTitle: String, cleanArtist: String): Float? {
         return try {
             val encodedTitle = URLEncoder.encode(cleanTitle, "UTF-8")
-            val searchUrl = URL("https://api.reccobeats.com/v1/track/search?searchText=$encodedTitle&size=10")
-            val conn = searchUrl.openConnection() as HttpURLConnection
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-            conn.instanceFollowRedirects = true
-
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
+            val response = fetchUrlText("https://api.reccobeats.com/v1/track/search?searchText=$encodedTitle&size=10")
 
             val json = JSONObject(response)
             val items = json.optJSONArray("content") ?: return null
@@ -200,16 +228,7 @@ object BpmDetector {
             // CRITICAL: Do NOT fall back to items[0] if artist does not match!
             if (matchedId.isNullOrBlank()) return null
 
-            val featuresUrl = URL("https://api.reccobeats.com/v1/track/$matchedId/audio-features")
-            val featConn = featuresUrl.openConnection() as HttpURLConnection
-            featConn.connectTimeout = 4000
-            featConn.readTimeout = 4000
-            featConn.requestMethod = "GET"
-            featConn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-
-            val featResp = featConn.inputStream.bufferedReader().use { it.readText() }
-            featConn.disconnect()
-
+            val featResp = fetchUrlText("https://api.reccobeats.com/v1/track/$matchedId/audio-features")
             val featJson = JSONObject(featResp)
             val tempo = featJson.optDouble("tempo", 0.0).toFloat()
             if (tempo in 30.0f..300.0f) tempo else null
@@ -222,16 +241,7 @@ object BpmDetector {
     private fun fetchDeezerBpm(cleanTitle: String, cleanArtist: String): Float? {
         return try {
             val query = URLEncoder.encode("$cleanTitle $cleanArtist".trim(), "UTF-8")
-            val searchUrl = URL("https://api.deezer.com/search?q=$query&limit=5")
-            val conn = searchUrl.openConnection() as HttpURLConnection
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-            conn.instanceFollowRedirects = true
-
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
+            val response = fetchUrlText("https://api.deezer.com/search?q=$query&limit=5")
 
             val json = JSONObject(response)
             val data = json.optJSONArray("data") ?: return null
@@ -248,16 +258,7 @@ object BpmDetector {
                 val trackId = item.optLong("id")
                 if (trackId <= 0L) continue
 
-                val trackUrl = URL("https://api.deezer.com/track/$trackId")
-                val trackConn = trackUrl.openConnection() as HttpURLConnection
-                trackConn.connectTimeout = 4000
-                trackConn.readTimeout = 4000
-                trackConn.requestMethod = "GET"
-                trackConn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-
-                val trackResp = trackConn.inputStream.bufferedReader().use { it.readText() }
-                trackConn.disconnect()
-
+                val trackResp = fetchUrlText("https://api.deezer.com/track/$trackId")
                 val trackJson = JSONObject(trackResp)
                 val rawBpm = trackJson.optDouble("bpm", 0.0).toFloat()
                 if (rawBpm in 30.0f..300.0f) {

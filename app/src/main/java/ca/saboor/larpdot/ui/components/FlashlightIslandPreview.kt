@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,9 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,14 +39,19 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactFlashlightContent
-import ca.saboor.larpdot.ui.overlay.getFlashlightStrengthFraction
+import ca.saboor.larpdot.ui.overlay.compactRadialGaugeExtraDp
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
 import ca.saboor.larpdot.ui.overlay.squircleShape
-import ca.saboor.larpdot.ui.theme.LarpMotion
+
+enum class FlashlightPreviewElement {
+    MINIMIZED_PILL,
+    MINIMIZED_RADIAL,
+    EXPANDED_BEAM,
+}
 
 /**
  * Authentic live preview of the Flashlight Dynamic Island
@@ -62,29 +61,28 @@ import ca.saboor.larpdot.ui.theme.LarpMotion
 fun FlashlightIslandPreview(
     cutoutInfo: CutoutInfo,
     modifier: Modifier = Modifier,
+    selectedElement: FlashlightPreviewElement? = null,
+    onElementClick: ((FlashlightPreviewElement) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
-    var showMinimizedPreview by remember { mutableStateOf(true) }
-    var showExpandedPreview by remember { mutableStateOf(true) }
 
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isSimulated by FlashlightController.isSimulated.collectAsState()
-    val torchStrength by FlashlightController.torchStrength.collectAsState()
-    val maxStrength by FlashlightController.maxStrength.collectAsState()
     val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
-    val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
-    val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
 
     val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
     val cutoutDiameterDp = cameraGeometry.diameter.dp
     val flashlightStatus = rememberCompactFlashlightStatus()
-    val compactExtraDp = rememberCompactStatusExtraDp(flashlightStatus)
+    val compactExtraDp = maxOf(
+        if (showMinimizedOutline) compactRadialGaugeExtraDp(cutoutDiameterDp) else 0.dp,
+        rememberCompactStatusExtraDp(flashlightStatus).coerceAtLeast(56.dp),
+    )
     val compactWidth = cutoutDiameterDp + compactExtraDp
 
     val screenWidthDp = configuration.screenWidthDp.dp
@@ -105,55 +103,13 @@ fun FlashlightIslandPreview(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (showMinimizedPreview) {
-                FilledTonalButton(
-                    onClick = { showMinimizedPreview = false },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                ) {
-                    Text("Minimized")
-                }
-            } else {
-                OutlinedButton(
-                    onClick = { showMinimizedPreview = true },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                ) {
-                    Text("Minimized")
-                }
-            }
-
-            if (showExpandedPreview) {
-                FilledTonalButton(
-                    onClick = { showExpandedPreview = false },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                ) {
-                    Text("Expanded")
-                }
-            } else {
-                OutlinedButton(
-                    onClick = { showExpandedPreview = true },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                ) {
-                    Text("Expanded")
-                }
-            }
-        }
-
         // Compact Pill Live Preview
-        AnimatedVisibility(showMinimizedPreview, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
                 // The camera spans the full thickness; padding belongs to the wing content.
                 val compactHeight = cutoutDiameterDp
                 val compactCornerRadius = compactHeight / 2f
@@ -162,11 +118,14 @@ fun FlashlightIslandPreview(
                         .width(compactWidth)
                         .height(compactHeight)
                         .islandFluidProgressBorder(
-                            progressFraction = if (showMinimizedOutline) strengthFraction else 0f,
+                            progressFraction = 0f,
                             cornerRadius = compactCornerRadius,
                             shape = RoundedCornerShape(compactCornerRadius),
-                            trackColor = if (showMinimizedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                            progressColor = Color.White,
+                            strokeWidth = if (selectedElement == FlashlightPreviewElement.MINIMIZED_PILL) 1.5.dp else 0.75.dp,
+                            trackColor = if (selectedElement == FlashlightPreviewElement.MINIMIZED_PILL) {
+                                MaterialTheme.colorScheme.primary
+                            } else Color(0x30FFFFFF),
+                            progressColor = Color.Transparent,
                         ),
                     shape = RoundedCornerShape(compactCornerRadius),
                     color = Color.Black,
@@ -181,6 +140,18 @@ fun FlashlightIslandPreview(
                             onExpand = {},
                             onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                             status = flashlightStatus,
+                            showRadialProgress = showMinimizedOutline,
+                            onIconClick = onElementClick?.let { callback ->
+                                { callback(FlashlightPreviewElement.MINIMIZED_PILL) }
+                            },
+                            onRadialClick = onElementClick?.let { callback ->
+                                { callback(FlashlightPreviewElement.MINIMIZED_RADIAL) }
+                            },
+                            onBackgroundClick = onElementClick?.let { callback ->
+                                { callback(FlashlightPreviewElement.MINIMIZED_PILL) }
+                            },
+                            highlightIcon = selectedElement == FlashlightPreviewElement.MINIMIZED_PILL,
+                            highlightRadial = selectedElement == FlashlightPreviewElement.MINIMIZED_RADIAL,
                         )
                         // Hardware camera cutout visualizer centered between wings
                         Box(
@@ -192,41 +163,45 @@ fun FlashlightIslandPreview(
                         )
                     }
                 }
-            }
         }
 
         // Expanded Card Live Preview
-        AnimatedVisibility(showExpandedPreview, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier
+                    .width(previewCardWidth)
+                    .height(previewCardHeight)
+                    .islandFluidProgressBorder(
+                        progressFraction = 0f,
+                        cornerRadius = expandedCornerRadiusDp,
+                        shape = containerShape,
+                        strokeWidth = if (selectedElement == FlashlightPreviewElement.EXPANDED_BEAM) 1.5.dp else 0.75.dp,
+                        trackColor = if (selectedElement == FlashlightPreviewElement.EXPANDED_BEAM) {
+                            MaterialTheme.colorScheme.primary
+                        } else Color(0x30FFFFFF),
+                        progressColor = Color.Transparent,
+                    ),
+                shape = containerShape,
+                color = Color.Black.copy(alpha = backgroundOpacity.coerceIn(0f, 1f)),
+                shadowElevation = 14.dp,
             ) {
-                Surface(
-                    modifier = Modifier
-                        .width(previewCardWidth)
-                        .height(previewCardHeight)
-                        .islandFluidProgressBorder(
-                            progressFraction = if (showExpandedOutline) strengthFraction else 0f,
-                            cornerRadius = expandedCornerRadiusDp,
-                            shape = containerShape,
-                            trackColor = if (showExpandedOutline) Color(0x30FFFFFF) else Color.Transparent,
-                            progressColor = Color.White,
-                        ),
-                    shape = containerShape,
-                    color = Color.Black.copy(alpha = backgroundOpacity.coerceIn(0f, 1f)),
-                    shadowElevation = 14.dp,
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopStart,
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.TopStart,
-                    ) {
-                        ExpandedFlashlightContent(
-                            cutoutDiameterDp = cutoutDiameterDp,
-                            isExpanded = true,
-                            onCollapse = { /* In-app preview */ },
-                            cutoutInfo = cutoutInfo,
-                            cardHorizontalMarginDp = previewHorizontalMarginDp,
-                        )
+                    ExpandedFlashlightContent(
+                        cutoutDiameterDp = cutoutDiameterDp,
+                        isExpanded = true,
+                        onCollapse = { /* In-app preview */ },
+                        cutoutInfo = cutoutInfo,
+                        cardHorizontalMarginDp = previewHorizontalMarginDp,
+                        onBeamClick = onElementClick?.let { callback ->
+                            { callback(FlashlightPreviewElement.EXPANDED_BEAM) }
+                        },
+                    )
 
                         // Hardware camera cutout punch hole positioned accurately
                         val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - previewHorizontalMarginDp
@@ -249,7 +224,6 @@ fun FlashlightIslandPreview(
                         )
                     }
                 }
-            }
         }
 
         // Action Controls: Quick Toggle and Simulation Toggle
@@ -264,7 +238,7 @@ fun FlashlightIslandPreview(
                 shape = CircleShape,
             ) {
                 Icon(
-                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOff else Icons.Default.FlashlightOn,
+                    imageVector = if (isFlashlightOn) LarpIcons.FlashlightOff else LarpIcons.FlashlightOn,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
@@ -283,16 +257,25 @@ fun FlashlightIslandPreview(
                 shape = CircleShape,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Science,
+                    imageVector = LarpIcons.Science,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (isSimulated) "Hardware Mode" else "Simulate Mode",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+
+            if (onElementClick != null) {
                 Text(
-                    text = if (isSimulated) "Hardware Mode" else "Simulate Mode",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "Tap the minimized pill or beam to customize; drag to adjust brightness",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             }
         }
     }
-}

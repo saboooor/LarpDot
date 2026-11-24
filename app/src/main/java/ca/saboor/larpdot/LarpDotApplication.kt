@@ -23,11 +23,16 @@ class LarpDotApplication : Application() {
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(this)
         OverlayPreferences.isHideWhenScreenOffEnabled(this)
         OverlayPreferences.isHideOnLockScreenEnabled(this)
+        OverlayPreferences.isHideInFullscreenEnabled(this)
+        OverlayPreferences.isHideInLandscapeEnabled(this)
         OverlayPreferences.isHideMusicWhenAppOpenEnabled(this)
         OverlayPreferences.isAppBlacklistEnabled(this)
         OverlayPreferences.getBlacklistedPackages(this)
         OverlayPreferences.getNotificationActivitySettings(this)
         FlashlightController.init(this)
+        ca.saboor.larpdot.service.FullscreenStateTracker.updateOrientation(resources.configuration)
+        ca.saboor.larpdot.service.AudioOutputTracker.init(this)
         ca.saboor.larpdot.service.SystemEventManager.init(this)
+        ca.saboor.larpdot.service.ScreenshotPocketManager.init(this)
     }
 }

@@ -34,6 +34,8 @@ enum class NotificationActivityKind {
     BATTERY_LOW,
     SOUND_MODE,
     BLUETOOTH,
+    AUDIO_OUTPUT,
+    SCREENSHOT,
 }
 
 data class NotificationActivitySettings(
@@ -46,11 +48,19 @@ data class NotificationActivitySettings(
     val batteryLow: Boolean = true,
     val soundMode: Boolean = true,
     val bluetooth: Boolean = true,
+    val audioOutput: Boolean = true,
+    val screenshotPocket: Boolean = true,
+    val chargeLimitAlert: Boolean = false,
+    val chargeLimitPercent: Int = 80,
     val permanentShortTerm: Boolean = false,
     val permanentCharging: Boolean = permanentShortTerm,
     val permanentLowBattery: Boolean = permanentShortTerm,
     val permanentSoundMode: Boolean = permanentShortTerm,
     val permanentBluetooth: Boolean = permanentShortTerm,
+    val permanentAudioOutput: Boolean = false,
+    val permanentScreenshotPocket: Boolean = false,
+    val expandShortTermAlerts: Boolean = false,
+    val progressOutline: Boolean = true,
 ) {
     fun allows(kind: NotificationActivityKind): Boolean = enabled && when (kind) {
         NotificationActivityKind.PROGRESS -> progress
@@ -61,6 +71,8 @@ data class NotificationActivitySettings(
         NotificationActivityKind.BATTERY_LOW -> batteryLow
         NotificationActivityKind.SOUND_MODE -> soundMode
         NotificationActivityKind.BLUETOOTH -> bluetooth
+        NotificationActivityKind.AUDIO_OUTPUT -> audioOutput
+        NotificationActivityKind.SCREENSHOT -> screenshotPocket
     }
 }
 
@@ -88,6 +100,9 @@ data class NotificationActivityInfo(
     val concurrentStatuses: List<String> = emptyList(),
     val bluetoothDeviceType: String? = null,
     val bluetoothBatteryPercent: Int? = null,
+    val mediaUri: String? = null,
+    val mediaMimeType: String? = null,
+    val isPinnedShortTerm: Boolean = false,
 ) {
     val progressFraction: Float?
         get() = if (progress != null && progressMax != null && progressMax > 0) {
@@ -267,17 +282,26 @@ object NotificationActivityState {
         }
     }
 
+    fun updateBluetoothTitle(key: String, title: String) {
+        if (title.isBlank()) return
+        synchronized(lock) {
+            val current = activities[key] ?: return
+            if (current.kind != NotificationActivityKind.BLUETOOTH || current.title == title) return
+            activities[key] = current.copy(title = title)
+            publishBestLocked()
+        }
+    }
+
     fun removeSystemActivity(key: String) = remove(key)
 
     private fun publishBestLocked() {
         val eligible = activities.values.filter { settings.allows(it.kind) && !isPackageBlacklisted(it.packageName) }
         val shortTerm = eligible.filter { it.packageName == "android" && it.key.startsWith("system_") }
-        val best = activities.values.asSequence()
-            .filter { settings.allows(it.kind) }
-            .filter { !isPackageBlacklisted(it.packageName) }
+        val nonShortTerm = eligible.filterNot { it.packageName == "android" && it.key.startsWith("system_") }
+        val best = (nonShortTerm.ifEmpty { eligible })
             .maxWithOrNull(
-            compareBy<NotificationActivityInfo> { priority(it.kind) }
-                .thenBy { it.postedAtMillis },
+                compareBy<NotificationActivityInfo> { if (it.isPinnedShortTerm) 0 else priority(it.kind) }
+                    .thenBy { it.postedAtMillis },
             )
         _shortTermActivities.value = shortTerm.sortedBy { it.key }
         _current.value = best
@@ -287,8 +311,10 @@ object NotificationActivityState {
         NotificationActivityKind.CALL -> 6
         NotificationActivityKind.BATTERY_LOW -> 5
         NotificationActivityKind.BATTERY_CHARGING -> 5
+        NotificationActivityKind.SCREENSHOT -> 5
         NotificationActivityKind.SOUND_MODE -> 4
         NotificationActivityKind.BLUETOOTH -> 4
+        NotificationActivityKind.AUDIO_OUTPUT -> 4
         NotificationActivityKind.NAVIGATION -> 3
         NotificationActivityKind.TIMER -> 2
         NotificationActivityKind.PROGRESS -> 1

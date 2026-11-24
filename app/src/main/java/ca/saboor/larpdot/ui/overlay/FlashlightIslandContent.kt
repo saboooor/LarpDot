@@ -1,7 +1,10 @@
 package ca.saboor.larpdot.ui.overlay
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import ca.saboor.larpdot.service.OverlayPreferences
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -15,6 +18,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -28,12 +33,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
@@ -88,11 +92,14 @@ val FlashlightAmberLight = Color(0xFFFFD54F)
 val FlashlightAmberDark = Color(0xFFFF8F00)
 
 /** Percentages use the standard torch maximum as 100%; boosted levels may exceed it. */
-fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int, standardMaxStrength: Int = maxStrength): String {
+fun getFlashlightPercentValue(torchStrength: Int, maxStrength: Int, standardMaxStrength: Int = maxStrength): Int {
     val level = torchStrength.coerceIn(1, maxStrength.coerceAtLeast(1))
-    val percent = (level.toFloat() / standardMaxStrength.coerceAtLeast(1) * 100).roundToInt().coerceAtLeast(1)
-    return "$percent%"
+    return (level.toFloat() / standardMaxStrength.coerceAtLeast(1) * 100).roundToInt().coerceAtLeast(1)
 }
+
+/** Percentages use the standard torch maximum as 100%; boosted levels may exceed it. */
+fun getFlashlightPercentText(torchStrength: Int, maxStrength: Int, standardMaxStrength: Int = maxStrength): String =
+    "${getFlashlightPercentValue(torchStrength, maxStrength, standardMaxStrength)}%"
 
 /** Strength as a perimeter fraction; binary flashlights show a full outline when on. */
 fun getFlashlightStrengthFraction(torchStrength: Int, maxStrength: Int): Float =
@@ -120,8 +127,23 @@ fun CompactFlashlightContent(
     modifier: Modifier = Modifier,
     isLandscape: Boolean = false,
     status: String = rememberCompactFlashlightStatus(),
+    showRadialProgress: Boolean = OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState().value,
+    onIconClick: (() -> Unit)? = null,
+    onRadialClick: (() -> Unit)? = null,
+    onBackgroundClick: (() -> Unit)? = null,
+    highlightIcon: Boolean = false,
+    highlightRadial: Boolean = false,
 ) {
     val accentColor = flashlightAccentColor()
+    val highlightColor = MaterialTheme.colorScheme.primary
+    val torchStrength by FlashlightController.torchStrength.collectAsState()
+    val maxStrength by FlashlightController.maxStrength.collectAsState()
+    val strengthFraction = getFlashlightStrengthFraction(torchStrength, maxStrength)
+    val percentLabel = status.removeSuffix("%").trim()
+    val showGauge = showRadialProgress && percentLabel.isNotEmpty()
+    val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
+    val compactRingInset = ((cutoutDiameterDp - compactRingDiameter) / 2f).coerceAtLeast(3.dp)
+
     val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.65f,
@@ -135,7 +157,7 @@ fun CompactFlashlightContent(
 
     val icon = @Composable {
         Icon(
-            imageVector = Icons.Default.FlashlightOn,
+            imageVector = LarpIcons.FlashlightOn,
             contentDescription = "Flashlight Active",
             tint = accentColor.copy(alpha = pulseAlpha),
             modifier = Modifier.size(18.dp),
@@ -168,8 +190,8 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 2.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(top = 8.dp, bottom = 2.dp),
+                contentAlignment = Alignment.TopCenter,
             ) {
                 icon()
             }
@@ -178,10 +200,20 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 2.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(top = 2.dp, bottom = if (showGauge) compactRingInset else 8.dp),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                if (status.isNotEmpty()) {
+                if (showGauge) {
+                    RadialProgressGauge(
+                        progress = strengthFraction,
+                        text = percentLabel,
+                        color = accentColor,
+                        diameter = compactRingDiameter,
+                        strokeWidth = 2.dp,
+                        fontSize = if (percentLabel.length >= 3) 6.5.sp else 7.5.sp,
+                        showPercentSymbol = false,
+                    )
+                } else if (status.isNotEmpty()) {
                     Text(
                         text = formattedStatus,
                         color = accentColor,
@@ -199,15 +231,29 @@ fun CompactFlashlightContent(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(Color.Black)
+                .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val startHighlightShape = RoundedCornerShape(
+                topStart = cutoutDiameterDp / 2f,
+                bottomStart = cutoutDiameterDp / 2f,
+            )
+            val endHighlightShape = RoundedCornerShape(
+                topEnd = cutoutDiameterDp / 2f,
+                bottomEnd = cutoutDiameterDp / 2f,
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(horizontal = 2.dp),
-                contentAlignment = Alignment.Center,
+                    .then(if (onIconClick != null) Modifier.clickable(onClick = onIconClick) else Modifier)
+                    .then(
+                        if (highlightIcon) Modifier.border(1.5.dp, highlightColor, startHighlightShape)
+                        else Modifier
+                    )
+                    .padding(start = 8.dp, end = 2.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 icon()
             }
@@ -216,10 +262,25 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(horizontal = 2.dp),
-                contentAlignment = Alignment.Center,
+                    .then(if (onRadialClick != null) Modifier.clickable(onClick = onRadialClick) else Modifier)
+                    .then(
+                        if (highlightRadial) Modifier.border(1.5.dp, highlightColor, endHighlightShape)
+                        else Modifier
+                    )
+                    .padding(start = 2.dp, end = if (showGauge) compactRingInset else 8.dp),
+                contentAlignment = Alignment.CenterEnd,
             ) {
-                if (status.isNotEmpty()) {
+                if (showGauge) {
+                    RadialProgressGauge(
+                        progress = strengthFraction,
+                        text = percentLabel,
+                        color = accentColor,
+                        diameter = compactRingDiameter,
+                        strokeWidth = 2.dp,
+                        fontSize = if (percentLabel.length >= 3) 7.sp else 8.sp,
+                        showPercentSymbol = false,
+                    )
+                } else if (status.isNotEmpty()) {
                     summary()
                 }
             }
@@ -246,6 +307,7 @@ fun ExpandedFlashlightContent(
     cutoutInfo: CutoutInfo? = null,
     cardHorizontalMarginDp: Dp = 14.dp,
     topContentInset: Dp = 0.dp,
+    onBeamClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -260,31 +322,51 @@ fun ExpandedFlashlightContent(
 
     // Dynamic Material You system accent colors
     val accentColor = flashlightAccentColor()
+    val beamBlur by OverlayPreferences.flashlightBeamBlurFlow.collectAsState()
+    val beamAccentColor by OverlayPreferences.flashlightBeamAccentColorFlow.collectAsState()
+    val beamColor = if (beamAccentColor) accentColor else Color.White
+    val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
+    val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
 
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
         Row(
             modifier = modifier.fillMaxSize().padding(
                 start = 16.dp, end = 16.dp,
-                top = maxOf(cutoutDiameterDp, topContentInset) + 8.dp, bottom = 8.dp,
+                top = if (topContentInset > 0.dp) topContentInset else 8.dp, bottom = 8.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconButton(onClick = { FlashlightController.toggleFlashlight() }, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                    contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
-                    tint = if (isFlashlightOn) accentColor else Color.Gray,
-                    modifier = Modifier.size(28.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
+                        contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
+                        tint = if (isFlashlightOn) accentColor else Color.Gray,
+                        modifier = Modifier.size(if (showExpandedRadial) 22.dp else 28.dp),
+                    )
+                    if (showExpandedRadial) {
+                        RadialProgressRing(
+                            progress = strengthFraction,
+                            color = accentColor,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(44.dp),
+                        )
+                    }
+                }
             }
+            val sliderMax = maxStrength.coerceAtLeast(2).toFloat()
+            val sliderValue = torchStrength.toFloat().coerceIn(1f, sliderMax)
+            val sliderState = remember(sliderMax) {
+                SliderState(value = sliderValue, trackRange = 1f..sliderMax)
+            }
+            sliderState.value = sliderValue
             Slider(
+                state = sliderState,
                 modifier = Modifier.weight(1f),
-                value = torchStrength.toFloat().coerceIn(1f, maxStrength.coerceAtLeast(2).toFloat()),
                 onValueChange = { FlashlightController.setStrength(it.roundToInt().coerceIn(1, maxStrength.coerceAtLeast(1))) },
                 onValueChangeFinished = { FlashlightController.flushStrength(FlashlightController.torchStrength.value) },
-                valueRange = 1f..maxStrength.coerceAtLeast(2).toFloat(),
                 enabled = isFlashlightOn && maxStrength > 1,
             )
         }
@@ -322,11 +404,15 @@ fun ExpandedFlashlightContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(onBeamClick) {
                 detectTapGestures(
                     onTap = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        FlashlightController.toggleFlashlight()
+                        if (onBeamClick != null) {
+                            onBeamClick()
+                        } else {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            FlashlightController.toggleFlashlight()
+                        }
                     }
                 )
             },
@@ -336,7 +422,7 @@ fun ExpandedFlashlightContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    top = maxOf((cutoutDiameterDp - 4.dp).coerceAtLeast(16.dp), topContentInset),
+                    top = if (topContentInset > 0.dp) topContentInset else 16.dp,
                     bottom = 16.dp,
                 )
                 .pointerInput(Unit) {
@@ -409,7 +495,7 @@ fun ExpandedFlashlightContent(
                 }
 
                 if (onOffProgress > 0.002f) {
-                    if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.BLURRED_BEAM) {
+                    if (beamBlur) {
                         // Approximate a Gaussian blur in horizontal bands: the light is sharp
                         // at its source and diffuses progressively toward the wide end.
                         val beamHeight = (beamOriginY - currentSliderY).coerceAtLeast(1f)
@@ -425,8 +511,8 @@ fun ExpandedFlashlightContent(
                                         drawPath(
                                             path = beamPath,
                                             brush = Brush.verticalGradient(
-                                                listOf(accentColor.copy(alpha = 0.85f * onOffProgress * weight),
-                                                    accentColor.copy(alpha = 0.12f * onOffProgress * weight)),
+                                                listOf(beamColor.copy(alpha = 0.85f * onOffProgress * weight),
+                                                    beamColor.copy(alpha = 0.12f * onOffProgress * weight)),
                                                 startY = currentSliderY, endY = beamOriginY,
                                             ),
                                         )
@@ -439,9 +525,9 @@ fun ExpandedFlashlightContent(
                         path = beamPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                accentColor.copy(alpha = 0.85f * onOffProgress),
-                                accentColor.copy(alpha = 0.45f * onOffProgress),
-                                accentColor.copy(alpha = 0.12f * onOffProgress),
+                                beamColor.copy(alpha = 0.85f * onOffProgress),
+                                beamColor.copy(alpha = 0.45f * onOffProgress),
+                                beamColor.copy(alpha = 0.12f * onOffProgress),
                             ),
                             startY = currentSliderY,
                             endY = beamOriginY,
@@ -457,7 +543,7 @@ fun ExpandedFlashlightContent(
                 }
 
                 // 2. Horizontal Slider Bar (Pill Handle at top of beam)
-                val sliderColor = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.35f)
+                val sliderColor = if (isFlashlightOn) beamColor else Color.White.copy(alpha = 0.35f)
                 drawRoundRect(
                     color = sliderColor,
                     topLeft = Offset(centerX - topBeamWidth / 2f, currentSliderY - barHeight / 2f),
@@ -476,12 +562,22 @@ fun ExpandedFlashlightContent(
                     .padding(bottom = 2.dp)
                     .size(44.dp),
             ) {
-                Icon(
-                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                    contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
-                    tint = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.40f),
-                    modifier = Modifier.size(32.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
+                        contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
+                        tint = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.40f),
+                        modifier = Modifier.size(if (showExpandedRadial) 22.dp else 32.dp),
+                    )
+                    if (showExpandedRadial) {
+                        RadialProgressRing(
+                            progress = if (isFlashlightOn) intensityFraction else 0f,
+                            color = accentColor,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(42.dp),
+                        )
+                    }
+                }
             }
         }
     }

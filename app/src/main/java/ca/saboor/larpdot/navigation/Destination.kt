@@ -1,10 +1,7 @@
 package ca.saboor.larpdot.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.NotificationsActive
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class Destination(
@@ -13,18 +10,22 @@ enum class Destination(
 ) {
     Home(
         label = "Home",
-        icon = Icons.Default.Home,
+        icon = LarpIcons.Home,
+    ),
+    Appearance(
+        label = "Appearance",
+        icon = LarpIcons.Palette,
     ),
     Music(
         label = "Music",
-        icon = Icons.Default.MusicNote,
+        icon = LarpIcons.MusicNote,
     ),
     LiveActivities(
         label = "Activities",
-        icon = Icons.Default.NotificationsActive,
+        icon = LarpIcons.NotificationsActive,
     ),
     Flashlight(
         label = "Flashlight",
-        icon = Icons.Default.FlashlightOn,
+        icon = LarpIcons.FlashlightOn,
     ),
 }

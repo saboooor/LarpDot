@@ -41,6 +41,25 @@ fun islandTouchRegion(bounds: List<Rect>, paddingPx: Float): IslandTouchRegion? 
     return IslandTouchRegion(left, top, right - left, bottom - top)
 }
 
+/**
+ * Computes the touch-forwarding bounds for both compact and expanded islands using one path.
+ * Expanded mode fits strictly to the expanded card (outside touches pass through and dismiss
+ * via FLAG_WATCH_OUTSIDE_TOUCH); collapsing or idle returns only compact bounds or empty.
+ */
+internal fun activeIslandTouchBounds(
+    isExpanded: Boolean,
+    expandedBounds: Rect?,
+    compactBounds: Rect?,
+    secondaryBounds: List<Rect>,
+): List<Rect> = if (isExpanded) {
+    listOfNotNull(expandedBounds ?: compactBounds)
+} else {
+    buildList {
+        compactBounds?.let(::add)
+        addAll(secondaryBounds)
+    }
+}
+
 /** Content-independent camera geometry, in dp. */
 data class IslandCameraGeometry(val diameter: Float, val thickness: Float, val cornerRadius: Float)
 

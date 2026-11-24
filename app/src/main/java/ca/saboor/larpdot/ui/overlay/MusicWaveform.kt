@@ -21,6 +21,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -68,7 +69,6 @@ internal fun EqualizerWaveform(
     val previewPositionMs by PreviewAudioPlayer.currentPositionMs.collectAsState()
 
     val effectiveIsPlaying = isPreviewPlaying || mediaInfo.isPlaying
-    val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else mediaInfo.positionMs
 
     if (visualizerMode == OverlayPreferences.VisualizerMode.DEVICE_AUDIO) {
         LiveTrackVisualizer(
@@ -89,6 +89,8 @@ internal fun EqualizerWaveform(
     if ((isPreviewPlaying || visualizerMode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW) &&
         realAmplitudes != null && realAmplitudes!!.isNotEmpty()
     ) {
+        val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
+        val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else if (mediaInfo.hasMedia) livePositionMs else mediaInfo.positionMs
         TrackVisualizer(
             amplitudes = realAmplitudes!!,
             currentPositionMs = effectivePositionMs,
@@ -106,6 +108,8 @@ internal fun EqualizerWaveform(
     }
 
     if (visualizerMode == OverlayPreferences.VisualizerMode.BPM) {
+        val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
+        val effectivePositionMs = if (isPreviewPlaying) previewPositionMs else if (mediaInfo.hasMedia) livePositionMs else mediaInfo.positionMs
         BpmVisualizer(
             bpm = currentBpm,
             currentPositionMs = effectivePositionMs,

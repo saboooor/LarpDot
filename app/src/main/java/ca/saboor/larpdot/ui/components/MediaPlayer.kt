@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.components
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.Image
@@ -17,17 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -55,10 +46,59 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.service.AudioOutputDevice
+import ca.saboor.larpdot.service.AudioOutputKind
+import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.visualizer.BpmChip
 import ca.saboor.larpdot.visualizer.BpmDetector
 import ca.saboor.larpdot.visualizer.rememberBpmPulse
+
+@Composable
+fun AudioOutputChip(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activeOutput by AudioOutputTracker.activeOutput.collectAsState()
+    val icon = audioOutputIcon(activeOutput)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = Color.White.copy(alpha = 0.22f),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = "Audio output",
+                tint = Color.White,
+                modifier = Modifier.size(13.dp),
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = activeOutput.name,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun audioOutputIcon(device: AudioOutputDevice) = when (device.kind) {
+    AudioOutputKind.PHONE_SPEAKER -> LarpIcons.PhoneAndroid
+    AudioOutputKind.BLUETOOTH_AUDIO -> LarpIcons.BluetoothAudio
+    AudioOutputKind.WIRED_HEADSET -> LarpIcons.Headphones
+    AudioOutputKind.USB_AUDIO -> LarpIcons.Usb
+    AudioOutputKind.CAR_AUDIO -> LarpIcons.DirectionsCar
+    AudioOutputKind.HEARING_AID -> LarpIcons.Hearing
+    AudioOutputKind.EXTERNAL_DISPLAY -> LarpIcons.Tv
+}
 
 /**
  * Authentic Android native media player notification card,
@@ -76,18 +116,19 @@ fun MediaPlayer(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
+    val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
     val bpmPulseEnabled by OverlayPreferences.bpmPulseEnabledFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     val bpmPulseState = rememberBpmPulse(
         bpm = currentBpm,
-        currentPositionMs = nowPlaying.positionMs,
+        currentPositionMs = livePositionMs,
         isPlaying = nowPlaying.isPlaying,
         enabled = bpmPulseEnabled,
     )
     val albumArt = nowPlaying.albumArt
     val progress = if (nowPlaying.durationMs > 0) {
-        (nowPlaying.positionMs.toFloat() / nowPlaying.durationMs).coerceIn(0f, 1f)
+        (livePositionMs.toFloat() / nowPlaying.durationMs).coerceIn(0f, 1f)
     } else {
         0f
     }
@@ -165,7 +206,7 @@ fun MediaPlayer(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Icon(
-                        Icons.Default.MusicNote,
+                        LarpIcons.MusicNote,
                         contentDescription = "Media",
                         tint = Color.White.copy(alpha = 0.92f),
                         modifier = Modifier.size(20.dp)
@@ -178,30 +219,10 @@ fun MediaPlayer(
                         if (expandedElementVisibility.bpm && currentBpm != null) {
                             BpmChip(bpm = currentBpm)
                         }
-                        // "This phone" output switcher chip
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.22f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.PhoneAndroid,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(Modifier.width(5.dp))
-                                Text(
-                                    "This phone",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                    color = Color.White
-                                )
-                            }
-                        }
+                        // Live audio output switcher chip
+                        AudioOutputChip(
+                            onClick = { AudioOutputTracker.openOutputSwitcher(context) },
+                        )
                     }
                 }
 
@@ -250,7 +271,7 @@ fun MediaPlayer(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = if (nowPlaying.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                imageVector = if (nowPlaying.isPlaying) LarpIcons.Pause else LarpIcons.PlayArrow,
                                 contentDescription = if (nowPlaying.isPlaying) "Pause" else "Play",
                                 tint = Color(0xFF1B1A1E),
                                 modifier = Modifier.size(30.dp)
@@ -271,7 +292,7 @@ fun MediaPlayer(
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            Icons.Default.SkipPrevious,
+                            LarpIcons.SkipPrevious,
                             contentDescription = "Previous track",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -308,7 +329,7 @@ fun MediaPlayer(
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            Icons.Default.SkipNext,
+                            LarpIcons.SkipNext,
                             contentDescription = "Next track",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -320,7 +341,7 @@ fun MediaPlayer(
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            Icons.Default.StarBorder,
+                            LarpIcons.StarBorder,
                             contentDescription = "Favorite",
                             tint = Color.White.copy(alpha = 0.88f),
                             modifier = Modifier.size(21.dp)
@@ -332,7 +353,7 @@ fun MediaPlayer(
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            Icons.Default.Shuffle,
+                            LarpIcons.Shuffle,
                             contentDescription = "Shuffle",
                             tint = Color.White.copy(alpha = 0.88f),
                             modifier = Modifier.size(21.dp)

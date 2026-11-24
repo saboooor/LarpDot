@@ -1,19 +1,17 @@
 package ca.saboor.larpdot.ui.screens
 
-import androidx.compose.material3.FilterChip
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import ca.saboor.larpdot.ui.theme.motionItem
-
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,79 +23,73 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessLow
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.ui.components.ConnectedButtonGroup
+import ca.saboor.larpdot.ui.components.FlashlightPreviewElement
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.SectionHeader
-import ca.saboor.larpdot.ui.overlay.FlashlightAmber
-import ca.saboor.larpdot.ui.overlay.FlashlightAmberLight
-import kotlin.math.roundToInt
+import ca.saboor.larpdot.ui.theme.LarpIcons
+import ca.saboor.larpdot.ui.theme.LarpMotion
+import ca.saboor.larpdot.ui.theme.motionItem
 
-private enum class FlashlightTapMode(val label: String, val icon: ImageVector) {
-    TAP_TO_TOGGLE("Tap to Toggle", Icons.Default.PowerSettingsNew),
-    TAP_TO_EXPAND("Tap to Expand", Icons.Default.OpenInFull),
-}
-
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FlashlightScreen(
     cutoutInfo: CutoutInfo,
-    selectedTabIndex: Int,
-    onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val context = LocalContext.current
-    LaunchedEffect(context) { OverlayPreferences.getFlashlightExpandedStyle(context) }
+    val slideTravel = with(LocalDensity.current) { 24.dp.roundToPx() }
+    var showFlashlightSettings by rememberSaveable { mutableStateOf(false) }
+    var selectedPreviewElement by remember { mutableStateOf<FlashlightPreviewElement?>(null) }
 
+    BackHandler(enabled = showFlashlightSettings) {
+        showFlashlightSettings = false
+    }
+
+    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
+    val beamBlur by OverlayPreferences.flashlightBeamBlurFlow.collectAsState()
+    val beamAccentColor by OverlayPreferences.flashlightBeamAccentColorFlow.collectAsState()
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isFlashlightAvailable by FlashlightController.isFlashlightAvailable.collectAsState()
     val isStrengthSupported by FlashlightController.isStrengthSupported.collectAsState()
-    val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    val standardMaximum by FlashlightController.standardMaxStrength.collectAsState()
     val isBoostSupported by FlashlightController.isBoostSupported.collectAsState()
     val isBoostActive by FlashlightController.isBoostActive.collectAsState()
     val isBoostStarting by FlashlightController.isBoostStarting.collectAsState()
@@ -105,6 +97,7 @@ fun FlashlightScreen(
     val flashlightError by FlashlightController.lastError.collectAsState()
     var pendingBoostPermission by remember { mutableStateOf(false) }
     var pendingTorchPermission by remember { mutableStateOf(false) }
+
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             FlashlightController.refreshHardware()
@@ -113,6 +106,32 @@ fun FlashlightScreen(
         }
         pendingBoostPermission = false
         pendingTorchPermission = false
+    }
+
+    val onSetTorch: (Boolean) -> Unit = { enabled ->
+        if (enabled && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingTorchPermission = true
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        } else {
+            FlashlightController.setTorch(enabled)
+        }
+    }
+
+    val onSetBoost: (Boolean) -> Unit = { enabled ->
+        if (enabled && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingBoostPermission = true
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        } else {
+            FlashlightController.setBoostEnabled(enabled)
+        }
+    }
+
+    val onCheckCameraSupport: () -> Unit = {
+        if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        } else {
+            FlashlightController.refreshHardware()
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -132,6 +151,9 @@ fun FlashlightScreen(
     LaunchedEffect(Unit) {
         FlashlightController.init(context)
         FlashlightController.refreshHardware()
+        OverlayPreferences.getFlashlightExpandedStyle(context)
+        OverlayPreferences.isFlashlightBeamBlurEnabled(context)
+        OverlayPreferences.isFlashlightBeamAccentColorEnabled(context)
         OverlayPreferences.isShowFlashlightIslandEnabled(context)
         OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)
@@ -139,110 +161,346 @@ fun FlashlightScreen(
         OverlayPreferences.isFlashlightBoostEnabled(context)
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // 1. Live Island Preview
-        item(key = "preview") {
-            IslandPreview(cutoutInfo = cutoutInfo, type = IslandPreviewType.FLASHLIGHT)
-        }
-
-        item(key = "tabs") {
-            PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { onTabSelected(0) },
-                    text = { Text("Minimized") },
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { onTabSelected(1) },
-                    text = { Text("Expanded") },
-                )
-                Tab(
-                    selected = selectedTabIndex == 2,
-                    onClick = { onTabSelected(2) },
-                    text = { Text("Overview") },
-                )
-            }
-        }
-
-        // 2. Master Controls Card
-        if (selectedTabIndex == 1) motionItem("expanded_style") {
-            SectionHeader(title = "Expanded style")
-            LarpCard {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OverlayPreferences.FlashlightExpandedStyle.entries.forEach { style ->
-                        FilterChip(
-                            selected = expandedStyle == style,
-                            onClick = { OverlayPreferences.setFlashlightExpandedStyle(context, style) },
-                            label = { Text(style.label) },
-                        )
+    AnimatedContent(
+        targetState = showFlashlightSettings,
+        modifier = modifier
+            .fillMaxSize()
+            .clipToBounds(),
+        label = "flashlight_screen_view",
+        transitionSpec = {
+            val direction = if (targetState) 1 else -1
+            val enter = fadeIn(LarpMotion.timing(250, delayMillis = 20, easing = LarpMotion.standard)) +
+                slideInHorizontally(LarpMotion.timing(280, easing = LarpMotion.settle)) { direction * slideTravel }
+            val exit = fadeOut(LarpMotion.fade(160)) +
+                slideOutHorizontally(LarpMotion.fade(200)) { -direction * slideTravel / 2 }
+            (enter togetherWith exit).using(null)
+        },
+    ) { isSettingsOpen ->
+        if (!isSettingsOpen) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "preview_top_bar") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = { showFlashlightSettings = true },
+                        ) {
+                            Icon(
+                                imageVector = LarpIcons.Settings,
+                                contentDescription = "Flashlight Settings",
+                            )
+                        }
                     }
                 }
-            }
-        }
-        if (selectedTabIndex == 1) motionItem("expanded_controls") {
-            SectionHeader(title = "Master Controls")
-            LarpCard {
-                // Power Toggle Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
+
+                item(key = "expanded_style_layout") {
+                    ButtonGroup(
+                        modifier = Modifier.fillMaxWidth(),
+                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isFlashlightOn) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            modifier = Modifier.size(44.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isFlashlightOn) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                                    contentDescription = null,
-                                    tint = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                text = "Flashlight Power",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        OverlayPreferences.FlashlightExpandedStyle.entries.forEach { style ->
+                            toggleableItem(
+                                checked = expandedStyle == style,
+                                label = style.label,
+                                onCheckedChange = {
+                                    OverlayPreferences.setFlashlightExpandedStyle(context, style)
+                                    if (style != OverlayPreferences.FlashlightExpandedStyle.BEAM &&
+                                        selectedPreviewElement == FlashlightPreviewElement.EXPANDED_BEAM
+                                    ) {
+                                        selectedPreviewElement = null
+                                    }
+                                },
+                                weight = 1f,
                             )
                         }
                     }
+                }
 
-                    Switch(
-                        checked = isFlashlightOn || isBoostStarting,
-                        onCheckedChange = {
-                            if (it && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                                pendingTorchPermission = true
-                                cameraPermission.launch(Manifest.permission.CAMERA)
-                            } else FlashlightController.setTorch(it)
+                item(key = "preview") {
+                    IslandPreview(
+                        cutoutInfo = cutoutInfo,
+                        type = IslandPreviewType.FLASHLIGHT,
+                        selectedFlashlightElement = selectedPreviewElement,
+                        onFlashlightElementClick = { element ->
+                            selectedPreviewElement = if (selectedPreviewElement == element) null else element
                         },
                     )
                 }
 
-                // Brightness Slider (if hardware or simulation supports strength level)
-                if (isStrengthSupported && maxStrength > 1) {
-                    Spacer(Modifier.height(8.dp))
+                selectedPreviewElement?.let { activeElement ->
+                    motionItem(key = "flashlight_inspector_${activeElement.name}") {
+                        FlashlightPreviewInspectorCard(
+                            element = activeElement,
+                            onDismiss = { selectedPreviewElement = null },
+                            context = context,
+                            showMinimizedOutline = showMinimizedOutline,
+                            tapToToggle = tapToToggle,
+                            beamBlur = beamBlur,
+                            beamAccentColor = beamAccentColor,
+                        )
+                    }
+                }
+            }
+        } else {
+            FlashlightSettingsPage(
+                context = context,
+                showInIsland = showInIsland,
+                showExpandedOutline = showExpandedOutline,
+                tapToToggle = tapToToggle,
+                isFlashlightOn = isFlashlightOn,
+                isFlashlightAvailable = isFlashlightAvailable,
+                isStrengthSupported = isStrengthSupported,
+                maxStrength = maxStrength,
+                isBoostSupported = isBoostSupported,
+                isBoostActive = isBoostActive,
+                isBoostStarting = isBoostStarting,
+                boostEnabled = boostEnabled,
+                flashlightError = flashlightError,
+                onSetTorch = onSetTorch,
+                onSetBoost = onSetBoost,
+                onCheckCameraSupport = onCheckCameraSupport,
+                onBack = { showFlashlightSettings = false },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun FlashlightPreviewInspectorCard(
+    element: FlashlightPreviewElement,
+    onDismiss: () -> Unit,
+    context: Context,
+    showMinimizedOutline: Boolean,
+    tapToToggle: Boolean,
+    beamBlur: Boolean,
+    beamAccentColor: Boolean,
+) {
+    val (title, icon) = when (element) {
+        FlashlightPreviewElement.MINIMIZED_PILL -> "Minimized Pill" to LarpIcons.FlashlightOn
+        FlashlightPreviewElement.MINIMIZED_RADIAL -> "Radial Progress" to LarpIcons.DonutLarge
+        FlashlightPreviewElement.EXPANDED_BEAM -> "Beam Settings" to LarpIcons.WbSunny
+    }
+
+    LarpCard {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = LarpIcons.Close,
+                        contentDescription = "Close $title settings",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            when (element) {
+                FlashlightPreviewElement.MINIMIZED_PILL -> {
+                    CompactTapActionSelector(
+                        context = context,
+                        tapToToggle = tapToToggle,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Show radial brightness gauge on the compact island and dots",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showMinimizedOutline,
+                            onCheckedChange = {
+                                OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it)
+                            },
+                        )
+                    }
+                }
+
+                FlashlightPreviewElement.MINIMIZED_RADIAL -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Show radial brightness gauge on the compact island and dots",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showMinimizedOutline,
+                            onCheckedChange = {
+                                OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it)
+                            },
+                        )
+                    }
+                }
+
+                FlashlightPreviewElement.EXPANDED_BEAM -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Blur Beam", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Soften the light cone with a diffused blur",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = beamBlur,
+                            onCheckedChange = {
+                                OverlayPreferences.setFlashlightBeamBlurEnabled(context, it)
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Beam Color", style = MaterialTheme.typography.titleMedium)
+                        ButtonGroup(
+                            modifier = Modifier.fillMaxWidth(),
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                        ) {
+                            toggleableItem(
+                                checked = !beamAccentColor,
+                                label = "White",
+                                onCheckedChange = {
+                                    OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, false)
+                                },
+                                weight = 1f,
+                            )
+                            toggleableItem(
+                                checked = beamAccentColor,
+                                label = "Accent Color",
+                                onCheckedChange = {
+                                    OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, true)
+                                },
+                                weight = 1f,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlashlightSettingsPage(
+    context: Context,
+    showInIsland: Boolean,
+    showExpandedOutline: Boolean,
+    tapToToggle: Boolean,
+    isFlashlightOn: Boolean,
+    isFlashlightAvailable: Boolean,
+    isStrengthSupported: Boolean,
+    maxStrength: Int,
+    isBoostSupported: Boolean,
+    isBoostActive: Boolean,
+    isBoostStarting: Boolean,
+    boostEnabled: Boolean,
+    flashlightError: String?,
+    onSetTorch: (Boolean) -> Unit,
+    onSetBoost: (Boolean) -> Unit,
+    onCheckCameraSupport: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = LarpIcons.ArrowBack,
+                    contentDescription = "Back",
+                )
+            }
+            Column {
+                Text(
+                    text = "Flashlight Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                )
+                Text(
+                    text = "Island integration, boost, and hardware",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            motionItem(key = "minimized_controls") {
+                SectionHeader(title = "Dynamic Island Integration")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -250,292 +508,264 @@ fun FlashlightScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.WbSunny,
+                                    imageVector = LarpIcons.BrightnessMedium,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp),
                                 )
-                                Text(
-                                    text = "Brightness Level",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                )
-                            }
-                            Text(
-                                text = "${(torchStrength.toFloat() / standardMaximum.coerceAtLeast(1) * 100).roundToInt()}% ($torchStrength / $maxStrength)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-
-                        val sliderState = remember(maxStrength) {
-                            SliderState(
-                                value = torchStrength.toFloat(),
-                                steps = maxStrength - 2,
-                                trackRange = 1f..maxStrength.toFloat(),
-                            )
-                        }
-                        sliderState.value = torchStrength.toFloat()
-                        Slider(
-                            state = sliderState,
-                            onValueChange = { newLevel ->
-                                FlashlightController.setStrength(newLevel.roundToInt())
-                            },
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            ),
-                        )
-
-                        // Quick presets
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            listOf(25, 50, 75, 100).forEach { pct ->
-                                val targetLevel = ((pct / 100f) * standardMaximum).roundToInt().coerceIn(1, maxStrength)
-                                FilledTonalButton(
-                                    onClick = { FlashlightController.setStrength(targetLevel) },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = if (torchStrength == targetLevel) {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceContainerHighest
-                                        },
-                                    ),
-                                ) {
+                                Column {
                                     Text(
-                                        text = "$pct%",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (torchStrength == targetLevel) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (torchStrength == targetLevel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        text = "Show in Dynamic Island",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                    )
+                                    Text(
+                                        text = "Morph pill into active torch when flashlight is on",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
+
+                            Switch(
+                                checked = showInIsland,
+                                onCheckedChange = { enabled ->
+                                    OverlayPreferences.setShowFlashlightIslandEnabled(context, enabled)
+                                },
+                            )
                         }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Expanded Radial Progress", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Show radial brightness ring around the expanded torch icon",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = showExpandedOutline,
+                                onCheckedChange = {
+                                    OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, it)
+                                },
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        CompactTapActionSelector(
+                            context = context,
+                            tapToToggle = tapToToggle,
+                        )
                     }
                 }
             }
-        }
 
-        // 3. Dynamic Island Behavior Card
-        if (selectedTabIndex == 0) motionItem("minimized_controls") {
-            SectionHeader(title = "Dynamic Island Integration")
-            LarpCard {
-                // Show in Island switch
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            motionItem(key = "expanded_controls") {
+                SectionHeader(title = "Master Controls")
+                LarpCard {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.BrightnessMedium,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isFlashlightOn) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHighest
+                                },
+                                modifier = Modifier.size(44.dp),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
+                                        contentDescription = null,
+                                        tint = if (isFlashlightOn) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Flashlight Power",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                                )
+                                Text(
+                                    text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isFlashlightOn || isBoostStarting,
+                            onCheckedChange = onSetTorch,
                         )
-                        Column {
+                    }
+                }
+            }
+
+            if (flashlightError != null) {
+                motionItem(key = "hardware_error") {
+                    Text(
+                        text = flashlightError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
+            motionItem(key = "overview_controls") {
+                SectionHeader(title = "Flashlight Boost")
+                LarpCard {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Built-in camera boost", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                text = "Show in Dynamic Island",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Morph pill into active torch when flashlight is on",
+                                if (isBoostSupported) {
+                                    "Unlocks brightness above 100%. The camera is used only above the standard flashlight maximum."
+                                } else {
+                                    "This device does not expose boost controls. Standard flashlight control is available."
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        Switch(
+                            checked = boostEnabled && isBoostSupported,
+                            enabled = isBoostSupported,
+                            onCheckedChange = onSetBoost,
+                        )
                     }
-
-                    Switch(
-                        checked = showInIsland,
-                        onCheckedChange = { enabled ->
-                            OverlayPreferences.setShowFlashlightIslandEnabled(context, enabled)
-                        },
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Strength Outline", style = MaterialTheme.typography.titleMedium)
+                    if (!isBoostSupported) {
+                        TextButton(onClick = onCheckCameraSupport) {
+                            Text("Check camera support")
+                        }
+                    }
+                    if (isBoostSupported) {
+                        Spacer(Modifier.height(12.dp))
                         Text(
-                            "Show torch brightness around the compact island",
+                            "Above 100%, camera permission and a camera session are required. Returning to 100% releases the camera. No photos or video are saved.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
-                        checked = showMinimizedOutline,
-                        onCheckedChange = { OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it) },
-                    )
                 }
+            }
 
-                Spacer(Modifier.height(10.dp))
-
-                // Compact Pill Tap Interaction Mode
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            motionItem(key = "diagnostics") {
+                SectionHeader(title = "Hardware & Diagnostics")
+                LarpCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.TouchApp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
+                        DiagnosticRow(
+                            label = "Torch Hardware",
+                            value = if (isFlashlightAvailable) "Detected & Ready" else "Not Available",
+                            isHighlight = isFlashlightAvailable,
                         )
-                        Text(
-                            text = "Compact Pill Tap Action",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                        DiagnosticRow(
+                            label = "Camera Boost",
+                            value = if (isBoostActive) "Active" else if (isBoostSupported) "Supported" else "Not Supported",
+                            isHighlight = isBoostSupported,
                         )
-                    }
-
-                    val tapModes = FlashlightTapMode.entries
-                    val selectedIndex = if (tapToToggle) 0 else 1
-
-                    ConnectedButtonGroup(
-                        items = tapModes,
-                        selectedIndex = selectedIndex,
-                        onItemSelected = { idx ->
-                            OverlayPreferences.setFlashlightTapToToggleEnabled(context, idx == 0)
-                        },
-                        label = { it.label },
-                        icon = { it.icon },
-                    )
-
-                    Text(
-                        text = "Swipe right on the flashlight island to raise brightness, or left to lower it. Hold to keep stepping; move farther for faster, larger steps. Tap or long-press to open the island card or toggle power.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        if (selectedTabIndex == 1) motionItem("expanded_outline") {
-            SectionHeader(title = "Expanded Appearance")
-            LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Strength Outline", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Show torch brightness around the expanded card",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        DiagnosticRow(
+                            label = "Multi-level Brightness",
+                            value = if (isStrengthSupported) "Supported (1 to $maxStrength)" else "Standard On/Off",
+                            isHighlight = isStrengthSupported,
+                        )
+                        DiagnosticRow(
+                            label = "Active Camera ID",
+                            value = FlashlightController.activeCameraId ?: "Auto (Back)",
+                            isHighlight = false,
                         )
                     }
-                    Switch(
-                        checked = showExpandedOutline,
-                        onCheckedChange = { OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, it) },
-                    )
                 }
             }
         }
+    }
+}
 
-        if (flashlightError != null) motionItem("hardware_error") {
-            Text(flashlightError.orEmpty(), color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun CompactTapActionSelector(
+    context: Context,
+    tapToToggle: Boolean,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = LarpIcons.TouchApp,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = "Compact Pill Tap Action",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+            )
         }
 
-        if (selectedTabIndex == 2) motionItem("overview_controls") {
-            SectionHeader(title = "Flashlight Boost")
-            LarpCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Built-in camera boost", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (isBoostSupported) "Unlocks brightness above 100%. The camera is used only above the standard flashlight maximum."
-                            else "This device does not expose boost controls. Standard flashlight control is available.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = boostEnabled && isBoostSupported,
-                        enabled = isBoostSupported,
-                        onCheckedChange = { enabled ->
-                            if (enabled && context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                                pendingBoostPermission = true
-                                cameraPermission.launch(Manifest.permission.CAMERA)
-                            } else FlashlightController.setBoostEnabled(enabled)
-                        },
-                    )
-                }
-                if (!isBoostSupported) {
-                    TextButton(onClick = {
-                        if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                            cameraPermission.launch(Manifest.permission.CAMERA)
-                        } else FlashlightController.refreshHardware()
-                    }) { Text("Check camera support") }
-                }
-                if (isBoostSupported) {
-                    Spacer(Modifier.height(12.dp))
-                    Text("Above 100%, camera permission and a camera session are required. Returning to 100% releases the camera. No photos or video are saved.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+        ButtonGroup(
+            modifier = Modifier.fillMaxWidth(),
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+        ) {
+            toggleableItem(
+                checked = tapToToggle,
+                label = "Tap to Toggle",
+                onCheckedChange = {
+                    OverlayPreferences.setFlashlightTapToToggleEnabled(context, true)
+                },
+                weight = 1f,
+            )
+            toggleableItem(
+                checked = !tapToToggle,
+                label = "Tap to Expand",
+                onCheckedChange = {
+                    OverlayPreferences.setFlashlightTapToToggleEnabled(context, false)
+                },
+                weight = 1f,
+            )
         }
 
-        // 4. Hardware & Diagnostics Card
-        if (selectedTabIndex == 2) motionItem("diagnostics") {
-            SectionHeader(title = "Hardware & Diagnostics")
-            LarpCard {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    DiagnosticRow(
-                        label = "Torch Hardware",
-                        value = if (isFlashlightAvailable) "Detected & Ready" else "Not Available",
-                        isHighlight = isFlashlightAvailable,
-                    )
-                    DiagnosticRow(
-                        label = "Camera Boost",
-                        value = if (isBoostActive) "Active" else if (isBoostSupported) "Supported" else "Not Supported",
-                        isHighlight = isBoostSupported,
-                    )
-                    DiagnosticRow(
-                        label = "Multi-level Brightness",
-                        value = if (isStrengthSupported) "Supported (1 to $maxStrength)" else "Standard On/Off",
-                        isHighlight = isStrengthSupported,
-                    )
-                    DiagnosticRow(
-                        label = "Active Camera ID",
-                        value = FlashlightController.activeCameraId ?: "Auto (Back)",
-                        isHighlight = false,
-                    )
-                }
-            }
-        }
+        Text(
+            text = "Swipe right on the flashlight island to raise brightness, or left to lower it. Hold to keep stepping; move farther for faster, larger steps. Tap or long-press to open the island card or toggle power.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

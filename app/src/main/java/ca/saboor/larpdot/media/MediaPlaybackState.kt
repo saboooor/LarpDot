@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.ScreenStateTracker
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +37,7 @@ data class MediaSessionAction(
 data class MediaTrackInfo(
     val title: String = "",
     val artist: String = "",
+    val album: String = "",
     val albumArt: Bitmap? = null,
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
@@ -98,6 +101,10 @@ object MediaPlaybackState {
 
     private val _currentTrack = MutableStateFlow(MediaTrackInfo())
     val currentTrack: StateFlow<MediaTrackInfo> = _currentTrack.asStateFlow()
+
+    /** High-frequency playback position stream, decoupled from [currentTrack] to avoid recomposing the whole overlay 10x/sec. */
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
     private val _isMusicActive = MutableStateFlow(false)
     val isMusicActive: StateFlow<Boolean> = _isMusicActive.asStateFlow()
@@ -226,6 +233,7 @@ object MediaPlaybackState {
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         val rawArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+        val rawAlbum = metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)
         val rawArtwork = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: metadata?.description?.iconBitmap
@@ -240,6 +248,11 @@ object MediaPlaybackState {
             !rawArtist.isNullOrBlank() -> rawArtist
             current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
             else -> "Media Player"
+        }
+        val album = when {
+            !rawAlbum.isNullOrBlank() -> rawAlbum
+            samePlayer && title == current.title -> current.album
+            else -> ""
         }
         if (rawArtwork != null || !samePlayer || title != current.title) {
             sessionArtwork = rawArtwork
@@ -332,20 +345,24 @@ object MediaPlaybackState {
 
         val isIdenticalTrack = title == current.title &&
             artist == current.artist &&
+            album == current.album &&
             isPlaying == current.isPlaying &&
             duration == current.durationMs &&
             samePlayer &&
             sessionActions == current.sessionActions
 
-        if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - current.positionMs) < 1000L) {
+        if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - _positionMs.value) < 1000L) {
+            _positionMs.value = calculatedPosition
             updateArtwork(sessionArtwork)
             checkTickerState(isPlaying)
             return
         }
 
+        _positionMs.value = calculatedPosition
         _currentTrack.value = MediaTrackInfo(
             title = title,
             artist = artist,
+            album = album,
             albumArt = current.albumArt.takeIf { samePlayer },
             isPlaying = isPlaying,
             positionMs = calculatedPosition,
@@ -384,6 +401,8 @@ object MediaPlaybackState {
             it.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: it.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
         }?.takeIf { it.isNotBlank() }
 
+        val controllerAlbum = sessionMetadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }
+
         // Canonical MediaController metadata is preferred over notification composite text
         val newTitle = when {
             controllerTitle != null -> controllerTitle
@@ -401,9 +420,11 @@ object MediaPlaybackState {
 
         val resolvedAppName = appName ?: current.appName
         val samePlayer = newPackage == current.playerPackageName
+        val newAlbum = controllerAlbum ?: if (samePlayer && newTitle == current.title) current.album else ""
         val candidate = sessionArtwork ?: artwork
         if (newTitle == current.title &&
             newArtist == current.artist &&
+            newAlbum == current.album &&
             samePlayer &&
             resolvedAppName == current.appName
         ) {
@@ -415,6 +436,7 @@ object MediaPlaybackState {
         _currentTrack.value = current.copy(
             title = newTitle,
             artist = newArtist,
+            album = newAlbum,
             albumArt = current.albumArt.takeIf { samePlayer },
             artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
             playerPackageName = newPackage,
@@ -494,6 +516,7 @@ object MediaPlaybackState {
             val artwork = DominantColorExtractor.createSampleArtwork(nextTitle)
             val artworkColors = DominantColorExtractor.extractArtworkColors(artwork)
             lastAnnouncedTrackKey = "${nextTitle}_The Weeknd"
+            _positionMs.value = 0L
             _currentTrack.value = track.copy(
                 title = nextTitle,
                 artist = "The Weeknd",
@@ -514,6 +537,7 @@ object MediaPlaybackState {
             val artwork = DominantColorExtractor.createSampleArtwork(prevTitle)
             val artworkColors = DominantColorExtractor.extractArtworkColors(artwork)
             lastAnnouncedTrackKey = "${prevTitle}_The Weeknd"
+            _positionMs.value = 0L
             _currentTrack.value = track.copy(
                 title = prevTitle,
                 artist = "The Weeknd",
@@ -529,8 +553,10 @@ object MediaPlaybackState {
 
     fun seekTo(positionMs: Long) {
         val track = _currentTrack.value
+        val clamped = positionMs.coerceIn(0L, track.durationMs.coerceAtLeast(0L))
+        _positionMs.value = clamped
         if (track.isSimulated) {
-            _currentTrack.value = track.copy(positionMs = positionMs.coerceIn(0L, track.durationMs))
+            _currentTrack.value = track.copy(positionMs = clamped)
             return
         }
         activeController?.transportControls?.seekTo(positionMs)
@@ -621,7 +647,12 @@ object MediaPlaybackState {
         progressTickerJob = playbackScope.launch {
             var previousTick = SystemClock.elapsedRealtime()
             while (isActive) {
-                delay(100L) // Progress is visual state; avoid rebuilding the full track 20 times a second.
+                // Suspend with zero wakeups while the display is off; snap position on wake.
+                if (!ScreenStateTracker.isScreenOn.value) {
+                    ScreenStateTracker.isScreenOn.first { it }
+                    previousTick = SystemClock.elapsedRealtime()
+                }
+                delay(100L)
                 val now = SystemClock.elapsedRealtime()
                 val elapsedMs = (now - previousTick).coerceAtLeast(0L)
                 previousTick = now
@@ -629,10 +660,10 @@ object MediaPlaybackState {
                 if (!current.isPlaying || current.durationMs <= 0L) continue
 
                 if (current.isSimulated) {
-                    val nextPos = (current.positionMs + elapsedMs).let {
+                    val nextPos = (_positionMs.value + elapsedMs).let {
                         if (it > current.durationMs) 0L else it
                     }
-                    _currentTrack.value = current.copy(positionMs = nextPos)
+                    _positionMs.value = nextPos
                 } else {
                     val controller = activeController ?: continue
                     val pbState = controller.playbackState ?: continue
@@ -644,7 +675,7 @@ object MediaPlaybackState {
                         } else 0L
                         val actualPos = (pbState.position + (elapsed * speed).toLong())
                             .coerceIn(0L, current.durationMs)
-                        _currentTrack.value = current.copy(positionMs = actualPos)
+                        _positionMs.value = actualPos
                     }
                 }
             }
@@ -667,6 +698,7 @@ object MediaPlaybackState {
         activeController = null
         sessionMetadata = null
         sessionArtwork = null
+        _positionMs.value = 0L
         _currentTrack.value = MediaTrackInfo()
     }
 }

@@ -36,6 +36,13 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         ForegroundAppTracker.updateFromAccessibility(event)
+        if (OverlayPreferences.hideInFullscreenFlow.value) {
+            FullscreenStateTracker.updateFromAccessibilityWindows(
+                context = this,
+                windows = runCatching { windows }.getOrNull(),
+                foregroundPackage = event.packageName?.toString(),
+            )
+        }
     }
 
     override fun onInterrupt() {
@@ -51,6 +58,7 @@ class DotAccessibilityService : AccessibilityService() {
 
         ScreenStateTracker.init(this)
         ForegroundAppTracker.init(this)
+        FullscreenStateTracker.updateOrientation(resources.configuration)
 
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -84,6 +92,7 @@ class DotAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        FullscreenStateTracker.updateOrientation(newConfig)
         overlayController?.onConfigurationChanged(newConfig)
     }
 
@@ -91,6 +100,7 @@ class DotAccessibilityService : AccessibilityService() {
         serviceJob.cancel()
         if (instance == this) instance = null
         _isServiceConnected.value = false
+        FullscreenStateTracker.reset()
         flashlightBroadcast.unregister(this)
         overlayController?.destroy()
         overlayController = null

@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.visualizer
 
+import ca.saboor.larpdot.ui.theme.LarpIcons
+
 import android.os.SystemClock
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -28,8 +30,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -259,26 +259,30 @@ fun rememberBpmPulse(
     currentPositionMs: Long,
     isPlaying: Boolean,
     enabled: Boolean = true,
+): State<Float> = rememberBpmPulse(
+    bpm = bpm,
+    positionMsProvider = { currentPositionMs },
+    isPlaying = isPlaying,
+    enabled = enabled,
+)
+
+/** Lambda-backed variant that reads live position inside frame callbacks without recomposing the caller. */
+@Composable
+fun rememberBpmPulse(
+    bpm: Float?,
+    positionMsProvider: () -> Long,
+    isPlaying: Boolean,
+    enabled: Boolean = true,
 ): State<Float> {
     val pulseState = remember { mutableFloatStateOf(0f) }
-
-    var lastReportedPos by remember { mutableLongStateOf(currentPositionMs) }
-    var lastReportedTime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-
-    val nowAnchor = SystemClock.elapsedRealtime()
-    val expectedAnchorMs = lastReportedPos + if (isPlaying) (nowAnchor - lastReportedTime) else 0L
-    if (abs(currentPositionMs - expectedAnchorMs) > 600L) {
-        lastReportedPos = currentPositionMs
-        lastReportedTime = nowAnchor
-    }
 
     LaunchedEffect(isPlaying, enabled, bpm) {
         if (!isPlaying || !enabled || bpm == null || bpm <= 0f) {
             pulseState.floatValue = 0f
             return@LaunchedEffect
         }
-        lastReportedPos = currentPositionMs
-        lastReportedTime = SystemClock.elapsedRealtime()
+        var lastReportedPos = positionMsProvider()
+        var lastReportedTime = SystemClock.elapsedRealtime()
 
         val safeBpm = bpm.toDouble().coerceIn(60.0, 240.0)
         val beatDurationMs = 60_000.0 / safeBpm
@@ -286,6 +290,12 @@ fun rememberBpmPulse(
         while (isActive && isPlaying && enabled) {
             withFrameNanos {
                 val now = SystemClock.elapsedRealtime()
+                val livePos = positionMsProvider()
+                val expectedAnchorMs = lastReportedPos + (now - lastReportedTime).coerceAtLeast(0L)
+                if (abs(livePos - expectedAnchorMs) > 600L) {
+                    lastReportedPos = livePos
+                    lastReportedTime = now
+                }
                 val elapsed = (now - lastReportedTime).coerceAtLeast(0L)
                 val exactMs = (lastReportedPos + elapsed).coerceAtLeast(0L)
 
@@ -333,7 +343,7 @@ fun BpmChip(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Speed,
+                imageVector = LarpIcons.Speed,
                 contentDescription = null,
                 tint = contentColor.copy(alpha = 0.88f),
                 modifier = Modifier.size(12.dp),

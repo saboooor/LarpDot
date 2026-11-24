@@ -1,0 +1,206 @@
+package ca.saboor.larpdot.service
+
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
+import org.junit.Assert.*
+import org.junit.Test
+
+class FeatureServicesTest {
+
+    @Test fun audioOutputPrefersExternalRoutesInPriorityOrder() {
+        val speaker = selectPrimaryAudioOutput(emptyList())
+        assertEquals(AudioOutputKind.PHONE_SPEAKER, speaker.kind)
+        assertFalse(speaker.isExternal)
+
+        val usb = AudioOutputDevice("usb:1", "USB-C DAC", AudioOutputKind.USB_AUDIO, true)
+        val buds = AudioOutputDevice("bt:1", "Pixel Buds Pro", AudioOutputKind.BLUETOOTH_AUDIO, true)
+        val car = AudioOutputDevice("car:1", "Car Audio", AudioOutputKind.CAR_AUDIO, true)
+
+        assertEquals(usb, selectPrimaryAudioOutput(listOf(usb)))
+        assertEquals(buds, selectPrimaryAudioOutput(listOf(usb, buds)))
+        assertEquals(car, selectPrimaryAudioOutput(listOf(usb, buds, car)))
+    }
+
+    @Test fun batteryFormatterHandlesUnitsTimeAndChargeLimit() {
+        // Microamps (Pixel/standard HAL) and milliamps (legacy HAL)
+        val microAmpWatts = BatteryStatusFormatter.estimateChargingWatts(-4_500_000, 4_200)!!
+        assertEquals(18.9f, microAmpWatts, 0.2f)
+        assertEquals("Fast Charging", BatteryStatusFormatter.classifyChargingTitle(microAmpWatts))
+
+        val superFastWatts = BatteryStatusFormatter.estimateChargingWatts(7_000_000, 4_300)!!
+        assertEquals("Super Fast Charging", BatteryStatusFormatter.classifyChargingTitle(superFastWatts))
+
+        val milliAmpWatts = BatteryStatusFormatter.estimateChargingWatts(2_000, 4_000)!!
+        assertEquals(8.0f, milliAmpWatts, 0.1f)
+        assertEquals("Charging", BatteryStatusFormatter.classifyChargingTitle(milliAmpWatts))
+
+        assertNull(BatteryStatusFormatter.estimateChargingWatts(0, 4_000))
+        assertEquals("1h 15m left", BatteryStatusFormatter.formatTimeRemaining(75 * 60_000L))
+        assertEquals("42m left", BatteryStatusFormatter.formatTimeRemaining(42 * 60_000L))
+        assertEquals("< 1m left", BatteryStatusFormatter.formatTimeRemaining(20_000L))
+        assertNull(BatteryStatusFormatter.formatTimeRemaining(-1L))
+
+        assertEquals(
+            "64% • 27W • 24m left",
+            BatteryStatusFormatter.buildChargingSubtitle(64, 27.1f, 24 * 60_000L),
+        )
+
+        assertTrue(BatteryStatusFormatter.shouldTriggerChargeLimit(true, 80, 80, false))
+        assertFalse(BatteryStatusFormatter.shouldTriggerChargeLimit(true, 79, 80, false))
+        assertFalse(BatteryStatusFormatter.shouldTriggerChargeLimit(true, 85, 80, true))
+        assertFalse(BatteryStatusFormatter.shouldTriggerChargeLimit(false, 90, 80, false))
+    }
+
+    @Test fun fullscreenDetectorClassifiesImmersiveAndGames() {
+        assertTrue(FullscreenStateTracker.isWindowCoveringScreen(0, 0, 1080, 2400, 1080, 2400))
+        assertFalse(FullscreenStateTracker.isWindowCoveringScreen(0, 100, 1080, 2400, 1080, 2400))
+        assertTrue(FullscreenStateTracker.isFullscreenState(appCoversFullScreen = true, statusBarVisible = false, isGame = false))
+        assertFalse(FullscreenStateTracker.isFullscreenState(appCoversFullScreen = true, statusBarVisible = true, isGame = false))
+        assertTrue(FullscreenStateTracker.isFullscreenState(appCoversFullScreen = false, statusBarVisible = true, isGame = true))
+    }
+
+    @Test fun screenshotCandidateMatchesPathsAndNames() {
+        assertTrue(ScreenshotPocketManager.isScreenshotCandidate("Pictures/Screenshots/", "IMG_001.png"))
+        assertTrue(ScreenshotPocketManager.isScreenshotCandidate("DCIM/", "Screenshot_20261123.png"))
+        assertFalse(ScreenshotPocketManager.isScreenshotCandidate("DCIM/Camera/", "PXL_20261123.jpg"))
+    }
+
+    @Test fun themePresetsRoundTripThroughJson() {
+        val original = IslandBackupConfig(
+            bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
+            smallerBubbles = true,
+            minimizedMaxWidthPercent = 84f,
+            islandCornerRadius = 42f,
+            islandSquircleEnabled = false,
+            expandedBackgroundOpacity = 0.6f,
+            backdropBlurEnabled = true,
+            backdropBlurRadius = 36f,
+            cameraCoverStyle = OverlayPreferences.CameraCoverStyle.CANOPY,
+            islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
+            islandFontWeight = 700,
+            showMinimizedTitle = true,
+            cutoutManualEnabled = true,
+            cutoutOffsetX = -4f,
+            cutoutOffsetY = 6f,
+            cutoutDiameterDp = 26f,
+        )
+        val json = IslandThemePresets.toJson(original)
+        val decoded = IslandThemePresets.fromJson(json)
+        assertNotNull(decoded)
+        assertEquals(original, decoded)
+        assertNull(IslandThemePresets.fromJson("not json"))
+        assertEquals(4, IslandThemePresets.builtInPresets.size)
+    }
+
+    @Test fun bluetoothFilterHidesFindHubTrackersPhonesAndUnbondedPeers() {
+        // Real accessories are shown: earbuds (even with Find Hub FMDN UUID), watches, controllers, BLE HID, LE Audio.
+        assertTrue(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.AUDIO_VIDEO,
+                uuids = listOf(
+                    "0000110b-0000-1000-8000-00805f9b34fb",
+                    "0000feaa-0000-1000-8000-00805f9b34fb",
+                ),
+                displayName = "Pixel Buds Pro 2",
+            ),
+        )
+        assertTrue(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.WEARABLE,
+                uuids = emptyList(),
+                displayName = "Saboor's Pixel Watch 5",
+            ),
+        )
+        assertTrue(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.PERIPHERAL,
+                uuids = emptyList(),
+                displayName = "DualSense Wireless Controller",
+            ),
+        )
+        assertTrue(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.UNCATEGORIZED,
+                uuids = listOf("00001812-0000-1000-8000-00805f9b34fb"),
+                displayName = "MX Master 3S",
+            ),
+        )
+        assertTrue(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = null,
+                uuids = listOf("0000184e-0000-1000-8000-00805f9b34fb"),
+                displayName = "LE Audio Buds",
+            ),
+        )
+
+        // Find Hub items (both unbonded BLE check-ins and bonded GATT-only trackers) are hidden.
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_NONE,
+                majorDeviceClass = BluetoothClass.Device.Major.UNCATEGORIZED,
+                uuids = listOf("0000feaa-0000-1000-8000-00805f9b34fb"),
+                displayName = "Keys",
+            ),
+        )
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.UNCATEGORIZED,
+                uuids = listOf(
+                    "0000fe2c-0000-1000-8000-00805f9b34fb",
+                    "0000feaa-0000-1000-8000-00805f9b34fb",
+                    "15190001-12f4-c226-88ed-2ac5579f2a85",
+                ),
+                displayName = "Moto Tag",
+            ),
+        )
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.PERIPHERAL,
+                uuids = listOf("15190001-12f4-c226-88ed-2ac5579f2a85"),
+                displayName = "Pebblebee Clip",
+            ),
+        )
+
+        // Phones, Phone Hub laptops, and unnamed / raw-MAC BLE devices are hidden.
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.PHONE,
+                uuids = listOf("0000110a-0000-1000-8000-00805f9b34fb"),
+                displayName = "Pixel 9 Pro",
+            ),
+        )
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.PHONE,
+                uuids = emptyList(),
+                displayName = "Pixel 9 Pro",
+                isProfileAudioEvent = true,
+            ),
+        )
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.COMPUTER,
+                uuids = emptyList(),
+                displayName = "Chromebook",
+            ),
+        )
+        assertFalse(
+            shouldSurfaceBluetoothDevice(
+                bondState = BluetoothDevice.BOND_BONDED,
+                majorDeviceClass = BluetoothClass.Device.Major.AUDIO_VIDEO,
+                uuids = emptyList(),
+                displayName = "AA:BB:CC:DD:EE:FF",
+            ),
+        )
+    }
+}

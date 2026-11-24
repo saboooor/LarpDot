@@ -34,6 +34,16 @@ object OverlayPreferences {
     private const val KEY_ALBUM_ART_GLOW = "album_art_glow"
     private const val KEY_EXPANDED_PLAYER_LAYOUT = "expanded_player_layout"
     private const val KEY_SHOW_PROGRESS_SQUIGGLES = "show_progress_squiggles"
+    private const val KEY_PROGRESS_BAR_ACCENT_COLOR = "progress_bar_accent_color"
+    private const val KEY_PLAYBACK_PLAY_PAUSE_BG = "playback_play_pause_bg"
+    private const val KEY_PLAYBACK_PLAY_PAUSE_ACCENT = "playback_play_pause_accent"
+    private const val KEY_PLAYBACK_SKIP_BG = "playback_skip_bg"
+    private const val KEY_PLAYBACK_CORNER_RADIUS = "playback_corner_radius"
+    private const val KEY_PLAYBACK_M3_BUTTON_GROUP = "playback_m3_button_group"
+    private const val KEY_TRACK_INFO_SHOW_TITLE = "track_info_show_title"
+    private const val KEY_TRACK_INFO_SHOW_ARTIST = "track_info_show_artist"
+    private const val KEY_TRACK_INFO_SHOW_ALBUM = "track_info_show_album"
+    private const val KEY_TRACK_INFO_TITLE_ACCENT = "track_info_title_accent"
     private const val KEY_SHOW_MINIMIZED_VISUALIZER = "show_minimized_visualizer"
     private const val KEY_SHOW_EXPANDED_TRACK_INFO = "show_expanded_track_info"
     private const val KEY_SHOW_EXPANDED_PROGRESS = "show_expanded_progress"
@@ -57,6 +67,8 @@ object OverlayPreferences {
     private const val KEY_EXPANDED_GLOW_BOTTOM = "expanded_glow_bottom"
     private const val KEY_EXPANDED_GLOW_TOP = "expanded_glow_top"
     private const val KEY_BPM_PULSE_ENABLED = "bpm_pulse_enabled"
+    private const val KEY_MINIMIZED_BPM_PULSE_ENABLED = "minimized_bpm_pulse_enabled"
+    private const val KEY_EXPANDED_BPM_PULSE_ENABLED = "expanded_bpm_pulse_enabled"
     private const val KEY_PULSE_ENTIRE_ISLAND_ENABLED = "pulse_entire_island_enabled"
     private const val KEY_PULSE_AMOUNT = "pulse_amount"
     const val DEFAULT_PULSE_AMOUNT = 1.0f
@@ -66,7 +78,16 @@ object OverlayPreferences {
     private const val KEY_NOTIFICATION_BATTERY_LOW_ENABLED = "notification_battery_low_enabled"
     private const val KEY_NOTIFICATION_SOUND_MODE_ENABLED = "notification_sound_mode_enabled"
     private const val KEY_NOTIFICATION_BLUETOOTH_ENABLED = "notification_bluetooth_enabled"
+    private const val KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED = "notification_audio_output_enabled"
+    private const val KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED = "notification_screenshot_pocket_enabled"
+    private const val KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED = "notification_charge_limit_alert_enabled"
+    private const val KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT = "notification_charge_limit_percent"
     private const val KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED = "notification_permanent_short_term_enabled"
+    private const val KEY_NOTIFICATION_EXPAND_SHORT_TERM = "notification_expand_short_term"
+    private const val KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED = "notification_progress_outline_enabled"
+    private const val KEY_HIDE_IN_FULLSCREEN = "hide_in_fullscreen"
+    private const val KEY_HIDE_IN_LANDSCAPE = "hide_in_landscape"
+    private const val KEY_ISLAND_PRIORITY_ORDER = "island_priority_order"
 
     enum class IslandFontStyle(val label: String) {
         DEFAULT("Default"),
@@ -278,8 +299,32 @@ object OverlayPreferences {
     private val _expandedPlayerLayoutFlow = MutableStateFlow(ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS)
     val expandedPlayerLayoutFlow: StateFlow<ExpandedPlayerLayout> = _expandedPlayerLayoutFlow.asStateFlow()
 
+    data class PlaybackControlsStyle(
+        val playPauseBackground: Boolean = true,
+        val playPauseAccentColor: Boolean = false,
+        val skipBackground: Boolean = false,
+        val cornerRadiusDp: Float = 20f,
+        val material3ButtonGroup: Boolean = false,
+    )
+
+    data class TrackInfoStyle(
+        val showTitle: Boolean = true,
+        val showArtist: Boolean = true,
+        val showAlbum: Boolean = false,
+        val titleAccentColor: Boolean = false,
+    )
+
     private val _showProgressSquigglesFlow = MutableStateFlow(true)
     val showProgressSquigglesFlow: StateFlow<Boolean> = _showProgressSquigglesFlow.asStateFlow()
+
+    private val _progressBarAccentColorFlow = MutableStateFlow(true)
+    val progressBarAccentColorFlow: StateFlow<Boolean> = _progressBarAccentColorFlow.asStateFlow()
+
+    private val _playbackControlsStyleFlow = MutableStateFlow(PlaybackControlsStyle())
+    val playbackControlsStyleFlow: StateFlow<PlaybackControlsStyle> = _playbackControlsStyleFlow.asStateFlow()
+
+    private val _trackInfoStyleFlow = MutableStateFlow(TrackInfoStyle())
+    val trackInfoStyleFlow: StateFlow<TrackInfoStyle> = _trackInfoStyleFlow.asStateFlow()
 
     private val _showMinimizedVisualizerFlow = MutableStateFlow(true)
     val showMinimizedVisualizerFlow: StateFlow<Boolean> = _showMinimizedVisualizerFlow.asStateFlow()
@@ -318,6 +363,12 @@ object OverlayPreferences {
     private val _bpmPulseEnabledFlow = MutableStateFlow(true)
     val bpmPulseEnabledFlow: StateFlow<Boolean> = _bpmPulseEnabledFlow.asStateFlow()
 
+    private val _minimizedBpmPulseEnabledFlow = MutableStateFlow(true)
+    val minimizedBpmPulseEnabledFlow: StateFlow<Boolean> = _minimizedBpmPulseEnabledFlow.asStateFlow()
+
+    private val _expandedBpmPulseEnabledFlow = MutableStateFlow(true)
+    val expandedBpmPulseEnabledFlow: StateFlow<Boolean> = _expandedBpmPulseEnabledFlow.asStateFlow()
+
     private val _pulseEntireIslandEnabledFlow = MutableStateFlow(false)
     val pulseEntireIslandEnabledFlow: StateFlow<Boolean> = _pulseEntireIslandEnabledFlow.asStateFlow()
 
@@ -351,6 +402,12 @@ object OverlayPreferences {
     private val _hideOnLockScreenFlow = MutableStateFlow(false)
     val hideOnLockScreenFlow: StateFlow<Boolean> = _hideOnLockScreenFlow.asStateFlow()
 
+    private val _hideInFullscreenFlow = MutableStateFlow(false)
+    val hideInFullscreenFlow: StateFlow<Boolean> = _hideInFullscreenFlow.asStateFlow()
+
+    private val _hideInLandscapeFlow = MutableStateFlow(false)
+    val hideInLandscapeFlow: StateFlow<Boolean> = _hideInLandscapeFlow.asStateFlow()
+
     private val _hideMusicWhenAppOpenFlow = MutableStateFlow(true)
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = _hideMusicWhenAppOpenFlow.asStateFlow()
 
@@ -363,6 +420,11 @@ object OverlayPreferences {
     private val _notificationActivitySettingsFlow = MutableStateFlow(NotificationActivitySettings())
     val notificationActivitySettingsFlow: StateFlow<NotificationActivitySettings> =
         _notificationActivitySettingsFlow.asStateFlow()
+
+    private val _islandPriorityOrderFlow = MutableStateFlow(ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER)
+    val islandPriorityOrderFlow: StateFlow<List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>> =
+        _islandPriorityOrderFlow.asStateFlow()
+    private var isIslandPriorityOrderInitialized = false
 
     private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
     val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
@@ -515,6 +577,8 @@ object OverlayPreferences {
         isShowSongAnnouncementEnabled(context)
         _islandFontWeightFlow.value = getPrefs(context).getInt("island_font_weight", 400).coerceIn(100, 900)
         getFlashlightExpandedStyle(context)
+        isFlashlightBeamBlurEnabled(context)
+        isFlashlightBeamAccentColorEnabled(context)
         getIslandFontStyle(context)
         getPulseAmount(context)
         isMinimizedNestedBlurredBgEnabled(context)
@@ -524,6 +588,9 @@ object OverlayPreferences {
         _albumArtGlowFlow.value = getPrefs(context).getBoolean(KEY_ALBUM_ART_GLOW, false)
         getExpandedPlayerLayout(context)
         isShowProgressSquigglesEnabled(context)
+        isProgressBarAccentColorEnabled(context)
+        getPlaybackControlsStyle(context)
+        getTrackInfoStyle(context)
         isShowMinimizedVisualizerEnabled(context)
         getExpandedElementVisibility(context)
         getMinimizedAlbumArtShape(context)
@@ -534,6 +601,8 @@ object OverlayPreferences {
         isShowExpandedDominantColorGlowEnabled(context)
         getExpandedGlowSides(context)
         isBpmPulseEnabled(context)
+        isMinimizedBpmPulseEnabled(context)
+        isExpandedBpmPulseEnabled(context)
         isPulseEntireIslandEnabled(context)
         getCameraCoverStyle(context)
         getWaveformBandCount(context)
@@ -773,6 +842,8 @@ object OverlayPreferences {
         isExpandedPlayerLayoutInitialized = true
     }
 
+    private var isProgressBarAccentColorInitialized = false
+
     fun isShowProgressSquigglesEnabled(context: Context): Boolean {
         if (!isShowProgressSquigglesInitialized) {
             _showProgressSquigglesFlow.value = getPrefs(context).getBoolean(KEY_SHOW_PROGRESS_SQUIGGLES, true)
@@ -785,6 +856,76 @@ object OverlayPreferences {
         getPrefs(context).edit().putBoolean(KEY_SHOW_PROGRESS_SQUIGGLES, enabled).apply()
         _showProgressSquigglesFlow.value = enabled
         isShowProgressSquigglesInitialized = true
+    }
+
+    private var isPlaybackControlsStyleInitialized = false
+    private var isTrackInfoStyleInitialized = false
+
+    fun isProgressBarAccentColorEnabled(context: Context): Boolean {
+        if (!isProgressBarAccentColorInitialized) {
+            _progressBarAccentColorFlow.value = getPrefs(context).getBoolean(KEY_PROGRESS_BAR_ACCENT_COLOR, true)
+            isProgressBarAccentColorInitialized = true
+        }
+        return _progressBarAccentColorFlow.value
+    }
+
+    fun setProgressBarAccentColorEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_PROGRESS_BAR_ACCENT_COLOR, enabled).apply()
+        _progressBarAccentColorFlow.value = enabled
+        isProgressBarAccentColorInitialized = true
+    }
+
+    fun getPlaybackControlsStyle(context: Context): PlaybackControlsStyle {
+        if (!isPlaybackControlsStyleInitialized) {
+            val prefs = getPrefs(context)
+            _playbackControlsStyleFlow.value = PlaybackControlsStyle(
+                playPauseBackground = prefs.getBoolean(KEY_PLAYBACK_PLAY_PAUSE_BG, true),
+                playPauseAccentColor = prefs.getBoolean(KEY_PLAYBACK_PLAY_PAUSE_ACCENT, false),
+                skipBackground = prefs.getBoolean(KEY_PLAYBACK_SKIP_BG, false),
+                cornerRadiusDp = prefs.getFloat(KEY_PLAYBACK_CORNER_RADIUS, 20f).coerceIn(0f, 32f),
+                material3ButtonGroup = prefs.getBoolean(KEY_PLAYBACK_M3_BUTTON_GROUP, false),
+            )
+            isPlaybackControlsStyleInitialized = true
+        }
+        return _playbackControlsStyleFlow.value
+    }
+
+    fun setPlaybackControlsStyle(context: Context, style: PlaybackControlsStyle) {
+        val clamped = style.copy(cornerRadiusDp = style.cornerRadiusDp.coerceIn(0f, 32f))
+        getPrefs(context).edit()
+            .putBoolean(KEY_PLAYBACK_PLAY_PAUSE_BG, clamped.playPauseBackground)
+            .putBoolean(KEY_PLAYBACK_PLAY_PAUSE_ACCENT, clamped.playPauseAccentColor)
+            .putBoolean(KEY_PLAYBACK_SKIP_BG, clamped.skipBackground)
+            .putFloat(KEY_PLAYBACK_CORNER_RADIUS, clamped.cornerRadiusDp)
+            .putBoolean(KEY_PLAYBACK_M3_BUTTON_GROUP, clamped.material3ButtonGroup)
+            .apply()
+        _playbackControlsStyleFlow.value = clamped
+        isPlaybackControlsStyleInitialized = true
+    }
+
+    fun getTrackInfoStyle(context: Context): TrackInfoStyle {
+        if (!isTrackInfoStyleInitialized) {
+            val prefs = getPrefs(context)
+            _trackInfoStyleFlow.value = TrackInfoStyle(
+                showTitle = prefs.getBoolean(KEY_TRACK_INFO_SHOW_TITLE, true),
+                showArtist = prefs.getBoolean(KEY_TRACK_INFO_SHOW_ARTIST, true),
+                showAlbum = prefs.getBoolean(KEY_TRACK_INFO_SHOW_ALBUM, false),
+                titleAccentColor = prefs.getBoolean(KEY_TRACK_INFO_TITLE_ACCENT, false),
+            )
+            isTrackInfoStyleInitialized = true
+        }
+        return _trackInfoStyleFlow.value
+    }
+
+    fun setTrackInfoStyle(context: Context, style: TrackInfoStyle) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_TRACK_INFO_SHOW_TITLE, style.showTitle)
+            .putBoolean(KEY_TRACK_INFO_SHOW_ARTIST, style.showArtist)
+            .putBoolean(KEY_TRACK_INFO_SHOW_ALBUM, style.showAlbum)
+            .putBoolean(KEY_TRACK_INFO_TITLE_ACCENT, style.titleAccentColor)
+            .apply()
+        _trackInfoStyleFlow.value = style
+        isTrackInfoStyleInitialized = true
     }
 
     fun isShowMinimizedVisualizerEnabled(context: Context): Boolean {
@@ -998,6 +1139,9 @@ object OverlayPreferences {
         isExpandedGlowSidesInitialized = true
     }
 
+    private var isMinimizedBpmPulseInitialized = false
+    private var isExpandedBpmPulseInitialized = false
+
     fun isBpmPulseEnabled(context: Context): Boolean {
         if (!isBpmPulseEnabledInitialized) {
             val prefs = getPrefs(context)
@@ -1009,9 +1153,49 @@ object OverlayPreferences {
     }
 
     fun setBpmPulseEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_BPM_PULSE_ENABLED, enabled).apply()
+        getPrefs(context).edit()
+            .putBoolean(KEY_BPM_PULSE_ENABLED, enabled)
+            .putBoolean(KEY_MINIMIZED_BPM_PULSE_ENABLED, enabled)
+            .putBoolean(KEY_EXPANDED_BPM_PULSE_ENABLED, enabled)
+            .apply()
         _bpmPulseEnabledFlow.value = enabled
+        _minimizedBpmPulseEnabledFlow.value = enabled
+        _expandedBpmPulseEnabledFlow.value = enabled
         isBpmPulseEnabledInitialized = true
+        isMinimizedBpmPulseInitialized = true
+        isExpandedBpmPulseInitialized = true
+    }
+
+    fun isMinimizedBpmPulseEnabled(context: Context): Boolean {
+        if (!isMinimizedBpmPulseInitialized) {
+            val prefs = getPrefs(context)
+            val fallback = prefs.getBoolean(KEY_BPM_PULSE_ENABLED, true)
+            _minimizedBpmPulseEnabledFlow.value = prefs.getBoolean(KEY_MINIMIZED_BPM_PULSE_ENABLED, fallback)
+            isMinimizedBpmPulseInitialized = true
+        }
+        return _minimizedBpmPulseEnabledFlow.value
+    }
+
+    fun setMinimizedBpmPulseEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_MINIMIZED_BPM_PULSE_ENABLED, enabled).apply()
+        _minimizedBpmPulseEnabledFlow.value = enabled
+        isMinimizedBpmPulseInitialized = true
+    }
+
+    fun isExpandedBpmPulseEnabled(context: Context): Boolean {
+        if (!isExpandedBpmPulseInitialized) {
+            val prefs = getPrefs(context)
+            val fallback = prefs.getBoolean(KEY_BPM_PULSE_ENABLED, true)
+            _expandedBpmPulseEnabledFlow.value = prefs.getBoolean(KEY_EXPANDED_BPM_PULSE_ENABLED, fallback)
+            isExpandedBpmPulseInitialized = true
+        }
+        return _expandedBpmPulseEnabledFlow.value
+    }
+
+    fun setExpandedBpmPulseEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_EXPANDED_BPM_PULSE_ENABLED, enabled).apply()
+        _expandedBpmPulseEnabledFlow.value = enabled
+        isExpandedBpmPulseInitialized = true
     }
 
     fun isPulseEntireIslandEnabled(context: Context): Boolean {
@@ -1056,13 +1240,32 @@ object OverlayPreferences {
     }
 
     enum class FlashlightExpandedStyle(val label: String) {
-        BEAM("Beam"), SLIDER("Slider"), BLURRED_BEAM("Blurred beam")
+        BEAM("Beam"), SLIDER("Slider")
     }
     private val _flashlightExpandedStyleFlow = MutableStateFlow(FlashlightExpandedStyle.BEAM)
     val flashlightExpandedStyleFlow = _flashlightExpandedStyleFlow.asStateFlow()
 
+    private const val KEY_FLASHLIGHT_BEAM_BLUR = "flashlight_beam_blur"
+    private const val KEY_FLASHLIGHT_BEAM_ACCENT_COLOR = "flashlight_beam_accent_color"
+
+    private val _flashlightBeamBlurFlow = MutableStateFlow(false)
+    val flashlightBeamBlurFlow: StateFlow<Boolean> = _flashlightBeamBlurFlow.asStateFlow()
+
+    private val _flashlightBeamAccentColorFlow = MutableStateFlow(true)
+    val flashlightBeamAccentColorFlow: StateFlow<Boolean> = _flashlightBeamAccentColorFlow.asStateFlow()
+
     fun getFlashlightExpandedStyle(context: Context): FlashlightExpandedStyle {
-        val saved = getPrefs(context).getString("flashlight_expanded_style", null)
+        val prefs = getPrefs(context)
+        val saved = prefs.getString("flashlight_expanded_style", null)
+        if (saved == "BLURRED_BEAM") {
+            if (!prefs.contains(KEY_FLASHLIGHT_BEAM_BLUR)) {
+                prefs.edit().putBoolean(KEY_FLASHLIGHT_BEAM_BLUR, true).apply()
+                _flashlightBeamBlurFlow.value = true
+            }
+            prefs.edit().putString("flashlight_expanded_style", FlashlightExpandedStyle.BEAM.name).apply()
+            _flashlightExpandedStyleFlow.value = FlashlightExpandedStyle.BEAM
+            return FlashlightExpandedStyle.BEAM
+        }
         _flashlightExpandedStyleFlow.value = FlashlightExpandedStyle.entries.firstOrNull { it.name == saved }
             ?: FlashlightExpandedStyle.BEAM
         return _flashlightExpandedStyleFlow.value
@@ -1071,6 +1274,28 @@ object OverlayPreferences {
     fun setFlashlightExpandedStyle(context: Context, style: FlashlightExpandedStyle) {
         getPrefs(context).edit().putString("flashlight_expanded_style", style.name).apply()
         _flashlightExpandedStyleFlow.value = style
+    }
+
+    fun isFlashlightBeamBlurEnabled(context: Context): Boolean {
+        val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BEAM_BLUR, false)
+        _flashlightBeamBlurFlow.value = enabled
+        return enabled
+    }
+
+    fun setFlashlightBeamBlurEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BEAM_BLUR, enabled).apply()
+        _flashlightBeamBlurFlow.value = enabled
+    }
+
+    fun isFlashlightBeamAccentColorEnabled(context: Context): Boolean {
+        val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BEAM_ACCENT_COLOR, true)
+        _flashlightBeamAccentColorFlow.value = enabled
+        return enabled
+    }
+
+    fun setFlashlightBeamAccentColorEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BEAM_ACCENT_COLOR, enabled).apply()
+        _flashlightBeamAccentColorFlow.value = enabled
     }
 
     fun getIslandFontStyle(context: Context): IslandFontStyle {
@@ -1275,6 +1500,39 @@ object OverlayPreferences {
         isHideOnLockScreenInitialized = true
     }
 
+    private var isHideInFullscreenInitialized = false
+    private var isHideInLandscapeInitialized = false
+
+    fun isHideInFullscreenEnabled(context: Context): Boolean {
+        if (!isHideInFullscreenInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_HIDE_IN_FULLSCREEN, false)
+            _hideInFullscreenFlow.value = enabled
+            isHideInFullscreenInitialized = true
+        }
+        return _hideInFullscreenFlow.value
+    }
+
+    fun setHideInFullscreenEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_HIDE_IN_FULLSCREEN, enabled).apply()
+        _hideInFullscreenFlow.value = enabled
+        isHideInFullscreenInitialized = true
+    }
+
+    fun isHideInLandscapeEnabled(context: Context): Boolean {
+        if (!isHideInLandscapeInitialized) {
+            val enabled = getPrefs(context).getBoolean(KEY_HIDE_IN_LANDSCAPE, false)
+            _hideInLandscapeFlow.value = enabled
+            isHideInLandscapeInitialized = true
+        }
+        return _hideInLandscapeFlow.value
+    }
+
+    fun setHideInLandscapeEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_HIDE_IN_LANDSCAPE, enabled).apply()
+        _hideInLandscapeFlow.value = enabled
+        isHideInLandscapeInitialized = true
+    }
+
     fun isHideMusicWhenAppOpenEnabled(context: Context): Boolean {
         if (!isHideMusicWhenAppOpenInitialized) {
             val enabled = getPrefs(context).getBoolean(KEY_HIDE_MUSIC_WHEN_APP_OPEN, true)
@@ -1303,12 +1561,19 @@ object OverlayPreferences {
                 batteryLow = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, true),
                 soundMode = prefs.getBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, true),
                 bluetooth = prefs.getBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, true),
+                audioOutput = prefs.getBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, true),
+                screenshotPocket = prefs.getBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, true),
+                chargeLimitAlert = prefs.getBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, false),
+                chargeLimitPercent = prefs.getInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, 80).coerceIn(50, 100),
                 permanentShortTerm = prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false),
                 permanentCharging = prefs.getBoolean("permanent_charging", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
                 permanentLowBattery = prefs.getBoolean("permanent_lowbattery", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
                 permanentSoundMode = prefs.getBoolean("permanent_soundmode", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
                 permanentBluetooth = prefs.getBoolean("permanent_bluetooth", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
-
+                permanentAudioOutput = prefs.getBoolean("permanent_audio_output", false),
+                permanentScreenshotPocket = prefs.getBoolean("permanent_screenshot_pocket", false),
+                expandShortTermAlerts = prefs.getBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, false),
+                progressOutline = prefs.getBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, true),
             )
             isNotificationActivitySettingsInitialized = true
         }
@@ -1329,16 +1594,27 @@ object OverlayPreferences {
             .putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
             .putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
             .putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
+            .putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
+            .putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
+            .putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
+            .putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
             .putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
             .putBoolean("permanent_charging", settings.permanentCharging)
             .putBoolean("permanent_lowbattery", settings.permanentLowBattery)
             .putBoolean("permanent_soundmode", settings.permanentSoundMode)
             .putBoolean("permanent_bluetooth", settings.permanentBluetooth)
-
+            .putBoolean("permanent_audio_output", settings.permanentAudioOutput)
+            .putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
+            .putBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, settings.expandShortTermAlerts)
+            .putBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, settings.progressOutline)
             .apply()
         _notificationActivitySettingsFlow.value = settings
         isNotificationActivitySettingsInitialized = true
         NotificationActivityState.configure(settings)
+        ScreenshotPocketManager.syncObserver(context)
+        if (settings.permanentBluetooth) {
+            SystemEventManager.syncConnectedBluetoothDevices(context)
+        }
     }
 
     fun getWaveformBandCount(context: Context): Int {
@@ -1525,5 +1801,31 @@ object OverlayPreferences {
 
     fun clearBlacklistedPackages(context: Context) {
         setBlacklistedPackages(context, emptySet())
+    }
+
+    fun getIslandPriorityOrder(context: Context): List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem> {
+        if (!isIslandPriorityOrderInitialized) {
+            val raw = getPrefs(context).getString(KEY_ISLAND_PRIORITY_ORDER, null)
+            val parsed = raw?.split(",")
+                ?.mapNotNull { token ->
+                    ca.saboor.larpdot.ui.overlay.IslandPriorityItem.entries.firstOrNull { it.name == token.trim() }
+                }
+                .orEmpty()
+            _islandPriorityOrderFlow.value = ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder(parsed)
+            isIslandPriorityOrderInitialized = true
+        }
+        return _islandPriorityOrderFlow.value
+    }
+
+    fun setIslandPriorityOrder(
+        context: Context,
+        order: List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>,
+    ) {
+        val normalized = ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder(order)
+        getPrefs(context).edit()
+            .putString(KEY_ISLAND_PRIORITY_ORDER, normalized.joinToString(",") { it.name })
+            .apply()
+        _islandPriorityOrderFlow.value = normalized
+        isIslandPriorityOrderInitialized = true
     }
 }

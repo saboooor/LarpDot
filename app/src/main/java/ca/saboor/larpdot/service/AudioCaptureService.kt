@@ -27,6 +27,7 @@ import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.exp
@@ -88,7 +89,7 @@ class AudioCaptureService : Service() {
             stopSelf()
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startForegroundWithNotification() {
@@ -199,7 +200,7 @@ class AudioCaptureService : Service() {
         }
     }
 
-    private fun readAudioLoop(record: AudioRecord, sampleRate: Int, numBands: Int) {
+    private suspend fun readAudioLoop(record: AudioRecord, sampleRate: Int, numBands: Int) {
         val safeBands = numBands.coerceIn(1, 32)
         val numCutoffs = (safeBands - 1).coerceAtLeast(1)
         val cutoffs = when (safeBands) {
@@ -228,16 +229,26 @@ class AudioCaptureService : Service() {
 
         val lp1 = DoubleArray(numCutoffs)
         val lp2 = DoubleArray(numCutoffs)
+        val sumSq = DoubleArray(safeBands)
 
         // Read in ~23ms chunks (1024 samples at 44.1kHz)
         val shortBuffer = ShortArray(1024)
         val bandPeaks = FloatArray(safeBands) { 0.08f }
 
         while (isRecording && serviceScope.isActive) {
+            // Pause hardware audio capture while the screen is off to save battery.
+            if (!ScreenStateTracker.isScreenOn.value) {
+                runCatching { record.stop() }
+                ScreenStateTracker.isScreenOn.first { it }
+                if (!isRecording || !serviceScope.isActive) break
+                val resumed = runCatching { record.startRecording(); true }.getOrDefault(false)
+                if (!resumed) break
+            }
+
             val samplesRead = record.read(shortBuffer, 0, shortBuffer.size)
             if (samplesRead <= 0) continue
 
-            val sumSq = DoubleArray(safeBands)
+            sumSq.fill(0.0)
 
             for (i in 0 until samplesRead) {
                 val sample = shortBuffer[i].toDouble() / 32768.0

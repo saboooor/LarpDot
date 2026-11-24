@@ -14,16 +14,24 @@ fun IslandPreview(
     cutoutInfo: CutoutInfo,
     type: IslandPreviewType,
     modifier: Modifier = Modifier,
+    selectedMusicElement: MusicPreviewElement? = null,
+    onMusicElementClick: ((MusicPreviewElement) -> Unit)? = null,
+    selectedFlashlightElement: FlashlightPreviewElement? = null,
+    onFlashlightElementClick: ((FlashlightPreviewElement) -> Unit)? = null,
 ) {
     when (type) {
         IslandPreviewType.MUSIC -> ExpandedIslandPreview(
             cutoutInfo = cutoutInfo,
             modifier = modifier,
+            selectedElement = selectedMusicElement,
+            onElementClick = onMusicElementClick,
         )
 
         IslandPreviewType.FLASHLIGHT -> FlashlightIslandPreview(
             cutoutInfo = cutoutInfo,
             modifier = modifier,
+            selectedElement = selectedFlashlightElement,
+            onElementClick = onFlashlightElementClick,
         )
     }
 }

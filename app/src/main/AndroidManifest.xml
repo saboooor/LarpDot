@@ -28,6 +28,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Optional photo access for zero-step Screenshot Pocket -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -109,6 +113,38 @@
                 <action android:name="ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT" />
             </intent-filter>
         </receiver>
+
+        <!-- Quick Settings Tile to toggle the Dynamic Island overlay -->
+        <service
+            android:name=".service.IslandTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_island"
+            android:label="@string/qs_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Share target ("Hold in Island") for tucking photos/files into the island pocket -->
+        <activity
+            android:name=".service.ShareToIslandActivity"
+            android:exported="true"
+            android:label="@string/hold_in_island_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
 
     </application>
 
