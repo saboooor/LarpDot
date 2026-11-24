@@ -110,6 +110,28 @@ class FeatureServicesTest {
             flashlightBeamBlur = true,
             flashlightBeamAccentColor = false,
             flashlightTapToToggle = false,
+            musicPauseTimeoutSeconds = 30,
+            activitiesEnabled = true,
+            activityProgress = false,
+            activityNavigation = true,
+            activityCalls = true,
+            activityTimers = false,
+            activityBatteryCharging = true,
+            activityBatteryLow = false,
+            activitySoundMode = true,
+            activityBluetooth = true,
+            activityAudioOutput = false,
+            activityScreenshotPocket = true,
+            activityChargeLimitAlert = true,
+            activityChargeLimitPercent = 85,
+            activityPermanentCharging = true,
+            activityPermanentLowBattery = false,
+            activityPermanentSoundMode = true,
+            activityPermanentBluetooth = true,
+            activityPermanentAudioOutput = false,
+            activityPermanentScreenshotPocket = true,
+            activityExpandShortTerm = true,
+            activityProgressOutline = false,
             islandPriorityOrder = listOf(
                 ca.saboor.larpdot.ui.overlay.IslandPriorityItem.NAVIGATION,
                 ca.saboor.larpdot.ui.overlay.IslandPriorityItem.MEDIA,
@@ -137,6 +159,14 @@ class FeatureServicesTest {
         assertEquals(0L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_120L, lastRunMs = 1_000L))
         assertEquals(80L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_040L, lastRunMs = 1_000L))
         assertEquals(120L, DotAccessibilityService.fullscreenCheckDelayMs(nowMs = 1_000L, lastRunMs = 1_000L))
+    }
+
+    @Test fun musicPauseGraceDelayResolvesTimeoutAndKeepForever() {
+        assertEquals(5_000L, ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(5))
+        assertEquals(30_000L, ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(30))
+        assertEquals(60_000L, ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(60))
+        assertNull(ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(0))
+        assertNull(ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(-5))
     }
 
     @Test fun playPauseIconTintAdaptsToAccentLuminance() {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -109,6 +110,8 @@ internal fun Modifier.artworkTile(
     }
 }
 
+private val FADE_MASK_COLORS = listOf(Color.White, Color.Transparent)
+
 @Composable
 internal fun TravelingArtwork(
     bitmap: ImageBitmap,
@@ -117,6 +120,8 @@ internal fun TravelingArtwork(
     isLandscape: Boolean = false,
     modifier: Modifier,
 ) {
+    val layerPaint = remember { Paint() }
+    val reusablePath = remember { Path() }
     Canvas(modifier) {
         val progress = motion.progress
         if (progress <= 0f || progress >= 1f) return@Canvas
@@ -153,13 +158,13 @@ internal fun TravelingArtwork(
         translate(tileCenter.x - tileSize.width / 2f, tileCenter.y - tileSize.height / 2f) {
             drawMovingAlbumArtGlow(glow, tileSize, opacity)
             if (start.style == end.style) {
-                drawArtwork(bitmap, tileSize, start.style, opacity)
+                drawArtwork(bitmap, tileSize, start.style, opacity, layerPaint, reusablePath)
             } else {
                 // Mix the masks over a transparent layer to keep their overlap at full opacity.
                 drawIntoCanvas { canvas ->
-                    canvas.saveLayer(Rect(Offset.Zero, tileSize), Paint())
-                    drawArtwork(bitmap, tileSize, start.style, opacity * (1f - styleMix))
-                    drawArtwork(bitmap, tileSize, end.style, opacity * styleMix, BlendMode.Plus)
+                    canvas.saveLayer(Rect(Offset.Zero, tileSize), layerPaint)
+                    drawArtwork(bitmap, tileSize, start.style, opacity * (1f - styleMix), layerPaint, reusablePath)
+                    drawArtwork(bitmap, tileSize, end.style, opacity * styleMix, layerPaint, reusablePath, BlendMode.Plus)
                     canvas.restore()
                 }
             }
@@ -172,6 +177,8 @@ private fun DrawScope.drawArtwork(
     tileSize: Size,
     style: ArtworkStyle,
     alpha: Float,
+    layerPaint: Paint,
+    reusablePath: Path,
     blendMode: BlendMode = BlendMode.SrcOver,
 ) {
     if (alpha <= 0f) return
@@ -181,8 +188,14 @@ private fun DrawScope.drawArtwork(
     val outline = style.shape?.createOutline(tileSize, layoutDirection, this)
     val path = when (outline) {
         is Outline.Generic -> outline.path
-        is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
-        is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
+        is Outline.Rounded -> reusablePath.apply {
+            rewind()
+            addRoundRect(outline.roundRect)
+        }
+        is Outline.Rectangle -> reusablePath.apply {
+            rewind()
+            addRect(outline.rect)
+        }
         null -> null
     }
 
@@ -201,10 +214,9 @@ private fun DrawScope.drawArtwork(
         clipPath(path) { drawTile() }
     } else if (style.fadeVertically != null) {
         drawIntoCanvas { canvas ->
-            val colors = listOf(Color.White, Color.Transparent)
-            val mask = if (style.fadeVertically) Brush.verticalGradient(colors, endY = tileSize.height)
-                else Brush.horizontalGradient(colors, endX = tileSize.width)
-            canvas.saveLayer(Rect(Offset.Zero, tileSize), Paint())
+            val mask = if (style.fadeVertically) Brush.verticalGradient(FADE_MASK_COLORS, endY = tileSize.height)
+                else Brush.horizontalGradient(FADE_MASK_COLORS, endX = tileSize.width)
+            canvas.saveLayer(Rect(Offset.Zero, tileSize), layerPaint)
             drawTile()
             drawRect(mask, size = tileSize, blendMode = BlendMode.DstIn)
             canvas.restore()

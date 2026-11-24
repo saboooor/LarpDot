@@ -58,7 +58,7 @@ object SystemEventManager {
         override fun onReceive(context: Context, intent: Intent?) {
             intent ?: return
             val action = intent.action ?: return
-            val settings = OverlayPreferences.getNotificationActivitySettings(context)
+            val settings = OverlayPreferences.notificationActivitySettingsFlow.value
             if (!settings.enabled) return
 
             when (action) {
@@ -157,6 +157,8 @@ object SystemEventManager {
     fun init(context: Context) {
         val app = context.applicationContext
         appContext = app
+        // Hydrate activity settings flow once so high-frequency broadcasts read in memory.
+        OverlayPreferences.getNotificationActivitySettings(app)
         AudioOutputTracker.init(app) { previous, current ->
             handleAudioOutputChanged(app, previous, current)
         }
@@ -346,7 +348,7 @@ object SystemEventManager {
         previous: AudioOutputDevice,
         current: AudioOutputDevice,
     ) {
-        val settings = OverlayPreferences.getNotificationActivitySettings(context)
+        val settings = OverlayPreferences.notificationActivitySettingsFlow.value
         if (!settings.enabled) return
 
         // If a Bluetooth audio device just connected and Bluetooth alerts already handled it, skip duplicate.

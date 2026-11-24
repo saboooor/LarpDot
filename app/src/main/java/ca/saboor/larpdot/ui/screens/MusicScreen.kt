@@ -101,6 +101,7 @@ fun MusicScreen(
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
+    val musicPauseTimeoutSeconds by OverlayPreferences.musicPauseTimeoutSecondsFlow.collectAsState()
     val usageAccessGranted by ForegroundAppTracker.hasUsageAccess.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -331,6 +332,7 @@ fun MusicScreen(
                 showExpandedAlbumArt = showExpandedAlbumArt,
                 expandedElementVisibility = expandedElementVisibility,
                 hideMusicWhenAppOpen = hideMusicWhenAppOpen,
+                musicPauseTimeoutSeconds = musicPauseTimeoutSeconds,
                 usageAccessGranted = usageAccessGranted,
                 pulseAmount = pulseAmount,
                 onBack = { showMusicSettings = false },
@@ -391,6 +393,7 @@ private fun MusicSettingsPage(
     showExpandedAlbumArt: Boolean,
     expandedElementVisibility: OverlayPreferences.ExpandedElementVisibility,
     hideMusicWhenAppOpen: Boolean,
+    musicPauseTimeoutSeconds: Int,
     usageAccessGranted: Boolean,
     pulseAmount: Float,
     onBack: () -> Unit,
@@ -636,6 +639,50 @@ private fun MusicSettingsPage(
                             )
                             TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
                                 Text(if (usageAccessGranted) "Manage usage access" else "Grant usage access")
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Pause Timeout",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                            )
+                            Text(
+                                text = if (musicPauseTimeoutSeconds == 0) {
+                                    "Keep the music island visible when paused until you dismiss it"
+                                } else {
+                                    "Hide the music island ${musicPauseTimeoutSeconds}s after playback pauses"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            val timeoutOptions = listOf(
+                                5 to "5s",
+                                15 to "15s",
+                                30 to "30s",
+                                60 to "1m",
+                                0 to "Always",
+                            )
+                            ButtonGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            ) {
+                                timeoutOptions.forEach { (seconds, label) ->
+                                    toggleableItem(
+                                        checked = musicPauseTimeoutSeconds == seconds,
+                                        label = label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setMusicPauseTimeoutSeconds(context, seconds)
+                                        },
+                                        weight = 1f,
+                                    )
+                                }
                             }
                         }
 

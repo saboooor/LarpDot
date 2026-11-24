@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.content.Context
+import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
 import ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder
@@ -63,6 +64,28 @@ data class IslandBackupConfig(
     val flashlightBeamBlur: Boolean = false,
     val flashlightBeamAccentColor: Boolean = true,
     val flashlightTapToToggle: Boolean = true,
+    val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
+    val activitiesEnabled: Boolean = true,
+    val activityProgress: Boolean = true,
+    val activityNavigation: Boolean = true,
+    val activityCalls: Boolean = true,
+    val activityTimers: Boolean = true,
+    val activityBatteryCharging: Boolean = true,
+    val activityBatteryLow: Boolean = true,
+    val activitySoundMode: Boolean = true,
+    val activityBluetooth: Boolean = true,
+    val activityAudioOutput: Boolean = true,
+    val activityScreenshotPocket: Boolean = true,
+    val activityChargeLimitAlert: Boolean = false,
+    val activityChargeLimitPercent: Int = 80,
+    val activityPermanentCharging: Boolean = false,
+    val activityPermanentLowBattery: Boolean = false,
+    val activityPermanentSoundMode: Boolean = false,
+    val activityPermanentBluetooth: Boolean = false,
+    val activityPermanentAudioOutput: Boolean = false,
+    val activityPermanentScreenshotPocket: Boolean = false,
+    val activityExpandShortTerm: Boolean = false,
+    val activityProgressOutline: Boolean = true,
     val islandPriorityOrder: List<IslandPriorityItem> = DEFAULT_ISLAND_PRIORITY_ORDER,
     val cutoutManualEnabled: Boolean? = null,
     val cutoutOffsetX: Float? = null,
@@ -78,7 +101,7 @@ data class IslandPreset(
 )
 
 object IslandThemePresets {
-    private const val BACKUP_VERSION = 2
+    private const val BACKUP_VERSION = 3
 
     private val KNOWN_BACKUP_KEYS = setOf(
         "version",
@@ -139,6 +162,28 @@ object IslandThemePresets {
         "flashlightBeamBlur",
         "flashlightBeamAccentColor",
         "flashlightTapToToggle",
+        "musicPauseTimeoutSeconds",
+        "activitiesEnabled",
+        "activityProgress",
+        "activityNavigation",
+        "activityCalls",
+        "activityTimers",
+        "activityBatteryCharging",
+        "activityBatteryLow",
+        "activitySoundMode",
+        "activityBluetooth",
+        "activityAudioOutput",
+        "activityScreenshotPocket",
+        "activityChargeLimitAlert",
+        "activityChargeLimitPercent",
+        "activityPermanentCharging",
+        "activityPermanentLowBattery",
+        "activityPermanentSoundMode",
+        "activityPermanentBluetooth",
+        "activityPermanentAudioOutput",
+        "activityPermanentScreenshotPocket",
+        "activityExpandShortTerm",
+        "activityProgressOutline",
         "islandPriorityOrder",
         "cutoutManualEnabled",
         "cutoutOffsetX",
@@ -326,6 +371,28 @@ object IslandThemePresets {
             add("flashlightBeamBlur" to config.flashlightBeamBlur.toString())
             add("flashlightBeamAccentColor" to config.flashlightBeamAccentColor.toString())
             add("flashlightTapToToggle" to config.flashlightTapToToggle.toString())
+            add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
+            add("activitiesEnabled" to config.activitiesEnabled.toString())
+            add("activityProgress" to config.activityProgress.toString())
+            add("activityNavigation" to config.activityNavigation.toString())
+            add("activityCalls" to config.activityCalls.toString())
+            add("activityTimers" to config.activityTimers.toString())
+            add("activityBatteryCharging" to config.activityBatteryCharging.toString())
+            add("activityBatteryLow" to config.activityBatteryLow.toString())
+            add("activitySoundMode" to config.activitySoundMode.toString())
+            add("activityBluetooth" to config.activityBluetooth.toString())
+            add("activityAudioOutput" to config.activityAudioOutput.toString())
+            add("activityScreenshotPocket" to config.activityScreenshotPocket.toString())
+            add("activityChargeLimitAlert" to config.activityChargeLimitAlert.toString())
+            add("activityChargeLimitPercent" to config.activityChargeLimitPercent.toString())
+            add("activityPermanentCharging" to config.activityPermanentCharging.toString())
+            add("activityPermanentLowBattery" to config.activityPermanentLowBattery.toString())
+            add("activityPermanentSoundMode" to config.activityPermanentSoundMode.toString())
+            add("activityPermanentBluetooth" to config.activityPermanentBluetooth.toString())
+            add("activityPermanentAudioOutput" to config.activityPermanentAudioOutput.toString())
+            add("activityPermanentScreenshotPocket" to config.activityPermanentScreenshotPocket.toString())
+            add("activityExpandShortTerm" to config.activityExpandShortTerm.toString())
+            add("activityProgressOutline" to config.activityProgressOutline.toString())
             add("islandPriorityOrder" to quote(normalizeIslandPriorityOrder(config.islandPriorityOrder).joinToString(",") { it.name }))
             config.cutoutManualEnabled?.let { add("cutoutManualEnabled" to it.toString()) }
             config.cutoutOffsetX?.let { add("cutoutOffsetX" to it.toString()) }
@@ -414,6 +481,28 @@ object IslandThemePresets {
             flashlightBeamBlur = fields["flashlightBeamBlur"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamBlur,
             flashlightBeamAccentColor = fields["flashlightBeamAccentColor"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamAccentColor,
             flashlightTapToToggle = fields["flashlightTapToToggle"]?.toBooleanStrictOrNull() ?: defaults.flashlightTapToToggle,
+            musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
+            activitiesEnabled = fields["activitiesEnabled"]?.toBooleanStrictOrNull() ?: defaults.activitiesEnabled,
+            activityProgress = fields["activityProgress"]?.toBooleanStrictOrNull() ?: defaults.activityProgress,
+            activityNavigation = fields["activityNavigation"]?.toBooleanStrictOrNull() ?: defaults.activityNavigation,
+            activityCalls = fields["activityCalls"]?.toBooleanStrictOrNull() ?: defaults.activityCalls,
+            activityTimers = fields["activityTimers"]?.toBooleanStrictOrNull() ?: defaults.activityTimers,
+            activityBatteryCharging = fields["activityBatteryCharging"]?.toBooleanStrictOrNull() ?: defaults.activityBatteryCharging,
+            activityBatteryLow = fields["activityBatteryLow"]?.toBooleanStrictOrNull() ?: defaults.activityBatteryLow,
+            activitySoundMode = fields["activitySoundMode"]?.toBooleanStrictOrNull() ?: defaults.activitySoundMode,
+            activityBluetooth = fields["activityBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityBluetooth,
+            activityAudioOutput = fields["activityAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityAudioOutput,
+            activityScreenshotPocket = fields["activityScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityScreenshotPocket,
+            activityChargeLimitAlert = fields["activityChargeLimitAlert"]?.toBooleanStrictOrNull() ?: defaults.activityChargeLimitAlert,
+            activityChargeLimitPercent = (fields["activityChargeLimitPercent"]?.toIntOrNull() ?: defaults.activityChargeLimitPercent).coerceIn(50, 100),
+            activityPermanentCharging = fields["activityPermanentCharging"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentCharging,
+            activityPermanentLowBattery = fields["activityPermanentLowBattery"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentLowBattery,
+            activityPermanentSoundMode = fields["activityPermanentSoundMode"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentSoundMode,
+            activityPermanentBluetooth = fields["activityPermanentBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentBluetooth,
+            activityPermanentAudioOutput = fields["activityPermanentAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentAudioOutput,
+            activityPermanentScreenshotPocket = fields["activityPermanentScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentScreenshotPocket,
+            activityExpandShortTerm = fields["activityExpandShortTerm"]?.toBooleanStrictOrNull() ?: defaults.activityExpandShortTerm,
+            activityProgressOutline = fields["activityProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.activityProgressOutline,
             islandPriorityOrder = parsedPriority,
             cutoutManualEnabled = fields["cutoutManualEnabled"]?.toBooleanStrictOrNull(),
             cutoutOffsetX = fields["cutoutOffsetX"]?.toFloatOrNull(),
@@ -447,6 +536,7 @@ object IslandThemePresets {
         val playback = OverlayPreferences.getPlaybackControlsStyle(context)
         val trackInfo = OverlayPreferences.getTrackInfoStyle(context)
         val glowSides = OverlayPreferences.getExpandedGlowSides(context)
+        val activities = OverlayPreferences.getNotificationActivitySettings(context)
         val config = IslandBackupConfig(
             bubbleStyle = OverlayPreferences.getBubbleStyle(context),
             smallerBubbles = OverlayPreferences.areSmallerBubblesEnabled(context),
@@ -505,6 +595,28 @@ object IslandThemePresets {
             flashlightBeamBlur = OverlayPreferences.isFlashlightBeamBlurEnabled(context),
             flashlightBeamAccentColor = OverlayPreferences.isFlashlightBeamAccentColorEnabled(context),
             flashlightTapToToggle = OverlayPreferences.isFlashlightTapToToggleEnabled(context),
+            musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
+            activitiesEnabled = activities.enabled,
+            activityProgress = activities.progress,
+            activityNavigation = activities.navigation,
+            activityCalls = activities.calls,
+            activityTimers = activities.timers,
+            activityBatteryCharging = activities.batteryCharging,
+            activityBatteryLow = activities.batteryLow,
+            activitySoundMode = activities.soundMode,
+            activityBluetooth = activities.bluetooth,
+            activityAudioOutput = activities.audioOutput,
+            activityScreenshotPocket = activities.screenshotPocket,
+            activityChargeLimitAlert = activities.chargeLimitAlert,
+            activityChargeLimitPercent = activities.chargeLimitPercent,
+            activityPermanentCharging = activities.permanentCharging,
+            activityPermanentLowBattery = activities.permanentLowBattery,
+            activityPermanentSoundMode = activities.permanentSoundMode,
+            activityPermanentBluetooth = activities.permanentBluetooth,
+            activityPermanentAudioOutput = activities.permanentAudioOutput,
+            activityPermanentScreenshotPocket = activities.permanentScreenshotPocket,
+            activityExpandShortTerm = activities.expandShortTermAlerts,
+            activityProgressOutline = activities.progressOutline,
             islandPriorityOrder = OverlayPreferences.getIslandPriorityOrder(context),
             cutoutManualEnabled = cutout.isManualEnabled,
             cutoutOffsetX = cutout.offsetX,
@@ -586,6 +698,33 @@ object IslandThemePresets {
         OverlayPreferences.setFlashlightBeamBlurEnabled(context, config.flashlightBeamBlur)
         OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, config.flashlightBeamAccentColor)
         OverlayPreferences.setFlashlightTapToToggleEnabled(context, config.flashlightTapToToggle)
+        OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
+        OverlayPreferences.setNotificationActivitySettings(
+            context,
+            NotificationActivitySettings(
+                enabled = config.activitiesEnabled,
+                progress = config.activityProgress,
+                navigation = config.activityNavigation,
+                calls = config.activityCalls,
+                timers = config.activityTimers,
+                batteryCharging = config.activityBatteryCharging,
+                batteryLow = config.activityBatteryLow,
+                soundMode = config.activitySoundMode,
+                bluetooth = config.activityBluetooth,
+                audioOutput = config.activityAudioOutput,
+                screenshotPocket = config.activityScreenshotPocket,
+                chargeLimitAlert = config.activityChargeLimitAlert,
+                chargeLimitPercent = config.activityChargeLimitPercent,
+                permanentCharging = config.activityPermanentCharging,
+                permanentLowBattery = config.activityPermanentLowBattery,
+                permanentSoundMode = config.activityPermanentSoundMode,
+                permanentBluetooth = config.activityPermanentBluetooth,
+                permanentAudioOutput = config.activityPermanentAudioOutput,
+                permanentScreenshotPocket = config.activityPermanentScreenshotPocket,
+                expandShortTermAlerts = config.activityExpandShortTerm,
+                progressOutline = config.activityProgressOutline,
+            ),
+        )
         OverlayPreferences.setIslandPriorityOrder(context, config.islandPriorityOrder)
 
         if (includeCutout && config.cutoutManualEnabled != null) {

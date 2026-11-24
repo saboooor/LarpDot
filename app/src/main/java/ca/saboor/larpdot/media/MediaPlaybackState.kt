@@ -60,13 +60,15 @@ object MediaPlaybackState {
 
     fun isPackageBlacklisted(packageName: String?): Boolean {
         if (packageName.isNullOrBlank()) return false
-        val context = applicationContext ?: return false
-        if (!OverlayPreferences.isAppBlacklistEnabled(context)) return false
-        return OverlayPreferences.getBlacklistedPackages(context).contains(packageName)
+        if (!OverlayPreferences.appBlacklistEnabledFlow.value) return false
+        return OverlayPreferences.blacklistedPackagesFlow.value.contains(packageName)
     }
 
     fun initialize(context: Context) {
         applicationContext = context.applicationContext
+        // Hydrate blacklist and pause-timeout flows once so callbacks stay lock/IO-free.
+        OverlayPreferences.isAppBlacklistEnabled(applicationContext!!)
+        OverlayPreferences.getMusicPauseTimeoutSeconds(applicationContext!!)
         if (!isBlacklistObserverStarted) {
             isBlacklistObserverStarted = true
             playbackScope.launch {
@@ -211,6 +213,11 @@ object MediaPlaybackState {
                     refreshFromController()
                 }
 
+                override fun onSessionDestroyed() {
+                    if (controllerCallback !== this) return
+                    clear()
+                }
+
             }
             controllerCallback = callback
             controller.registerCallback(callback)
@@ -318,6 +325,7 @@ object MediaPlaybackState {
         val isNewTrack = trackKey.isNotBlank() && (trackKey != lastAnnouncedTrackKey || !wasMusicActive)
 
         val wasPlaying = current.isPlaying
+        val graceDelayMs = resolvePauseGraceDelayMs(OverlayPreferences.musicPauseTimeoutSecondsFlow.value)
         if (isPlaying) {
             musicGraceJob?.cancel()
             musicGraceJob = null
@@ -330,14 +338,12 @@ object MediaPlaybackState {
             }
         } else if (wasPlaying) {
             lastPauseTime = SystemClock.uptimeMillis()
+            schedulePauseGrace()
+        } else if (graceDelayMs == null && title.isNotBlank() && title != "Playing Track") {
             musicGraceJob?.cancel()
-            musicGraceJob = playbackScope.launch {
-                delay(5000L)
-                if (!_currentTrack.value.isPlaying) {
-                    _isMusicActive.value = false
-                }
-            }
-        } else if (lastPauseTime == 0L || SystemClock.uptimeMillis() - lastPauseTime >= 5000L) {
+            musicGraceJob = null
+            _isMusicActive.value = true
+        } else if (graceDelayMs != null && (lastPauseTime == 0L || SystemClock.uptimeMillis() - lastPauseTime >= graceDelayMs)) {
             musicGraceJob?.cancel()
             musicGraceJob = null
             _isMusicActive.value = false
@@ -451,6 +457,22 @@ object MediaPlaybackState {
         }
     }
 
+    /** Returns the grace delay in ms after pausing, or null when set to keep visible until dismissed. */
+    internal fun resolvePauseGraceDelayMs(timeoutSeconds: Int): Long? =
+        if (timeoutSeconds <= 0) null else timeoutSeconds.toLong() * 1000L
+
+    private fun schedulePauseGrace() {
+        musicGraceJob?.cancel()
+        musicGraceJob = null
+        val graceDelayMs = resolvePauseGraceDelayMs(OverlayPreferences.musicPauseTimeoutSecondsFlow.value) ?: return
+        musicGraceJob = playbackScope.launch {
+            delay(graceDelayMs)
+            if (!_currentTrack.value.isPlaying) {
+                _isMusicActive.value = false
+            }
+        }
+    }
+
     fun pause() {
         val track = _currentTrack.value
         if (track.isSimulated) {
@@ -458,13 +480,7 @@ object MediaPlaybackState {
                 lastPauseTime = SystemClock.uptimeMillis()
                 _currentTrack.value = track.copy(isPlaying = false)
                 checkTickerState(false)
-                musicGraceJob?.cancel()
-                musicGraceJob = playbackScope.launch {
-                    delay(5000L)
-                    if (!_currentTrack.value.isPlaying) {
-                        _isMusicActive.value = false
-                    }
-                }
+                schedulePauseGrace()
             }
             return
         }
@@ -485,13 +501,7 @@ object MediaPlaybackState {
                 _isMusicActive.value = true
             } else {
                 lastPauseTime = SystemClock.uptimeMillis()
-                musicGraceJob?.cancel()
-                musicGraceJob = playbackScope.launch {
-                    delay(5000L)
-                    if (!_currentTrack.value.isPlaying) {
-                        _isMusicActive.value = false
-                    }
-                }
+                schedulePauseGrace()
             }
             _currentTrack.value = track.copy(isPlaying = newPlaying)
             checkTickerState(newPlaying)

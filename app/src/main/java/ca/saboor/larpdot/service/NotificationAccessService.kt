@@ -27,6 +27,17 @@ class NotificationAccessService : NotificationListenerService() {
             notification.category == Notification.CATEGORY_TRANSPORT
     }
 
+    private fun capArtworkBitmap(bitmap: Bitmap, maxDimensionPx: Int = 512): Bitmap {
+        if (bitmap.isRecycled) return bitmap
+        val maxSide = maxOf(bitmap.width, bitmap.height)
+        if (maxSide <= maxDimensionPx || maxSide <= 0) return bitmap
+        val scale = maxDimensionPx.toFloat() / maxSide.toFloat()
+        val targetW = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val targetH = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        return runCatching { Bitmap.createScaledBitmap(bitmap, targetW, targetH, true) }
+            .getOrDefault(bitmap)
+    }
+
     private val sessionsChangedListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
         MediaPlaybackState.updateFromControllers(controllers)
     }
@@ -134,6 +145,7 @@ class NotificationAccessService : NotificationListenerService() {
                 }
 
                 if (artwork != null || title != null) {
+                    val boundedArtwork = artwork?.let { capArtworkBitmap(it) }
                     val resolvedAppName = try {
                         packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString()
                     } catch (_: Exception) {
@@ -142,7 +154,7 @@ class NotificationAccessService : NotificationListenerService() {
                     MediaPlaybackState.updateNotificationMetadata(
                         title = title,
                         artist = artist,
-                        artwork = artwork,
+                        artwork = boundedArtwork,
                         packageName = sbn.packageName,
                         appName = resolvedAppName,
                     )

@@ -8,6 +8,7 @@ import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.graphics.Shader
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.ScreenStateTracker
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.foundation.layout.Arrangement
@@ -150,16 +151,19 @@ fun CompactFlashlightContent(
     val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
     val compactRingInset = ((cutoutDiameterDp - compactRingDiameter) / 2f).coerceAtLeast(3.dp)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
-    val pulseAlphaState = infiniteTransition.animateFloat(
-        initialValue = 0.65f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = LarpMotion.timing(durationMillis = 1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulse_alpha",
-    )
+    val isScreenOn by ScreenStateTracker.isScreenOn.collectAsState()
+    val pulseAlphaState = if (isScreenOn) {
+        val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
+        infiniteTransition.animateFloat(
+            initialValue = 0.65f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = LarpMotion.timing(durationMillis = 1000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulse_alpha",
+        )
+    } else null
 
     val icon = @Composable {
         Icon(
@@ -168,7 +172,7 @@ fun CompactFlashlightContent(
             tint = accentColor,
             modifier = Modifier
                 .size(18.dp)
-                .graphicsLayer { alpha = pulseAlphaState.value },
+                .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
         )
     }
 
@@ -480,6 +484,7 @@ fun ExpandedFlashlightContent(
                     style = AndroidPaint.Style.FILL
                 }
             }
+            val composeBeamPath = remember { Path() }
             val nativeBeamPath = remember { AndroidPath() }
             val nativeCorePath = remember { AndroidPath() }
             val outerBlurFilter = remember(density) {
@@ -488,6 +493,8 @@ fun ExpandedFlashlightContent(
             val coreBlurFilter = remember(density) {
                 BlurMaskFilter(with(density) { 4.dp.toPx() }, BlurMaskFilter.Blur.NORMAL)
             }
+            // Cache blur LinearGradient shaders across identical draw passes
+            val shaderCacheKey = remember { FloatArray(4) { Float.NaN } }
 
             // Light Cone Canvas and Horizontal Slider Bar
             Canvas(
@@ -513,13 +520,12 @@ fun ExpandedFlashlightContent(
                 val barHeight = 6.dp.toPx()
 
                 // 1. Upward Projecting Light Cone
-                val beamPath = Path().apply {
-                    moveTo(centerX - beamBaseWidth / 2f, beamOriginY)
-                    lineTo(centerX - topBeamWidth / 2f, currentSliderY)
-                    lineTo(centerX + topBeamWidth / 2f, currentSliderY)
-                    lineTo(centerX + beamBaseWidth / 2f, beamOriginY)
-                    close()
-                }
+                composeBeamPath.rewind()
+                composeBeamPath.moveTo(centerX - beamBaseWidth / 2f, beamOriginY)
+                composeBeamPath.lineTo(centerX - topBeamWidth / 2f, currentSliderY)
+                composeBeamPath.lineTo(centerX + topBeamWidth / 2f, currentSliderY)
+                composeBeamPath.lineTo(centerX + beamBaseWidth / 2f, beamOriginY)
+                composeBeamPath.close()
 
                 if (onOffProgress > 0.002f) {
                     if (beamBlur) {
@@ -538,43 +544,54 @@ fun ExpandedFlashlightContent(
                         nativeCorePath.lineTo(centerX + beamBaseWidth * 0.45f, beamOriginY)
                         nativeCorePath.close()
 
-                        outerBlurPaint.maskFilter = outerBlurFilter
-                        outerBlurPaint.shader = LinearGradient(
-                            0f, currentSliderY, 0f, beamOriginY,
-                            beamColor.copy(alpha = 0.72f * onOffProgress).toArgb(),
-                            beamColor.copy(alpha = 0.10f * onOffProgress).toArgb(),
-                            Shader.TileMode.CLAMP,
-                        )
-                        coreBlurPaint.maskFilter = coreBlurFilter
-                        coreBlurPaint.shader = LinearGradient(
-                            0f, currentSliderY, 0f, beamOriginY,
-                            beamColor.copy(alpha = 0.34f * onOffProgress).toArgb(),
-                            beamColor.copy(alpha = 0.22f * onOffProgress).toArgb(),
-                            Shader.TileMode.CLAMP,
-                        )
+                        val beamArgb = beamColor.toArgb().toFloat()
+                        if (shaderCacheKey[0] != currentSliderY ||
+                            shaderCacheKey[1] != beamOriginY ||
+                            shaderCacheKey[2] != onOffProgress ||
+                            shaderCacheKey[3] != beamArgb
+                        ) {
+                            shaderCacheKey[0] = currentSliderY
+                            shaderCacheKey[1] = beamOriginY
+                            shaderCacheKey[2] = onOffProgress
+                            shaderCacheKey[3] = beamArgb
+                            outerBlurPaint.maskFilter = outerBlurFilter
+                            outerBlurPaint.shader = LinearGradient(
+                                0f, currentSliderY, 0f, beamOriginY,
+                                beamColor.copy(alpha = 0.72f * onOffProgress).toArgb(),
+                                beamColor.copy(alpha = 0.10f * onOffProgress).toArgb(),
+                                Shader.TileMode.CLAMP,
+                            )
+                            coreBlurPaint.maskFilter = coreBlurFilter
+                            coreBlurPaint.shader = LinearGradient(
+                                0f, currentSliderY, 0f, beamOriginY,
+                                beamColor.copy(alpha = 0.34f * onOffProgress).toArgb(),
+                                beamColor.copy(alpha = 0.22f * onOffProgress).toArgb(),
+                                Shader.TileMode.CLAMP,
+                            )
+                        }
 
                         drawIntoCanvas { canvas ->
                             canvas.nativeCanvas.drawPath(nativeBeamPath, outerBlurPaint)
                             canvas.nativeCanvas.drawPath(nativeCorePath, coreBlurPaint)
                         }
                     } else {
-                    drawPath(
-                        path = beamPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                beamColor.copy(alpha = 0.85f * onOffProgress),
-                                beamColor.copy(alpha = 0.45f * onOffProgress),
-                                beamColor.copy(alpha = 0.12f * onOffProgress),
+                        drawPath(
+                            path = composeBeamPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    beamColor.copy(alpha = 0.85f * onOffProgress),
+                                    beamColor.copy(alpha = 0.45f * onOffProgress),
+                                    beamColor.copy(alpha = 0.12f * onOffProgress),
+                                ),
+                                startY = currentSliderY,
+                                endY = beamOriginY,
                             ),
-                            startY = currentSliderY,
-                            endY = beamOriginY,
-                        ),
-                    )
+                        )
                     }
                 } else {
                     // Subtle translucent guide when unlit
                     drawPath(
-                        path = beamPath,
+                        path = composeBeamPath,
                         color = Color.White.copy(alpha = 0.04f),
                     )
                 }

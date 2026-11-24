@@ -135,13 +135,14 @@ object NotificationActivityState {
 
     fun isPackageBlacklisted(packageName: String?): Boolean {
         if (packageName.isNullOrBlank()) return false
-        val ctx = appContext ?: return false
-        if (!OverlayPreferences.isAppBlacklistEnabled(ctx)) return false
-        return OverlayPreferences.getBlacklistedPackages(ctx).contains(packageName)
+        if (!OverlayPreferences.appBlacklistEnabledFlow.value) return false
+        return OverlayPreferences.blacklistedPackagesFlow.value.contains(packageName)
     }
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        // Hydrate blacklist flows once so high-frequency notification updates read strictly from memory.
+        OverlayPreferences.isAppBlacklistEnabled(appContext!!)
         if (!isBlacklistObserverStarted) {
             isBlacklistObserverStarted = true
             scope.launch {

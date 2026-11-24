@@ -8,9 +8,12 @@ import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
@@ -23,6 +26,8 @@ import androidx.compose.ui.unit.IntSize
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.theme.LarpMotion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 import kotlin.math.roundToInt
 
@@ -69,9 +74,18 @@ internal fun rememberAlbumArtGlow(media: MediaTrackInfo): AlbumArtGlowState {
         label = "album_art_glow_alpha",
     )
     val shouldRender = enabled || alpha > GLOW_ALPHA_EPSILON
-    val blurred = remember(albumArt, shouldRender) {
-        if (albumArt != null && shouldRender) getOrCreateBlurredArtwork(albumArt) else null
+    val cachedHit = remember(albumArt, shouldRender) {
+        if (albumArt != null && shouldRender) getCachedBlurredArtwork(albumArt) else null
     }
+    var asyncBlurred by remember(albumArt, shouldRender) { mutableStateOf(cachedHit) }
+    LaunchedEffect(albumArt, shouldRender) {
+        if (albumArt != null && shouldRender && asyncBlurred == null) {
+            asyncBlurred = withContext(Dispatchers.Default) {
+                getOrCreateBlurredArtwork(albumArt)
+            }
+        }
+    }
+    val blurred = cachedHit ?: asyncBlurred
     val retainedHolder = remember { arrayOfNulls<ImageBitmap>(1) }
     if (blurred != null) {
         retainedHolder[0] = blurred
@@ -143,7 +157,7 @@ private fun DrawScope.drawBlurredArtworkHalo(
     )
 }
 
-private fun getOrCreateBlurredArtwork(source: Bitmap): ImageBitmap? {
+private fun getCachedBlurredArtwork(source: Bitmap): ImageBitmap? {
     if (source.isRecycled || source.width <= 0 || source.height <= 0) return null
     val generationId = source.generationId
     synchronized(blurredArtworkCacheLock) {
@@ -158,6 +172,13 @@ private fun getOrCreateBlurredArtwork(source: Bitmap): ImageBitmap? {
             }
         }
     }
+    return null
+}
+
+private fun getOrCreateBlurredArtwork(source: Bitmap): ImageBitmap? {
+    getCachedBlurredArtwork(source)?.let { return it }
+    if (source.isRecycled || source.width <= 0 || source.height <= 0) return null
+    val generationId = source.generationId
 
     val created = createBlurredArtworkBitmap(source)?.asImageBitmap() ?: return null
     synchronized(blurredArtworkCacheLock) {

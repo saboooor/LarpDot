@@ -20,6 +20,8 @@ object OverlayPreferences {
     private const val KEY_CUTOUT_DIAMETER = "cutout_diameter"
     private const val KEY_SHOW_MINIMIZED_TITLE = "show_minimized_title"
     private const val KEY_SHOW_SONG_ANNOUNCEMENT = "show_song_announcement"
+    private const val KEY_MUSIC_PAUSE_TIMEOUT_SECONDS = "music_pause_timeout_seconds"
+    const val DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS = 5
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
     private const val KEY_HOLD_TO_EXPAND_DURATION_MS = "hold_to_expand_duration_ms"
     const val DEFAULT_HOLD_TO_EXPAND_DURATION_MS = 300
@@ -74,20 +76,8 @@ object OverlayPreferences {
     const val DEFAULT_PULSE_AMOUNT = 1.0f
     private const val KEY_ISLAND_FONT_STYLE = "island_font_style"
     private const val KEY_MINIMIZED_NESTED_BLURRED_BG = "minimized_nested_blurred_bg"
-    private const val KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED = "notification_battery_charging_enabled"
-    private const val KEY_NOTIFICATION_BATTERY_LOW_ENABLED = "notification_battery_low_enabled"
-    private const val KEY_NOTIFICATION_SOUND_MODE_ENABLED = "notification_sound_mode_enabled"
-    private const val KEY_NOTIFICATION_BLUETOOTH_ENABLED = "notification_bluetooth_enabled"
-    private const val KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED = "notification_audio_output_enabled"
-    private const val KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED = "notification_screenshot_pocket_enabled"
-    private const val KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED = "notification_charge_limit_alert_enabled"
-    private const val KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT = "notification_charge_limit_percent"
-    private const val KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED = "notification_permanent_short_term_enabled"
-    private const val KEY_NOTIFICATION_EXPAND_SHORT_TERM = "notification_expand_short_term"
-    private const val KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED = "notification_progress_outline_enabled"
     private const val KEY_HIDE_IN_FULLSCREEN = "hide_in_fullscreen"
     private const val KEY_HIDE_IN_LANDSCAPE = "hide_in_landscape"
-    private const val KEY_ISLAND_PRIORITY_ORDER = "island_priority_order"
 
     enum class IslandFontStyle(val label: String) {
         DEFAULT("Default"),
@@ -132,25 +122,12 @@ object OverlayPreferences {
     }
     private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
-    private const val KEY_SHOW_FLASHLIGHT_ISLAND = "show_flashlight_island"
-    private const val KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE = "show_minimized_flashlight_outline"
-    private const val KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE = "show_expanded_flashlight_outline"
-    private const val KEY_FLASHLIGHT_TAP_TO_TOGGLE = "flashlight_tap_to_toggle"
-    private const val KEY_FLASHLIGHT_BOOST = "flashlight_boost_enabled"
-    private const val KEY_BOOST_STRENGTH = "flashlight_boost_strength"
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_SHOW_DEBUG_DOT = "show_debug_dot"
     private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
     private const val KEY_HIDE_ON_LOCK_SCREEN = "hide_on_lock_screen"
     private const val KEY_HIDE_MUSIC_WHEN_APP_OPEN = "hide_music_when_app_open"
-    private const val KEY_APP_BLACKLIST_ENABLED = "app_blacklist_enabled"
-    private const val KEY_APP_BLACKLIST = "app_blacklist"
     private const val KEY_SHOW_DOT_RIGHT_SIDE_INFO = "show_dot_right_side_info"
-    private const val KEY_NOTIFICATION_ACTIVITIES_ENABLED = "notification_activities_enabled"
-    private const val KEY_NOTIFICATION_PROGRESS_ENABLED = "notification_progress_enabled"
-    private const val KEY_NOTIFICATION_NAVIGATION_ENABLED = "notification_navigation_enabled"
-    private const val KEY_NOTIFICATION_CALLS_ENABLED = "notification_calls_enabled"
-    private const val KEY_NOTIFICATION_TIMERS_ENABLED = "notification_timers_enabled"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
     const val DEFAULT_WAVEFORM_BAND_COUNT = 5
     private const val KEY_WAVEFORM_BAR_WIDTH = "waveform_bar_width"
@@ -375,22 +352,14 @@ object OverlayPreferences {
     private val _cameraCoverStyleFlow = MutableStateFlow(CameraCoverStyle.SWOOP)
     val cameraCoverStyleFlow: StateFlow<CameraCoverStyle> = _cameraCoverStyleFlow.asStateFlow()
 
-    private val _showFlashlightIslandFlow = MutableStateFlow(true)
     private val _showDotRightSideInfoFlow = MutableStateFlow(false)
     val showDotRightSideInfoFlow: StateFlow<Boolean> = _showDotRightSideInfoFlow.asStateFlow()
 
-    val showFlashlightIslandFlow: StateFlow<Boolean> = _showFlashlightIslandFlow.asStateFlow()
-
-    private val _showMinimizedFlashlightOutlineFlow = MutableStateFlow(true)
-    val showMinimizedFlashlightOutlineFlow: StateFlow<Boolean> = _showMinimizedFlashlightOutlineFlow.asStateFlow()
-    private val _showExpandedFlashlightOutlineFlow = MutableStateFlow(true)
-    val showExpandedFlashlightOutlineFlow: StateFlow<Boolean> = _showExpandedFlashlightOutlineFlow.asStateFlow()
-
-    private val _flashlightTapToToggleFlow = MutableStateFlow(true)
-    val flashlightTapToToggleFlow: StateFlow<Boolean> = _flashlightTapToToggleFlow.asStateFlow()
-
-    private val _flashlightBoostFlow = MutableStateFlow(false)
-    val flashlightBoostFlow: StateFlow<Boolean> = _flashlightBoostFlow.asStateFlow()
+    val showFlashlightIslandFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showFlashlightIslandFlow
+    val showMinimizedFlashlightOutlineFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showMinimizedFlashlightOutlineFlow
+    val showExpandedFlashlightOutlineFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showExpandedFlashlightOutlineFlow
+    val flashlightTapToToggleFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightTapToToggleFlow
+    val flashlightBoostFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBoostFlow
 
     private val _isDebugModeFlow = MutableStateFlow(false)
     val isDebugModeFlow: StateFlow<Boolean> = _isDebugModeFlow.asStateFlow()
@@ -411,20 +380,16 @@ object OverlayPreferences {
     private val _hideMusicWhenAppOpenFlow = MutableStateFlow(true)
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = _hideMusicWhenAppOpenFlow.asStateFlow()
 
-    private val _appBlacklistEnabledFlow = MutableStateFlow(true)
-    val appBlacklistEnabledFlow: StateFlow<Boolean> = _appBlacklistEnabledFlow.asStateFlow()
+    private val _musicPauseTimeoutSecondsFlow = MutableStateFlow(DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS)
+    val musicPauseTimeoutSecondsFlow: StateFlow<Int> = _musicPauseTimeoutSecondsFlow.asStateFlow()
+    private var isMusicPauseTimeoutInitialized = false
 
-    private val _blacklistedPackagesFlow = MutableStateFlow<Set<String>>(emptySet())
-    val blacklistedPackagesFlow: StateFlow<Set<String>> = _blacklistedPackagesFlow.asStateFlow()
-
-    private val _notificationActivitySettingsFlow = MutableStateFlow(NotificationActivitySettings())
-    val notificationActivitySettingsFlow: StateFlow<NotificationActivitySettings> =
-        _notificationActivitySettingsFlow.asStateFlow()
-
-    private val _islandPriorityOrderFlow = MutableStateFlow(ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER)
-    val islandPriorityOrderFlow: StateFlow<List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>> =
-        _islandPriorityOrderFlow.asStateFlow()
-    private var isIslandPriorityOrderInitialized = false
+    val appBlacklistEnabledFlow: StateFlow<Boolean> get() = ActivityAndBlacklistPrefsStore.appBlacklistEnabledFlow
+    val blacklistedPackagesFlow: StateFlow<Set<String>> get() = ActivityAndBlacklistPrefsStore.blacklistedPackagesFlow
+    val notificationActivitySettingsFlow: StateFlow<NotificationActivitySettings>
+        get() = ActivityAndBlacklistPrefsStore.notificationActivitySettingsFlow
+    val islandPriorityOrderFlow: StateFlow<List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>>
+        get() = ActivityAndBlacklistPrefsStore.islandPriorityOrderFlow
 
     private val _waveformBandCountFlow = MutableStateFlow(DEFAULT_WAVEFORM_BAND_COUNT)
     val waveformBandCountFlow: StateFlow<Int> = _waveformBandCountFlow.asStateFlow()
@@ -493,17 +458,11 @@ object OverlayPreferences {
     private var isIslandFontStyleInitialized = false
     private var isMinimizedNestedBlurredBgInitialized = false
     private var isCameraCoverStyleInitialized = false
-    private var isShowFlashlightIslandInitialized = false
-    private var isShowMinimizedFlashlightOutlineInitialized = false
-    private var isShowExpandedFlashlightOutlineInitialized = false
     private var isShowDotRightSideInfoInitialized = false
-    private var isFlashlightTapToToggleInitialized = false
-    private var isFlashlightBoostInitialized = false
     private var isDebugModeInitialized = false
     private var isHideWhenScreenOffInitialized = false
     private var isHideOnLockScreenInitialized = false
     private var isHideMusicWhenAppOpenInitialized = false
-    private var isNotificationActivitySettingsInitialized = false
     private var isWaveformBandCountInitialized = false
     private var isWaveformBarWidthInitialized = false
     private var isWaveformBarSpacingInitialized = false
@@ -575,6 +534,7 @@ object OverlayPreferences {
         isShowExpandedProgressOutlineEnabled(context)
         isShowMinimizedTitleEnabled(context)
         isShowSongAnnouncementEnabled(context)
+        getMusicPauseTimeoutSeconds(context)
         _islandFontWeightFlow.value = getPrefs(context).getInt("island_font_weight", 400).coerceIn(100, 900)
         getFlashlightExpandedStyle(context)
         isFlashlightBeamBlurEnabled(context)
@@ -1242,61 +1202,27 @@ object OverlayPreferences {
     enum class FlashlightExpandedStyle(val label: String) {
         BEAM("Beam"), SLIDER("Slider")
     }
-    private val _flashlightExpandedStyleFlow = MutableStateFlow(FlashlightExpandedStyle.BEAM)
-    val flashlightExpandedStyleFlow = _flashlightExpandedStyleFlow.asStateFlow()
+    val flashlightExpandedStyleFlow: StateFlow<FlashlightExpandedStyle> get() = FlashlightPrefsStore.flashlightExpandedStyleFlow
+    val flashlightBeamBlurFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamBlurFlow
+    val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamAccentColorFlow
 
-    private const val KEY_FLASHLIGHT_BEAM_BLUR = "flashlight_beam_blur"
-    private const val KEY_FLASHLIGHT_BEAM_ACCENT_COLOR = "flashlight_beam_accent_color"
+    fun getFlashlightExpandedStyle(context: Context): FlashlightExpandedStyle =
+        FlashlightPrefsStore.getFlashlightExpandedStyle(getPrefs(context))
 
-    private val _flashlightBeamBlurFlow = MutableStateFlow(false)
-    val flashlightBeamBlurFlow: StateFlow<Boolean> = _flashlightBeamBlurFlow.asStateFlow()
+    fun setFlashlightExpandedStyle(context: Context, style: FlashlightExpandedStyle) =
+        FlashlightPrefsStore.setFlashlightExpandedStyle(getPrefs(context), style)
 
-    private val _flashlightBeamAccentColorFlow = MutableStateFlow(true)
-    val flashlightBeamAccentColorFlow: StateFlow<Boolean> = _flashlightBeamAccentColorFlow.asStateFlow()
+    fun isFlashlightBeamBlurEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isFlashlightBeamBlurEnabled(getPrefs(context))
 
-    fun getFlashlightExpandedStyle(context: Context): FlashlightExpandedStyle {
-        val prefs = getPrefs(context)
-        val saved = prefs.getString("flashlight_expanded_style", null)
-        if (saved == "BLURRED_BEAM") {
-            if (!prefs.contains(KEY_FLASHLIGHT_BEAM_BLUR)) {
-                prefs.edit().putBoolean(KEY_FLASHLIGHT_BEAM_BLUR, true).apply()
-                _flashlightBeamBlurFlow.value = true
-            }
-            prefs.edit().putString("flashlight_expanded_style", FlashlightExpandedStyle.BEAM.name).apply()
-            _flashlightExpandedStyleFlow.value = FlashlightExpandedStyle.BEAM
-            return FlashlightExpandedStyle.BEAM
-        }
-        _flashlightExpandedStyleFlow.value = FlashlightExpandedStyle.entries.firstOrNull { it.name == saved }
-            ?: FlashlightExpandedStyle.BEAM
-        return _flashlightExpandedStyleFlow.value
-    }
+    fun setFlashlightBeamBlurEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setFlashlightBeamBlurEnabled(getPrefs(context), enabled)
 
-    fun setFlashlightExpandedStyle(context: Context, style: FlashlightExpandedStyle) {
-        getPrefs(context).edit().putString("flashlight_expanded_style", style.name).apply()
-        _flashlightExpandedStyleFlow.value = style
-    }
+    fun isFlashlightBeamAccentColorEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isFlashlightBeamAccentColorEnabled(getPrefs(context))
 
-    fun isFlashlightBeamBlurEnabled(context: Context): Boolean {
-        val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BEAM_BLUR, false)
-        _flashlightBeamBlurFlow.value = enabled
-        return enabled
-    }
-
-    fun setFlashlightBeamBlurEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BEAM_BLUR, enabled).apply()
-        _flashlightBeamBlurFlow.value = enabled
-    }
-
-    fun isFlashlightBeamAccentColorEnabled(context: Context): Boolean {
-        val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BEAM_ACCENT_COLOR, true)
-        _flashlightBeamAccentColorFlow.value = enabled
-        return enabled
-    }
-
-    fun setFlashlightBeamAccentColorEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BEAM_ACCENT_COLOR, enabled).apply()
-        _flashlightBeamAccentColorFlow.value = enabled
-    }
+    fun setFlashlightBeamAccentColorEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setFlashlightBeamAccentColorEnabled(getPrefs(context), enabled)
 
     fun getIslandFontStyle(context: Context): IslandFontStyle {
         if (!isIslandFontStyleInitialized) {
@@ -1371,82 +1297,40 @@ object OverlayPreferences {
         isShowDotRightSideInfoInitialized = true
     }
 
-    fun isShowFlashlightIslandEnabled(context: Context): Boolean {
-        if (!isShowFlashlightIslandInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_SHOW_FLASHLIGHT_ISLAND, true)
-            _showFlashlightIslandFlow.value = enabled
-            isShowFlashlightIslandInitialized = true
-        }
-        return _showFlashlightIslandFlow.value
-    }
+    fun isShowFlashlightIslandEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isShowFlashlightIslandEnabled(getPrefs(context))
 
-    fun setShowFlashlightIslandEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_FLASHLIGHT_ISLAND, enabled).apply()
-        _showFlashlightIslandFlow.value = enabled
-        isShowFlashlightIslandInitialized = true
-    }
+    fun setShowFlashlightIslandEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setShowFlashlightIslandEnabled(getPrefs(context), enabled)
 
-    fun isShowMinimizedFlashlightOutlineEnabled(context: Context): Boolean {
-        if (!isShowMinimizedFlashlightOutlineInitialized) {
-            _showMinimizedFlashlightOutlineFlow.value = getPrefs(context).getBoolean(KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE, true)
-            isShowMinimizedFlashlightOutlineInitialized = true
-        }
-        return _showMinimizedFlashlightOutlineFlow.value
-    }
+    fun isShowMinimizedFlashlightOutlineEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isShowMinimizedFlashlightOutlineEnabled(getPrefs(context))
 
-    fun setShowMinimizedFlashlightOutlineEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_MINIMIZED_FLASHLIGHT_OUTLINE, enabled).apply()
-        _showMinimizedFlashlightOutlineFlow.value = enabled
-        isShowMinimizedFlashlightOutlineInitialized = true
-    }
+    fun setShowMinimizedFlashlightOutlineEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setShowMinimizedFlashlightOutlineEnabled(getPrefs(context), enabled)
 
-    fun isShowExpandedFlashlightOutlineEnabled(context: Context): Boolean {
-        if (!isShowExpandedFlashlightOutlineInitialized) {
-            _showExpandedFlashlightOutlineFlow.value = getPrefs(context).getBoolean(KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE, true)
-            isShowExpandedFlashlightOutlineInitialized = true
-        }
-        return _showExpandedFlashlightOutlineFlow.value
-    }
+    fun isShowExpandedFlashlightOutlineEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isShowExpandedFlashlightOutlineEnabled(getPrefs(context))
 
-    fun setShowExpandedFlashlightOutlineEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_SHOW_EXPANDED_FLASHLIGHT_OUTLINE, enabled).apply()
-        _showExpandedFlashlightOutlineFlow.value = enabled
-        isShowExpandedFlashlightOutlineInitialized = true
-    }
+    fun setShowExpandedFlashlightOutlineEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setShowExpandedFlashlightOutlineEnabled(getPrefs(context), enabled)
 
-    fun isFlashlightTapToToggleEnabled(context: Context): Boolean {
-        if (!isFlashlightTapToToggleInitialized) {
-            val enabled = getPrefs(context).getBoolean(KEY_FLASHLIGHT_TAP_TO_TOGGLE, true)
-            _flashlightTapToToggleFlow.value = enabled
-            isFlashlightTapToToggleInitialized = true
-        }
-        return _flashlightTapToToggleFlow.value
-    }
+    fun isFlashlightTapToToggleEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isFlashlightTapToToggleEnabled(getPrefs(context))
 
-    fun setFlashlightTapToToggleEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_TAP_TO_TOGGLE, enabled).apply()
-        _flashlightTapToToggleFlow.value = enabled
-        isFlashlightTapToToggleInitialized = true
-    }
+    fun setFlashlightTapToToggleEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setFlashlightTapToToggleEnabled(getPrefs(context), enabled)
 
-    fun isFlashlightBoostEnabled(context: Context): Boolean {
-        if (!isFlashlightBoostInitialized) {
-            _flashlightBoostFlow.value = getPrefs(context).getBoolean(KEY_FLASHLIGHT_BOOST, false)
-            isFlashlightBoostInitialized = true
-        }
-        return _flashlightBoostFlow.value
-    }
+    fun isFlashlightBoostEnabled(context: Context): Boolean =
+        FlashlightPrefsStore.isFlashlightBoostEnabled(getPrefs(context))
 
-    fun setFlashlightBoostEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_FLASHLIGHT_BOOST, enabled).apply()
-        _flashlightBoostFlow.value = enabled
-        isFlashlightBoostInitialized = true
-    }
+    fun setFlashlightBoostEnabled(context: Context, enabled: Boolean) =
+        FlashlightPrefsStore.setFlashlightBoostEnabled(getPrefs(context), enabled)
 
-    fun getBoostStrength(context: Context): Int = getPrefs(context).getInt(KEY_BOOST_STRENGTH, 1)
-    fun setBoostStrength(context: Context, strength: Int) {
-        getPrefs(context).edit().putInt(KEY_BOOST_STRENGTH, strength).apply()
-    }
+    fun getBoostStrength(context: Context): Int = FlashlightPrefsStore.getBoostStrength(getPrefs(context))
+
+    fun setBoostStrength(context: Context, strength: Int) =
+        FlashlightPrefsStore.setBoostStrength(getPrefs(context), strength)
 
     fun isDebugModeEnabled(context: Context): Boolean {
         if (!isDebugModeInitialized) {
@@ -1548,74 +1432,32 @@ object OverlayPreferences {
         isHideMusicWhenAppOpenInitialized = true
     }
 
-    fun getNotificationActivitySettings(context: Context): NotificationActivitySettings {
-        if (!isNotificationActivitySettingsInitialized) {
-            val prefs = getPrefs(context)
-            _notificationActivitySettingsFlow.value = NotificationActivitySettings(
-                enabled = prefs.getBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, true),
-                progress = prefs.getBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, true),
-                navigation = prefs.getBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, true),
-                calls = prefs.getBoolean(KEY_NOTIFICATION_CALLS_ENABLED, true),
-                timers = prefs.getBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, true),
-                batteryCharging = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, true),
-                batteryLow = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, true),
-                soundMode = prefs.getBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, true),
-                bluetooth = prefs.getBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, true),
-                audioOutput = prefs.getBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, true),
-                screenshotPocket = prefs.getBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, true),
-                chargeLimitAlert = prefs.getBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, false),
-                chargeLimitPercent = prefs.getInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, 80).coerceIn(50, 100),
-                permanentShortTerm = prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false),
-                permanentCharging = prefs.getBoolean("permanent_charging", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
-                permanentLowBattery = prefs.getBoolean("permanent_lowbattery", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
-                permanentSoundMode = prefs.getBoolean("permanent_soundmode", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
-                permanentBluetooth = prefs.getBoolean("permanent_bluetooth", prefs.getBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, false)),
-                permanentAudioOutput = prefs.getBoolean("permanent_audio_output", false),
-                permanentScreenshotPocket = prefs.getBoolean("permanent_screenshot_pocket", false),
-                expandShortTermAlerts = prefs.getBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, false),
-                progressOutline = prefs.getBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, true),
-            )
-            isNotificationActivitySettingsInitialized = true
+    /** Seconds to keep the music island visible after pausing; 0 means keep until dismissed. */
+    fun getMusicPauseTimeoutSeconds(context: Context): Int {
+        if (!isMusicPauseTimeoutInitialized) {
+            val saved = getPrefs(context)
+                .getInt(KEY_MUSIC_PAUSE_TIMEOUT_SECONDS, DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS)
+                .coerceIn(0, 300)
+            _musicPauseTimeoutSecondsFlow.value = saved
+            isMusicPauseTimeoutInitialized = true
         }
-        return _notificationActivitySettingsFlow.value.also(NotificationActivityState::configure)
+        return _musicPauseTimeoutSecondsFlow.value
     }
+
+    fun setMusicPauseTimeoutSeconds(context: Context, seconds: Int) {
+        val clamped = seconds.coerceIn(0, 300)
+        getPrefs(context).edit().putInt(KEY_MUSIC_PAUSE_TIMEOUT_SECONDS, clamped).apply()
+        _musicPauseTimeoutSecondsFlow.value = clamped
+        isMusicPauseTimeoutInitialized = true
+    }
+
+    fun getNotificationActivitySettings(context: Context): NotificationActivitySettings =
+        ActivityAndBlacklistPrefsStore.getNotificationActivitySettings(getPrefs(context))
 
     fun setNotificationActivitySettings(
         context: Context,
         settings: NotificationActivitySettings,
-    ) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, settings.enabled)
-            .putBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, settings.progress)
-            .putBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, settings.navigation)
-            .putBoolean(KEY_NOTIFICATION_CALLS_ENABLED, settings.calls)
-            .putBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, settings.timers)
-            .putBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, settings.batteryCharging)
-            .putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
-            .putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
-            .putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
-            .putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
-            .putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
-            .putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
-            .putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
-            .putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
-            .putBoolean("permanent_charging", settings.permanentCharging)
-            .putBoolean("permanent_lowbattery", settings.permanentLowBattery)
-            .putBoolean("permanent_soundmode", settings.permanentSoundMode)
-            .putBoolean("permanent_bluetooth", settings.permanentBluetooth)
-            .putBoolean("permanent_audio_output", settings.permanentAudioOutput)
-            .putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
-            .putBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, settings.expandShortTermAlerts)
-            .putBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, settings.progressOutline)
-            .apply()
-        _notificationActivitySettingsFlow.value = settings
-        isNotificationActivitySettingsInitialized = true
-        NotificationActivityState.configure(settings)
-        ScreenshotPocketManager.syncObserver(context)
-        if (settings.permanentBluetooth) {
-            SystemEventManager.syncConnectedBluetoothDevices(context)
-        }
-    }
+    ) = ActivityAndBlacklistPrefsStore.setNotificationActivitySettings(context, getPrefs(context), settings)
 
     fun getWaveformBandCount(context: Context): Int {
         if (!isWaveformBandCountInitialized) {
@@ -1743,89 +1585,35 @@ object OverlayPreferences {
         isPreviewAudioSourceInitialized = true
     }
 
-    private var isAppBlacklistInitialized = false
+    fun isAppBlacklistEnabled(context: Context): Boolean =
+        ActivityAndBlacklistPrefsStore.isAppBlacklistEnabled(getPrefs(context))
 
-    private fun ensureAppBlacklistInitialized(context: Context) {
-        if (!isAppBlacklistInitialized) {
-            val prefs = getPrefs(context)
-            _appBlacklistEnabledFlow.value = prefs.getBoolean(KEY_APP_BLACKLIST_ENABLED, true)
-            val saved = prefs.getStringSet(KEY_APP_BLACKLIST, emptySet())?.toSet() ?: emptySet()
-            _blacklistedPackagesFlow.value = saved
-            isAppBlacklistInitialized = true
-        }
-    }
+    fun setAppBlacklistEnabled(context: Context, enabled: Boolean) =
+        ActivityAndBlacklistPrefsStore.setAppBlacklistEnabled(getPrefs(context), enabled)
 
-    fun isAppBlacklistEnabled(context: Context): Boolean {
-        ensureAppBlacklistInitialized(context)
-        return _appBlacklistEnabledFlow.value
-    }
+    fun getBlacklistedPackages(context: Context): Set<String> =
+        ActivityAndBlacklistPrefsStore.getBlacklistedPackages(getPrefs(context))
 
-    fun setAppBlacklistEnabled(context: Context, enabled: Boolean) {
-        ensureAppBlacklistInitialized(context)
-        getPrefs(context).edit().putBoolean(KEY_APP_BLACKLIST_ENABLED, enabled).apply()
-        _appBlacklistEnabledFlow.value = enabled
-    }
+    fun setBlacklistedPackages(context: Context, packages: Set<String>) =
+        ActivityAndBlacklistPrefsStore.setBlacklistedPackages(context, getPrefs(context), packages)
 
-    fun getBlacklistedPackages(context: Context): Set<String> {
-        ensureAppBlacklistInitialized(context)
-        return _blacklistedPackagesFlow.value
-    }
+    fun addBlacklistedPackage(context: Context, packageName: String) =
+        ActivityAndBlacklistPrefsStore.addBlacklistedPackage(context, getPrefs(context), packageName)
 
-    fun setBlacklistedPackages(context: Context, packages: Set<String>) {
-        ensureAppBlacklistInitialized(context)
-        val filtered = packages.filter { it.isNotBlank() && it != context.packageName }.toSet()
-        getPrefs(context).edit().putStringSet(KEY_APP_BLACKLIST, HashSet(filtered)).apply()
-        _blacklistedPackagesFlow.value = filtered
-    }
+    fun removeBlacklistedPackage(context: Context, packageName: String) =
+        ActivityAndBlacklistPrefsStore.removeBlacklistedPackage(context, getPrefs(context), packageName)
 
-    fun addBlacklistedPackage(context: Context, packageName: String) {
-        if (packageName.isBlank() || packageName == context.packageName) return
-        ensureAppBlacklistInitialized(context)
-        setBlacklistedPackages(context, _blacklistedPackagesFlow.value + packageName)
-    }
+    fun toggleBlacklistedPackage(context: Context, packageName: String) =
+        ActivityAndBlacklistPrefsStore.toggleBlacklistedPackage(context, getPrefs(context), packageName)
 
-    fun removeBlacklistedPackage(context: Context, packageName: String) {
-        ensureAppBlacklistInitialized(context)
-        setBlacklistedPackages(context, _blacklistedPackagesFlow.value - packageName)
-    }
+    fun clearBlacklistedPackages(context: Context) =
+        ActivityAndBlacklistPrefsStore.clearBlacklistedPackages(context, getPrefs(context))
 
-    fun toggleBlacklistedPackage(context: Context, packageName: String) {
-        if (packageName.isBlank() || packageName == context.packageName) return
-        ensureAppBlacklistInitialized(context)
-        if (_blacklistedPackagesFlow.value.contains(packageName)) {
-            removeBlacklistedPackage(context, packageName)
-        } else {
-            addBlacklistedPackage(context, packageName)
-        }
-    }
-
-    fun clearBlacklistedPackages(context: Context) {
-        setBlacklistedPackages(context, emptySet())
-    }
-
-    fun getIslandPriorityOrder(context: Context): List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem> {
-        if (!isIslandPriorityOrderInitialized) {
-            val raw = getPrefs(context).getString(KEY_ISLAND_PRIORITY_ORDER, null)
-            val parsed = raw?.split(",")
-                ?.mapNotNull { token ->
-                    ca.saboor.larpdot.ui.overlay.IslandPriorityItem.entries.firstOrNull { it.name == token.trim() }
-                }
-                .orEmpty()
-            _islandPriorityOrderFlow.value = ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder(parsed)
-            isIslandPriorityOrderInitialized = true
-        }
-        return _islandPriorityOrderFlow.value
-    }
+    fun getIslandPriorityOrder(context: Context): List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem> =
+        ActivityAndBlacklistPrefsStore.getIslandPriorityOrder(getPrefs(context))
 
     fun setIslandPriorityOrder(
         context: Context,
         order: List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>,
-    ) {
-        val normalized = ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder(order)
-        getPrefs(context).edit()
-            .putString(KEY_ISLAND_PRIORITY_ORDER, normalized.joinToString(",") { it.name })
-            .apply()
-        _islandPriorityOrderFlow.value = normalized
-        isIslandPriorityOrderInitialized = true
-    }
+    ) = ActivityAndBlacklistPrefsStore.setIslandPriorityOrder(getPrefs(context), order)
 }

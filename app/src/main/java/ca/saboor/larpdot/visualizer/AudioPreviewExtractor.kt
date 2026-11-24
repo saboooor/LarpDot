@@ -89,7 +89,8 @@ object AudioPreviewExtractor {
     private const val CACHE_MAGIC = 0x4D424133
     const val DEFAULT_BAND_COUNT = OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT
 
-    private const val MAX_DISK_CACHE_BYTES = 80L * 1024L * 1024L
+    private const val MAX_DISK_CACHE_BYTES = 25L * 1024L * 1024L
+    private const val MAX_DISK_CACHE_FILES = 40
     private const val FAILURE_RETRY_MS = 30L * 60L * 1000L
     private val memoryCache = object : LruCache<String, FloatArray>(4 * 1024 * 1024) {
         override fun sizeOf(key: String, value: FloatArray): Int = value.size * Float.SIZE_BYTES
@@ -264,7 +265,9 @@ object AudioPreviewExtractor {
         if (cacheFile.exists() && cacheFile.length() > 0) {
             val cachedData = readDiskCache(cacheFile, bandCount)
             if (cachedData != null && cachedData.isNotEmpty()) {
-                cacheFile.setLastModified(System.currentTimeMillis())
+                val now = System.currentTimeMillis()
+                cacheFile.setLastModified(now)
+                if (audioFile.exists()) audioFile.setLastModified(now)
                 memoryCache.put(cacheKey, cachedData)
                 val audioPath = if (audioFile.exists() && audioFile.length() > 0) audioFile.absolutePath else null
                 _extractionState.value = ExtractionState.Success(
@@ -747,11 +750,15 @@ object AudioPreviewExtractor {
     private fun trimDiskCache(folder: File, protectedFiles: Set<File>) {
         val files = folder.listFiles()?.sortedBy { it.lastModified() } ?: return
         var total = files.sumOf { it.length() }
+        var remainingCount = files.size
         for (file in files) {
-            if (total <= MAX_DISK_CACHE_BYTES) break
+            if (total <= MAX_DISK_CACHE_BYTES && remainingCount <= MAX_DISK_CACHE_FILES) break
             if (file in protectedFiles) continue
             val length = file.length()
-            if (file.delete()) total -= length
+            if (file.delete()) {
+                total -= length
+                remainingCount--
+            }
         }
     }
 
