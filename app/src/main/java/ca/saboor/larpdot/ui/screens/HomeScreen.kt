@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +28,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +51,8 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
@@ -300,45 +300,15 @@ fun HomeScreen(
                     Text("Limits each side independently. 100% allows each side to reach its screen edge, reserving space for nearby bubbles.", style = MaterialTheme.typography.bodySmall)
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.TouchApp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Tap to Expand",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Tap expands island, hold-tap opens player",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = tapToExpand,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setTapToExpandEnabled(context, isChecked)
-                        },
-                    )
-                }
+                LarpSwitchRow(
+                    title = "Tap to Expand",
+                    subtitle = "Tap expands island, hold-tap opens player",
+                    icon = LarpIcons.TouchApp,
+                    checked = tapToExpand,
+                    onCheckedChange = { OverlayPreferences.setTapToExpandEnabled(context, it) },
+                )
 
                 CutoutSliderRow(
                     label = "Hold Duration to Expand",
@@ -359,212 +329,57 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
-                // Hide Island When Phone Is Off
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.PowerSettingsNew,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Hide When Phone Is Off",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Dismiss the island overlay whenever the screen turns off",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                LarpSwitchRow(
+                    title = "Hide When Phone Is Off",
+                    subtitle = "Dismiss the island overlay whenever the screen turns off",
+                    icon = LarpIcons.PowerSettingsNew,
+                    checked = hideWhenScreenOff,
+                    onCheckedChange = { OverlayPreferences.setHideWhenScreenOffEnabled(context, it) },
+                )
 
-                    Switch(
-                        checked = hideWhenScreenOff,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setHideWhenScreenOffEnabled(context, isChecked)
-                        },
-                    )
-                }
+                LarpDivider()
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpSwitchRow(
+                    title = "Hide on Lock Screen",
+                    subtitle = "Dismiss the island overlay while the device is locked",
+                    icon = LarpIcons.Lock,
+                    checked = hideOnLockScreen,
+                    onCheckedChange = { OverlayPreferences.setHideOnLockScreenEnabled(context, it) },
+                )
 
-                // Hide on Lock Screen
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Hide on Lock Screen",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Dismiss the island overlay while the device is locked",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                LarpDivider()
 
-                    Switch(
-                        checked = hideOnLockScreen,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setHideOnLockScreenEnabled(context, isChecked)
-                        },
-                    )
-                }
+                LarpSwitchRow(
+                    title = "Hide in Fullscreen & Games",
+                    subtitle = "Auto-hide during immersive video players and games (requires Accessibility)",
+                    icon = LarpIcons.Fullscreen,
+                    checked = hideInFullscreen,
+                    onCheckedChange = { OverlayPreferences.setHideInFullscreenEnabled(context, it) },
+                )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
-                // Hide in Fullscreen & Games
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.Fullscreen,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Hide in Fullscreen & Games",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Auto-hide during immersive video players and games (requires Accessibility)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                LarpSwitchRow(
+                    title = "Hide in Landscape",
+                    subtitle = "Automatically hide the island whenever the phone rotates horizontally",
+                    icon = LarpIcons.ScreenRotation,
+                    checked = hideInLandscape,
+                    onCheckedChange = { OverlayPreferences.setHideInLandscapeEnabled(context, it) },
+                )
 
-                    Switch(
-                        checked = hideInFullscreen,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setHideInFullscreenEnabled(context, isChecked)
-                        },
-                    )
-                }
+                LarpDivider()
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpSwitchRow(
+                    title = "Show Right Side Info on Dots",
+                    subtitle = "Show info alongside icons on secondary dots, making them mini pills",
+                    icon = LarpIcons.MoreHoriz,
+                    checked = showDotRightSideInfo,
+                    onCheckedChange = { OverlayPreferences.setShowDotRightSideInfoEnabled(context, it) },
+                )
 
-                // Hide in Landscape
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.ScreenRotation,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Hide in Landscape",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Automatically hide the island whenever the phone rotates horizontally",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = hideInLandscape,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setHideInLandscapeEnabled(context, isChecked)
-                        },
-                    )
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                // Show Right Side Info on Dots (Mini Pill)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.MoreHoriz,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Show Right Side Info on Dots",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Show info alongside icons on secondary dots, making them mini pills",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = showDotRightSideInfo,
-                        onCheckedChange = { isChecked ->
-                            OverlayPreferences.setShowDotRightSideInfoEnabled(context, isChecked)
-                        },
-                    )
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
                 // App Blacklist
                 Row(
@@ -590,7 +405,6 @@ fun HomeScreen(
                             Text(
                                 text = "App Blacklist",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             val count = blacklistedPackages.size
                             val statusText = if (!appBlacklistEnabled) {
@@ -634,48 +448,13 @@ private fun CutoutAlignmentCard(
 ) {
     val context = LocalContext.current
     LarpCard {
-        // Header row with Title, status subtitle, and Switch
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = LarpIcons.Tune,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Column {
-                    Text(
-                        text = "Manual Alignment",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                    )
-                    Text(
-                        text = if (config.isManualEnabled) {
-                            "Custom offsets active"
-                        } else {
-                            "Auto-detected from hardware"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Switch(
-                checked = config.isManualEnabled,
-                onCheckedChange = { isChecked ->
-                    onConfigChange(config.copy(isManualEnabled = isChecked))
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Manual Alignment",
+            subtitle = if (config.isManualEnabled) "Custom offsets active" else "Auto-detected from hardware",
+            icon = LarpIcons.Tune,
+            checked = config.isManualEnabled,
+            onCheckedChange = { onConfigChange(config.copy(isManualEnabled = it)) },
+        )
 
         Spacer(Modifier.height(4.dp))
 
@@ -694,51 +473,19 @@ private fun CutoutAlignmentCard(
                 text = "X: ${cutoutInfo.centerX.toInt()} • Y: ${cutoutInfo.centerY.toInt()} px",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 
         Spacer(Modifier.height(8.dp))
 
-        // Debug mode / Green dot toggle
         val isDebugMode by OverlayPreferences.isDebugModeFlow.collectAsState()
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = LarpIcons.BugReport,
-                    contentDescription = null,
-                    tint = if (isDebugMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp),
-                )
-                Column {
-                    Text(
-                        text = "Debug Mode",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                    )
-                    Text(
-                        text = "Show green cutout alignment dot when idle",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Switch(
-                checked = isDebugMode,
-                onCheckedChange = { isChecked ->
-                    OverlayPreferences.setDebugModeEnabled(context, isChecked)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Debug Mode",
+            subtitle = "Show green cutout alignment dot when idle",
+            icon = LarpIcons.BugReport,
+            checked = isDebugMode,
+            onCheckedChange = { OverlayPreferences.setDebugModeEnabled(context, it) },
+        )
 
         AnimatedVisibility(
             visible = config.isManualEnabled,
@@ -839,13 +586,11 @@ internal fun CutoutSliderRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
             Text(
                 text = "${value.roundToInt()} $unit",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 

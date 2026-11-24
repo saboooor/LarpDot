@@ -604,7 +604,6 @@ internal fun CompactIslandContent(
     val materialYouPrimary = MaterialTheme.colorScheme.primary
     val accentColor = if (mediaInfo.albumArt == null) materialYouPrimary else mediaInfo.dominantColor
     val dotRadiusPx = with(density) { (cutoutDiameterDp / 2f).toPx() }
-    val fadeRadiusPx = with(density) { ((cutoutDiameterDp / 2f) + cutoutDiameterDp).toPx() }
     val glowAlpha by animateFloatAsState(
         targetValue = if (mediaInfo.isPlaying) 0.28f else 0.08f,
         animationSpec = LarpMotion.fade(360),
@@ -635,6 +634,13 @@ internal fun CompactIslandContent(
         isPlaying = mediaInfo.isPlaying,
         enabled = bpmPulseEnabled,
     )
+    val glowAlphaProvider: () -> Float = {
+        if (bpmPulseEnabled && mediaInfo.isPlaying) {
+            0.16f + (0.22f * bpmPulseState.value * pulseAmount)
+        } else {
+            glowAlpha
+        }
+    }
 
     if (isLandscape) {
         // Landscape Mode: Vertical Dynamic Island Pill
@@ -649,9 +655,7 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        // The camera spans the full thickness; padding belongs to the wing content.
-                        val compactPillThickness = cutoutDiameterDp
-                        val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+                        val albumArtSize = (cutoutDiameterDp - 12.dp).coerceIn(16.dp, 24.dp)
                         val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
                         val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
                         Box(
@@ -660,28 +664,17 @@ internal fun CompactIslandContent(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.BottomCenter,
                         ) {
-                            Box(
-                                modifier = Modifier.size(renderedArtSize),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CompactMusicNestedArtwork(
-                                    bitmap = mediaInfo.albumArt,
-                                    size = innerArtSize,
-                                    shape = artworkShape,
-                                    artworkGlow = artworkGlow,
-                                    artworkAnchor = artworkAnchor,
-                                )
-                                if (hasMusicProgressRing) {
-                                    RadialProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        shape = artworkShape,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
+                            CompactMusicNestedArtworkWithRing(
+                                bitmap = mediaInfo.albumArt,
+                                renderedSize = renderedArtSize,
+                                innerSize = innerArtSize,
+                                shape = artworkShape,
+                                artworkGlow = artworkGlow,
+                                artworkAnchor = artworkAnchor,
+                                hasProgressRing = hasMusicProgressRing,
+                                progressProvider = musicProgressProvider,
+                                accentColor = accentColor,
+                            )
                         }
                     }
                     OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
@@ -705,14 +698,10 @@ internal fun CompactIslandContent(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                                 if (hasMusicProgressRing) {
-                                    RadialProgressRing(
+                                    CompactMusicProgressRing(
                                         progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(1.dp),
+                                        accentColor = accentColor,
+                                        modifier = Modifier.fillMaxSize().padding(1.dp),
                                     )
                                 }
                             }
@@ -740,14 +729,10 @@ internal fun CompactIslandContent(
                                         .size(cutoutDiameterDp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    RadialProgressRing(
+                                    CompactMusicProgressRing(
                                         progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(1.dp),
+                                        accentColor = accentColor,
+                                        modifier = Modifier.fillMaxSize().padding(1.dp),
                                     )
                                 }
                             }
@@ -762,28 +747,17 @@ internal fun CompactIslandContent(
                         albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
                     ) Alignment.Center else Alignment.BottomCenter,
                 ) {
-                    Box(
-                        modifier = if (hasMusicProgressRing) Modifier.size(compactRingDiameter) else Modifier,
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CompactMusicArtworkPlaceholder(
-                            albumArtStyle = albumArtStyle,
-                            nestedShape = nestedShape,
-                            nestedRotation = nestedRotation,
-                            pillThickness = cutoutDiameterDp,
-                            sizeOverride = if (hasMusicProgressRing) (compactRingDiameter - 5.dp).coerceAtLeast(11.dp) else null,
-                        )
-                        if (hasMusicProgressRing) {
-                            RadialProgressRing(
-                                progressProvider = musicProgressProvider,
-                                color = accentColor,
-                                trackColor = Color.White.copy(alpha = 0.28f),
-                                strokeWidth = 2.dp,
-                                shape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) artworkShape else RoundedCornerShape(6.dp),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
+                    CompactMusicPlaceholderWithRing(
+                        albumArtStyle = albumArtStyle,
+                        nestedShape = nestedShape,
+                        nestedRotation = nestedRotation,
+                        artworkShape = artworkShape,
+                        cutoutDiameterDp = cutoutDiameterDp,
+                        ringDiameter = compactRingDiameter,
+                        hasProgressRing = hasMusicProgressRing,
+                        progressProvider = musicProgressProvider,
+                        accentColor = accentColor,
+                    )
                 }
             }
             // Center: Symmetrical clearance spacer hugging the hole punch camera
@@ -794,25 +768,11 @@ internal fun CompactIslandContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .then(
-                        if (showDominantGlow) {
-                            Modifier.drawWithCache {
-                                val gradient = Brush.verticalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        accentColor,
-                                    )
-                                )
-                                onDrawBehind {
-                                    val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        0.16f + (0.22f * bpmPulseState.value * pulseAmount)
-                                    } else {
-                                        glowAlpha
-                                    }
-                                    drawRect(brush = gradient, alpha = alpha)
-                                }
-                            }
-                        } else Modifier
+                    .compactDominantGlow(
+                        enabled = showDominantGlow,
+                        vertical = true,
+                        accentColor = accentColor,
+                        alphaProvider = glowAlphaProvider,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -867,12 +827,10 @@ internal fun CompactIslandContent(
             if (mediaInfo.albumArt != null) {
                 when (albumArtStyle) {
                     OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        // The camera spans the full thickness; padding belongs to the wing content.
-                        val compactPillThickness = cutoutDiameterDp
-                        val albumArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
+                        val albumArtSize = (cutoutDiameterDp - 12.dp).coerceIn(16.dp, 24.dp)
                         val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
                         val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
-                        val artStartInset = ((compactPillThickness - renderedArtSize) / 2f).coerceAtLeast(3.dp)
+                        val artStartInset = ((cutoutDiameterDp - renderedArtSize) / 2f).coerceAtLeast(3.dp)
                         Row(
                             modifier = Modifier
                                 .weight(leadingWingFraction)
@@ -885,44 +843,22 @@ internal fun CompactIslandContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.End,
                         ) {
-                            Box(
-                                modifier = Modifier.size(renderedArtSize),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CompactMusicNestedArtwork(
-                                    bitmap = mediaInfo.albumArt,
-                                    size = innerArtSize,
-                                    shape = artworkShape,
-                                    artworkGlow = artworkGlow,
-                                    artworkAnchor = artworkAnchor,
-                                )
-                                if (hasMusicProgressRing) {
-                                    RadialProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        shape = artworkShape,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
+                            CompactMusicNestedArtworkWithRing(
+                                bitmap = mediaInfo.albumArt,
+                                renderedSize = renderedArtSize,
+                                innerSize = innerArtSize,
+                                shape = artworkShape,
+                                artworkGlow = artworkGlow,
+                                artworkAnchor = artworkAnchor,
+                                hasProgressRing = hasMusicProgressRing,
+                                progressProvider = musicProgressProvider,
+                                accentColor = accentColor,
+                            )
                             if (showAnnouncementText) {
-                                MarqueeText(
-                                    text = mediaInfo.title.ifBlank { "Playing Track" },
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                        fontSize = 11.5.sp,
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .graphicsLayer { alpha = announcementAlpha },
-                                    textAlign = TextAlign.Center,
-                                    fadeWidth = 6.dp,
-                                    initialDelayMillis = 600,
-                                    repeatDelayMillis = 1000,
-                                    velocity = 35.dp,
+                                CompactMusicAnnouncementTitle(
+                                    title = mediaInfo.title,
+                                    alpha = announcementAlpha,
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
                         }
@@ -950,14 +886,10 @@ internal fun CompactIslandContent(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                                 if (hasMusicProgressRing) {
-                                    RadialProgressRing(
+                                    CompactMusicProgressRing(
                                         progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(1.dp),
+                                        accentColor = accentColor,
+                                        modifier = Modifier.fillMaxSize().padding(1.dp),
                                     )
                                 }
                             }
@@ -968,22 +900,10 @@ internal fun CompactIslandContent(
                                         .graphicsLayer { alpha = announcementAlpha }
                                         .background(Color.Black.copy(alpha = 0.34f)),
                                 )
-                                MarqueeText(
-                                    text = mediaInfo.title.ifBlank { "Playing Track" },
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                        fontSize = 11.5.sp,
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 6.dp, end = 2.dp)
-                                        .graphicsLayer { alpha = announcementAlpha },
-                                    textAlign = TextAlign.Center,
-                                    fadeWidth = 6.dp,
-                                    initialDelayMillis = 600,
-                                    repeatDelayMillis = 1000,
-                                    velocity = 35.dp,
+                                CompactMusicAnnouncementTitle(
+                                    title = mediaInfo.title,
+                                    alpha = announcementAlpha,
+                                    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
                                 )
                             }
                         }
@@ -1011,14 +931,10 @@ internal fun CompactIslandContent(
                                         .size(cutoutDiameterDp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    RadialProgressRing(
+                                    CompactMusicProgressRing(
                                         progressProvider = musicProgressProvider,
-                                        color = accentColor,
-                                        trackColor = Color.White.copy(alpha = 0.28f),
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(1.dp),
+                                        accentColor = accentColor,
+                                        modifier = Modifier.fillMaxSize().padding(1.dp),
                                     )
                                 }
                             }
@@ -1029,22 +945,10 @@ internal fun CompactIslandContent(
                                         .graphicsLayer { alpha = announcementAlpha }
                                         .background(Color.Black.copy(alpha = 0.34f)),
                                 )
-                                MarqueeText(
-                                    text = mediaInfo.title.ifBlank { "Playing Track" },
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                        fontSize = 11.5.sp,
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 6.dp, end = 2.dp)
-                                        .graphicsLayer { alpha = announcementAlpha },
-                                    textAlign = TextAlign.Center,
-                                    fadeWidth = 6.dp,
-                                    initialDelayMillis = 600,
-                                    repeatDelayMillis = 1000,
-                                    velocity = 35.dp,
+                                CompactMusicAnnouncementTitle(
+                                    title = mediaInfo.title,
+                                    alpha = announcementAlpha,
+                                    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
                                 )
                             }
                         }
@@ -1063,46 +967,23 @@ internal fun CompactIslandContent(
                     ) Alignment.Center else Alignment.CenterEnd,
                 ) {
                     if (showAnnouncementText) {
-                        MarqueeText(
-                            text = mediaInfo.title.ifBlank { "Playing Track" },
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                fontSize = 11.5.sp,
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 6.dp, end = 2.dp)
-                                .graphicsLayer { alpha = announcementAlpha },
-                            textAlign = TextAlign.Center,
-                            fadeWidth = 6.dp,
-                            initialDelayMillis = 600,
-                            repeatDelayMillis = 1000,
-                            velocity = 35.dp,
+                        CompactMusicAnnouncementTitle(
+                            title = mediaInfo.title,
+                            alpha = announcementAlpha,
+                            modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
                         )
                     } else {
-                        Box(
-                            modifier = if (hasMusicProgressRing) Modifier.size(compactRingDiameter) else Modifier,
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CompactMusicArtworkPlaceholder(
-                                albumArtStyle = albumArtStyle,
-                                nestedShape = nestedShape,
-                                nestedRotation = nestedRotation,
-                                pillThickness = cutoutDiameterDp,
-                                sizeOverride = if (hasMusicProgressRing) (compactRingDiameter - 5.dp).coerceAtLeast(11.dp) else null,
-                            )
-                            if (hasMusicProgressRing) {
-                                RadialProgressRing(
-                                    progressProvider = musicProgressProvider,
-                                    color = accentColor,
-                                    trackColor = Color.White.copy(alpha = 0.28f),
-                                    strokeWidth = 2.dp,
-                                    shape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) artworkShape else RoundedCornerShape(6.dp),
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        }
+                        CompactMusicPlaceholderWithRing(
+                            albumArtStyle = albumArtStyle,
+                            nestedShape = nestedShape,
+                            nestedRotation = nestedRotation,
+                            artworkShape = artworkShape,
+                            cutoutDiameterDp = cutoutDiameterDp,
+                            ringDiameter = compactRingDiameter,
+                            hasProgressRing = hasMusicProgressRing,
+                            progressProvider = musicProgressProvider,
+                            accentColor = accentColor,
+                        )
                     }
                 }
             }
@@ -1110,15 +991,10 @@ internal fun CompactIslandContent(
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
 
             // Right Wing: Equalizer with ambient glow extending from the dot to the right edge.
-            // Compact styles (NESTED, BASIC_FADED, no-art) have a narrow right wing (~30dp) with a
-            // ~14dp rounded corner on the right — shift the waveform left by cornerRadius/2 so it
-            // sits optically centered in the visible straight area rather than close to the edge.
-            // The camera spans the full thickness; padding belongs to the wing content.
-            val compactPillThickness = cutoutDiameterDp
             val equalizerShift = if (
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
-            ) 0.dp else -(compactPillThickness / if (waveformBandCount >= 6) 16f else 8f)
+            ) 0.dp else -(cutoutDiameterDp / if (waveformBandCount >= 6) 16f else 8f)
             val compactVisualizerVisible = showVisualizer && !(!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank())
             Box(
                 modifier = Modifier
@@ -1138,29 +1014,15 @@ internal fun CompactIslandContent(
                             )
                         } else Modifier
                     )
-                    .then(
-                        if (showDominantGlow) {
-                            Modifier.drawWithCache {
-                                val gradient = Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        accentColor,
-                                    )
-                                )
-                                onDrawBehind {
-                                    val alpha = if (bpmPulseEnabled && mediaInfo.isPlaying) {
-                                        0.16f + (0.22f * bpmPulseState.value * pulseAmount)
-                                    } else {
-                                        glowAlpha
-                                    }
-                                    drawRect(brush = gradient, alpha = alpha)
-                                }
-                            }
-                        } else Modifier
+                    .compactDominantGlow(
+                        enabled = showDominantGlow,
+                        vertical = false,
+                        accentColor = accentColor,
+                        alphaProvider = glowAlphaProvider,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                val visualizerEndInset = (compactPillThickness / 3f).coerceAtLeast(8.dp)
+                val visualizerEndInset = (cutoutDiameterDp / 3f).coerceAtLeast(8.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1208,5 +1070,125 @@ internal fun CompactIslandContent(
             }
         }
     }
+}
+
+private fun Modifier.compactDominantGlow(
+    enabled: Boolean,
+    vertical: Boolean,
+    accentColor: Color,
+    alphaProvider: () -> Float,
+): Modifier = if (!enabled) this else drawWithCache {
+    val stops = listOf(Color.Transparent, accentColor)
+    val gradient = if (vertical) Brush.verticalGradient(stops) else Brush.horizontalGradient(stops)
+    onDrawBehind {
+        drawRect(brush = gradient, alpha = alphaProvider())
+    }
+}
+
+@Composable
+private fun CompactMusicProgressRing(
+    progressProvider: () -> Float,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    shape: Shape = androidx.compose.foundation.shape.CircleShape,
+) {
+    RadialProgressRing(
+        progressProvider = progressProvider,
+        color = accentColor,
+        trackColor = Color.White.copy(alpha = 0.28f),
+        strokeWidth = 2.dp,
+        shape = shape,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun CompactMusicNestedArtworkWithRing(
+    bitmap: Bitmap,
+    renderedSize: Dp,
+    innerSize: Dp,
+    shape: Shape,
+    artworkGlow: AlbumArtGlowState,
+    artworkAnchor: ArtworkAnchor?,
+    hasProgressRing: Boolean,
+    progressProvider: () -> Float,
+    accentColor: Color,
+) {
+    Box(
+        modifier = Modifier.size(renderedSize),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompactMusicNestedArtwork(
+            bitmap = bitmap,
+            size = innerSize,
+            shape = shape,
+            artworkGlow = artworkGlow,
+            artworkAnchor = artworkAnchor,
+        )
+        if (hasProgressRing) {
+            CompactMusicProgressRing(
+                progressProvider = progressProvider,
+                accentColor = accentColor,
+                shape = shape,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactMusicPlaceholderWithRing(
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape,
+    nestedRotation: Float,
+    artworkShape: Shape,
+    cutoutDiameterDp: Dp,
+    ringDiameter: Dp,
+    hasProgressRing: Boolean,
+    progressProvider: () -> Float,
+    accentColor: Color,
+) {
+    Box(
+        modifier = if (hasProgressRing) Modifier.size(ringDiameter) else Modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        CompactMusicArtworkPlaceholder(
+            albumArtStyle = albumArtStyle,
+            nestedShape = nestedShape,
+            nestedRotation = nestedRotation,
+            pillThickness = cutoutDiameterDp,
+            sizeOverride = if (hasProgressRing) (ringDiameter - 5.dp).coerceAtLeast(11.dp) else null,
+        )
+        if (hasProgressRing) {
+            CompactMusicProgressRing(
+                progressProvider = progressProvider,
+                accentColor = accentColor,
+                shape = if (albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED) artworkShape else RoundedCornerShape(6.dp),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactMusicAnnouncementTitle(
+    title: String,
+    alpha: Float,
+    modifier: Modifier = Modifier,
+) {
+    MarqueeText(
+        text = title.ifBlank { "Playing Track" },
+        color = Color.White,
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+            fontSize = 11.5.sp,
+        ),
+        modifier = modifier.graphicsLayer { this.alpha = alpha },
+        textAlign = TextAlign.Center,
+        fadeWidth = 6.dp,
+        initialDelayMillis = 600,
+        repeatDelayMillis = 1000,
+        velocity = 35.dp,
+    )
 }
 

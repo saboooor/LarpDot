@@ -3,9 +3,6 @@ package ca.saboor.larpdot.visualizer
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
 import android.os.SystemClock
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -41,7 +38,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
-import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * Lightweight, zero-battery BPM-synchronized visualizer.
@@ -109,40 +105,9 @@ fun BpmVisualizer(
     val hasResolvedBpm = bpm != null && bpm > 0f
     val isBpmActive = isPlaying && hasResolvedBpm
 
-    // Staggered acoustic musical ceilings
-    val weights = remember(barCount) {
-        when (barCount) {
-            3 -> floatArrayOf(1.00f, 0.80f, 0.58f)
-            4 -> floatArrayOf(1.00f, 0.74f, 0.92f, 0.58f)
-            5 -> floatArrayOf(1.00f, 0.72f, 0.96f, 0.68f, 0.52f)
-            6 -> floatArrayOf(1.00f, 0.70f, 0.92f, 0.76f, 0.62f, 0.48f)
-            7 -> floatArrayOf(1.00f, 0.68f, 0.88f, 0.96f, 0.74f, 0.60f, 0.46f)
-            else -> {
-                val count = barCount.coerceAtLeast(1)
-                FloatArray(count) { idx ->
-                    val norm = if (count > 1) idx.toFloat() / (count - 1) else 0.5f
-                    (1.0f - norm * 0.46f + kotlin.math.sin(norm * Math.PI.toFloat()) * 0.16f).coerceIn(0.44f, 1.0f)
-                }
-            }
-        }
-    }
-
-    // Playback state spring transition (read inside draw phase to avoid per-frame recompositions)
-    val playProgressState = animateFloatAsState(
-        targetValue = if (isBpmActive) 1f else 0f,
-        animationSpec = if (isBpmActive) {
-            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "bpm_play_spring",
-    )
-
-    val playAlphaState = animateFloatAsState(
-        targetValue = if (isBpmActive) 1.0f else 0.45f,
-        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "bpm_alpha",
-    )
+    // Staggered acoustic musical ceilings & playback springs
+    val weights = remember(barCount) { acousticBandWeights(barCount) }
+    val playback = rememberVisualizerPlaybackStates(isBpmActive, labelPrefix = "bpm")
 
     // Hardware frame clock
     var vsyncClock by remember { mutableLongStateOf(0L) }
@@ -166,8 +131,8 @@ fun BpmVisualizer(
     val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
-        val playProgress = playProgressState.value
-        val playAlpha = playAlphaState.value
+        val playProgress = playback.playProgress.value
+        val playAlpha = playback.playAlpha.value
 
         val now = SystemClock.elapsedRealtime()
         val livePos = latestPositionProvider()
@@ -233,16 +198,7 @@ fun BpmVisualizer(
 
             val w = weights.getOrElse(i) { 1.0f }
             val targetHeight = (rawTarget * w).coerceIn(0.0f, 1.0f)
-
-            val prevHeight = ballisticHeights[i]
-            val attackRate = 0.80f + (0.12f * normalizedCol) // 0.80 -> 0.92
-            val decayRate = 0.13f + (0.18f * normalizedCol)  // 0.13 (bass) -> 0.31 (treble)
-
-            val filteredHeight = if (targetHeight > prevHeight) {
-                prevHeight + (targetHeight - prevHeight) * attackRate
-            } else {
-                prevHeight + (targetHeight - prevHeight) * decayRate
-            }
+            val filteredHeight = stepBandBallistics(ballisticHeights[i], targetHeight, normalizedCol)
             ballisticHeights[i] = filteredHeight
 
             val activeHeightPx = minHeightPx + (heightSpanPx * filteredHeight)

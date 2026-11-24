@@ -152,7 +152,6 @@ internal fun ShapePickerSection(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = "Active: ${selectedShape.label} ($subtitle)",
@@ -270,14 +269,12 @@ internal fun ShapePickerSection(
                 Text(
                     text = "Shape Rotation",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                 )
             }
             Text(
                 text = "${rotationDegrees.roundToInt()}°",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 

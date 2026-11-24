@@ -4,8 +4,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.SystemClock
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
@@ -31,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -53,7 +48,6 @@ import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactActivityStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusTextWidthDp
-import ca.saboor.larpdot.ui.overlay.squircleShape
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
 private enum class LiveActivityPreviewSample(val label: String) {
@@ -244,12 +238,7 @@ fun LiveActivitiesPreview(
         label = "activity_preview_expanded_height",
     )
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(animatedCardWidth, animatedCardHeight) / 2f)
-    val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
-    val containerShape = if (!squircleEnabled || blurEnabled) {
-        RoundedCornerShape(expandedCornerRadiusDp)
-    } else {
-        squircleShape(expandedCornerRadiusPx, 0.80f)
-    }
+    val containerShape = previewCardShape(expandedCornerRadiusDp, squircleEnabled, blurEnabled)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -301,14 +290,11 @@ fun LiveActivitiesPreview(
                         trailingWingFraction = compactTrailingFraction,
                     )
                     val leadingWidthDp = (animatedCompactWidth - cutoutDiameterDp) * (1f - compactTrailingFraction)
-                    Box(
+                    PreviewCameraCutoutDot(
+                        diameter = cutoutDiameterDp,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .offset(x = leadingWidthDp)
-                            .size(cutoutDiameterDp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0D0D0D))
-                            .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                            .offset(x = leadingWidthDp),
                     )
                 }
             }
@@ -343,14 +329,11 @@ fun LiveActivitiesPreview(
                         topContentInset = cutoutDiameterDp + 8.dp,
                         spanIconLeftOfCutout = true,
                     )
-                    Box(
+                    PreviewCameraCutoutDot(
+                        diameter = cutoutDiameterDp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = 6.dp)
-                            .size(cutoutDiameterDp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0D0D0D))
-                            .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                            .offset(y = 6.dp),
                     )
                 }
             }

@@ -1,16 +1,10 @@
 package ca.saboor.larpdot.visualizer
 
-import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.sqrt
 
 /**
@@ -24,34 +18,6 @@ object AudioBpmDetector {
 
     private const val TAG = "AudioBpmDetector"
     private const val TARGET_FPS = 100 // 100 frames per second = 10ms resolution
-
-    private fun downloadPreview(urlString: String, destination: File): Boolean {
-        return try {
-            val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 4000
-            connection.readTimeout = 6000
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-            connection.instanceFollowRedirects = true
-
-            connection.inputStream.use { input ->
-                FileOutputStream(destination).use { output ->
-                    val buffer = ByteArray(8192)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                    }
-                }
-            }
-            connection.disconnect()
-            destination.exists() && destination.length() > 0L
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to download preview: ${e.message}")
-            false
-        }
-    }
 
     fun analyzeBpmFromFile(audioFile: File): Float? {
         val extractor = MediaExtractor()

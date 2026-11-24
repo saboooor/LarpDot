@@ -32,7 +32,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,13 +55,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -187,7 +186,6 @@ fun AppBlacklistScreen(
                     Text(
                         text = "App Blacklist",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = if (blacklistedPackages.isEmpty()) {
@@ -214,43 +212,13 @@ fun AppBlacklistScreen(
 
         // Master Switch Card
         LarpCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = LarpIcons.Block,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Column {
-                        Text(
-                            text = "Enable App Blacklist",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                        )
-                        Text(
-                            text = "Ignore media playback and notifications from selected apps so they never appear on the dynamic island",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Switch(
-                    checked = appBlacklistEnabled,
-                    onCheckedChange = { isChecked ->
-                        OverlayPreferences.setAppBlacklistEnabled(context, isChecked)
-                    },
-                )
-            }
+            LarpSwitchRow(
+                title = "Enable App Blacklist",
+                subtitle = "Ignore media playback and notifications from selected apps so they never appear on the dynamic island",
+                icon = LarpIcons.Block,
+                checked = appBlacklistEnabled,
+                onCheckedChange = { OverlayPreferences.setAppBlacklistEnabled(context, it) },
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -374,7 +342,6 @@ fun AppBlacklistScreen(
                             "No apps found"
                         },
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
@@ -441,7 +408,6 @@ fun AppBlacklistScreen(
                                 Text(
                                     text = app.label,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )

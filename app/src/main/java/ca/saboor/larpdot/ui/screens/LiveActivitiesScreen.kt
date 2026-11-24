@@ -20,12 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
@@ -49,6 +45,10 @@ import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.components.AccentCard
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
+import ca.saboor.larpdot.ui.components.LarpToggleTile
 import ca.saboor.larpdot.ui.components.LiveActivitiesPreview
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -257,45 +257,15 @@ fun LiveActivitiesScreen(
         item {
             SectionHeader(title = "Live Activities")
             LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.NotificationsActive,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Show Live Activities",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Turn ongoing notifications into island activities",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = settings.enabled,
-                        onCheckedChange = {
-                            OverlayPreferences.setNotificationActivitySettings(
-                                context,
-                                settings.copy(enabled = it),
-                            )
-                        },
-                    )
-                }
+                LarpSwitchRow(
+                    title = "Show Live Activities",
+                    subtitle = "Turn ongoing notifications into island activities",
+                    icon = LarpIcons.NotificationsActive,
+                    checked = settings.enabled,
+                    onCheckedChange = {
+                        OverlayPreferences.setNotificationActivitySettings(context, settings.copy(enabled = it))
+                    },
+                )
 
                 AnimatedVisibility(
                     visible = settings.enabled,
@@ -303,7 +273,7 @@ fun LiveActivitiesScreen(
                     exit = LarpMotion.conceal,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        LarpDivider()
                         ActivityToggleGrid(items = ongoingItems)
                     }
                 }
@@ -385,47 +355,20 @@ fun LiveActivitiesScreen(
         item {
             SectionHeader(title = "Short-Term Status Alerts")
             LarpCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.OpenInFull,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
+                LarpSwitchRow(
+                    title = "Show Expanded",
+                    subtitle = "Open short-term alerts expanded instead of minimized",
+                    icon = LarpIcons.OpenInFull,
+                    checked = settings.expandShortTermAlerts,
+                    onCheckedChange = {
+                        OverlayPreferences.setNotificationActivitySettings(
+                            context,
+                            settings.copy(expandShortTermAlerts = it),
                         )
-                        Column {
-                            Text(
-                                text = "Show Expanded",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Open short-term alerts expanded instead of minimized",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = settings.expandShortTermAlerts,
-                        onCheckedChange = {
-                            OverlayPreferences.setNotificationActivitySettings(
-                                context,
-                                settings.copy(expandShortTermAlerts = it),
-                            )
-                        },
-                    )
-                }
+                    },
+                )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
                 ActivityToggleGrid(items = shortTermItems)
 
@@ -435,32 +378,13 @@ fun LiveActivitiesScreen(
                     exit = LarpMotion.conceal,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Charge limit target",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = "${settings.chargeLimitPercent}%",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        val limitSliderState = remember {
-                            SliderState(
-                                value = settings.chargeLimitPercent.toFloat(),
-                                steps = 5,
-                                trackRange = 70f..100f,
-                            )
-                        }
-                        limitSliderState.value = settings.chargeLimitPercent.toFloat()
-                        Slider(
-                            state = limitSliderState,
+                        LarpDivider()
+                        LarpSliderRow(
+                            title = "Charge limit target",
+                            valueLabel = "${settings.chargeLimitPercent}%",
+                            value = settings.chargeLimitPercent.toFloat(),
+                            valueRange = 70f..100f,
+                            steps = 5,
                             onValueChange = { raw ->
                                 val snapped = ((raw / 5f).roundToInt() * 5).coerceIn(70, 100)
                                 OverlayPreferences.setNotificationActivitySettings(
@@ -518,47 +442,14 @@ private fun ActivityToggleTile(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        ToggleButton(
+        LarpToggleTile(
+            title = item.title,
+            subtitle = item.subtitle,
+            icon = item.icon,
             checked = item.checked,
             onCheckedChange = item.onCheckedChange,
             modifier = Modifier.fillMaxWidth(),
-            shapes = ToggleButtonShapes(
-                shape = RoundedCornerShape(16.dp),
-                pressedShape = RoundedCornerShape(12.dp),
-                checkedShape = RoundedCornerShape(22.dp),
-            ),
-            colors = ToggleButtonDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            ),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                horizontalAlignment = Alignment.Start,
-            ) {
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = item.subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        )
         if (item.permanent != null && item.onPermanentChange != null) {
             ToggleButton(
                 checked = item.permanent,

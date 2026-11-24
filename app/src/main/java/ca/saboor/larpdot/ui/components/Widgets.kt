@@ -15,6 +15,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,13 +23,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -39,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
@@ -224,7 +235,6 @@ fun StatusPill(
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             color = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -304,6 +314,181 @@ fun PreferenceRow(
                 Spacer(modifier = Modifier.width(12.dp))
                 trailing()
             }
+        }
+    }
+}
+
+/** Subtle divider shared across preference cards. */
+@Composable
+fun LarpDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+    )
+}
+
+/** Standardized title + optional subtitle/icon + Material 3 Switch row. */
+@Composable
+fun LarpSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
+    }
+}
+
+/** Standardized labeled Material 3 Expressive slider row with live formatted readout. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun LarpSliderRow(
+    title: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = if (subtitle != null) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelLarge,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        val sliderState = remember(valueRange, steps) {
+            SliderState(
+                value = value.coerceIn(valueRange.start, valueRange.endInclusive),
+                steps = steps,
+                trackRange = valueRange,
+            )
+        }
+        sliderState.value = value.coerceIn(valueRange.start, valueRange.endInclusive)
+        Slider(
+            state = sliderState,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** Shared Material 3 Expressive tile used in 2-column toggle grids across Music & Live Activities. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun LarpToggleTile(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        shapes = ToggleButtonShapes(
+            shape = RoundedCornerShape(16.dp),
+            pressedShape = RoundedCornerShape(12.dp),
+            checkedShape = RoundedCornerShape(22.dp),
+        ),
+        colors = ToggleButtonDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

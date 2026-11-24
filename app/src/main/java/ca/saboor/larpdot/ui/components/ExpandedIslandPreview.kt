@@ -1,29 +1,23 @@
 package ca.saboor.larpdot.ui.components
 
-import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -37,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +51,6 @@ import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.configuredCompactMediaWings
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
-import ca.saboor.larpdot.ui.overlay.squircleShape
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
 enum class IslandPreviewMode {
@@ -234,12 +226,7 @@ fun ExpandedIslandPreview(
     val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
 
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewHeight) / 2f)
-    val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
-    val containerShape = if (!squircleEnabled || blurEnabled) {
-        RoundedCornerShape(expandedCornerRadiusDp)
-    } else {
-        squircleShape(expandedCornerRadiusPx, 0.80f)
-    }
+    val containerShape = previewCardShape(expandedCornerRadiusDp, squircleEnabled, blurEnabled)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -352,13 +339,7 @@ fun ExpandedIslandPreview(
                             highlightVisualizer = selectedElement == MusicPreviewElement.VISUALIZER,
                         )
                         // Hardware camera cutout visualizer centered between wings
-                        Box(
-                            modifier = Modifier
-                                .size(cutoutDiameterDp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0D0D0D))
-                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
-                        )
+                        PreviewCameraCutoutDot(diameter = cutoutDiameterDp)
                     }
                 }
             }
@@ -438,16 +419,12 @@ fun ExpandedIslandPreview(
                     )
                     val punchHoleCenterYDp = 18.dp
 
-                    Box(
-                        modifier = Modifier
-                            .offset(
-                                x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
-                                y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
-                            )
-                            .size(cutoutDiameterDp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0D0D0D))
-                            .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                    PreviewCameraCutoutDot(
+                        diameter = cutoutDiameterDp,
+                        modifier = Modifier.offset(
+                            x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
+                            y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                        ),
                     )
                 }
             }

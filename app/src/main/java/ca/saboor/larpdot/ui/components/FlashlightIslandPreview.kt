@@ -2,8 +2,6 @@ package ca.saboor.larpdot.ui.components
 
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,11 +27,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
@@ -45,7 +41,6 @@ import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberCompactFlashlightStatus
 import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedFlashlightContent
-import ca.saboor.larpdot.ui.overlay.squircleShape
 
 enum class FlashlightPreviewElement {
     MINIMIZED_PILL,
@@ -92,12 +87,7 @@ fun FlashlightIslandPreview(
     val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
 
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewCardHeight) / 2f)
-    val expandedCornerRadiusPx = with(density) { expandedCornerRadiusDp.toPx() }
-    val containerShape = if (!squircleEnabled || blurEnabled) {
-        RoundedCornerShape(expandedCornerRadiusDp)
-    } else {
-        squircleShape(expandedCornerRadiusPx, 0.80f)
-    }
+    val containerShape = previewCardShape(expandedCornerRadiusDp, squircleEnabled, blurEnabled)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -154,13 +144,7 @@ fun FlashlightIslandPreview(
                             highlightRadial = selectedElement == FlashlightPreviewElement.MINIMIZED_RADIAL,
                         )
                         // Hardware camera cutout visualizer centered between wings
-                        Box(
-                            modifier = Modifier
-                                .size(cutoutDiameterDp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0D0D0D))
-                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
-                        )
+                        PreviewCameraCutoutDot(diameter = cutoutDiameterDp)
                     }
                 }
         }
@@ -211,16 +195,12 @@ fun FlashlightIslandPreview(
                         )
                         val punchHoleCenterYDp = 18.dp
 
-                        Box(
-                            modifier = Modifier
-                                .offset(
-                                    x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
-                                    y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
-                                )
-                                .size(cutoutDiameterDp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0D0D0D))
-                                .border(0.75.dp, Color(0x28FFFFFF), CircleShape),
+                        PreviewCameraCutoutDot(
+                            diameter = cutoutDiameterDp,
+                            modifier = Modifier.offset(
+                                x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
+                                y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                            ),
                         )
                     }
                 }

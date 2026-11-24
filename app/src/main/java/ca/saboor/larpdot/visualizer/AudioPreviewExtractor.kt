@@ -28,8 +28,6 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -364,20 +362,11 @@ object AudioPreviewExtractor {
     fun fetchDeezerPreviewUrl(title: String, artist: String): String? {
         return try {
             val query = URLEncoder.encode("$title $artist", "UTF-8")
-            val endpoint = URL("https://api.deezer.com/search?q=$query&limit=1")
-            val connection = endpoint.openConnection() as HttpURLConnection
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", "LarpDot/1.0")
-            connection.instanceFollowRedirects = true
-
-            val responseText = try {
-                connection.inputStream.bufferedReader().use { it.readText() }
-            } finally {
-                connection.disconnect()
-            }
-
+            val responseText = VisualizerHttp.fetchText(
+                urlString = "https://api.deezer.com/search?q=$query&limit=1",
+                connectTimeoutMs = 5_000,
+                readTimeoutMs = 5_000,
+            )
             val json = JSONObject(responseText)
             val data = json.optJSONArray("data")
             if (data != null && data.length() > 0) {
@@ -394,19 +383,11 @@ object AudioPreviewExtractor {
     fun fetchItunesPreviewUrl(title: String, artist: String): String? {
         return try {
             val query = URLEncoder.encode("$title $artist", "UTF-8")
-            val endpoint = URL("https://itunes.apple.com/search?term=$query&entity=song&limit=1")
-            val connection = endpoint.openConnection() as HttpURLConnection
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-            connection.requestMethod = "GET"
-            connection.instanceFollowRedirects = true
-
-            val responseText = try {
-                connection.inputStream.bufferedReader().use { it.readText() }
-            } finally {
-                connection.disconnect()
-            }
-
+            val responseText = VisualizerHttp.fetchText(
+                urlString = "https://itunes.apple.com/search?term=$query&entity=song&limit=1",
+                connectTimeoutMs = 5_000,
+                readTimeoutMs = 5_000,
+            )
             val json = JSONObject(responseText)
             val results = json.optJSONArray("results")
             if (results != null && results.length() > 0) {
@@ -440,34 +421,8 @@ object AudioPreviewExtractor {
         }
     }
 
-    private suspend fun downloadToFile(urlString: String, destination: File) {
-        val url = URL(urlString)
-        val connection = url.openConnection() as HttpURLConnection
-        connection.connectTimeout = 6000
-        connection.readTimeout = 10000
-        connection.requestMethod = "GET"
-        connection.instanceFollowRedirects = true
-
-        val partial = File(destination.parentFile, "${destination.name}.partial")
-        try {
-            connection.inputStream.use { input ->
-                FileOutputStream(partial).use { output ->
-                    val buffer = ByteArray(8192)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                    }
-                }
-            }
-            currentCoroutineContext().ensureActive()
-            if (!partial.renameTo(destination)) error("Could not save audio preview")
-        } finally {
-            connection.disconnect()
-            partial.delete()
-        }
-    }
+    private suspend fun downloadToFile(urlString: String, destination: File) =
+        VisualizerHttp.downloadToFile(urlString, destination)
 
     /**
      * Decodes 16-bit PCM audio and separates exactly [numBands] frequency bands

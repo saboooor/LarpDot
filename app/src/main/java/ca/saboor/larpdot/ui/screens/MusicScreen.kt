@@ -20,26 +20,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,7 +46,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -68,6 +58,10 @@ import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
+import ca.saboor.larpdot.ui.components.LarpToggleTile
 import ca.saboor.larpdot.ui.components.MusicPreviewElement
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -347,7 +341,6 @@ fun MusicScreen(
                 Text(
                     text = "Performance Warning",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                 )
             },
             text = {
@@ -366,7 +359,6 @@ fun MusicScreen(
                     Text(
                         text = "Enable Anyway",
                         color = MaterialTheme.colorScheme.error,
-                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                 }
             },
@@ -418,7 +410,6 @@ private fun MusicSettingsPage(
                 Text(
                     text = "Music Settings",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                 )
                 Text(
                     text = "Minimized, expanded, and playback options",
@@ -604,31 +595,12 @@ private fun MusicSettingsPage(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Hide in Music App",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                )
-                                Text(
-                                    text = "Hide the music island while the active music player application is open",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-
-                            Switch(
-                                checked = hideMusicWhenAppOpen,
-                                onCheckedChange = { isChecked ->
-                                    OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, isChecked)
-                                },
-                            )
-                        }
+                        LarpSwitchRow(
+                            title = "Hide in Music App",
+                            subtitle = "Hide the music island while the active music player application is open",
+                            checked = hideMusicWhenAppOpen,
+                            onCheckedChange = { OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, it) },
+                        )
 
                         if (hideMusicWhenAppOpen) {
                             Text(
@@ -642,7 +614,7 @@ private fun MusicSettingsPage(
                             }
                         }
 
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        LarpDivider()
 
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -651,7 +623,6 @@ private fun MusicSettingsPage(
                             Text(
                                 text = "Pause Timeout",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = if (musicPauseTimeoutSeconds == 0) {
@@ -686,49 +657,17 @@ private fun MusicSettingsPage(
                             }
                         }
 
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        LarpDivider()
 
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Pulse Amount",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                    )
-                                    Text(
-                                        text = "Scale factor for BPM pulse intensity (0.25x – 3.0x)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Text(
-                                    text = "%.2fx".format(pulseAmount),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            val pulseSliderState = remember {
-                                SliderState(
-                                    value = pulseAmount,
-                                    steps = 10,
-                                    trackRange = 0.25f..3.0f,
-                                )
-                            }
-                            pulseSliderState.value = pulseAmount
-                            Slider(
-                                state = pulseSliderState,
-                                onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
-                            )
-                        }
+                        LarpSliderRow(
+                            title = "Pulse Amount",
+                            subtitle = "Scale factor for BPM pulse intensity (0.25x – 3.0x)",
+                            valueLabel = "%.2fx".format(pulseAmount),
+                            value = pulseAmount,
+                            valueRange = 0.25f..3.0f,
+                            steps = 10,
+                            onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
+                        )
                     }
                 }
             }
@@ -736,7 +675,6 @@ private fun MusicSettingsPage(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MusicElementToggleGrid(
     items: List<MusicElementToggle>,
@@ -749,47 +687,14 @@ private fun MusicElementToggleGrid(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 rowItems.forEach { item ->
-                    ToggleButton(
+                    LarpToggleTile(
+                        title = item.title,
+                        subtitle = item.subtitle,
+                        icon = item.icon,
                         checked = item.checked,
                         onCheckedChange = item.onCheckedChange,
                         modifier = Modifier.weight(1f),
-                        shapes = ToggleButtonShapes(
-                            shape = RoundedCornerShape(16.dp),
-                            pressedShape = RoundedCornerShape(12.dp),
-                            checkedShape = RoundedCornerShape(22.dp),
-                        ),
-                        colors = ToggleButtonDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            horizontalAlignment = Alignment.Start,
-                        ) {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = item.subtitle,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
+                    )
                 }
                 repeat(columns - rowItems.size) {
                     Spacer(modifier = Modifier.weight(1f))

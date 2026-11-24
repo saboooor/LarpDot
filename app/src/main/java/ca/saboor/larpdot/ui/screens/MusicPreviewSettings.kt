@@ -5,33 +5,28 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.MusicPreviewElement
 import ca.saboor.larpdot.ui.theme.LarpIcons
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -137,7 +132,7 @@ internal fun MusicPreviewInspectorCard(
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            LarpDivider()
 
             when (element) {
                 MusicPreviewElement.MINIMIZED_ALBUM_ART -> {
@@ -240,47 +235,19 @@ private fun MinimizedBackgroundSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Dominant Color Glow", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Ambient artwork tint on the minimized pill",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = showMinimizedDominantGlow,
-                onCheckedChange = {
-                    OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, it)
-                },
-            )
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Pulse with BPM", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Pulse the minimized dominant glow to the track tempo",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = minimizedBpmPulseEnabled,
-                onCheckedChange = {
-                    OverlayPreferences.setMinimizedBpmPulseEnabled(context, it)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Dominant Color Glow",
+            subtitle = "Ambient artwork tint on the minimized pill",
+            checked = showMinimizedDominantGlow,
+            onCheckedChange = { OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, it) },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Pulse with BPM",
+            subtitle = "Pulse the minimized dominant glow to the track tempo",
+            checked = minimizedBpmPulseEnabled,
+            onCheckedChange = { OverlayPreferences.setMinimizedBpmPulseEnabled(context, it) },
+        )
     }
 }
 
@@ -311,7 +278,6 @@ private fun ExpandedBackgroundSettingsContent(
             Text(
                 text = "Background Style",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
             )
             Text(
                 text = when (expandedStyle) {
@@ -334,9 +300,7 @@ private fun ExpandedBackgroundSettingsContent(
                 toggleableItem(
                     checked = expandedStyle == style,
                     label = style.label,
-                    onCheckedChange = {
-                        OverlayPreferences.setExpandedAlbumArtStyle(context, style)
-                    },
+                    onCheckedChange = { OverlayPreferences.setExpandedAlbumArtStyle(context, style) },
                     weight = 1f,
                 )
             }
@@ -350,36 +314,20 @@ private fun ExpandedBackgroundSettingsContent(
                 toggleableItem(
                     checked = expandedStyle == style,
                     label = style.label,
-                    onCheckedChange = {
-                        OverlayPreferences.setExpandedAlbumArtStyle(context, style)
-                    },
+                    onCheckedChange = { OverlayPreferences.setExpandedAlbumArtStyle(context, style) },
                     weight = 1f,
                 )
             }
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        LarpDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Dominant Color Glow", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Ambient colored edge glow adapted from artwork",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = showExpandedDominantGlow,
-                onCheckedChange = {
-                    OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, it)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Dominant Color Glow",
+            subtitle = "Ambient colored edge glow adapted from artwork",
+            checked = showExpandedDominantGlow,
+            onCheckedChange = { OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, it) },
+        )
 
         AnimatedVisibility(
             visible = showExpandedDominantGlow,
@@ -400,10 +348,7 @@ private fun ExpandedBackgroundSettingsContent(
                         checked = expandedGlowSides.left,
                         label = "Left",
                         onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(
-                                context,
-                                expandedGlowSides.copy(left = it),
-                            )
+                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(left = it))
                         },
                         weight = 1f,
                     )
@@ -411,10 +356,7 @@ private fun ExpandedBackgroundSettingsContent(
                         checked = expandedGlowSides.right,
                         label = "Right",
                         onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(
-                                context,
-                                expandedGlowSides.copy(right = it),
-                            )
+                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(right = it))
                         },
                         weight = 1f,
                     )
@@ -422,10 +364,7 @@ private fun ExpandedBackgroundSettingsContent(
                         checked = expandedGlowSides.bottom,
                         label = "Bottom",
                         onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(
-                                context,
-                                expandedGlowSides.copy(bottom = it),
-                            )
+                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(bottom = it))
                         },
                         weight = 1f,
                     )
@@ -433,10 +372,7 @@ private fun ExpandedBackgroundSettingsContent(
                         checked = expandedGlowSides.top,
                         label = "Top",
                         onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(
-                                context,
-                                expandedGlowSides.copy(top = it),
-                            )
+                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(top = it))
                         },
                         weight = 1f,
                     )
@@ -444,28 +380,14 @@ private fun ExpandedBackgroundSettingsContent(
             }
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        LarpDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Pulse with BPM", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Pulse the expanded glow and play button to the track tempo",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = expandedBpmPulseEnabled,
-                onCheckedChange = {
-                    OverlayPreferences.setExpandedBpmPulseEnabled(context, it)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Pulse with BPM",
+            subtitle = "Pulse the expanded glow and play button to the track tempo",
+            checked = expandedBpmPulseEnabled,
+            onCheckedChange = { OverlayPreferences.setExpandedBpmPulseEnabled(context, it) },
+        )
     }
 }
 
@@ -479,125 +401,53 @@ private fun TrackInfoSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Track Info", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display track metadata on the expanded card",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = expandedElementVisibility.trackInfo,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setExpandedElementVisibility(
-                        context,
-                        expandedElementVisibility.copy(trackInfo = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Title", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display the song title",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.showTitle,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setTrackInfoStyle(context, style.copy(showTitle = enabled))
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Title Accent Color", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Tint the song title with album art accent color",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.titleAccentColor,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setTrackInfoStyle(context, style.copy(titleAccentColor = enabled))
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Artist", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display the artist name",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.showArtist,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setTrackInfoStyle(context, style.copy(showArtist = enabled))
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Album", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display the album name when available",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.showAlbum,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setTrackInfoStyle(context, style.copy(showAlbum = enabled))
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Show Track Info",
+            subtitle = "Display track metadata on the expanded card",
+            checked = expandedElementVisibility.trackInfo,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(trackInfo = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Show Title",
+            subtitle = "Display the song title",
+            checked = style.showTitle,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setTrackInfoStyle(context, style.copy(showTitle = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Title Accent Color",
+            subtitle = "Tint the song title with album art accent color",
+            checked = style.titleAccentColor,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setTrackInfoStyle(context, style.copy(titleAccentColor = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Show Artist",
+            subtitle = "Display the artist name",
+            checked = style.showArtist,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setTrackInfoStyle(context, style.copy(showArtist = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Show Album",
+            subtitle = "Display the album name when available",
+            checked = style.showAlbum,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setTrackInfoStyle(context, style.copy(showAlbum = enabled))
+            },
+        )
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PlaybackControlsSettingsContent(
     context: Context,
@@ -608,177 +458,67 @@ private fun PlaybackControlsSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Playback Controls", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display previous, play/pause, and next controls",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        LarpSwitchRow(
+            title = "Show Playback Controls",
+            subtitle = "Display previous, play/pause, and next controls",
+            checked = expandedElementVisibility.mainControls,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(mainControls = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Play/Pause Background",
+            subtitle = "Show a filled background behind the play/pause button",
+            checked = style.playPauseBackground,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(playPauseBackground = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Play/Pause Accent Color",
+            subtitle = "Tint the play/pause button with album art accent color",
+            checked = style.playPauseAccentColor,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(playPauseAccentColor = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Skip/Previous Background",
+            subtitle = "Show a tonal background behind skip and previous buttons",
+            checked = style.skipBackground,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(skipBackground = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Material 3 Button Group",
+            subtitle = "Connect buttons with tight spacing and inner seam corners",
+            checked = style.material3ButtonGroup,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setPlaybackControlsStyle(
+                    context,
+                    if (enabled) {
+                        style.copy(material3ButtonGroup = true, playPauseBackground = true, skipBackground = true)
+                    } else {
+                        style.copy(material3ButtonGroup = false)
+                    },
                 )
-            }
-            Switch(
-                checked = expandedElementVisibility.mainControls,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setExpandedElementVisibility(
-                        context,
-                        expandedElementVisibility.copy(mainControls = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Play/Pause Background", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Show a filled background behind the play/pause button",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.playPauseBackground,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setPlaybackControlsStyle(
-                        context,
-                        style.copy(playPauseBackground = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Play/Pause Accent Color", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Tint the play/pause button with album art accent color",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.playPauseAccentColor,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setPlaybackControlsStyle(
-                        context,
-                        style.copy(playPauseAccentColor = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Skip/Previous Background", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Show a tonal background behind skip and previous buttons",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.skipBackground,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setPlaybackControlsStyle(
-                        context,
-                        style.copy(skipBackground = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Material 3 Button Group", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Connect buttons with tight spacing and inner seam corners",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = style.material3ButtonGroup,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setPlaybackControlsStyle(
-                        context,
-                        if (enabled) {
-                            style.copy(
-                                material3ButtonGroup = true,
-                                playPauseBackground = true,
-                                skipBackground = true,
-                            )
-                        } else {
-                            style.copy(material3ButtonGroup = false)
-                        },
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Corner Radius", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = "${style.cornerRadiusDp.roundToInt()} dp",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            val radiusSliderState = remember {
-                SliderState(
-                    value = style.cornerRadiusDp,
-                    trackRange = 0f..32f,
-                )
-            }
-            radiusSliderState.value = style.cornerRadiusDp
-            Slider(
-                state = radiusSliderState,
-                onValueChange = { value ->
-                    OverlayPreferences.setPlaybackControlsStyle(
-                        context,
-                        style.copy(cornerRadiusDp = value.roundToInt().toFloat()),
-                    )
-                },
-            )
-        }
+            },
+        )
+        LarpDivider()
+        LarpSliderRow(
+            title = "Corner Radius",
+            valueLabel = "${style.cornerRadiusDp.roundToInt()} dp",
+            value = style.cornerRadiusDp,
+            valueRange = 0f..32f,
+            onValueChange = { value ->
+                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(cornerRadiusDp = value.roundToInt().toFloat()))
+            },
+        )
     }
 }
 
@@ -793,75 +533,28 @@ private fun ProgressBarSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Progress Bar", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Display the seekable scrubber on the expanded card",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = expandedElementVisibility.progress,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setExpandedElementVisibility(
-                        context,
-                        expandedElementVisibility.copy(progress = enabled),
-                    )
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Progress Squiggles", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Animate the progress bar with a wavy line",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = showProgressSquiggles,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setShowProgressSquigglesEnabled(context, enabled)
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Accent Color", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Tint the progress bar with album art accent color",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = progressBarAccentColor,
-                onCheckedChange = { enabled ->
-                    OverlayPreferences.setProgressBarAccentColorEnabled(context, enabled)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Show Progress Bar",
+            subtitle = "Display the seekable scrubber on the expanded card",
+            checked = expandedElementVisibility.progress,
+            onCheckedChange = { enabled ->
+                OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(progress = enabled))
+            },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Progress Squiggles",
+            subtitle = "Animate the progress bar with a wavy line",
+            checked = showProgressSquiggles,
+            onCheckedChange = { OverlayPreferences.setShowProgressSquigglesEnabled(context, it) },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Accent Color",
+            subtitle = "Tint the progress bar with album art accent color",
+            checked = progressBarAccentColor,
+            onCheckedChange = { OverlayPreferences.setProgressBarAccentColorEnabled(context, it) },
+        )
     }
 }
 
@@ -890,7 +583,6 @@ private fun MinimizedAlbumArtSettingsContent(
             Text(
                 text = "Minimized Style",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
             )
             Text(
                 text = when (minimizedStyle) {
@@ -912,9 +604,7 @@ private fun MinimizedAlbumArtSettingsContent(
                 toggleableItem(
                     checked = minimizedStyle == style,
                     label = style.label,
-                    onCheckedChange = {
-                        OverlayPreferences.setMinimizedAlbumArtStyle(context, style)
-                    },
+                    onCheckedChange = { OverlayPreferences.setMinimizedAlbumArtStyle(context, style) },
                     weight = 1f,
                 )
             }
@@ -931,80 +621,31 @@ private fun MinimizedAlbumArtSettingsContent(
                     subtitle = "minimized island",
                     selectedShape = minimizedShape,
                     rotationDegrees = minimizedRotation,
-                    onShapeSelected = {
-                        OverlayPreferences.setMinimizedAlbumArtShape(context, it)
-                    },
-                    onRotationChanged = {
-                        OverlayPreferences.setMinimizedAlbumArtRotation(context, it)
-                    },
+                    onShapeSelected = { OverlayPreferences.setMinimizedAlbumArtShape(context, it) },
+                    onRotationChanged = { OverlayPreferences.setMinimizedAlbumArtRotation(context, it) },
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            OverlayPreferences.setMinimizedNestedBlurredBgEnabled(
-                                context,
-                                !minimizedNestedBlurredBg,
-                            )
-                        }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Blurred Artwork Background",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                        )
-                        Text(
-                            text = "Add blurred background behind nested art that fades into the dot",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = minimizedNestedBlurredBg,
-                        onCheckedChange = {
-                            OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, it)
-                        },
-                    )
-                }
+                LarpDivider()
+                LarpSwitchRow(
+                    title = "Blurred Artwork Background",
+                    subtitle = "Add blurred background behind nested art that fades into the dot",
+                    checked = minimizedNestedBlurredBg,
+                    onCheckedChange = { OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, it) },
+                )
             }
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
-            Switch(
-                checked = showMinimizedProgressOutline,
-                onCheckedChange = {
-                    OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, it)
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Album Art Glow", style = MaterialTheme.typography.titleMedium)
-            Switch(
-                checked = albumArtGlow,
-                onCheckedChange = {
-                    OverlayPreferences.setAlbumArtGlowEnabled(context, it)
-                },
-            )
-        }
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Radial Progress",
+            checked = showMinimizedProgressOutline,
+            onCheckedChange = { OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, it) },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Album Art Glow",
+            checked = albumArtGlow,
+            onCheckedChange = { OverlayPreferences.setAlbumArtGlowEnabled(context, it) },
+        )
     }
 }
 
@@ -1021,26 +662,12 @@ private fun ExpandedAlbumArtSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show Album Art", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Show the cover beside the track title",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = showExpandedAlbumArt,
-                onCheckedChange = {
-                    OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it)
-                },
-            )
-        }
+        LarpSwitchRow(
+            title = "Show Album Art",
+            subtitle = "Show the cover beside the track title",
+            checked = showExpandedAlbumArt,
+            onCheckedChange = { OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it) },
+        )
 
         AnimatedVisibility(
             visible = showExpandedAlbumArt,
@@ -1052,46 +679,22 @@ private fun ExpandedAlbumArtSettingsContent(
                 subtitle = "expanded album art",
                 selectedShape = expandedShape,
                 rotationDegrees = expandedRotation,
-                onShapeSelected = {
-                    OverlayPreferences.setExpandedAlbumArtShape(context, it)
-                },
-                onRotationChanged = {
-                    OverlayPreferences.setExpandedAlbumArtRotation(context, it)
-                },
+                onShapeSelected = { OverlayPreferences.setExpandedAlbumArtShape(context, it) },
+                onRotationChanged = { OverlayPreferences.setExpandedAlbumArtRotation(context, it) },
             )
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
-            Switch(
-                checked = showExpandedProgressOutline,
-                onCheckedChange = {
-                    OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, it)
-                },
-            )
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Album Art Glow", style = MaterialTheme.typography.titleMedium)
-            Switch(
-                checked = albumArtGlow,
-                onCheckedChange = {
-                    OverlayPreferences.setAlbumArtGlowEnabled(context, it)
-                },
-            )
-        }
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Radial Progress",
+            checked = showExpandedProgressOutline,
+            onCheckedChange = { OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, it) },
+        )
+        LarpDivider()
+        LarpSwitchRow(
+            title = "Album Art Glow",
+            checked = albumArtGlow,
+            onCheckedChange = { OverlayPreferences.setAlbumArtGlowEnabled(context, it) },
+        )
     }
 }
-

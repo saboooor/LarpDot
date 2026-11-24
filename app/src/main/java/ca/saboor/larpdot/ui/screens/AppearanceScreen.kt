@@ -21,13 +21,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -50,6 +46,9 @@ import ca.saboor.larpdot.service.IslandThemePresets
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.ExpandedIslandPreview
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.BackdropBlurStatus
 import ca.saboor.larpdot.ui.overlay.rememberBackdropBlurStatus
@@ -141,14 +140,12 @@ fun AppearanceScreen(
                         onValueChange = { OverlayPreferences.setIslandCornerRadius(context, it) },
                         onNudge = { OverlayPreferences.setIslandCornerRadius(context, cornerRadius + it) },
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Squircle corners", modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = squircleEnabled && !blurEnabled,
-                            enabled = !blurEnabled,
-                            onCheckedChange = { OverlayPreferences.setIslandSquircleEnabled(context, it) },
-                        )
-                    }
+                    LarpSwitchRow(
+                        title = "Squircle corners",
+                        checked = squircleEnabled && !blurEnabled,
+                        enabled = !blurEnabled,
+                        onCheckedChange = { OverlayPreferences.setIslandSquircleEnabled(context, it) },
+                    )
                     AnimatedVisibility(blurEnabled, enter = LarpMotion.reveal, exit = LarpMotion.conceal) {
                         Text("Turn off backdrop blur to enable squircle corners.", style = MaterialTheme.typography.bodySmall)
                     }
@@ -159,15 +156,13 @@ fun AppearanceScreen(
                         onNudge = { OverlayPreferences.setExpandedBackgroundOpacity(context, backgroundOpacity + it / 100f) },
                     )
                     Text("The minimized island and camera cover stay opaque.", style = MaterialTheme.typography.bodySmall)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Backdrop blur", modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = blurEnabled && blurStatus == BackdropBlurStatus.AVAILABLE,
-                            enabled = blurStatus == BackdropBlurStatus.AVAILABLE,
-                            onCheckedChange = { OverlayPreferences.setBackdropBlurEnabled(context, it) },
-                        )
-                    }
-                    Text(blurStatus.description, style = MaterialTheme.typography.bodySmall)
+                    LarpSwitchRow(
+                        title = "Backdrop blur",
+                        subtitle = blurStatus.description,
+                        checked = blurEnabled && blurStatus == BackdropBlurStatus.AVAILABLE,
+                        enabled = blurStatus == BackdropBlurStatus.AVAILABLE,
+                        onCheckedChange = { OverlayPreferences.setBackdropBlurEnabled(context, it) },
+                    )
                     AnimatedVisibility(
                         visible = blurEnabled && blurStatus == BackdropBlurStatus.AVAILABLE,
                         enter = LarpMotion.reveal,
@@ -193,7 +188,6 @@ fun AppearanceScreen(
                     Text(
                         text = "Bubble Style",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = "Shape of the island and nearby bubbles",
@@ -215,42 +209,15 @@ fun AppearanceScreen(
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LarpDivider()
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.BubbleChart,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Smaller Bubbles",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                            )
-                            Text(
-                                text = "Reduce secondary bubble thickness by 20%",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = smallerBubbles,
-                        onCheckedChange = { OverlayPreferences.setSmallerBubblesEnabled(context, it) },
-                    )
-                }
+                LarpSwitchRow(
+                    title = "Smaller Bubbles",
+                    subtitle = "Reduce secondary bubble thickness by 20%",
+                    icon = LarpIcons.BubbleChart,
+                    checked = smallerBubbles,
+                    onCheckedChange = { OverlayPreferences.setSmallerBubblesEnabled(context, it) },
+                )
             }
         }
 
@@ -261,7 +228,6 @@ fun AppearanceScreen(
                     Text(
                         text = "Camera Cover",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                     )
                     Text(
                         text = cameraCoverStyle.description,
@@ -307,7 +273,6 @@ fun AppearanceScreen(
                             Text(
                                 text = "Island Font Style",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = "Font family applied to island tracks, artists, and live notifications",
@@ -346,17 +311,12 @@ fun AppearanceScreen(
                             }
                         }
                     }
-                    Text("Font weight: $fontWeight")
-                    val fontWeightSliderState = remember {
-                        SliderState(
-                            value = fontWeight.toFloat(),
-                            steps = 7,
-                            trackRange = 100f..900f,
-                        )
-                    }
-                    fontWeightSliderState.value = fontWeight.toFloat()
-                    Slider(
-                        state = fontWeightSliderState,
+                    LarpSliderRow(
+                        title = "Font weight",
+                        valueLabel = "$fontWeight",
+                        value = fontWeight.toFloat(),
+                        valueRange = 100f..900f,
+                        steps = 7,
                         onValueChange = { OverlayPreferences.setIslandFontWeight(context, (it / 100).roundToInt() * 100) },
                     )
                 }

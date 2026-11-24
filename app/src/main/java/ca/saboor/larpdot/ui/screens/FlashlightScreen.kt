@@ -29,7 +29,6 @@ import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +62,8 @@ import ca.saboor.larpdot.ui.components.FlashlightPreviewElement
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpIcons
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -327,7 +328,7 @@ private fun FlashlightPreviewInspectorCard(
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            LarpDivider()
 
             when (element) {
                 FlashlightPreviewElement.MINIMIZED_PILL -> {
@@ -335,75 +336,33 @@ private fun FlashlightPreviewInspectorCard(
                         context = context,
                         tapToToggle = tapToToggle,
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Show radial brightness gauge on the compact island and dots",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = showMinimizedOutline,
-                            onCheckedChange = {
-                                OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it)
-                            },
-                        )
-                    }
+                    LarpDivider()
+                    LarpSwitchRow(
+                        title = "Radial Progress",
+                        subtitle = "Show radial brightness gauge on the compact island and dots",
+                        checked = showMinimizedOutline,
+                        onCheckedChange = { OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it) },
+                    )
                 }
 
                 FlashlightPreviewElement.MINIMIZED_RADIAL -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Radial Progress", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Show radial brightness gauge on the compact island and dots",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = showMinimizedOutline,
-                            onCheckedChange = {
-                                OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it)
-                            },
-                        )
-                    }
+                    LarpSwitchRow(
+                        title = "Radial Progress",
+                        subtitle = "Show radial brightness gauge on the compact island and dots",
+                        checked = showMinimizedOutline,
+                        onCheckedChange = { OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, it) },
+                    )
                 }
 
                 FlashlightPreviewElement.EXPANDED_BEAM -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Blur Beam", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Soften the light cone with a diffused blur",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = beamBlur,
-                            onCheckedChange = {
-                                OverlayPreferences.setFlashlightBeamBlurEnabled(context, it)
-                            },
-                        )
-                    }
+                    LarpSwitchRow(
+                        title = "Blur Beam",
+                        subtitle = "Soften the light cone with a diffused blur",
+                        checked = beamBlur,
+                        onCheckedChange = { OverlayPreferences.setFlashlightBeamBlurEnabled(context, it) },
+                    )
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    LarpDivider()
 
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -478,7 +437,6 @@ private fun FlashlightSettingsPage(
                 Text(
                     text = "Flashlight Settings",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                 )
                 Text(
                     text = "Island integration, boost, and hardware",
@@ -502,68 +460,24 @@ private fun FlashlightSettingsPage(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Icon(
-                                    imageVector = LarpIcons.BrightnessMedium,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                                Column {
-                                    Text(
-                                        text = "Show in Dynamic Island",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                                    )
-                                    Text(
-                                        text = "Morph pill into active torch when flashlight is on",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
+                        LarpSwitchRow(
+                            title = "Show in Dynamic Island",
+                            subtitle = "Morph pill into active torch when flashlight is on",
+                            icon = LarpIcons.BrightnessMedium,
+                            checked = showInIsland,
+                            onCheckedChange = { OverlayPreferences.setShowFlashlightIslandEnabled(context, it) },
+                        )
 
-                            Switch(
-                                checked = showInIsland,
-                                onCheckedChange = { enabled ->
-                                    OverlayPreferences.setShowFlashlightIslandEnabled(context, enabled)
-                                },
-                            )
-                        }
+                        LarpDivider()
 
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        LarpSwitchRow(
+                            title = "Expanded Radial Progress",
+                            subtitle = "Show radial brightness ring around the expanded torch icon",
+                            checked = showExpandedOutline,
+                            onCheckedChange = { OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, it) },
+                        )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Expanded Radial Progress", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "Show radial brightness ring around the expanded torch icon",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                checked = showExpandedOutline,
-                                onCheckedChange = {
-                                    OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, it)
-                                },
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        LarpDivider()
 
                         CompactTapActionSelector(
                             context = context,
@@ -612,7 +526,6 @@ private fun FlashlightSettingsPage(
                                 Text(
                                     text = "Flashlight Power",
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                                 )
                                 Text(
                                     text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
@@ -643,25 +556,17 @@ private fun FlashlightSettingsPage(
             motionItem(key = "overview_controls") {
                 SectionHeader(title = "Flashlight Boost")
                 LarpCard {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Built-in camera boost", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                if (isBoostSupported) {
-                                    "Unlocks brightness above 100%. The camera is used only above the standard flashlight maximum."
-                                } else {
-                                    "This device does not expose boost controls. Standard flashlight control is available."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = boostEnabled && isBoostSupported,
-                            enabled = isBoostSupported,
-                            onCheckedChange = onSetBoost,
-                        )
-                    }
+                    LarpSwitchRow(
+                        title = "Built-in camera boost",
+                        subtitle = if (isBoostSupported) {
+                            "Unlocks brightness above 100%. The camera is used only above the standard flashlight maximum."
+                        } else {
+                            "This device does not expose boost controls. Standard flashlight control is available."
+                        },
+                        checked = boostEnabled && isBoostSupported,
+                        enabled = isBoostSupported,
+                        onCheckedChange = onSetBoost,
+                    )
                     if (!isBoostSupported) {
                         TextButton(onClick = onCheckCameraSupport) {
                             Text("Check camera support")
@@ -735,7 +640,6 @@ private fun CompactTapActionSelector(
             Text(
                 text = "Compact Pill Tap Action",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
             )
         }
 

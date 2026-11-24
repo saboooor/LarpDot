@@ -20,16 +20,12 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpDivider
+import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.theme.LarpIcons
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
@@ -76,129 +74,37 @@ internal fun VisualizerSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Waveform Bands",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-                )
-                Text(
-                    text = "Number of animated equalizer frequency bars (default: 5)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Text(
-                text = if (waveformBandCount == 0) {
-                    "Off"
-                } else if (waveformBandCount == OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT) {
-                    "5 (Default)"
-                } else {
-                    "$waveformBandCount Bands"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-            )
-        }
-
-        val bandSliderState = remember {
-            SliderState(
-                value = waveformBandCount.toFloat(),
-                steps = 29,
-                trackRange = 0f..30f,
-            )
-        }
-        bandSliderState.value = waveformBandCount.toFloat()
-        Slider(
-            state = bandSliderState,
-            onValueChange = {
-                OverlayPreferences.setWaveformBandCount(context, it.roundToInt())
+        LarpSliderRow(
+            title = "Waveform Bands",
+            subtitle = "Number of animated equalizer frequency bars (default: 5)",
+            valueLabel = when (waveformBandCount) {
+                0 -> "Off"
+                OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT -> "5 (Default)"
+                else -> "$waveformBandCount Bands"
             },
-            modifier = Modifier.fillMaxWidth(),
+            value = waveformBandCount.toFloat(),
+            valueRange = 0f..30f,
+            steps = 29,
+            onValueChange = { OverlayPreferences.setWaveformBandCount(context, it.roundToInt()) },
         )
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Bar Width",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Text(
-                    text = "${"%.1f".format(waveformBarWidth)} dp",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            val widthSliderState = remember {
-                SliderState(
-                    value = waveformBarWidth,
-                    trackRange = 0.5f..6f,
-                )
-            }
-            widthSliderState.value = waveformBarWidth
-            Slider(
-                state = widthSliderState,
-                onValueChange = {
-                    OverlayPreferences.setWaveformBarWidth(
-                        context,
-                        (it * 10f).roundToInt() / 10f,
-                    )
-                },
-            )
-        }
+        LarpSliderRow(
+            title = "Bar Width",
+            valueLabel = "${"%.1f".format(waveformBarWidth)} dp",
+            value = waveformBarWidth,
+            valueRange = 0.5f..6f,
+            onValueChange = { OverlayPreferences.setWaveformBarWidth(context, (it * 10f).roundToInt() / 10f) },
+        )
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Bar Spacing",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Text(
-                    text = "${"%.1f".format(waveformBarSpacing)} dp",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            val spacingSliderState = remember {
-                SliderState(
-                    value = waveformBarSpacing,
-                    trackRange = 0f..8f,
-                )
-            }
-            spacingSliderState.value = waveformBarSpacing
-            Slider(
-                state = spacingSliderState,
-                onValueChange = {
-                    OverlayPreferences.setWaveformBarSpacing(
-                        context,
-                        (it * 10f).roundToInt() / 10f,
-                    )
-                },
-            )
-        }
+        LarpSliderRow(
+            title = "Bar Spacing",
+            valueLabel = "${"%.1f".format(waveformBarSpacing)} dp",
+            value = waveformBarSpacing,
+            valueRange = 0f..8f,
+            onValueChange = { OverlayPreferences.setWaveformBarSpacing(context, (it * 10f).roundToInt() / 10f) },
+        )
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        LarpDivider()
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -220,7 +126,6 @@ internal fun VisualizerSettingsContent(
                 Text(
                     text = "Visualizer Mode",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                 )
                 Text(
                     text = when (visualizerMode) {
@@ -315,7 +220,6 @@ internal fun VisualizerSettingsContent(
                                     "Tempo Beat Sync (No BPM)"
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = when {
@@ -375,7 +279,6 @@ internal fun VisualizerSettingsContent(
                             Text(
                                 text = "Internal Playback Capture (Digital Loopback)",
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                             )
                             Text(
                                 text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
@@ -456,7 +359,6 @@ internal fun VisualizerSettingsContent(
                             text = "Preview Audio Source",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                         )
                         val previewSources = listOf(
                             OverlayPreferences.PreviewAudioSource.AUTO,
@@ -502,9 +404,7 @@ internal fun VisualizerSettingsContent(
                         )
                     }
 
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                    )
+                    LarpDivider()
                     when (extractionState) {
                         is ExtractionState.Idle -> {
                             Row(
@@ -538,7 +438,6 @@ internal fun VisualizerSettingsContent(
                                     Text(
                                         text = "Processing: ${extractionState.trackTitle}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                                     )
                                     Text(
                                         text = "Downloading 30s preview & decomposing ${extractionState.bandCount} frequency bands offline",
@@ -563,7 +462,6 @@ internal fun VisualizerSettingsContent(
                                     Text(
                                         text = "Successfully Processed: ${extractionState.trackTitle}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                                     )
                                     Text(
                                         text = "Synced from ${extractionState.sourceName} • ${extractionState.frameCount} frames • ${extractionState.bandCount} acoustic bands",
@@ -575,9 +473,7 @@ internal fun VisualizerSettingsContent(
 
                             val audioSource = extractionState.audioFilePath ?: extractionState.previewUrl
                             if (audioSource != null) {
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                )
+                                LarpDivider()
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -606,7 +502,6 @@ internal fun VisualizerSettingsContent(
                                             Text(
                                                 text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                                             )
                                             Text(
                                                 text = "${formatPreviewTime(previewPositionMs)} / ${formatPreviewTime(previewDurationMs)}",
@@ -651,7 +546,6 @@ internal fun VisualizerSettingsContent(
                                     Text(
                                         text = "Could not process: ${extractionState.trackTitle}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
                                     )
                                     Text(
                                         text = "${extractionState.reason} • Falling back to simulated waveform",

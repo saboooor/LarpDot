@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
@@ -161,19 +159,8 @@ object BpmDetector {
         }
     }
 
-    private fun fetchUrlText(urlString: String): String {
-        val conn = URL(urlString).openConnection() as HttpURLConnection
-        return try {
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "LarpDot/1.0 (Android)")
-            conn.instanceFollowRedirects = true
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            conn.disconnect()
-        }
-    }
+    private fun fetchUrlText(urlString: String): String =
+        VisualizerHttp.fetchText(urlString, connectTimeoutMs = 4_000, readTimeoutMs = 4_000)
 
     private suspend fun fetchBpm(title: String, artist: String): Pair<Float, String>? {
         val cleanT = cleanTitle(title)

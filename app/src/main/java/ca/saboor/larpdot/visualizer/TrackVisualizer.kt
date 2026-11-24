@@ -1,9 +1,6 @@
 package ca.saboor.larpdot.visualizer
 
 import android.os.SystemClock
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import ca.saboor.larpdot.ui.theme.LarpMotion
 
 /**
  * High-performance hardware-vsync multi-band audio visualizer.
@@ -91,40 +87,8 @@ fun TrackVisualizer(
     val heightSpanPx = maxHeightPx - minHeightPx
     val latestPositionProvider by rememberUpdatedState(positionMsProvider)
 
-    // Staggered musical equalizer ceilings for any number of bands
-    val weights = remember(barCount) {
-        when (barCount) {
-            3 -> floatArrayOf(1.00f, 0.80f, 0.58f)
-            4 -> floatArrayOf(1.00f, 0.74f, 0.92f, 0.58f)
-            5 -> floatArrayOf(1.00f, 0.72f, 0.96f, 0.68f, 0.52f)
-            6 -> floatArrayOf(1.00f, 0.70f, 0.92f, 0.76f, 0.62f, 0.48f)
-            7 -> floatArrayOf(1.00f, 0.68f, 0.88f, 0.96f, 0.74f, 0.60f, 0.46f)
-            else -> {
-                val count = barCount.coerceAtLeast(1)
-                FloatArray(count) { idx ->
-                    val norm = if (count > 1) idx.toFloat() / (count - 1) else 0.5f
-                    (1.0f - norm * 0.46f + kotlin.math.sin(norm * Math.PI.toFloat()) * 0.16f).coerceIn(0.44f, 1.0f)
-                }
-            }
-        }
-    }
-
-    // Playback state spring transition (read inside draw phase)
-    val playProgressState = animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "tv_play_spring",
-    )
-
-    val playAlphaState = animateFloatAsState(
-        targetValue = if (isPlaying) 1.0f else 0.45f,
-        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "tv_alpha",
-    )
+    val weights = remember(barCount) { acousticBandWeights(barCount) }
+    val playback = rememberVisualizerPlaybackStates(isPlaying, labelPrefix = "tv")
 
     // Hardware frame clock
     var vsyncClock by remember { mutableLongStateOf(0L) }
@@ -147,8 +111,8 @@ fun TrackVisualizer(
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         // Subscribe to display refresh loop
         val _tick = vsyncClock
-        val playProgress = playProgressState.value
-        val playAlpha = playAlphaState.value
+        val playProgress = playback.playProgress.value
+        val playAlpha = playback.playAlpha.value
 
         val bandsInArray = if (barCount > 0 && amplitudes.isNotEmpty() && amplitudes.size % barCount == 0) {
             barCount
@@ -224,18 +188,7 @@ fun TrackVisualizer(
             val targetHeight = (contrasted * w).coerceIn(0.0f, 1.0f)
 
             val normalizedPos = if (barCount > 1) i.toFloat() / (barCount - 1) else 0.5f
-
-            // Distinct per-band ballistics:
-            // Bass bands (left) sustain longer, Treble bands (right) decay rapidly with transient jitter
-            val prevHeight = ballisticHeights[i]
-            val attackRate = 0.80f + (0.12f * normalizedPos) // 0.80 -> 0.92
-            val decayRate = 0.13f + (0.18f * normalizedPos)  // 0.13 (bass) -> 0.31 (treble)
-
-            val filteredHeight = if (targetHeight > prevHeight) {
-                prevHeight + (targetHeight - prevHeight) * attackRate
-            } else {
-                prevHeight + (targetHeight - prevHeight) * decayRate
-            }
+            val filteredHeight = stepBandBallistics(ballisticHeights[i], targetHeight, normalizedPos)
             ballisticHeights[i] = filteredHeight
 
             val activeHeightPx = minHeightPx + (heightSpanPx * filteredHeight)
@@ -306,38 +259,8 @@ fun LiveTrackVisualizer(
     val heightSpanPx = maxHeightPx - minHeightPx
     val latestAmplitudesProvider by rememberUpdatedState(amplitudesProvider)
 
-    val weights = remember(barCount) {
-        when (barCount) {
-            3 -> floatArrayOf(1.00f, 0.80f, 0.58f)
-            4 -> floatArrayOf(1.00f, 0.74f, 0.92f, 0.58f)
-            5 -> floatArrayOf(1.00f, 0.72f, 0.96f, 0.68f, 0.52f)
-            6 -> floatArrayOf(1.00f, 0.70f, 0.92f, 0.76f, 0.62f, 0.48f)
-            7 -> floatArrayOf(1.00f, 0.68f, 0.88f, 0.96f, 0.74f, 0.60f, 0.46f)
-            else -> {
-                val count = barCount.coerceAtLeast(1)
-                FloatArray(count) { idx ->
-                    val norm = if (count > 1) idx.toFloat() / (count - 1) else 0.5f
-                    (1.0f - norm * 0.46f + kotlin.math.sin(norm * Math.PI.toFloat()) * 0.16f).coerceIn(0.44f, 1.0f)
-                }
-            }
-        }
-    }
-
-    val playProgressState = animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = if (isPlaying) {
-            LarpMotion.quickSpring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            LarpMotion.quickSpring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "live_play_spring",
-    )
-
-    val playAlphaState = animateFloatAsState(
-        targetValue = if (isPlaying) 1.0f else 0.45f,
-        animationSpec = LarpMotion.timing(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "live_alpha",
-    )
+    val weights = remember(barCount) { acousticBandWeights(barCount) }
+    val playback = rememberVisualizerPlaybackStates(isPlaying, labelPrefix = "live")
 
     var vsyncClock by remember { mutableLongStateOf(0L) }
     LaunchedEffect(isPlaying) {
@@ -353,8 +276,8 @@ fun LiveTrackVisualizer(
     val totalWidth = (barCount * barWidthPx) + ((barCount - 1) * barSpacingPx)
     WaveformCanvas(modifier, accentColor, secondaryColor, totalWidth) { gradient ->
         val _tick = vsyncClock
-        val playProgress = playProgressState.value
-        val playAlpha = playAlphaState.value
+        val playProgress = playback.playProgress.value
+        val playAlpha = playback.playAlpha.value
 
         var currentX = (size.width - totalWidth) / 2f
         val centerY = size.height / 2f
@@ -387,16 +310,8 @@ fun LiveTrackVisualizer(
             val w = weights.getOrElse(i) { 1.0f }
             val targetHeight = (contrasted * w).coerceIn(0.0f, 1.0f)
 
-            val prevHeight = ballisticHeights[i]
             val normalizedPos = if (barCount > 1) i.toFloat() / (barCount - 1) else 0.5f
-            val attackRate = 0.80f + (0.12f * normalizedPos)
-            val decayRate = 0.13f + (0.18f * normalizedPos)
-
-            val filteredHeight = if (targetHeight > prevHeight) {
-                prevHeight + (targetHeight - prevHeight) * attackRate
-            } else {
-                prevHeight + (targetHeight - prevHeight) * decayRate
-            }
+            val filteredHeight = stepBandBallistics(ballisticHeights[i], targetHeight, normalizedPos)
             ballisticHeights[i] = filteredHeight
 
             val activeHeightPx = minHeightPx + (heightSpanPx * filteredHeight)
