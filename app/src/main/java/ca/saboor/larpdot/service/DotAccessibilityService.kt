@@ -5,7 +5,6 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
@@ -190,21 +189,6 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
-        fun openQuickSettings(context: Context): Boolean {
-            val service = instance
-            if (service != null && service.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)) {
-                return true
-            }
-            return try {
-                val sbm = context.getSystemService("statusbar")
-                val method = sbm.javaClass.getMethod("expandSettingsPanel")
-                method.invoke(sbm)
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
         fun openAccessibilitySettings(context: Context) {
             try {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
@@ -213,22 +197,6 @@ class DotAccessibilityService : AccessibilityService() {
                 context.startActivity(intent)
             } catch (e: Exception) {
                 e.printStackTrace()
-            }
-        }
-
-        fun openAppInAccessibilitySettings(context: Context) {
-            try {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    val showArgs = "${context.packageName}/${DotAccessibilityService::class.java.canonicalName}"
-                    putExtra(":settings:fragment_args_key", showArgs)
-                    val bundle = Bundle()
-                    bundle.putString(":settings:fragment_args_key", showArgs)
-                    putExtra(":settings:show_fragment_args", bundle)
-                }
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                openAccessibilitySettings(context)
             }
         }
 

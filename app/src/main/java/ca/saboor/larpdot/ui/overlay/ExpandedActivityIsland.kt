@@ -116,6 +116,53 @@ internal fun inlineNavigationAction(activity: NotificationActivityInfo): Notific
     } ?: activity.actions.first()
 }
 
+private data class ExpandedActivityLayoutModel(
+    val subtitle: String,
+    val isNavigation: Boolean,
+    val radialProgress: Pair<Int, Color>?,
+    val hasRadialGauge: Boolean,
+    val navigationEta: String?,
+    val inlineAction: NotificationActivityAction?,
+    val footerActions: List<NotificationActivityAction>,
+    val hasNavRightContent: Boolean,
+    val isScreenshot: Boolean,
+    val showProgressBar: Boolean,
+    val hasFooter: Boolean,
+)
+
+private fun buildExpandedActivityLayoutModel(
+    activity: NotificationActivityInfo,
+    progressOutlineEnabled: Boolean,
+    primaryColor: Color,
+): ExpandedActivityLayoutModel {
+    val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
+    val radialProgress = activityRadialProgress(activity, progressOutlineEnabled, primaryColor)
+    val hasRadialGauge = radialProgress != null
+    val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
+    val inlineAction = inlineNavigationAction(activity)
+    val footerActions = if (inlineAction != null) {
+        activity.actions.filterNot { it == inlineAction }.take(3)
+    } else {
+        activity.actions.take(3)
+    }
+    val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null
+    val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
+    val hasFooter = showProgressBar || isScreenshot || footerActions.isNotEmpty()
+    return ExpandedActivityLayoutModel(
+        subtitle = activitySubtitle(activity),
+        isNavigation = isNavigation,
+        radialProgress = radialProgress,
+        hasRadialGauge = hasRadialGauge,
+        navigationEta = navigationEta,
+        inlineAction = inlineAction,
+        footerActions = footerActions,
+        hasNavRightContent = navigationEta != null || inlineAction != null,
+        isScreenshot = isScreenshot,
+        showProgressBar = showProgressBar,
+        hasFooter = hasFooter,
+    )
+}
+
 /** Measure the same text styles and wrapping limits used by the activity card. */
 @Composable
 internal fun expandedActivitySize(
@@ -131,48 +178,38 @@ internal fun expandedActivitySize(
     val density = LocalDensity.current
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val primaryColor = MaterialTheme.colorScheme.primary
+    val model = buildExpandedActivityLayoutModel(activity, activitySettings.progressOutline, primaryColor)
     val titleStyle = activityTextStyle(true)
     val subtitleStyle = activityTextStyle(false)
     val buttonStyle = MaterialTheme.typography.labelLarge
     val etaStyle = subtitleStyle.copy(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
     return with(density) {
-        val subtitle = activitySubtitle(activity)
-        val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
-        val radialProgress = activityRadialProgress(activity, activitySettings.progressOutline, primaryColor)
-        val hasRadialGauge = radialProgress != null
-        val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
-        val inlineAction = inlineNavigationAction(activity)
-        val footerActions = if (inlineAction != null) {
-            activity.actions.filterNot { it == inlineAction }.take(3)
-        } else {
-            activity.actions.take(3)
-        }
         val titleNatural = measurer.measure(activity.title, titleStyle, softWrap = false).size.width.toDp()
-        val subtitleNatural = if (subtitle.isNotEmpty()) {
-            measurer.measure(subtitle, subtitleStyle, softWrap = false).size.width.toDp()
+        val subtitleNatural = if (model.subtitle.isNotEmpty()) {
+            measurer.measure(model.subtitle, subtitleStyle, softWrap = false).size.width.toDp()
         } else 0.dp
-        val etaWidth = if (navigationEta != null) {
-            measurer.measure(navigationEta, etaStyle, softWrap = false).size.width.toDp()
-        } else 0.dp
-        val inlineButtonWidth = if (inlineAction != null) {
-            maxOf(64.dp, measurer.measure(inlineAction.title, buttonStyle, softWrap = false).size.width.toDp() + 32.dp)
-        } else 0.dp
+        val etaWidth = model.navigationEta?.let {
+            measurer.measure(it, etaStyle, softWrap = false).size.width.toDp()
+        } ?: 0.dp
+        val inlineButtonWidth = model.inlineAction?.let {
+            maxOf(64.dp, measurer.measure(it.title, buttonStyle, softWrap = false).size.width.toDp() + 32.dp)
+        } ?: 0.dp
         val navRightWidth = maxOf(etaWidth, inlineButtonWidth)
         val navRightHeight = if (navRightWidth > 0.dp) {
-            (if (navigationEta != null) 20.dp else 0.dp) +
-                (if (inlineAction != null) 38.dp else 0.dp) +
-                (if (navigationEta != null && inlineAction != null) 6.dp else 0.dp) +
+            (if (model.navigationEta != null) 20.dp else 0.dp) +
+                (if (model.inlineAction != null) 38.dp else 0.dp) +
+                (if (model.navigationEta != null && model.inlineAction != null) 6.dp else 0.dp) +
                 24.dp
         } else 0.dp
-        val buttonWidths = footerActions.map {
+        val buttonWidths = model.footerActions.map {
             maxOf(64.dp, measurer.measure(it.title, buttonStyle, softWrap = false).size.width.toDp() + 48.dp)
         }
         val actionsWidth = buttonWidths.fold(0.dp) { sum, width -> sum + width } + (8.dp * (buttonWidths.size - 1).coerceAtLeast(0))
         val horizontalChrome = when {
-            spanIconLeftOfCutout && hasRadialGauge -> 160.dp
+            spanIconLeftOfCutout && model.hasRadialGauge -> 160.dp
             spanIconLeftOfCutout && navRightWidth > 0.dp -> 116.dp + navRightWidth
             spanIconLeftOfCutout -> 100.dp
-            hasRadialGauge -> 134.dp
+            model.hasRadialGauge -> 134.dp
             navRightWidth > 0.dp -> 92.dp + navRightWidth
             else -> 78.dp
         }
@@ -183,22 +220,22 @@ internal fun expandedActivitySize(
         }
         val width = maxOf(minCardWidth, maxOf(titleNatural, subtitleNatural) + horizontalChrome, actionsWidth + 44.dp).coerceAtMost(maxWidth)
         val textWidthPx = (width - horizontalChrome).coerceAtLeast(1.dp).roundToPx()
-        val titleMaxLines = if (isNavigation) 3 else 2
+        val titleMaxLines = if (model.isNavigation) 3 else 2
         val titleHeight = measurer.measure(
             activity.title,
             titleStyle,
             maxLines = titleMaxLines,
             constraints = Constraints(maxWidth = textWidthPx),
         ).size.height.toDp()
-        val subtitleHeight = if (subtitle.isNotEmpty()) {
+        val subtitleHeight = if (model.subtitle.isNotEmpty()) {
             measurer.measure(
-                subtitle,
+                model.subtitle,
                 subtitleStyle,
                 maxLines = 4,
                 constraints = Constraints(maxWidth = textWidthPx),
             ).size.height.toDp()
         } else 0.dp
-        val textHeight = titleHeight + subtitleHeight + (if (isNavigation) 4.dp else 0.dp)
+        val textHeight = titleHeight + subtitleHeight + (if (model.isNavigation) 4.dp else 0.dp)
         var rows = if (buttonWidths.isEmpty()) 0 else 1
         var rowWidth = 0.dp
         buttonWidths.forEach { button ->
@@ -210,30 +247,27 @@ internal fun expandedActivitySize(
                 rowWidth = next
             }
         }
-        val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null
-        val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
-        val previewHeight = if (isScreenshot && activity.appIcon != null) 118.dp else 0.dp
-        val pocketActionHeight = if (isScreenshot) 56.dp else 0.dp
-        val hasFooter = showProgressBar || isScreenshot || rows > 0
+        val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
+        val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
         val bottomPadding = 22.dp
         val headerBlockHeight = if (spanIconLeftOfCutout) {
-            if (hasFooter) {
+            if (model.hasFooter) {
                 maxOf(48.dp, navRightHeight, topInset + textHeight) + bottomPadding
             } else {
                 maxOf(64.dp, navRightHeight, topInset + textHeight + bottomPadding)
             }
         } else {
             (if (topInset > 0.dp) topInset else 16.dp) + maxOf(
-                if (hasRadialGauge) 44.dp else 24.dp,
+                if (model.hasRadialGauge) 44.dp else 24.dp,
                 if (navRightWidth > 0.dp) navRightHeight - 16.dp else 0.dp,
                 textHeight,
             ) + bottomPadding
         }
         val height = headerBlockHeight +
-            (if (showProgressBar) 20.dp else 0.dp) +
+            (if (model.showProgressBar) 20.dp else 0.dp) +
             previewHeight + pocketActionHeight +
             (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
-        val effectiveWidth = if (isScreenshot) maxOf(width, 280.dp).coerceAtMost(maxWidth) else width
+        val effectiveWidth = if (model.isScreenshot) maxOf(width, 280.dp).coerceAtMost(maxWidth) else width
         DpSize(effectiveWidth, height.coerceAtMost(maxHeight))
     }
 }
@@ -265,65 +299,16 @@ internal fun ExpandedNotificationActivityContent(
 
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val primaryColor = MaterialTheme.colorScheme.primary
-    val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
-    val radialProgress = activityRadialProgress(activity, activitySettings.progressOutline, primaryColor)
-    val hasRadialGauge = radialProgress != null
-    val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
-    val inlineAction = inlineNavigationAction(activity)
-    val footerActions = if (inlineAction != null) {
-        activity.actions.filterNot { it == inlineAction }.take(3)
-    } else {
-        activity.actions.take(3)
-    }
-    val hasNavRightContent = navigationEta != null || inlineAction != null
+    val model = buildExpandedActivityLayoutModel(activity, activitySettings.progressOutline, primaryColor)
     val startPadding = if (spanIconLeftOfCutout) 18.dp else 22.dp
-    val endPadding = if (spanIconLeftOfCutout) (if (hasRadialGauge || hasNavRightContent) 18.dp else 20.dp) else 22.dp
+    val endPadding = if (spanIconLeftOfCutout) (if (model.hasRadialGauge || model.hasNavRightContent) 18.dp else 20.dp) else 22.dp
     val bottomPadding = 22.dp
-    val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null
-    val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
-    val hasFooter = showProgressBar || isScreenshot || footerActions.isNotEmpty()
     val columnTopPadding = when {
         spanIconLeftOfCutout -> 0.dp
         topContentInset > 0.dp -> topContentInset
         else -> 16.dp
     }
-    val columnBottomPadding = if (spanIconLeftOfCutout && !hasFooter) 0.dp else bottomPadding
-    val subtitle = activitySubtitle(activity)
-
-    val navRightSlot: (@Composable (Modifier) -> Unit)? = if (hasNavRightContent) {
-        { slotModifier ->
-            Column(
-                modifier = slotModifier,
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
-            ) {
-                if (navigationEta != null) {
-                    Text(
-                        text = navigationEta,
-                        color = primaryColor,
-                        style = activityTextStyle(false).copy(
-                            fontSize = 14.sp,
-                            lineHeight = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                        fontFamily = fontStyle.fontFamily,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (inlineAction != null) {
-                    Button(
-                        onClick = { NotificationActivityState.perform(inlineAction) },
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.heightIn(min = 38.dp),
-                    ) {
-                        Text(inlineAction.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
-    } else null
+    val columnBottomPadding = if (spanIconLeftOfCutout && !model.hasFooter) 0.dp else bottomPadding
 
     val scrollState = rememberScrollState()
     Column(
@@ -337,130 +322,18 @@ internal fun ExpandedNotificationActivityContent(
             )
             .padding(start = startPadding, end = endPadding, top = columnTopPadding, bottom = columnBottomPadding),
     ) {
-        if (spanIconLeftOfCutout) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min)
-                    .then(if (!hasFooter) Modifier.heightIn(min = 64.dp) else Modifier),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(48.dp)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    ActivityIcon(
-                        activity = activity,
-                        modifier = Modifier.size(44.dp),
-                        iconShape = RoundedCornerShape(12.dp),
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(
-                            top = topContentInset,
-                            bottom = if (hasFooter) 0.dp else bottomPadding,
-                        ),
-                ) {
-                    Text(
-                        text = activity.title,
-                        color = Color.White,
-                        style = activityTextStyle(true),
-                        fontWeight = fontWeight,
-                        fontFamily = fontStyle.fontFamily,
-                        maxLines = if (isNavigation) 3 else 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (subtitle.isNotEmpty()) {
-                        Text(
-                            text = subtitle,
-                            color = Color.White.copy(alpha = 0.7f),
-                            style = activityTextStyle(false),
-                            fontFamily = fontStyle.fontFamily,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (radialProgress != null) {
-                    val (percent, ringColor) = radialProgress
-                    Box(
-                        modifier = Modifier
-                            .width(48.dp)
-                            .fillMaxHeight(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        BatteryRadialGauge(
-                            percent = percent,
-                            color = ringColor,
-                            diameter = 44.dp,
-                            strokeWidth = 3.5.dp,
-                            fontSize = if (percent >= 100) 10.sp else 11.5.sp,
-                            showPercentSymbol = true,
-                        )
-                    }
-                } else if (navRightSlot != null) {
-                    navRightSlot(
-                        Modifier
-                            .fillMaxHeight()
-                            .padding(vertical = 12.dp),
-                    )
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                ActivityIcon(
-                    activity = activity,
-                    modifier = Modifier.size(24.dp),
-                    iconShape = RoundedCornerShape(6.dp),
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = activity.title,
-                        color = Color.White,
-                        style = activityTextStyle(true),
-                        fontWeight = fontWeight,
-                        fontFamily = fontStyle.fontFamily,
-                        maxLines = if (isNavigation) 3 else 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (subtitle.isNotEmpty()) {
-                        Text(
-                            text = subtitle,
-                            color = Color.White.copy(alpha = 0.7f),
-                            style = activityTextStyle(false),
-                            fontFamily = fontStyle.fontFamily,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (radialProgress != null) {
-                    val (percent, ringColor) = radialProgress
-                    Spacer(Modifier.width(2.dp))
-                    BatteryRadialGauge(
-                        percent = percent,
-                        color = ringColor,
-                        diameter = 42.dp,
-                        strokeWidth = 3.5.dp,
-                        fontSize = if (percent >= 100) 9.5.sp else 11.sp,
-                        showPercentSymbol = true,
-                    )
-                } else if (navRightSlot != null) {
-                    navRightSlot(Modifier)
-                }
-            }
-        }
+        ExpandedActivityHeaderRow(
+            activity = activity,
+            model = model,
+            fontStyle = fontStyle,
+            fontWeight = fontWeight,
+            primaryColor = primaryColor,
+            topContentInset = topContentInset,
+            bottomPadding = bottomPadding,
+            spanIconLeftOfCutout = spanIconLeftOfCutout,
+        )
 
-        if (showProgressBar) activity.progressFraction?.let { fraction ->
+        if (model.showProgressBar) activity.progressFraction?.let { fraction ->
             Spacer(Modifier.height(14.dp))
             LinearProgressIndicator(
                 progress = { fraction },
@@ -473,72 +346,253 @@ internal fun ExpandedNotificationActivityContent(
             )
         }
 
-        if (activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null) {
-            if (activity.appIcon != null) {
-                Spacer(Modifier.height(12.dp))
-                Image(
-                    bitmap = activity.appIcon.asImageBitmap(),
-                    contentDescription = activity.title,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(106.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { openApp() },
-                    contentScale = ContentScale.Crop,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = {
-                        ScreenshotPocketManager.shareItem(context, activity.mediaUri, activity.mediaMimeType)
-                        onCollapse()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Share", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                FilledTonalButton(
-                    onClick = {
-                        ScreenshotPocketManager.copyItem(context, activity.mediaUri)
-                        onCollapse()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                FilledTonalButton(
-                    onClick = {
-                        ScreenshotPocketManager.deleteItem(context, activity.key, activity.mediaUri)
-                        onCollapse()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(18.dp))
-                }
-            }
+        if (model.isScreenshot) {
+            ExpandedScreenshotSection(
+                activity = activity,
+                onOpen = openApp,
+                onCollapse = onCollapse,
+            )
         }
 
-        if (footerActions.isNotEmpty()) {
+        if (model.footerActions.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                footerActions.forEach { action ->
+                model.footerActions.forEach { action ->
                     Button(modifier = Modifier.heightIn(min = 48.dp), onClick = { NotificationActivityState.perform(action) }) {
                         Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExpandedActivityHeaderRow(
+    activity: NotificationActivityInfo,
+    model: ExpandedActivityLayoutModel,
+    fontStyle: OverlayPreferences.IslandFontStyle,
+    fontWeight: FontWeight,
+    primaryColor: Color,
+    topContentInset: Dp,
+    bottomPadding: Dp,
+    spanIconLeftOfCutout: Boolean,
+) {
+    val rowModifier = if (spanIconLeftOfCutout) {
+        Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .then(if (!model.hasFooter) Modifier.heightIn(min = 64.dp) else Modifier)
+    } else {
+        Modifier.fillMaxWidth()
+    }
+    Row(
+        modifier = rowModifier,
+        horizontalArrangement = Arrangement.spacedBy(if (spanIconLeftOfCutout) 14.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (spanIconLeftOfCutout) {
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ActivityIcon(
+                    activity = activity,
+                    modifier = Modifier.size(44.dp),
+                    iconShape = RoundedCornerShape(12.dp),
+                )
+            }
+        } else {
+            ActivityIcon(
+                activity = activity,
+                modifier = Modifier.size(24.dp),
+                iconShape = RoundedCornerShape(6.dp),
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (spanIconLeftOfCutout) {
+                        Modifier.padding(
+                            top = topContentInset,
+                            bottom = if (model.hasFooter) 0.dp else bottomPadding,
+                        )
+                    } else {
+                        Modifier
+                    }
+                ),
+        ) {
+            Text(
+                text = activity.title,
+                color = Color.White,
+                style = activityTextStyle(true),
+                fontWeight = fontWeight,
+                fontFamily = fontStyle.fontFamily,
+                maxLines = if (model.isNavigation) 3 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (model.subtitle.isNotEmpty()) {
+                Text(
+                    text = model.subtitle,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = activityTextStyle(false),
+                    fontFamily = fontStyle.fontFamily,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (model.radialProgress != null) {
+            val (percent, ringColor) = model.radialProgress
+            if (spanIconLeftOfCutout) {
+                Box(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    BatteryRadialGauge(
+                        percent = percent,
+                        color = ringColor,
+                        diameter = 44.dp,
+                        strokeWidth = 3.5.dp,
+                        fontSize = if (percent >= 100) 10.sp else 11.5.sp,
+                        showPercentSymbol = true,
+                    )
+                }
+            } else {
+                Spacer(Modifier.width(2.dp))
+                BatteryRadialGauge(
+                    percent = percent,
+                    color = ringColor,
+                    diameter = 42.dp,
+                    strokeWidth = 3.5.dp,
+                    fontSize = if (percent >= 100) 9.5.sp else 11.sp,
+                    showPercentSymbol = true,
+                )
+            }
+        } else if (model.hasNavRightContent) {
+            ExpandedNavigationTrailingSlot(
+                navigationEta = model.navigationEta,
+                inlineAction = model.inlineAction,
+                primaryColor = primaryColor,
+                fontStyle = fontStyle,
+                modifier = if (spanIconLeftOfCutout) {
+                    Modifier.fillMaxHeight().padding(vertical = 12.dp)
+                } else {
+                    Modifier
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandedNavigationTrailingSlot(
+    navigationEta: String?,
+    inlineAction: NotificationActivityAction?,
+    primaryColor: Color,
+    fontStyle: OverlayPreferences.IslandFontStyle,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+    ) {
+        if (navigationEta != null) {
+            Text(
+                text = navigationEta,
+                color = primaryColor,
+                style = activityTextStyle(false).copy(
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                fontFamily = fontStyle.fontFamily,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (inlineAction != null) {
+            Button(
+                onClick = { NotificationActivityState.perform(inlineAction) },
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.heightIn(min = 38.dp),
+            ) {
+                Text(inlineAction.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandedScreenshotSection(
+    activity: NotificationActivityInfo,
+    onOpen: () -> Unit,
+    onCollapse: () -> Unit,
+) {
+    val context = LocalContext.current
+    val mediaUri = activity.mediaUri ?: return
+    val previewBitmap = remember(activity.appIcon) { activity.appIcon?.asImageBitmap() }
+    if (previewBitmap != null) {
+        Spacer(Modifier.height(12.dp))
+        Image(
+            bitmap = previewBitmap,
+            contentDescription = activity.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(106.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onOpen),
+            contentScale = ContentScale.Crop,
+        )
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = {
+                ScreenshotPocketManager.shareItem(context, mediaUri, activity.mediaMimeType)
+                onCollapse()
+            },
+            modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+        ) {
+            Icon(LarpIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Share", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        FilledTonalButton(
+            onClick = {
+                ScreenshotPocketManager.copyItem(context, mediaUri)
+                onCollapse()
+            },
+            modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+        ) {
+            Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        FilledTonalButton(
+            onClick = {
+                ScreenshotPocketManager.deleteItem(context, activity.key, mediaUri)
+                onCollapse()
+            },
+            modifier = Modifier.heightIn(min = 42.dp),
+        ) {
+            Icon(LarpIcons.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(18.dp))
         }
     }
 }

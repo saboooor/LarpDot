@@ -454,7 +454,6 @@ object OverlayPreferences {
     val expandedAlbumArtRotationFlow: StateFlow<Float> = expandedAlbumArtRotationPref.flow
     val showMinimizedDominantColorGlowFlow: StateFlow<Boolean> = showMinimizedDominantColorGlowPref.flow
     val showExpandedDominantColorGlowFlow: StateFlow<Boolean> = showExpandedDominantColorGlowPref.flow
-    val bpmPulseEnabledFlow: StateFlow<Boolean> = bpmPulseEnabledPref.flow
     val minimizedBpmPulseEnabledFlow: StateFlow<Boolean> = minimizedBpmPulseEnabledPref.flow
     val expandedBpmPulseEnabledFlow: StateFlow<Boolean> = expandedBpmPulseEnabledPref.flow
     val pulseEntireIslandEnabledFlow: StateFlow<Boolean> = pulseEntireIslandEnabledPref.flow
@@ -464,7 +463,6 @@ object OverlayPreferences {
     val minimizedNestedBlurredBgFlow: StateFlow<Boolean> = minimizedNestedBlurredBgPref.flow
     val showDotRightSideInfoFlow: StateFlow<Boolean> = showDotRightSideInfoPref.flow
     val isDebugModeFlow: StateFlow<Boolean> = isDebugModePref.flow
-    val showDebugDotFlow: StateFlow<Boolean> = isDebugModePref.flow
     val hideWhenScreenOffFlow: StateFlow<Boolean> = hideWhenScreenOffPref.flow
     val hideOnLockScreenFlow: StateFlow<Boolean> = hideOnLockScreenPref.flow
     val hideInFullscreenFlow: StateFlow<Boolean> = hideInFullscreenPref.flow
@@ -506,9 +504,6 @@ object OverlayPreferences {
     private val _cameraCoverStyleFlow = MutableStateFlow(CameraCoverStyle.SWOOP)
     val cameraCoverStyleFlow: StateFlow<CameraCoverStyle> = _cameraCoverStyleFlow.asStateFlow()
     private var isCameraCoverStyleInitialized = false
-
-    private val _hqVisualizerEnabledFlow = MutableStateFlow(false)
-    val hqVisualizerEnabledFlow: StateFlow<Boolean> = _hqVisualizerEnabledFlow.asStateFlow()
 
     private val _visualizerModeFlow = MutableStateFlow(VisualizerMode.SIMULATED)
     val visualizerModeFlow: StateFlow<VisualizerMode> = _visualizerModeFlow.asStateFlow()
@@ -584,7 +579,6 @@ object OverlayPreferences {
         getWaveformBandCount(context)
         getWaveformBarWidth(context)
         getWaveformBarSpacing(context)
-        isHqVisualizerEnabled(context)
         getVisualizerMode(context)
         getPreviewAudioSource(context)
     }
@@ -659,16 +653,6 @@ object OverlayPreferences {
     fun setShowExpandedDominantColorGlowEnabled(context: Context, enabled: Boolean) = showExpandedDominantColorGlowPref.set(getPrefs(context), enabled)
 
     fun isBpmPulseEnabled(context: Context): Boolean = bpmPulseEnabledPref.get(getPrefs(context))
-    fun setBpmPulseEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_BPM_PULSE_ENABLED, enabled)
-            .putBoolean(KEY_MINIMIZED_BPM_PULSE_ENABLED, enabled)
-            .putBoolean(KEY_EXPANDED_BPM_PULSE_ENABLED, enabled)
-            .apply()
-        bpmPulseEnabledPref.forceSet(enabled)
-        minimizedBpmPulseEnabledPref.forceSet(enabled)
-        expandedBpmPulseEnabledPref.forceSet(enabled)
-    }
 
     fun isMinimizedBpmPulseEnabled(context: Context): Boolean = minimizedBpmPulseEnabledPref.get(getPrefs(context))
     fun setMinimizedBpmPulseEnabled(context: Context, enabled: Boolean) = minimizedBpmPulseEnabledPref.set(getPrefs(context), enabled)
@@ -701,9 +685,6 @@ object OverlayPreferences {
             .apply()
         isDebugModePref.forceSet(enabled)
     }
-
-    fun isShowDebugDotEnabled(context: Context): Boolean = isDebugModeEnabled(context)
-    fun setShowDebugDotEnabled(context: Context, enabled: Boolean) = setDebugModeEnabled(context, enabled)
 
     fun isHideWhenScreenOffEnabled(context: Context): Boolean = hideWhenScreenOffPref.get(getPrefs(context))
     fun setHideWhenScreenOffEnabled(context: Context, enabled: Boolean) = hideWhenScreenOffPref.set(getPrefs(context), enabled)
@@ -912,7 +893,6 @@ object OverlayPreferences {
                 VisualizerMode.SIMULATED
             }
             _visualizerModeFlow.value = mode
-            _hqVisualizerEnabledFlow.value = (mode == VisualizerMode.AUDIO_PREVIEW)
             isVisualizerModeInitialized = true
         }
         return _visualizerModeFlow.value
@@ -924,15 +904,8 @@ object OverlayPreferences {
             .putBoolean(KEY_HQ_VISUALIZER_ENABLED, mode == VisualizerMode.AUDIO_PREVIEW)
             .apply()
         _visualizerModeFlow.value = mode
-        _hqVisualizerEnabledFlow.value = (mode == VisualizerMode.AUDIO_PREVIEW)
         isVisualizerModeInitialized = true
     }
-
-    fun isHqVisualizerEnabled(context: Context): Boolean =
-        getVisualizerMode(context) == VisualizerMode.AUDIO_PREVIEW
-
-    fun setHqVisualizerEnabled(context: Context, enabled: Boolean) =
-        setVisualizerMode(context, if (enabled) VisualizerMode.AUDIO_PREVIEW else VisualizerMode.SIMULATED)
 
     // ---- Delegated Store Accessors (Flashlight, Blacklist, Live Activities, Priority) ----
     fun getFlashlightExpandedStyle(context: Context): FlashlightExpandedStyle =

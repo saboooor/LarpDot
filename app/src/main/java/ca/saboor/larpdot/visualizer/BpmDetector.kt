@@ -259,28 +259,50 @@ object BpmDetector {
         }
     }
 
+    private val titleBracketNoiseRegex = Regex(
+        """\s*[\(\[](feat\.|ft\.|with|version|remaster|deluxe|bonus|explicit|official|edit|radio|single).*?[\)\]]""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val titleDashNoiseRegex = Regex(
+        """\s*-\s*(remaster|single|bonus|deluxe|official|edit|radio|mono|stereo|anniversary).*$""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val titleYearRemasterRegex = Regex(
+        """\s*-\s*\d{4}\s*remaster.*$""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val emptyBracketsRegex = Regex("""\(\s*\)|\[\s*\]""")
+    private val artistSplitRegex = Regex(
+        """,|;|/|\s+feat\.?\s+|\s+ft\.?\s+|\s+&\s+|\s+x\s+""",
+        RegexOption.IGNORE_CASE,
+    )
+
     fun cleanTitle(title: String): String {
         var cleaned = title
         // Strip parenthetical / bracketed features, versions, remasters, etc.
-        cleaned = cleaned.replace(Regex("""\s*[\(\[](feat\.|ft\.|with|version|remaster|deluxe|bonus|explicit|official|edit|radio|single).*?[\)\]]""", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(titleBracketNoiseRegex, "")
         // Strip "- Remastered...", "- Single...", "- Bonus Track...", "- Official..."
-        cleaned = cleaned.replace(Regex("""\s*-\s*(remaster|single|bonus|deluxe|official|edit|radio|mono|stereo|anniversary).*$""", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(titleDashNoiseRegex, "")
         // Strip trailing "- 2011 Remaster", etc.
-        cleaned = cleaned.replace(Regex("""\s*-\s*\d{4}\s*remaster.*$""", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(titleYearRemasterRegex, "")
         // Strip empty parenthesis or brackets left over
-        cleaned = cleaned.replace(Regex("""\(\s*\)|\[\s*\]"""), "")
+        cleaned = cleaned.replace(emptyBracketsRegex, "")
         cleaned = cleaned.trim()
         return if (cleaned.isNotBlank()) cleaned else title.trim()
     }
 
     fun cleanArtist(artist: String): String {
-        val primary = artist.split(Regex(""",|;|/|\s+feat\.?\s+|\s+ft\.?\s+|\s+&\s+|\s+x\s+""", RegexOption.IGNORE_CASE)).firstOrNull()?.trim()
+        val primary = artist.split(artistSplitRegex).firstOrNull()?.trim()
         return if (!primary.isNullOrBlank()) primary else artist.trim()
     }
 
-    private fun sanitizeKey(title: String, artist: String): String {
-        return (cleanTitle(title).lowercase() + "_" + cleanArtist(artist).lowercase())
-            .replace(Regex("[^a-z0-9_]"), "_")
-            .take(64)
-    }
+    private fun sanitizeKey(title: String, artist: String): String =
+        sanitizeTrackSlug(cleanTitle(title), cleanArtist(artist))
 }
+
+private val NON_SLUG_CHARS_REGEX = Regex("[^a-z0-9_]")
+
+internal fun sanitizeTrackSlug(title: String, artist: String): String =
+    (title.trim().lowercase() + "_" + artist.trim().lowercase())
+        .replace(NON_SLUG_CHARS_REGEX, "_")
+        .take(64)

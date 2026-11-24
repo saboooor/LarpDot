@@ -6,10 +6,74 @@ import androidx.compose.runtime.getValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+
+/** Base compact pill extra width for media art styles (shared by live overlay and settings preview). */
+internal fun compactMediaBaseExtraDp(
+    artStyle: OverlayPreferences.AlbumArtStyle,
+    thickness: Dp,
+    showOutline: Boolean,
+    radialGaugeExtra: Dp = compactRadialGaugeExtraDp(thickness),
+): Dp = when (artStyle) {
+    OverlayPreferences.AlbumArtStyle.BLENDED -> thickness * 3
+    OverlayPreferences.AlbumArtStyle.NESTED -> maxOf(
+        thickness + (thickness - 12.dp).coerceIn(16.dp, 24.dp),
+        if (showOutline) radialGaugeExtra else 0.dp,
+    )
+    else -> 60.dp
+}
+
+/** Total horizontal width of the compact visualizer bars (shared by live overlay and settings preview). */
+internal fun compactVisualizerWidthDp(
+    showVisualizer: Boolean,
+    bandCount: Int,
+    barWidth: Float,
+    barSpacing: Float,
+): Float = if (showVisualizer) {
+    bandCount * barWidth + (bandCount - 1).coerceAtLeast(0) * barSpacing
+} else 0f
+
+/** Canonical expanded media card size (shared by live overlay and settings preview). */
+internal fun expandedMediaCardSize(
+    mediaInfo: MediaTrackInfo,
+    playerLayout: OverlayPreferences.ExpandedPlayerLayout,
+    showExpandedAlbumArt: Boolean,
+    showAppActions: Boolean,
+    screenWidthDp: Dp,
+    screenHeightDp: Dp,
+    horizontalMarginDp: Dp,
+    drawWindowWidthDp: Dp = screenWidthDp,
+    isLandscape: Boolean = false,
+): DpSize {
+    val usesVerticalLayout = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
+    val hasExtraMediaButtons = showAppActions && mediaInfo.sessionActions.any {
+        it.iconResourceId != 0 && it.iconPackageName != null
+    }
+    val width = if (usesVerticalLayout) {
+        minOf(screenWidthDp - 88.dp, 248.dp)
+    } else if (isLandscape) {
+        minOf(drawWindowWidthDp - horizontalMarginDp - 14.dp, 420.dp)
+    } else {
+        screenWidthDp - (horizontalMarginDp * 2)
+    }
+    val height = if (usesVerticalLayout) {
+        val hasAlbumArt = showExpandedAlbumArt && mediaInfo.albumArt != null
+        val materialHeight = when {
+            hasAlbumArt && hasExtraMediaButtons -> 430.dp
+            hasAlbumArt -> 350.dp
+            hasExtraMediaButtons -> 290.dp
+            else -> 210.dp
+        }
+        if (isLandscape) minOf(screenHeightDp - 36.dp, materialHeight) else materialHeight
+    } else {
+        220.dp
+    }
+    return DpSize(width, height)
+}
 
 /** Values supplied by content providers to the common island shell. */
 data class IslandPresentation(
@@ -107,14 +171,7 @@ internal fun rememberIslandPresentations(
     val showActivityOutline = activitySettings.progressOutline && activityProgress != null
     return mapOf(
         IslandType.MEDIA to run {
-            val base = when (artStyle) {
-                OverlayPreferences.AlbumArtStyle.BLENDED -> thickness * 3
-                OverlayPreferences.AlbumArtStyle.NESTED -> maxOf(
-                    thickness + (thickness - 12.dp).coerceIn(16.dp, 24.dp),
-                    if (compactMediaOutline) radialGaugeExtra else 0.dp,
-                )
-                else -> 60.dp
-            }
+            val base = compactMediaBaseExtraDp(artStyle, thickness, compactMediaOutline, radialGaugeExtra)
             val extra = maxOf(base, if (showTitle) 180.dp else 0.dp, if (announcing) 210.dp else 0.dp)
             IslandPresentation(
                 status = media.artist,

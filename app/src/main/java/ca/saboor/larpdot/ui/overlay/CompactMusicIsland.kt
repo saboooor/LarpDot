@@ -13,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -566,7 +567,6 @@ internal fun SecondaryMusicDotContent(
 internal fun CompactIslandContent(
     mediaInfo: MediaTrackInfo,
     cutoutDiameterDp: Dp,
-    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
@@ -579,8 +579,6 @@ internal fun CompactIslandContent(
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
     bpmPulseEnabled: Boolean = OverlayPreferences.minimizedBpmPulseEnabledFlow.collectAsState().value,
     pulseAmount: Float = OverlayPreferences.pulseAmountFlow.collectAsState().value,
-    fontStyle: OverlayPreferences.IslandFontStyle = OverlayPreferences.islandFontStyleFlow.collectAsState().value,
-    minimizedNestedBlurredBg: Boolean = OverlayPreferences.minimizedNestedBlurredBgFlow.collectAsState().value,
     isSongAnnouncement: Boolean = false,
     trailingWingFraction: Float = 0.5f,
     artworkAnchor: ArtworkAnchor? = null,
@@ -638,430 +636,427 @@ internal fun CompactIslandContent(
         }
     }
 
+    val containerModifier = modifier
+        .fillMaxSize()
+        .background(Color.Black)
+        .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier)
+
     if (isLandscape) {
-        // Landscape Mode: Vertical Dynamic Island Pill
         Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier),
+            modifier = containerModifier,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Top Wing: Album art based on chosen AlbumArtStyle
-            if (mediaInfo.albumArt != null) {
-                when (albumArtStyle) {
-                    OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        val albumArtSize = (cutoutDiameterDp - 12.dp).coerceIn(16.dp, 24.dp)
-                        val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
-                        val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            CompactMusicNestedArtworkWithRing(
-                                bitmap = mediaInfo.albumArt,
-                                renderedSize = renderedArtSize,
-                                innerSize = innerArtSize,
-                                shape = artworkShape,
-                                artworkGlow = artworkGlow,
-                                artworkAnchor = artworkAnchor,
-                                hasProgressRing = hasMusicProgressRing,
-                                progressProvider = musicProgressProvider,
-                                accentColor = accentColor,
-                            )
-                        }
-                    }
-                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(1f, matchHeightConstraintsFirst = false),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CompactMusicBasicFadedArtwork(
-                                    bitmap = mediaInfo.albumArt,
-                                    isLandscape = true,
-                                    artworkGlow = artworkGlow,
-                                    artworkAnchor = artworkAnchor,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                                if (hasMusicProgressRing) {
-                                    CompactMusicProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        accentColor = accentColor,
-                                        modifier = Modifier.fillMaxSize().padding(1.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
-                    OverlayPreferences.AlbumArtStyle.BLENDED -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.TopCenter,
-                        ) {
-                            CompactMusicBlendedArtwork(
-                                bitmap = mediaInfo.albumArt,
-                                isLandscape = true,
-                                dotRadiusPx = dotRadiusPx,
-                                artworkGlow = artworkGlow,
-                                artworkAnchor = artworkAnchor,
-                            )
-                            if (hasMusicProgressRing) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .size(cutoutDiameterDp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CompactMusicProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        accentColor = accentColor,
-                                        modifier = Modifier.fillMaxSize().padding(1.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+            CompactMusicArtworkWing(
+                mediaInfo = mediaInfo,
+                isLandscape = true,
+                albumArtStyle = albumArtStyle,
+                nestedShape = nestedShape,
+                nestedRotation = nestedRotation,
+                artworkShape = artworkShape,
+                artworkGlow = artworkGlow,
+                artworkAnchor = artworkAnchor,
+                cutoutDiameterDp = cutoutDiameterDp,
+                dotRadiusPx = dotRadiusPx,
+                compactRingDiameter = compactRingDiameter,
+                hasProgressRing = hasMusicProgressRing,
+                progressProvider = musicProgressProvider,
+                accentColor = accentColor,
+                showAnnouncementText = false,
+                announcementAlpha = 0f,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(cutoutDiameterDp))
+            CompactMusicTrailingWing(
+                mediaInfo = mediaInfo,
+                isLandscape = true,
+                albumArtStyle = albumArtStyle,
+                cutoutDiameterDp = cutoutDiameterDp,
+                accentColor = accentColor,
+                showDominantGlow = showDominantGlow,
+                glowAlphaProvider = glowAlphaProvider,
+                showAnnouncementText = showAnnouncementText,
+                announcementAlpha = announcementAlpha,
+                showMinimizedTitle = showMinimizedTitle,
+                showVisualizer = showVisualizer,
+                waveformBandCount = waveformBandCount,
+                waveformBarWidth = waveformBarWidth,
+                waveformBarSpacing = waveformBarSpacing,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
+    } else {
+        val leadingWingFraction = 1f - trailingWingFraction
+        val albumArtWingInteraction = Modifier
+            .then(if (onAlbumArtClick != null) Modifier.clickable(onClick = onAlbumArtClick) else Modifier)
+            .then(
+                if (highlightAlbumArt) Modifier.border(
+                    1.5.dp,
+                    materialYouPrimary,
+                    RoundedCornerShape(topStart = cutoutDiameterDp / 2f, bottomStart = cutoutDiameterDp / 2f),
+                ) else Modifier
+            )
+        val compactVisualizerVisible = showVisualizer && !(!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank())
+        val visualizerWingInteraction = Modifier
+            .then(
+                if (onVisualizerClick != null && compactVisualizerVisible) {
+                    Modifier.clickable(onClick = onVisualizerClick)
+                } else Modifier
+            )
+            .then(
+                if (highlightVisualizer && compactVisualizerVisible) {
+                    Modifier.border(
+                        1.5.dp,
+                        materialYouPrimary,
+                        RoundedCornerShape(topEnd = cutoutDiameterDp / 2f, bottomEnd = cutoutDiameterDp / 2f),
+                    )
+                } else Modifier
+            )
+        Row(
+            modifier = containerModifier,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CompactMusicArtworkWing(
+                mediaInfo = mediaInfo,
+                isLandscape = false,
+                albumArtStyle = albumArtStyle,
+                nestedShape = nestedShape,
+                nestedRotation = nestedRotation,
+                artworkShape = artworkShape,
+                artworkGlow = artworkGlow,
+                artworkAnchor = artworkAnchor,
+                cutoutDiameterDp = cutoutDiameterDp,
+                dotRadiusPx = dotRadiusPx,
+                compactRingDiameter = compactRingDiameter,
+                hasProgressRing = hasMusicProgressRing,
+                progressProvider = musicProgressProvider,
+                accentColor = accentColor,
+                showAnnouncementText = showAnnouncementText,
+                announcementAlpha = announcementAlpha,
+                modifier = Modifier
+                    .weight(leadingWingFraction)
+                    .fillMaxHeight()
+                    .then(albumArtWingInteraction),
+            )
+            Spacer(modifier = Modifier.width(cutoutDiameterDp))
+            CompactMusicTrailingWing(
+                mediaInfo = mediaInfo,
+                isLandscape = false,
+                albumArtStyle = albumArtStyle,
+                cutoutDiameterDp = cutoutDiameterDp,
+                accentColor = accentColor,
+                showDominantGlow = showDominantGlow,
+                glowAlphaProvider = glowAlphaProvider,
+                showAnnouncementText = showAnnouncementText,
+                announcementAlpha = announcementAlpha,
+                showMinimizedTitle = showMinimizedTitle,
+                showVisualizer = showVisualizer,
+                waveformBandCount = waveformBandCount,
+                waveformBarWidth = waveformBarWidth,
+                waveformBarSpacing = waveformBarSpacing,
+                modifier = Modifier
+                    .weight(trailingWingFraction)
+                    .fillMaxHeight()
+                    .then(visualizerWingInteraction),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactMusicArtworkWing(
+    mediaInfo: MediaTrackInfo,
+    isLandscape: Boolean,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    nestedShape: OverlayPreferences.NestedAlbumArtShape,
+    nestedRotation: Float,
+    artworkShape: Shape,
+    artworkGlow: AlbumArtGlowState,
+    artworkAnchor: ArtworkAnchor?,
+    cutoutDiameterDp: Dp,
+    dotRadiusPx: Float,
+    compactRingDiameter: Dp,
+    hasProgressRing: Boolean,
+    progressProvider: () -> Float,
+    accentColor: Color,
+    showAnnouncementText: Boolean,
+    announcementAlpha: Float,
+    modifier: Modifier = Modifier,
+) {
+    val isBlendedStyle = albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
+        albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
+    val albumArt = mediaInfo.albumArt
+    if (albumArt == null) {
+        val alignment = when {
+            isLandscape -> if (isBlendedStyle) Alignment.Center else Alignment.BottomCenter
+            showAnnouncementText || isBlendedStyle -> Alignment.Center
+            else -> Alignment.CenterEnd
+        }
+        Box(modifier = modifier, contentAlignment = alignment) {
+            if (!isLandscape && showAnnouncementText) {
+                CompactMusicAnnouncementTitle(
+                    title = mediaInfo.title,
+                    alpha = announcementAlpha,
+                    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
+                )
             } else {
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = if (
-                        albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
-                        albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
-                    ) Alignment.Center else Alignment.BottomCenter,
-                ) {
-                    CompactMusicPlaceholderWithRing(
-                        albumArtStyle = albumArtStyle,
-                        nestedShape = nestedShape,
-                        nestedRotation = nestedRotation,
-                        artworkShape = artworkShape,
-                        cutoutDiameterDp = cutoutDiameterDp,
-                        ringDiameter = compactRingDiameter,
-                        hasProgressRing = hasMusicProgressRing,
-                        progressProvider = musicProgressProvider,
+                CompactMusicPlaceholderWithRing(
+                    albumArtStyle = albumArtStyle,
+                    nestedShape = nestedShape,
+                    nestedRotation = nestedRotation,
+                    artworkShape = artworkShape,
+                    cutoutDiameterDp = cutoutDiameterDp,
+                    ringDiameter = compactRingDiameter,
+                    hasProgressRing = hasProgressRing,
+                    progressProvider = progressProvider,
+                    accentColor = accentColor,
+                )
+            }
+        }
+        return
+    }
+
+    when (albumArtStyle) {
+        OverlayPreferences.AlbumArtStyle.NESTED -> {
+            val albumArtSize = (cutoutDiameterDp - 12.dp).coerceIn(16.dp, 24.dp)
+            val renderedArtSize = if (hasProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
+            val innerArtSize = if (hasProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
+            if (isLandscape) {
+                Box(modifier = modifier, contentAlignment = Alignment.BottomCenter) {
+                    CompactMusicNestedArtworkWithRing(
+                        bitmap = albumArt,
+                        renderedSize = renderedArtSize,
+                        innerSize = innerArtSize,
+                        shape = artworkShape,
+                        artworkGlow = artworkGlow,
+                        artworkAnchor = artworkAnchor,
+                        hasProgressRing = hasProgressRing,
+                        progressProvider = progressProvider,
                         accentColor = accentColor,
                     )
                 }
-            }
-            // Center: Symmetrical clearance spacer hugging the hole punch camera
-            Spacer(modifier = Modifier.height(cutoutDiameterDp))
-
-            // Bottom Wing: Equalizer with ambient glow extending from the dot to the bottom edge
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .compactDominantGlow(
-                        enabled = showDominantGlow,
-                        vertical = true,
-                        accentColor = accentColor,
-                        alphaProvider = glowAlphaProvider,
+            } else {
+                val artStartInset = ((cutoutDiameterDp - renderedArtSize) / 2f).coerceAtLeast(3.dp)
+                Row(
+                    modifier = modifier.padding(
+                        start = if (showAnnouncementText) artStartInset else 0.dp,
+                        end = if (showAnnouncementText) 2.dp else 0.dp,
                     ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(if (showAnnouncementText) Modifier.padding(horizontal = 4.dp, vertical = 4.dp) else Modifier),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.End,
                 ) {
+                    CompactMusicNestedArtworkWithRing(
+                        bitmap = albumArt,
+                        renderedSize = renderedArtSize,
+                        innerSize = innerArtSize,
+                        shape = artworkShape,
+                        artworkGlow = artworkGlow,
+                        artworkAnchor = artworkAnchor,
+                        hasProgressRing = hasProgressRing,
+                        progressProvider = progressProvider,
+                        accentColor = accentColor,
+                    )
                     if (showAnnouncementText) {
-                        Box(modifier = Modifier.graphicsLayer { alpha = announcementAlpha }) {
-                            AnnouncementTrackText(
-                                title = mediaInfo.title,
-                                artist = mediaInfo.artist,
-                                accentColor = accentColor,
-                                titleFontSize = 10.5f,
-                                artistFontSize = 9f,
-                                fadeWidth = 6.dp,
-                            )
-                        }
-                    }
-                    if (showVisualizer) {
-                        EqualizerWaveform(
-                            mediaInfo = mediaInfo,
-                            maxHeightDp = 13.5f,
-                            barCount = waveformBandCount,
-                            barWidth = waveformBarWidth.dp,
-                            barSpacing = waveformBarSpacing.dp,
+                        CompactMusicAnnouncementTitle(
+                            title = mediaInfo.title,
+                            alpha = announcementAlpha,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
             }
         }
-    } else {
-        // Portrait Mode: Horizontal Dynamic Island Pill
-        val leadingWingFraction = 1f - trailingWingFraction
-        val albumArtWingInteraction = Modifier
-            .then(if (onAlbumArtClick != null) Modifier.clickable(onClick = onAlbumArtClick) else Modifier)
-            .then(
-                if (highlightAlbumArt) Modifier.border(1.5.dp, materialYouPrimary, RoundedCornerShape(topStart = cutoutDiameterDp / 2f, bottomStart = cutoutDiameterDp / 2f))
-                else Modifier
-            )
-        Row(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .then(if (onBackgroundClick != null) Modifier.clickable(onClick = onBackgroundClick) else Modifier),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Left Wing: Album art based on chosen AlbumArtStyle, with announcement title inserted in front
-            if (mediaInfo.albumArt != null) {
-                when (albumArtStyle) {
-                    OverlayPreferences.AlbumArtStyle.NESTED -> {
-                        val albumArtSize = (cutoutDiameterDp - 12.dp).coerceIn(16.dp, 24.dp)
-                        val renderedArtSize = if (hasMusicProgressRing) maxOf(albumArtSize, compactRingDiameter) else albumArtSize
-                        val innerArtSize = if (hasMusicProgressRing) (renderedArtSize - 5.dp).coerceAtLeast(11.dp) else albumArtSize
-                        val artStartInset = ((cutoutDiameterDp - renderedArtSize) / 2f).coerceAtLeast(3.dp)
-                        Row(
-                            modifier = Modifier
-                                .weight(leadingWingFraction)
-                                .fillMaxHeight()
-                                .then(albumArtWingInteraction)
-                                .padding(
-                                    start = if (showAnnouncementText) artStartInset else 0.dp,
-                                    end = if (showAnnouncementText) 2.dp else 0.dp,
-                                ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.End,
-                        ) {
-                            CompactMusicNestedArtworkWithRing(
-                                bitmap = mediaInfo.albumArt,
-                                renderedSize = renderedArtSize,
-                                innerSize = innerArtSize,
-                                shape = artworkShape,
-                                artworkGlow = artworkGlow,
-                                artworkAnchor = artworkAnchor,
-                                hasProgressRing = hasMusicProgressRing,
-                                progressProvider = musicProgressProvider,
-                                accentColor = accentColor,
-                            )
-                            if (showAnnouncementText) {
-                                CompactMusicAnnouncementTitle(
-                                    title = mediaInfo.title,
-                                    alpha = announcementAlpha,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(leadingWingFraction)
-                                .fillMaxHeight()
-                                .then(albumArtWingInteraction),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .align(if (showAnnouncementText) Alignment.CenterStart else Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .aspectRatio(1f, matchHeightConstraintsFirst = true),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CompactMusicBasicFadedArtwork(
-                                    bitmap = mediaInfo.albumArt,
-                                    isLandscape = false,
-                                    artworkGlow = artworkGlow,
-                                    artworkAnchor = artworkAnchor,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                                if (hasMusicProgressRing) {
-                                    CompactMusicProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        accentColor = accentColor,
-                                        modifier = Modifier.fillMaxSize().padding(1.dp),
-                                    )
-                                }
-                            }
-                            if (showAnnouncementText) {
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .graphicsLayer { alpha = announcementAlpha }
-                                        .background(Color.Black.copy(alpha = 0.34f)),
-                                )
-                                CompactMusicAnnouncementTitle(
-                                    title = mediaInfo.title,
-                                    alpha = announcementAlpha,
-                                    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
-                                )
-                            }
-                        }
-                    }
-                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
-                    OverlayPreferences.AlbumArtStyle.BLENDED -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(leadingWingFraction)
-                                .fillMaxHeight()
-                                .then(albumArtWingInteraction),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CompactMusicBlendedArtwork(
-                                bitmap = mediaInfo.albumArt,
-                                isLandscape = false,
-                                dotRadiusPx = dotRadiusPx,
-                                artworkGlow = artworkGlow,
-                                artworkAnchor = artworkAnchor,
-                            )
-                            if (hasMusicProgressRing) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .size(cutoutDiameterDp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CompactMusicProgressRing(
-                                        progressProvider = musicProgressProvider,
-                                        accentColor = accentColor,
-                                        modifier = Modifier.fillMaxSize().padding(1.dp),
-                                    )
-                                }
-                            }
-                            if (showAnnouncementText) {
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .graphicsLayer { alpha = announcementAlpha }
-                                        .background(Color.Black.copy(alpha = 0.34f)),
-                                )
-                                CompactMusicAnnouncementTitle(
-                                    title = mediaInfo.title,
-                                    alpha = announcementAlpha,
-                                    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
-                                )
-                            }
-                        }
+        OverlayPreferences.AlbumArtStyle.BASIC_FADED -> {
+            Box(
+                modifier = modifier,
+                contentAlignment = if (isLandscape) Alignment.BottomCenter else Alignment.Center,
+            ) {
+                val artContainerModifier = if (isLandscape) {
+                    Modifier.fillMaxWidth().aspectRatio(1f, matchHeightConstraintsFirst = false)
+                } else {
+                    Modifier
+                        .align(if (showAnnouncementText) Alignment.CenterStart else Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                }
+                Box(modifier = artContainerModifier, contentAlignment = Alignment.Center) {
+                    CompactMusicBasicFadedArtwork(
+                        bitmap = albumArt,
+                        isLandscape = isLandscape,
+                        artworkGlow = artworkGlow,
+                        artworkAnchor = artworkAnchor,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (hasProgressRing) {
+                        CompactMusicProgressRing(
+                            progressProvider = progressProvider,
+                            accentColor = accentColor,
+                            modifier = Modifier.fillMaxSize().padding(1.dp),
+                        )
                     }
                 }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .weight(leadingWingFraction)
-                        .fillMaxHeight()
-                        .then(albumArtWingInteraction),
-                    contentAlignment = if (
-                        showAnnouncementText ||
-                        albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
-                        albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
-                    ) Alignment.Center else Alignment.CenterEnd,
-                ) {
-                    if (showAnnouncementText) {
-                        CompactMusicAnnouncementTitle(
-                            title = mediaInfo.title,
-                            alpha = announcementAlpha,
-                            modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
-                        )
-                    } else {
-                        CompactMusicPlaceholderWithRing(
-                            albumArtStyle = albumArtStyle,
-                            nestedShape = nestedShape,
-                            nestedRotation = nestedRotation,
-                            artworkShape = artworkShape,
-                            cutoutDiameterDp = cutoutDiameterDp,
-                            ringDiameter = compactRingDiameter,
-                            hasProgressRing = hasMusicProgressRing,
-                            progressProvider = musicProgressProvider,
-                            accentColor = accentColor,
-                        )
-                    }
+                if (!isLandscape && showAnnouncementText) {
+                    CompactMusicAnnouncementScrimAndTitle(mediaInfo.title, announcementAlpha)
                 }
             }
-            // Center: Symmetrical clearance spacer hugging the hole punch camera
-            Spacer(modifier = Modifier.width(cutoutDiameterDp))
+        }
+        OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+        OverlayPreferences.AlbumArtStyle.BLENDED -> {
+            Box(
+                modifier = modifier,
+                contentAlignment = if (isLandscape) Alignment.TopCenter else Alignment.Center,
+            ) {
+                CompactMusicBlendedArtwork(
+                    bitmap = albumArt,
+                    isLandscape = isLandscape,
+                    dotRadiusPx = dotRadiusPx,
+                    artworkGlow = artworkGlow,
+                    artworkAnchor = artworkAnchor,
+                )
+                if (hasProgressRing) {
+                    Box(
+                        modifier = Modifier
+                            .align(if (isLandscape) Alignment.TopCenter else Alignment.CenterStart)
+                            .size(cutoutDiameterDp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompactMusicProgressRing(
+                            progressProvider = progressProvider,
+                            accentColor = accentColor,
+                            modifier = Modifier.fillMaxSize().padding(1.dp),
+                        )
+                    }
+                }
+                if (!isLandscape && showAnnouncementText) {
+                    CompactMusicAnnouncementScrimAndTitle(mediaInfo.title, announcementAlpha)
+                }
+            }
+        }
+    }
+}
 
-            // Right Wing: Equalizer with ambient glow extending from the dot to the right edge.
+@Composable
+private fun BoxScope.CompactMusicAnnouncementScrimAndTitle(
+    title: String,
+    announcementAlpha: Float,
+) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .graphicsLayer { alpha = announcementAlpha }
+            .background(Color.Black.copy(alpha = 0.34f)),
+    )
+    CompactMusicAnnouncementTitle(
+        title = title,
+        alpha = announcementAlpha,
+        modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
+    )
+}
+
+@Composable
+private fun CompactMusicTrailingWing(
+    mediaInfo: MediaTrackInfo,
+    isLandscape: Boolean,
+    albumArtStyle: OverlayPreferences.AlbumArtStyle,
+    cutoutDiameterDp: Dp,
+    accentColor: Color,
+    showDominantGlow: Boolean,
+    glowAlphaProvider: () -> Float,
+    showAnnouncementText: Boolean,
+    announcementAlpha: Float,
+    showMinimizedTitle: Boolean,
+    showVisualizer: Boolean,
+    waveformBandCount: Int,
+    waveformBarWidth: Float,
+    waveformBarSpacing: Float,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.compactDominantGlow(
+            enabled = showDominantGlow,
+            vertical = isLandscape,
+            accentColor = accentColor,
+            alphaProvider = glowAlphaProvider,
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isLandscape) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (showAnnouncementText) Modifier.padding(horizontal = 4.dp, vertical = 4.dp) else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            ) {
+                if (showAnnouncementText) {
+                    Box(modifier = Modifier.graphicsLayer { alpha = announcementAlpha }) {
+                        AnnouncementTrackText(
+                            title = mediaInfo.title,
+                            artist = mediaInfo.artist,
+                            accentColor = accentColor,
+                            titleFontSize = 10.5f,
+                            artistFontSize = 9f,
+                            fadeWidth = 6.dp,
+                        )
+                    }
+                }
+                if (showVisualizer) {
+                    EqualizerWaveform(
+                        mediaInfo = mediaInfo,
+                        maxHeightDp = 13.5f,
+                        barCount = waveformBandCount,
+                        barWidth = waveformBarWidth.dp,
+                        barSpacing = waveformBarSpacing.dp,
+                    )
+                }
+            }
+        } else {
             val equalizerShift = if (
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.BLENDED ||
                 albumArtStyle == OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND
             ) 0.dp else -(cutoutDiameterDp / if (waveformBandCount >= 6) 16f else 8f)
-            val compactVisualizerVisible = showVisualizer && !(!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank())
-            Box(
+            val visualizerEndInset = (cutoutDiameterDp / 3f).coerceAtLeast(8.dp)
+            Row(
                 modifier = Modifier
-                    .weight(trailingWingFraction)
-                    .fillMaxHeight()
+                    .fillMaxSize()
                     .then(
-                        if (onVisualizerClick != null && compactVisualizerVisible) {
-                            Modifier.clickable(onClick = onVisualizerClick)
-                        } else Modifier
-                    )
-                    .then(
-                        if (highlightVisualizer && compactVisualizerVisible) {
-                            Modifier.border(
-                                1.5.dp,
-                                materialYouPrimary,
-                                RoundedCornerShape(topEnd = cutoutDiameterDp / 2f, bottomEnd = cutoutDiameterDp / 2f),
-                            )
-                        } else Modifier
-                    )
-                    .compactDominantGlow(
-                        enabled = showDominantGlow,
-                        vertical = false,
-                        accentColor = accentColor,
-                        alphaProvider = glowAlphaProvider,
+                        if (showAnnouncementText) Modifier.padding(start = 2.dp, end = visualizerEndInset)
+                        else Modifier
                     ),
-                contentAlignment = Alignment.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.Center,
             ) {
-                val visualizerEndInset = (cutoutDiameterDp / 3f).coerceAtLeast(8.dp)
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (showAnnouncementText) Modifier.padding(start = 2.dp, end = visualizerEndInset)
-                            else Modifier
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = if (showAnnouncementText) Arrangement.spacedBy(4.dp) else Arrangement.Center,
-                ) {
-                    if (showAnnouncementText) {
-                        MarqueeText(
-                            text = mediaInfo.artist.ifBlank { "Media Player" },
-                            color = accentColor.copy(alpha = 0.95f),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .graphicsLayer { alpha = announcementAlpha },
-                            textAlign = TextAlign.Center,
-                            fadeWidth = 6.dp,
-                            initialDelayMillis = 600,
-                            repeatDelayMillis = 1000,
-                            velocity = 35.dp,
-                        )
-                    }
-                    if (!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank()) {
-                        MarqueeText(
-                            text = mediaInfo.title,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            fadeWidth = 6.dp,
-                        )
-                    } else if (showVisualizer) {
-                        EqualizerWaveform(
-                            mediaInfo = mediaInfo,
-                            maxHeightDp = 13.5f,
-                            barCount = waveformBandCount,
-                            barWidth = waveformBarWidth.dp,
-                            barSpacing = waveformBarSpacing.dp,
-                            modifier = Modifier.offset(x = if (showAnnouncementText) 0.dp else equalizerShift),
-                        )
-                    }
+                if (showAnnouncementText) {
+                    MarqueeText(
+                        text = mediaInfo.artist.ifBlank { "Media Player" },
+                        color = accentColor.copy(alpha = 0.95f),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer { alpha = announcementAlpha },
+                        textAlign = TextAlign.Center,
+                        fadeWidth = 6.dp,
+                        initialDelayMillis = 600,
+                        repeatDelayMillis = 1000,
+                        velocity = 35.dp,
+                    )
+                }
+                if (!showAnnouncementText && showMinimizedTitle && mediaInfo.title.isNotBlank()) {
+                    MarqueeText(
+                        text = mediaInfo.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        fadeWidth = 6.dp,
+                    )
+                } else if (showVisualizer) {
+                    EqualizerWaveform(
+                        mediaInfo = mediaInfo,
+                        maxHeightDp = 13.5f,
+                        barCount = waveformBandCount,
+                        barWidth = waveformBarWidth.dp,
+                        barSpacing = waveformBarSpacing.dp,
+                        modifier = Modifier.offset(x = if (showAnnouncementText) 0.dp else equalizerShift),
+                    )
                 }
             }
         }

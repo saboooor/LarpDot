@@ -167,8 +167,6 @@ object NotificationActivityState {
         }
     }
 
-    fun updateSettings(newSettings: NotificationActivitySettings) = configure(newSettings)
-
     fun update(context: Context, sbn: StatusBarNotification) {
         appContext = context.applicationContext
         if (isPackageBlacklisted(sbn.packageName)) {

@@ -104,10 +104,6 @@ object AudioOutputTracker {
         am.registerAudioDeviceCallback(deviceCallback, Handler(Looper.getMainLooper()))
     }
 
-    fun setOnOutputChangedListener(listener: ((AudioOutputDevice, AudioOutputDevice) -> Unit)?) {
-        onOutputChanged = listener
-    }
-
     fun refresh(notify: Boolean = false) {
         val am = audioManager ?: return
         val outputs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)

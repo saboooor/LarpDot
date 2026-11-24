@@ -1,8 +1,6 @@
 package ca.saboor.larpdot.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,7 +32,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import ca.saboor.larpdot.visualizer.BpmDetector
@@ -45,11 +42,14 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CompactIslandContent
-import ca.saboor.larpdot.ui.overlay.compactRadialGaugeExtraDp
 import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
+import ca.saboor.larpdot.ui.overlay.compactMediaBaseExtraDp
+import ca.saboor.larpdot.ui.overlay.compactVisualizerWidthDp
 import ca.saboor.larpdot.ui.overlay.configuredCompactMediaWings
+import ca.saboor.larpdot.ui.overlay.expandedMediaCardSize
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
+import ca.saboor.larpdot.ui.overlay.rememberLiveMediaPositionMs
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
 enum class IslandPreviewMode {
@@ -96,7 +96,6 @@ fun ExpandedIslandPreview(
     }
 
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
-    val livePositionMs by MediaPlaybackState.positionMs.collectAsState()
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
@@ -132,7 +131,12 @@ fun ExpandedIslandPreview(
 
     // Always display realistic media so styles, shapes, blur, and waveforms are immediately visible
     val previewTrack = if (nowPlaying.hasMedia) nowPlaying else sampleTrack
-    val previewPositionMs = if (nowPlaying.hasMedia) livePositionMs else sampleTrack.positionMs
+    val livePositionMsState = rememberLiveMediaPositionMs(previewTrack, useLiveStream = nowPlaying.hasMedia)
+    val previewProgressProvider: () -> Float = {
+        if (previewTrack.durationMs > 0L) {
+            (livePositionMsState.value.toFloat() / previewTrack.durationMs).coerceIn(0f, 1f)
+        } else 0f
+    }
     val pulseEntireIsland by OverlayPreferences.pulseEntireIslandEnabledFlow.collectAsState()
     val pulseAmount by OverlayPreferences.pulseAmountFlow.collectAsState()
     val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
@@ -140,7 +144,7 @@ fun ExpandedIslandPreview(
     val isBpmResolved by BpmDetector.isResolved.collectAsState()
     val bpmPulseState = rememberBpmPulse(
         bpm = if (isBpmResolved) currentBpm else (if (!nowPlaying.hasMedia) 120f else null),
-        currentPositionMs = previewPositionMs,
+        positionMsProvider = { livePositionMsState.value },
         isPlaying = previewTrack.isPlaying,
         enabled = pulseEntireIsland,
     )
@@ -149,18 +153,17 @@ fun ExpandedIslandPreview(
     val cutoutDiameterDp = cameraGeometry.diameter.dp
     val compactPillThickness = cameraGeometry.thickness.dp
     val compactCornerRadius = cameraGeometry.cornerRadius.dp
-    val nestedArtSize = (compactPillThickness - 12.dp).coerceIn(16.dp, 24.dp)
-    val compactExtraDp = when (minimizedStyle) {
-        OverlayPreferences.AlbumArtStyle.BLENDED -> compactPillThickness * 3
-        OverlayPreferences.AlbumArtStyle.NESTED -> maxOf(
-            compactPillThickness + nestedArtSize,
-            if (showMinimizedProgressOutline) compactRadialGaugeExtraDp(compactPillThickness) else 0.dp,
-        )
-        else -> 60.dp
-    }
-    val visualizerWidthDp = if (showMinimizedVisualizer) {
-        waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
-    } else 0f
+    val compactExtraDp = compactMediaBaseExtraDp(
+        artStyle = minimizedStyle,
+        thickness = compactPillThickness,
+        showOutline = showMinimizedProgressOutline,
+    )
+    val visualizerWidthDp = compactVisualizerWidthDp(
+        showVisualizer = showMinimizedVisualizer,
+        bandCount = waveformBandCount,
+        barWidth = waveformBarWidth,
+        barSpacing = waveformBarSpacing,
+    )
     val mediaWings = configuredCompactMediaWings(
         mediaInfo = previewTrack,
         extraWidthDp = compactExtraDp.value,
@@ -181,44 +184,23 @@ fun ExpandedIslandPreview(
         label = "preview_compact_width",
     )
 
-    val progressFraction = if (previewTrack.durationMs > 0) {
-        (previewPositionMs.toFloat() / previewTrack.durationMs).coerceIn(0f, 1f)
-    } else 0f
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressFraction,
-        animationSpec = LarpMotion.timing(durationMillis = 350, easing = LinearEasing),
-        label = "preview_progress",
-    )
-
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
-    val usesVerticalMediaLayout = expandedPlayerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
-    val hasExtraMediaButtons = expandedElementVisibility.appActions && previewTrack.sessionActions.any {
-        it.iconResourceId != 0 && it.iconPackageName != null
-    }
 
     val screenWidthDp = configuration.screenWidthDp.dp
-    val previewCardWidth = if (usesVerticalMediaLayout) {
-        minOf(screenWidthDp - 88.dp, 248.dp)
-    } else {
-        screenWidthDp - 32.dp
-    }
-    val previewHeight = if (titleBar) {
-        52.dp
-    } else if (usesVerticalMediaLayout) {
-        val hasAlbumArt = showExpandedAlbumArt && previewTrack.albumArt != null
-        val materialHeight = when {
-            hasAlbumArt && hasExtraMediaButtons -> 430.dp
-            hasAlbumArt -> 350.dp
-            hasExtraMediaButtons -> 290.dp
-            else -> 210.dp
-        }
-        materialHeight
-    } else {
-        220.dp
-    }
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val mediaCardSize = expandedMediaCardSize(
+        mediaInfo = previewTrack,
+        playerLayout = expandedPlayerLayout,
+        showExpandedAlbumArt = showExpandedAlbumArt,
+        showAppActions = expandedElementVisibility.appActions,
+        screenWidthDp = screenWidthDp,
+        screenHeightDp = screenHeightDp,
+        horizontalMarginDp = 16.dp,
+    )
+    val previewCardWidth = mediaCardSize.width
+    val previewHeight = if (titleBar) 52.dp else mediaCardSize.height
     val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
 
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewHeight) / 2f)
@@ -312,16 +294,14 @@ fun ExpandedIslandPreview(
                         CompactIslandContent(
                             mediaInfo = previewTrack,
                             cutoutDiameterDp = cutoutDiameterDp,
-                            onExpand = {},
                             albumArtStyle = minimizedStyle,
                             showVisualizer = showMinimizedVisualizer,
                             waveformBandCount = waveformBandCount,
                             isSongAnnouncement = isAnnouncing,
                             trailingWingFraction = mediaWings.trailingFraction,
                             pulseAmount = pulseAmount,
-                            fontStyle = islandFontStyle,
                             showProgressRing = showMinimizedProgressOutline,
-                            progressProvider = { animatedProgress },
+                            progressProvider = previewProgressProvider,
                             onAlbumArtClick = onElementClick?.let { callback ->
                                 { callback(MusicPreviewElement.MINIMIZED_ALBUM_ART) }
                             },
@@ -383,7 +363,7 @@ fun ExpandedIslandPreview(
                         pulseAmount = pulseAmount,
                         fontStyle = islandFontStyle,
                         showExpandedProgressRing = showExpandedProgressOutline,
-                        progressProvider = { animatedProgress },
+                        progressProvider = previewProgressProvider,
                         onAlbumArtClick = onElementClick?.let { callback ->
                             { callback(MusicPreviewElement.EXPANDED_ALBUM_ART) }
                         },

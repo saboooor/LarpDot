@@ -425,6 +425,7 @@ private fun ExpandedMusicBackground(
     if (albumArt == null) return
     val density = LocalDensity.current
     val isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
+    val imageBitmap = remember(albumArt) { albumArt.asImageBitmap() }
 
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundOpacity }) {
         when (albumArtStyle) {
@@ -432,7 +433,7 @@ private fun ExpandedMusicBackground(
             OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND,
             OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> {
                 Image(
-                    bitmap = albumArt.asImageBitmap(),
+                    bitmap = imageBitmap,
                     contentDescription = "Background album art",
                     modifier = Modifier
                         .fillMaxSize()
@@ -466,7 +467,7 @@ private fun ExpandedMusicBackground(
             OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED,
             OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> {
                 val isBlended = albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLENDED
-                val bitmap = albumArt.asImageBitmap()
+                val bitmap = imageBitmap
                 val side = minOf(bitmap.width, bitmap.height)
                 val cropX = (bitmap.width - side) / 2
                 val cropY = (bitmap.height - side) / 2
@@ -751,7 +752,7 @@ private fun ExpandedSessionActionButton(
     modifier: Modifier = Modifier,
 ) {
     val appIcon = remember(action.iconPackageName, action.iconResourceId) {
-        loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)
+        loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)?.asImageBitmap()
     } ?: return
     IconButton(
         onClick = {
@@ -761,7 +762,7 @@ private fun ExpandedSessionActionButton(
         modifier = modifier.size(buttonSize),
     ) {
         Image(
-            bitmap = appIcon.asImageBitmap(),
+            bitmap = appIcon,
             contentDescription = action.label,
             colorFilter = ColorFilter.tint(
                 if (action.active) accentColor else Color.White.copy(alpha = inactiveAlpha)

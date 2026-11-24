@@ -230,11 +230,6 @@ object ScreenshotPocketManager {
         }
     }
 
-    fun dismissItem(key: String) {
-        dismissJobs.remove(key)?.cancel()
-        NotificationActivityState.removeSystemActivity(key)
-    }
-
     private data class ScreenshotRecord(
         val id: Long,
         val uri: Uri,

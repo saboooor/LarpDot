@@ -22,7 +22,7 @@ internal fun IslandCompactContent(
 ) {
     when (model.type) {
         IslandType.MEDIA -> CompactIslandContent(
-            mediaInfo = media, cutoutDiameterDp = diameter, onExpand = onExpand,
+            mediaInfo = media, cutoutDiameterDp = diameter,
             showMinimizedTitle = showTitle, isSongAnnouncement = announcing,
             trailingWingFraction = trailingWingFraction, artworkAnchor = artworkAnchor,
         )

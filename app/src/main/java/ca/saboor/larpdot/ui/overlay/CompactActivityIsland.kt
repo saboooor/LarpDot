@@ -281,17 +281,6 @@ fun rememberCompactStatusExtraDp(
 }
 
 @Composable
-fun rememberActivityCompactExtraDp(
-    activity: NotificationActivityInfo?,
-    status: String?,
-): Dp {
-    if (activity == null) return 80.dp
-    if (batteryPercentOf(activity) != null) return 64.dp
-    if (status.isNullOrEmpty()) return 48.dp
-    return rememberCompactStatusExtraDp(status)
-}
-
-@Composable
 internal fun CompactNotificationActivityContent(
     activity: NotificationActivityInfo,
     cutoutDiameterDp: Dp,

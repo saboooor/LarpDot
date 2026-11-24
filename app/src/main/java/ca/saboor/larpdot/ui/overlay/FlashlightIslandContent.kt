@@ -75,7 +75,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -309,81 +308,144 @@ fun CompactFlashlightContent(
  * - Horizontal pill slider bar at the top of the beam with continuous vertical drag control.
  * - Tapping on the expanded island toggles / turns off the flashlight.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpandedFlashlightContent(
-    cutoutDiameterDp: Dp,
-    isExpanded: Boolean,
-    onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
-    cutoutInfo: CutoutInfo? = null,
-    cardHorizontalMarginDp: Dp = 14.dp,
     topContentInset: Dp = 0.dp,
     onBeamClick: (() -> Unit)? = null,
 ) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val hapticFeedback = LocalHapticFeedback.current
-
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
+    val accentColor = flashlightAccentColor()
+    val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
+    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
 
+    if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
+        ExpandedFlashlightSliderLayout(
+            isFlashlightOn = isFlashlightOn,
+            torchStrength = torchStrength,
+            maxStrength = maxStrength,
+            accentColor = accentColor,
+            showExpandedRadial = showExpandedRadial,
+            topContentInset = topContentInset,
+            modifier = modifier,
+        )
+    } else {
+        ExpandedFlashlightBeamLayout(
+            isFlashlightOn = isFlashlightOn,
+            torchStrength = torchStrength,
+            maxStrength = maxStrength,
+            accentColor = accentColor,
+            showExpandedRadial = showExpandedRadial,
+            topContentInset = topContentInset,
+            onBeamClick = onBeamClick,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun FlashlightTorchToggleButton(
+    isFlashlightOn: Boolean,
+    accentColor: Color,
+    inactiveTint: Color,
+    showExpandedRadial: Boolean,
+    progress: Float,
+    buttonSize: Dp,
+    iconSize: Dp,
+    ringSize: Dp,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(onClick = onClick, modifier = modifier.size(buttonSize)) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
+                contentDescription = contentDescription,
+                tint = if (isFlashlightOn) accentColor else inactiveTint,
+                modifier = Modifier.size(if (showExpandedRadial) 22.dp else iconSize),
+            )
+            if (showExpandedRadial) {
+                RadialProgressRing(
+                    progress = progress,
+                    color = accentColor,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(ringSize),
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ExpandedFlashlightSliderLayout(
+    isFlashlightOn: Boolean,
+    torchStrength: Int,
+    maxStrength: Int,
+    accentColor: Color,
+    showExpandedRadial: Boolean,
+    topContentInset: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
+    Row(
+        modifier = modifier.fillMaxSize().padding(
+            start = 16.dp, end = 16.dp,
+            top = if (topContentInset > 0.dp) topContentInset else 8.dp, bottom = 8.dp,
+        ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FlashlightTorchToggleButton(
+            isFlashlightOn = isFlashlightOn,
+            accentColor = accentColor,
+            inactiveTint = Color.Gray,
+            showExpandedRadial = showExpandedRadial,
+            progress = strengthFraction,
+            buttonSize = 48.dp,
+            iconSize = 28.dp,
+            ringSize = 44.dp,
+            contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
+            onClick = { FlashlightController.toggleFlashlight() },
+        )
+        val sliderMax = maxStrength.coerceAtLeast(2).toFloat()
+        val sliderValue = torchStrength.toFloat().coerceIn(1f, sliderMax)
+        val sliderState = remember(sliderMax) {
+            SliderState(value = sliderValue, trackRange = 1f..sliderMax)
+        }
+        sliderState.value = sliderValue
+        Slider(
+            state = sliderState,
+            modifier = Modifier.weight(1f),
+            onValueChange = { FlashlightController.setStrength(it.roundToInt().coerceIn(1, maxStrength.coerceAtLeast(1))) },
+            onValueChangeFinished = { FlashlightController.flushStrength(FlashlightController.torchStrength.value) },
+            enabled = isFlashlightOn && maxStrength > 1,
+        )
+    }
+}
+
+@Composable
+private fun ExpandedFlashlightBeamLayout(
+    isFlashlightOn: Boolean,
+    torchStrength: Int,
+    maxStrength: Int,
+    accentColor: Color,
+    showExpandedRadial: Boolean,
+    topContentInset: Dp,
+    onBeamClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val hapticFeedback = LocalHapticFeedback.current
     val currentMaxStrength by rememberUpdatedState(maxStrength)
     val currentIsFlashlightOn by rememberUpdatedState(isFlashlightOn)
-
-    // Dynamic Material You system accent colors
-    val accentColor = flashlightAccentColor()
     val beamBlur by OverlayPreferences.flashlightBeamBlurFlow.collectAsState()
     val beamAccentColor by OverlayPreferences.flashlightBeamAccentColorFlow.collectAsState()
     val beamColor = if (beamAccentColor) accentColor else Color.White
-    val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
-    val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
 
-    val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
-    if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
-        Row(
-            modifier = modifier.fillMaxSize().padding(
-                start = 16.dp, end = 16.dp,
-                top = if (topContentInset > 0.dp) topContentInset else 8.dp, bottom = 8.dp,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            IconButton(onClick = { FlashlightController.toggleFlashlight() }, modifier = Modifier.size(48.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
-                        contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
-                        tint = if (isFlashlightOn) accentColor else Color.Gray,
-                        modifier = Modifier.size(if (showExpandedRadial) 22.dp else 28.dp),
-                    )
-                    if (showExpandedRadial) {
-                        RadialProgressRing(
-                            progress = strengthFraction,
-                            color = accentColor,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(44.dp),
-                        )
-                    }
-                }
-            }
-            val sliderMax = maxStrength.coerceAtLeast(2).toFloat()
-            val sliderValue = torchStrength.toFloat().coerceIn(1f, sliderMax)
-            val sliderState = remember(sliderMax) {
-                SliderState(value = sliderValue, trackRange = 1f..sliderMax)
-            }
-            sliderState.value = sliderValue
-            Slider(
-                state = sliderState,
-                modifier = Modifier.weight(1f),
-                onValueChange = { FlashlightController.setStrength(it.roundToInt().coerceIn(1, maxStrength.coerceAtLeast(1))) },
-                onValueChangeFinished = { FlashlightController.flushStrength(FlashlightController.torchStrength.value) },
-                enabled = isFlashlightOn && maxStrength > 1,
-            )
-        }
-        return
-    }
     // Whether user is actively dragging the slider
     var isDragging by remember { mutableStateOf(false) }
 
@@ -607,32 +669,22 @@ fun ExpandedFlashlightContent(
             }
 
             // Regular Material Flashlight Icon at bottom of beam
-            IconButton(
+            FlashlightTorchToggleButton(
+                isFlashlightOn = isFlashlightOn,
+                accentColor = accentColor,
+                inactiveTint = Color.White.copy(alpha = 0.40f),
+                showExpandedRadial = showExpandedRadial,
+                progress = if (isFlashlightOn) intensityFraction else 0f,
+                buttonSize = 44.dp,
+                iconSize = 32.dp,
+                ringSize = 42.dp,
+                contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
                 onClick = {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     FlashlightController.toggleFlashlight()
                 },
-                modifier = Modifier
-                    .padding(bottom = 2.dp)
-                    .size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
-                        contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
-                        tint = if (isFlashlightOn) accentColor else Color.White.copy(alpha = 0.40f),
-                        modifier = Modifier.size(if (showExpandedRadial) 22.dp else 32.dp),
-                    )
-                    if (showExpandedRadial) {
-                        RadialProgressRing(
-                            progress = if (isFlashlightOn) intensityFraction else 0f,
-                            color = accentColor,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(42.dp),
-                        )
-                    }
-                }
-            }
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
         }
     }
 }

@@ -177,11 +177,6 @@ fun FlashlightIslandPreview(
                     contentAlignment = Alignment.TopStart,
                 ) {
                     ExpandedFlashlightContent(
-                        cutoutDiameterDp = cutoutDiameterDp,
-                        isExpanded = true,
-                        onCollapse = { /* In-app preview */ },
-                        cutoutInfo = cutoutInfo,
-                        cardHorizontalMarginDp = previewHorizontalMarginDp,
                         onBeamClick = onElementClick?.let { callback ->
                             { callback(FlashlightPreviewElement.EXPANDED_BEAM) }
                         },

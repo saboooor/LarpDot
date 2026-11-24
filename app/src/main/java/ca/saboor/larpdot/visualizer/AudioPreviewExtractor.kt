@@ -658,9 +658,7 @@ object AudioPreviewExtractor {
         val identity = title.trim().lowercase() + "\u0000" + artist.trim().lowercase()
         val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
             .take(8).joinToString("") { "%02x".format(it) }
-        val readable = (title.trim().lowercase() + "_" + artist.trim().lowercase())
-            .replace(Regex("[^a-z0-9_]"), "_")
-            .take(64)
+        val readable = sanitizeTrackSlug(title, artist)
         return "${readable}_$digest"
     }
 }

@@ -200,9 +200,12 @@ internal fun CompactIslandOverlay(
     )
     val presentation = presentations.getValue(activeDisplayType)
     val activeExtraDp = presentation.compactExtra
-    val visualizerWidthDp = if (showMinimizedVisualizer) {
-        waveformBandCount * waveformBarWidth + (waveformBandCount - 1).coerceAtLeast(0) * waveformBarSpacing
-    } else 0f
+    val visualizerWidthDp = compactVisualizerWidthDp(
+        showVisualizer = showMinimizedVisualizer,
+        bandCount = waveformBandCount,
+        barWidth = waveformBarWidth,
+        barSpacing = waveformBarSpacing,
+    )
     val mediaWings = configuredCompactMediaWings(
         mediaInfo = mediaInfo,
         extraWidthDp = activeExtraDp.value,

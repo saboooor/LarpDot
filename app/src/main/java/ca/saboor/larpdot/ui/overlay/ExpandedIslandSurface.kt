@@ -135,11 +135,6 @@ internal fun IslandSurfaceOverlay(
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
     val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
     val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
-    val usesVerticalMediaLayout = expandedType == IslandType.MEDIA &&
-        expandedPlayerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
-    val hasExtraMediaButtons = expandedElementVisibility.appActions && mediaInfo.sessionActions.any {
-        it.iconResourceId != 0 && it.iconPackageName != null
-    }
 
     val topMarginDp = (cutoutCenterYDp - compactPillThickness / 2f).coerceAtLeast(0.dp)
     val drawWindowWidthDp = with(density) { drawWindowWidthPx.toDp() }
@@ -164,36 +159,31 @@ internal fun IslandSurfaceOverlay(
         cutoutDiameterDp = cutoutDiameterDp,
         spanIconLeftOfCutout = spanActivityIconLeftOfCutout,
     )
+    val mediaCardSize = expandedMediaCardSize(
+        mediaInfo = mediaInfo,
+        playerLayout = expandedPlayerLayout,
+        showExpandedAlbumArt = showExpandedAlbumArt,
+        showAppActions = expandedElementVisibility.appActions,
+        screenWidthDp = screenWidthDp,
+        screenHeightDp = screenHeightDp,
+        horizontalMarginDp = horizontalMarginDp,
+        drawWindowWidthDp = drawWindowWidthDp,
+        isLandscape = isLandscape,
+    )
     val cardWidth = when (expandedType) {
         IslandType.FLASHLIGHT -> if (wideFlashlight) {
             if (isLandscape) minOf(drawWindowWidthDp - horizontalMarginDp - 14.dp, 420.dp)
             else screenWidthDp - (horizontalMarginDp * 2)
         } else minOf(screenWidthDp - 96.dp, 220.dp)
         IslandType.NOTIFICATION_ACTIVITY -> activitySize.width
-        IslandType.MEDIA -> if (usesVerticalMediaLayout) {
-            minOf(screenWidthDp - 88.dp, 248.dp)
-        } else {
-            if (isLandscape) minOf(drawWindowWidthDp - horizontalMarginDp - 14.dp, 420.dp)
-            else screenWidthDp - (horizontalMarginDp * 2)
-        }
+        IslandType.MEDIA -> mediaCardSize.width
     }
     val cardHeight = when (expandedType) {
         IslandType.FLASHLIGHT -> if (wideFlashlight) {
             (if (expandedCutoutClearanceDp > 0.dp) expandedCutoutClearanceDp else 8.dp) + 56.dp
         } else if (isLandscape) minOf(screenHeightDp - 36.dp, 290.dp) else 290.dp
         IslandType.NOTIFICATION_ACTIVITY -> activitySize.height
-        IslandType.MEDIA -> if (usesVerticalMediaLayout) {
-            val hasAlbumArt = showExpandedAlbumArt && mediaInfo.albumArt != null
-            val materialHeight = when {
-                hasAlbumArt && hasExtraMediaButtons -> 430.dp
-                hasAlbumArt -> 350.dp
-                hasExtraMediaButtons -> 290.dp
-                else -> 210.dp
-            }
-            if (isLandscape) minOf(screenHeightDp - 36.dp, materialHeight) else materialHeight
-        } else {
-            220.dp
-        }
+        IslandType.MEDIA -> mediaCardSize.height
     }
     val mediaCardHorizontalMarginDp = (screenWidthDp - cardWidth) / 2f
 
@@ -420,11 +410,6 @@ internal fun IslandSurfaceOverlay(
                             }
                             IslandType.FLASHLIGHT -> {
                                 ExpandedFlashlightContent(
-                                    cutoutDiameterDp = cutoutDiameterDp,
-                                    isExpanded = isExpanded,
-                                    onCollapse = onCollapse,
-                                    cutoutInfo = cutoutInfo,
-                                    cardHorizontalMarginDp = horizontalMarginDp,
                                     topContentInset = expandedCutoutClearanceDp,
                                 )
                             }
@@ -435,7 +420,11 @@ internal fun IslandSurfaceOverlay(
                                     isExpanded = isExpanded,
                                     onCollapse = onCollapse,
                                     cutoutInfo = cutoutInfo,
-                                    cardHorizontalMarginDp = if (usesVerticalMediaLayout) mediaCardHorizontalMarginDp else horizontalMarginDp,
+                                    cardHorizontalMarginDp = if (expandedPlayerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE) {
+                                        mediaCardHorizontalMarginDp
+                                    } else {
+                                        horizontalMarginDp
+                                    },
                                     topContentInset = expandedCutoutClearanceDp,
                                     artworkAnchor = artworkMotion?.expanded,
                                 )

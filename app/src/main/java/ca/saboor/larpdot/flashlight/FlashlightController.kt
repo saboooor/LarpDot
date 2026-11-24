@@ -374,7 +374,6 @@ object FlashlightController {
             refreshRange()
         }
     }
-    fun toggleSimulationMode() = setSimulated(!_isSimulated.value)
 
     private fun notifyState(enabled: Boolean) {
         val wasOn = _isFlashlightOn.value

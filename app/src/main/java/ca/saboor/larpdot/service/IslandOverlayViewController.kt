@@ -724,11 +724,6 @@ class IslandOverlayViewController(
         }
     }
 
-    fun updateCutout(cutout: CutoutInfo) {
-        currentCutoutInfo = cutout
-        updateOverlayLayout()
-    }
-
     fun updateOverlayLayout() {
         val wm = windowManager ?: return
         if (currentCutoutInfo == null) return
