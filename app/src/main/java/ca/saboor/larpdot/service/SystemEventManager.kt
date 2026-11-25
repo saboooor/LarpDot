@@ -31,6 +31,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -63,6 +66,8 @@ object SystemEventManager {
     private val dismissJobs = mutableMapOf<String, Job>()
     private var lastRingerMode: Int? = null
     private var lastInterruptionFilter: Int? = null
+    private val _isDoNotDisturbActive = MutableStateFlow(false)
+    val isDoNotDisturbActive: StateFlow<Boolean> = _isDoNotDisturbActive.asStateFlow()
     private var lastMusicVolume: Int? = null
     private var lastNonZeroMusicVolume: Int = 1
     private var isChargingActive = false
@@ -253,6 +258,7 @@ object SystemEventManager {
         }
         val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         lastInterruptionFilter = nm?.currentInterruptionFilter
+        _isDoNotDisturbActive.value = lastInterruptionFilter?.let { classifyDndFilter(it)?.isActive } == true
         ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         isRegistered = true
         ShizukuEarbudBattery.initialize()
@@ -282,6 +288,7 @@ object SystemEventManager {
         val filter = nm.currentInterruptionFilter
         lastInterruptionFilter = filter
         val status = classifyDndFilter(filter)
+        _isDoNotDisturbActive.value = status?.isActive == true
         if (settings.enabled && settings.dnd && settings.permanentDnd && status != null && status.isActive) {
             postAlert(
                 key = "system_dnd",
@@ -308,6 +315,7 @@ object SystemEventManager {
         if (lastInterruptionFilter == filter) return
         lastInterruptionFilter = filter
         val status = classifyDndFilter(filter) ?: return
+        _isDoNotDisturbActive.value = status.isActive
         if (!settings.dnd) return
 
         if (status.isActive) {

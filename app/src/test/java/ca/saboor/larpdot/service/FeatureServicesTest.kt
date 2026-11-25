@@ -155,6 +155,7 @@ class FeatureServicesTest {
             hideOnLockScreen = true,
             hideInFullscreen = true,
             hideInLandscape = true,
+            hideInDnd = true,
             hideMusicWhenAppOpen = false,
             showSongAnnouncement = false,
             expandedShowTrackInfo = false,

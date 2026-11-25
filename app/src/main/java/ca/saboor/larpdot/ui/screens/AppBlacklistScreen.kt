@@ -75,8 +75,9 @@ private data class AppEntry(
 )
 
 private enum class BlacklistFilter(val label: String, val icon: ImageVector) {
-    ALL("All Apps", LarpIcons.Apps),
-    BLACKLISTED("Blacklisted", LarpIcons.Block),
+    ALL("All", LarpIcons.Apps),
+    USER("User", LarpIcons.Android),
+    BLACKLISTED("Blocked", LarpIcons.Block),
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -151,6 +152,7 @@ fun AppBlacklistScreen(
         appList.filter { app ->
             val matchesFilter = when (currentFilter) {
                 BlacklistFilter.ALL -> true
+                BlacklistFilter.USER -> !app.isSystemApp
                 BlacklistFilter.BLACKLISTED -> blacklistedPackages.contains(app.packageName)
             }
             val matchesQuery = searchQuery.isBlank() ||
@@ -238,11 +240,13 @@ fun AppBlacklistScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Filter Tabs
+        val userAppCount = remember(appList) { appList.count { !it.isSystemApp } }
         LarpConnectedButtons(
             options = BlacklistFilter.entries.mapIndexed { index, filter ->
                 val filterLabel = when (filter) {
                     BlacklistFilter.ALL -> "All (${appList.size})"
-                    BlacklistFilter.BLACKLISTED -> "Blacklisted (${blacklistedPackages.size})"
+                    BlacklistFilter.USER -> "User ($userAppCount)"
+                    BlacklistFilter.BLACKLISTED -> "Blocked (${blacklistedPackages.size})"
                 }
                 LarpButtonOption(
                     checked = selectedFilterIndex == index,

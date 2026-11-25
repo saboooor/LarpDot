@@ -14,6 +14,8 @@ object OverlayVisibilityPolicy {
         OverlayPreferences.hideInFullscreenFlow,
         FullscreenStateTracker.isLandscape,
         OverlayPreferences.hideInLandscapeFlow,
+        SystemEventManager.isDoNotDisturbActive,
+        OverlayPreferences.hideInDndFlow,
     ) { values ->
         shouldShowOverlay(
             isEnabled = values[0],
@@ -25,12 +27,14 @@ object OverlayVisibilityPolicy {
             hideInFullscreen = values[6],
             isLandscape = values[7],
             hideInLandscape = values[8],
+            isDndActive = values[9],
+            hideInDnd = values[10],
         )
     }
 
     /**
      * Determines whether the island overlay window should be visible on screen based on
-     * user master toggle, screen state, lock screen state, and fullscreen/landscape rules.
+     * user master toggle, screen state, lock screen state, DND, and fullscreen/landscape rules.
      */
     fun shouldShowOverlay(
         isEnabled: Boolean,
@@ -42,11 +46,14 @@ object OverlayVisibilityPolicy {
         hideInFullscreen: Boolean = false,
         isLandscape: Boolean = false,
         hideInLandscape: Boolean = false,
+        isDndActive: Boolean = false,
+        hideInDnd: Boolean = false,
     ): Boolean {
         val screenAllowed = if (hideWhenScreenOff) isScreenOn else true
         val lockAllowed = if (hideOnLockScreen) !isLocked else true
         val fullscreenAllowed = if (hideInFullscreen) !isFullscreen else true
         val landscapeAllowed = if (hideInLandscape) !isLandscape else true
-        return isEnabled && screenAllowed && lockAllowed && fullscreenAllowed && landscapeAllowed
+        val dndAllowed = if (hideInDnd) !isDndActive else true
+        return isEnabled && screenAllowed && lockAllowed && fullscreenAllowed && landscapeAllowed && dndAllowed
     }
 }

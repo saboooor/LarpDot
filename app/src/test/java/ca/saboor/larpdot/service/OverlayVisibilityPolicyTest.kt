@@ -129,4 +129,41 @@ class OverlayVisibilityPolicyTest {
             )
         )
     }
+
+    @Test
+    fun overlayHidesDuringDoNotDisturbWhenConfigured() {
+        assertFalse(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isDndActive = true,
+                hideInDnd = true,
+            )
+        )
+        assertTrue(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isDndActive = true,
+                hideInDnd = false,
+            )
+        )
+        assertTrue(
+            OverlayVisibilityPolicy.shouldShowOverlay(
+                isEnabled = true,
+                isScreenOn = true,
+                hideWhenScreenOff = true,
+                isLocked = false,
+                hideOnLockScreen = false,
+                isDndActive = false,
+                hideInDnd = true,
+            )
+        )
+    }
 }

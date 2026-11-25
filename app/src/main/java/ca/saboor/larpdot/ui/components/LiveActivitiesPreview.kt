@@ -52,6 +52,8 @@ private enum class LiveActivityPreviewSample(val label: String) {
     PROGRESS("Download"),
     TIMER("Timer"),
     CALL("Call"),
+    DND("DND"),
+    VOLUME("Volume"),
 }
 
 @Composable
@@ -174,6 +176,38 @@ fun LiveActivitiesPreview(
                 contentIntent = null,
                 actions = emptyList(),
             )
+            LiveActivityPreviewSample.DND -> NotificationActivityInfo(
+                key = "preview_dnd",
+                packageName = "android",
+                appName = "System",
+                title = "Do Not Disturb",
+                text = "Priority interruptions only",
+                kind = NotificationActivityKind.DND,
+                progress = null,
+                progressMax = null,
+                progressIndeterminate = false,
+                chronometerBaseElapsedRealtime = null,
+                chronometerCountsDown = false,
+                postedAtMillis = 1L,
+                contentIntent = null,
+                actions = emptyList(),
+            )
+            LiveActivityPreviewSample.VOLUME -> NotificationActivityInfo(
+                key = "preview_volume",
+                packageName = "android",
+                appName = "System",
+                title = "Media Volume",
+                text = "68% • Slide to adjust",
+                kind = NotificationActivityKind.VOLUME,
+                progress = 68,
+                progressMax = 100,
+                progressIndeterminate = false,
+                chronometerBaseElapsedRealtime = null,
+                chronometerCountsDown = false,
+                postedAtMillis = 1L,
+                contentIntent = null,
+                actions = emptyList(),
+            )
         }
     }
 
@@ -235,6 +269,7 @@ fun LiveActivitiesPreview(
                     onCheckedChange = { selectedSampleIndex = index },
                 )
             },
+            maxButtonsPerRow = 4,
         )
 
         // Compact Pill Preview

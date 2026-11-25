@@ -84,6 +84,7 @@ object OverlayPreferences {
     private const val KEY_MINIMIZED_NESTED_BLURRED_BG = "minimized_nested_blurred_bg"
     private const val KEY_HIDE_IN_FULLSCREEN = "hide_in_fullscreen"
     private const val KEY_HIDE_IN_LANDSCAPE = "hide_in_landscape"
+    private const val KEY_HIDE_IN_DND = "hide_in_dnd"
     private const val KEY_CAMERA_COVER_STYLE = "camera_cover_style"
     private const val KEY_SHOW_CAMERA_SWOOP = "show_camera_swoop"
     private const val KEY_DEBUG_MODE = "debug_mode"
@@ -439,6 +440,7 @@ object OverlayPreferences {
     private val hideOnLockScreenPref = BooleanPref(KEY_HIDE_ON_LOCK_SCREEN, false)
     private val hideInFullscreenPref = BooleanPref(KEY_HIDE_IN_FULLSCREEN, false)
     private val hideInLandscapePref = BooleanPref(KEY_HIDE_IN_LANDSCAPE, false)
+    private val hideInDndPref = BooleanPref(KEY_HIDE_IN_DND, false)
     private val hideMusicWhenAppOpenPref = BooleanPref(KEY_HIDE_MUSIC_WHEN_APP_OPEN, true)
     private val musicPauseTimeoutSecondsPref = IntPref(
         KEY_MUSIC_PAUSE_TIMEOUT_SECONDS,
@@ -502,6 +504,7 @@ object OverlayPreferences {
     val hideOnLockScreenFlow: StateFlow<Boolean> = hideOnLockScreenPref.flow
     val hideInFullscreenFlow: StateFlow<Boolean> = hideInFullscreenPref.flow
     val hideInLandscapeFlow: StateFlow<Boolean> = hideInLandscapePref.flow
+    val hideInDndFlow: StateFlow<Boolean> = hideInDndPref.flow
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = hideMusicWhenAppOpenPref.flow
     val musicPauseTimeoutSecondsFlow: StateFlow<Int> = musicPauseTimeoutSecondsPref.flow
     val waveformBandCountFlow: StateFlow<Int> = waveformBandCountPref.flow
@@ -752,6 +755,9 @@ object OverlayPreferences {
 
     fun isHideInLandscapeEnabled(context: Context): Boolean = hideInLandscapePref.get(getPrefs(context))
     fun setHideInLandscapeEnabled(context: Context, enabled: Boolean) = hideInLandscapePref.set(getPrefs(context), enabled)
+
+    fun isHideInDndEnabled(context: Context): Boolean = hideInDndPref.get(getPrefs(context))
+    fun setHideInDndEnabled(context: Context, enabled: Boolean) = hideInDndPref.set(getPrefs(context), enabled)
 
     fun isHideMusicWhenAppOpenEnabled(context: Context): Boolean = hideMusicWhenAppOpenPref.get(getPrefs(context))
     fun setHideMusicWhenAppOpenEnabled(context: Context, enabled: Boolean) = hideMusicWhenAppOpenPref.set(getPrefs(context), enabled)

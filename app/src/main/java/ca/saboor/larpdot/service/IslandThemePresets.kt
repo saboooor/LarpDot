@@ -76,6 +76,7 @@ data class IslandBackupConfig(
     val hideOnLockScreen: Boolean = false,
     val hideInFullscreen: Boolean = false,
     val hideInLandscape: Boolean = false,
+    val hideInDnd: Boolean = false,
     val hideMusicWhenAppOpen: Boolean = true,
     val showSongAnnouncement: Boolean = true,
     val expandedShowTrackInfo: Boolean = true,
@@ -453,6 +454,7 @@ object IslandThemePresets {
             add("hideOnLockScreen" to config.hideOnLockScreen.toString())
             add("hideInFullscreen" to config.hideInFullscreen.toString())
             add("hideInLandscape" to config.hideInLandscape.toString())
+            add("hideInDnd" to config.hideInDnd.toString())
             add("hideMusicWhenAppOpen" to config.hideMusicWhenAppOpen.toString())
             add("showSongAnnouncement" to config.showSongAnnouncement.toString())
             add("expandedShowTrackInfo" to config.expandedShowTrackInfo.toString())
@@ -590,6 +592,7 @@ object IslandThemePresets {
             hideOnLockScreen = fields["hideOnLockScreen"]?.toBooleanStrictOrNull() ?: defaults.hideOnLockScreen,
             hideInFullscreen = fields["hideInFullscreen"]?.toBooleanStrictOrNull() ?: defaults.hideInFullscreen,
             hideInLandscape = fields["hideInLandscape"]?.toBooleanStrictOrNull() ?: defaults.hideInLandscape,
+            hideInDnd = fields["hideInDnd"]?.toBooleanStrictOrNull() ?: defaults.hideInDnd,
             hideMusicWhenAppOpen = fields["hideMusicWhenAppOpen"]?.toBooleanStrictOrNull() ?: defaults.hideMusicWhenAppOpen,
             showSongAnnouncement = fields["showSongAnnouncement"]?.toBooleanStrictOrNull() ?: defaults.showSongAnnouncement,
             expandedShowTrackInfo = fields["expandedShowTrackInfo"]?.toBooleanStrictOrNull() ?: defaults.expandedShowTrackInfo,
@@ -728,6 +731,7 @@ object IslandThemePresets {
             hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(context),
             hideInFullscreen = OverlayPreferences.isHideInFullscreenEnabled(context),
             hideInLandscape = OverlayPreferences.isHideInLandscapeEnabled(context),
+            hideInDnd = OverlayPreferences.isHideInDndEnabled(context),
             hideMusicWhenAppOpen = OverlayPreferences.isHideMusicWhenAppOpenEnabled(context),
             showSongAnnouncement = OverlayPreferences.isShowSongAnnouncementEnabled(context),
             expandedShowTrackInfo = expandedVisibility.trackInfo,
@@ -785,6 +789,7 @@ object IslandThemePresets {
         OverlayPreferences.setHideOnLockScreenEnabled(context, config.hideOnLockScreen)
         OverlayPreferences.setHideInFullscreenEnabled(context, config.hideInFullscreen)
         OverlayPreferences.setHideInLandscapeEnabled(context, config.hideInLandscape)
+        OverlayPreferences.setHideInDndEnabled(context, config.hideInDnd)
         OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, config.hideMusicWhenAppOpen)
         OverlayPreferences.setShowSongAnnouncementEnabled(context, config.showSongAnnouncement)
         OverlayPreferences.setExpandedElementVisibility(

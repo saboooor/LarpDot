@@ -85,6 +85,7 @@ fun HomeScreen(
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
     val hideInFullscreen by OverlayPreferences.hideInFullscreenFlow.collectAsState()
     val hideInLandscape by OverlayPreferences.hideInLandscapeFlow.collectAsState()
+    val hideInDnd by OverlayPreferences.hideInDndFlow.collectAsState()
     val islandPriorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
     val customIslandSettings by CustomIslandStore.settings.collectAsState()
     val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
@@ -110,6 +111,7 @@ fun HomeScreen(
         OverlayPreferences.isHideOnLockScreenEnabled(context)
         OverlayPreferences.isHideInFullscreenEnabled(context)
         OverlayPreferences.isHideInLandscapeEnabled(context)
+        OverlayPreferences.isHideInDndEnabled(context)
         OverlayPreferences.getIslandPriorityOrder(context)
         FlashlightController.init(context)
     }
@@ -153,6 +155,7 @@ fun HomeScreen(
                 hideOnLockScreen = hideOnLockScreen,
                 hideInFullscreen = hideInFullscreen,
                 hideInLandscape = hideInLandscape,
+                hideInDnd = hideInDnd,
                 appBlacklistEnabled = appBlacklistEnabled,
                 blacklistedCount = blacklistedPackages.size,
                 onOpenBlacklist = { showBlacklistScreen = true },
@@ -343,6 +346,7 @@ private fun IslandBehaviorCard(
     hideOnLockScreen: Boolean,
     hideInFullscreen: Boolean,
     hideInLandscape: Boolean,
+    hideInDnd: Boolean,
     appBlacklistEnabled: Boolean,
     blacklistedCount: Int,
     onOpenBlacklist: () -> Unit,
@@ -475,6 +479,16 @@ private fun IslandBehaviorCard(
             icon = LarpIcons.ScreenRotation,
             checked = hideInLandscape,
             onCheckedChange = { OverlayPreferences.setHideInLandscapeEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide During Do Not Disturb",
+            subtitle = "Pause the island overlay while Do Not Disturb is active",
+            icon = LarpIcons.DoNotDisturbOn,
+            checked = hideInDnd,
+            onCheckedChange = { OverlayPreferences.setHideInDndEnabled(context, it) },
         )
 
         LarpDivider()
