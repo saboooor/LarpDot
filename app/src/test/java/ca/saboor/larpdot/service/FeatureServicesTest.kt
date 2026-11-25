@@ -123,6 +123,22 @@ class FeatureServicesTest {
             flashlightBeamAccentColor = false,
             flashlightTapToToggle = false,
             musicPauseTimeoutSeconds = 30,
+            tapToExpand = true,
+            holdToExpandDurationMs = 550,
+            hideWhenScreenOff = false,
+            hideOnLockScreen = true,
+            hideInFullscreen = true,
+            hideInLandscape = true,
+            hideMusicWhenAppOpen = false,
+            showSongAnnouncement = false,
+            expandedShowTrackInfo = false,
+            expandedShowProgress = false,
+            expandedShowMainControls = true,
+            expandedShowAppActions = false,
+            expandedShowVisualizer = false,
+            expandedShowBpm = false,
+            visualizerMode = OverlayPreferences.VisualizerMode.BPM,
+            previewAudioSource = OverlayPreferences.PreviewAudioSource.ITUNES,
             activitiesEnabled = true,
             activityProgress = false,
             activityNavigation = true,
@@ -169,6 +185,16 @@ class FeatureServicesTest {
         assertEquals(edgeSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(edgeSpacing)))
         val wideSpacing = IslandBackupConfig(waveformBarSpacing = 7.5f, activityChargeLimitPercent = 100)
         assertEquals(wideSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(wideSpacing)))
+
+        // Built-in presets must have unique IDs and valid round-tripping configs.
+        val presets = IslandThemePresets.builtInPresets
+        assertTrue(presets.size >= 5)
+        assertEquals(presets.size, presets.map { it.id }.distinct().size)
+        for (preset in presets) {
+            assertTrue(preset.name.isNotBlank())
+            assertTrue(preset.tagline.isNotBlank())
+            assertEquals(preset.style, IslandThemePresets.fromJson(IslandThemePresets.toJson(preset.style)))
+        }
     }
 
     @Test fun fullscreenAccessibilityThrottleCoalescesRapidBursts() {

@@ -67,6 +67,22 @@ data class IslandBackupConfig(
     val flashlightBeamAccentColor: Boolean = true,
     val flashlightTapToToggle: Boolean = true,
     val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
+    val tapToExpand: Boolean = false,
+    val holdToExpandDurationMs: Int = OverlayPreferences.DEFAULT_HOLD_TO_EXPAND_DURATION_MS,
+    val hideWhenScreenOff: Boolean = true,
+    val hideOnLockScreen: Boolean = false,
+    val hideInFullscreen: Boolean = false,
+    val hideInLandscape: Boolean = false,
+    val hideMusicWhenAppOpen: Boolean = true,
+    val showSongAnnouncement: Boolean = true,
+    val expandedShowTrackInfo: Boolean = true,
+    val expandedShowProgress: Boolean = true,
+    val expandedShowMainControls: Boolean = true,
+    val expandedShowAppActions: Boolean = true,
+    val expandedShowVisualizer: Boolean = true,
+    val expandedShowBpm: Boolean = true,
+    val visualizerMode: OverlayPreferences.VisualizerMode = OverlayPreferences.VisualizerMode.SIMULATED,
+    val previewAudioSource: OverlayPreferences.PreviewAudioSource = OverlayPreferences.PreviewAudioSource.AUTO,
     val activitiesEnabled: Boolean = true,
     val activityProgress: Boolean = true,
     val activityNavigation: Boolean = true,
@@ -95,8 +111,261 @@ data class IslandBackupConfig(
     val cutoutDiameterDp: Float? = null,
 )
 
+data class IslandThemePreset(
+    val id: String,
+    val name: String,
+    val tagline: String,
+    val style: IslandBackupConfig,
+)
+
 object IslandThemePresets {
-    private const val BACKUP_VERSION = 3
+    private const val BACKUP_VERSION = 4
+
+    val builtInPresets: List<IslandThemePreset> = listOf(
+        IslandThemePreset(
+            id = "m3_expressive",
+            name = "Material 3",
+            tagline = "Squircle bubbles, rounded font & M3 controls",
+            style = IslandBackupConfig(
+                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
+                smallerBubbles = false,
+                islandCornerRadius = 36f,
+                islandSquircleEnabled = true,
+                expandedBackgroundOpacity = 1f,
+                backdropBlurEnabled = false,
+                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.GRADIENT,
+                islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
+                islandFontWeight = 500,
+                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.NESTED,
+                minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.COOKIE,
+                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
+                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
+                showProgressSquiggles = true,
+                progressBarAccentColor = true,
+                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BELOW,
+                playbackPlayPauseBg = true,
+                playbackM3ButtonGroup = true,
+                playbackPlayPauseAccent = true,
+                showMinimizedDominantGlow = true,
+                showExpandedDominantGlow = true,
+                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
+            ),
+        ),
+        IslandThemePreset(
+            id = "classic_ios",
+            name = "Classic Pill",
+            tagline = "Clean black capsule, straight bar & side times",
+            style = IslandBackupConfig(
+                bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
+                smallerBubbles = false,
+                islandCornerRadius = 44f,
+                islandSquircleEnabled = true,
+                expandedBackgroundOpacity = 1f,
+                backdropBlurEnabled = false,
+                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.NONE,
+                islandFontStyle = OverlayPreferences.IslandFontStyle.DEFAULT,
+                islandFontWeight = 500,
+                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.NESTED,
+                minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
+                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.IPHONE,
+                showProgressSquiggles = false,
+                progressBarAccentColor = false,
+                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BESIDE,
+                playbackPlayPauseBg = false,
+                playbackSkipBg = false,
+                playbackM3ButtonGroup = false,
+                showMinimizedDominantGlow = false,
+                showExpandedDominantGlow = false,
+                minimizedBpmPulseEnabled = false,
+                expandedBpmPulseEnabled = false,
+                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
+            ),
+        ),
+        IslandThemePreset(
+            id = "frosted_glass",
+            name = "Frosted Glass",
+            tagline = "Translucent blurred card with soft rounded corners",
+            style = IslandBackupConfig(
+                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
+                smallerBubbles = false,
+                islandCornerRadius = 34f,
+                islandSquircleEnabled = false,
+                expandedBackgroundOpacity = 0.58f,
+                backdropBlurEnabled = true,
+                backdropBlurRadius = 34f,
+                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.GRADIENT,
+                islandFontStyle = OverlayPreferences.IslandFontStyle.DEFAULT,
+                islandFontWeight = 500,
+                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.BLENDED,
+                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
+                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
+                showProgressSquiggles = true,
+                progressBarAccentColor = true,
+                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.HIDDEN,
+                playbackPlayPauseBg = true,
+                playbackPlayPauseAccent = true,
+                showMinimizedDominantGlow = true,
+                showExpandedDominantGlow = true,
+                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
+            ),
+        ),
+        IslandThemePreset(
+            id = "vibrant_pulse",
+            name = "Vibrant Pulse",
+            tagline = "Full-bleed art, 4-side glow & beat-synced pulse",
+            style = IslandBackupConfig(
+                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
+                smallerBubbles = false,
+                islandCornerRadius = 40f,
+                islandSquircleEnabled = true,
+                expandedBackgroundOpacity = 1f,
+                backdropBlurEnabled = false,
+                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.CANOPY,
+                islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
+                islandFontWeight = 600,
+                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
+                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
+                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.CLOVER,
+                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
+                showProgressSquiggles = true,
+                progressBarAccentColor = true,
+                playbackPlayPauseBg = true,
+                playbackPlayPauseAccent = true,
+                playbackM3ButtonGroup = true,
+                trackInfoTitleAccent = true,
+                albumArtGlowEnabled = true,
+                showMinimizedDominantGlow = true,
+                showExpandedDominantGlow = true,
+                expandedGlowLeft = true,
+                expandedGlowRight = true,
+                expandedGlowTop = true,
+                expandedGlowBottom = true,
+                bpmPulseEnabled = true,
+                minimizedBpmPulseEnabled = true,
+                expandedBpmPulseEnabled = true,
+                pulseAmount = 1.35f,
+                pulseEntireIslandEnabled = true,
+                waveformBandCount = 8,
+                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
+                flashlightBeamBlur = true,
+            ),
+        ),
+        IslandThemePreset(
+            id = "minimal_matte",
+            name = "Minimal Matte",
+            tagline = "Compact bubbles, condensed type & zero glow",
+            style = IslandBackupConfig(
+                bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
+                smallerBubbles = true,
+                islandCornerRadius = 28f,
+                islandSquircleEnabled = true,
+                expandedBackgroundOpacity = 1f,
+                backdropBlurEnabled = false,
+                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.SWOOP,
+                islandFontStyle = OverlayPreferences.IslandFontStyle.CONDENSED,
+                islandFontWeight = 500,
+                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.BASIC_FADED,
+                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
+                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
+                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
+                showProgressSquiggles = false,
+                progressBarAccentColor = false,
+                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.HIDDEN,
+                playbackPlayPauseBg = true,
+                playbackPlayPauseAccent = false,
+                albumArtGlowEnabled = false,
+                showMinimizedDominantGlow = false,
+                showExpandedDominantGlow = false,
+                bpmPulseEnabled = false,
+                minimizedBpmPulseEnabled = false,
+                expandedBpmPulseEnabled = false,
+                pulseEntireIslandEnabled = false,
+                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
+            ),
+        ),
+    )
+
+    /** Applies only visual theme fields, preserving cutout calibration, notification toggles, and priority order. */
+    fun applyThemePreset(context: Context, preset: IslandThemePreset) {
+        applyVisualAppearance(context, preset.style)
+    }
+
+    private fun applyVisualAppearance(context: Context, config: IslandBackupConfig) {
+        OverlayPreferences.setBubbleStyle(context, config.bubbleStyle)
+        OverlayPreferences.setSmallerBubblesEnabled(context, config.smallerBubbles)
+        OverlayPreferences.setIslandCornerRadius(context, config.islandCornerRadius)
+        OverlayPreferences.setIslandSquircleEnabled(context, config.islandSquircleEnabled)
+        OverlayPreferences.setExpandedBackgroundOpacity(context, config.expandedBackgroundOpacity)
+        OverlayPreferences.setBackdropBlurEnabled(context, config.backdropBlurEnabled)
+        OverlayPreferences.setBackdropBlurRadius(context, config.backdropBlurRadius)
+        OverlayPreferences.setCameraCoverStyle(context, config.cameraCoverStyle)
+        OverlayPreferences.setIslandFontStyle(context, config.islandFontStyle)
+        OverlayPreferences.setIslandFontWeight(context, config.islandFontWeight)
+        OverlayPreferences.setMinimizedAlbumArtStyle(context, config.minimizedAlbumArtStyle)
+        OverlayPreferences.setMinimizedAlbumArtShape(context, config.minimizedAlbumArtShape)
+        OverlayPreferences.setMinimizedAlbumArtRotation(context, config.minimizedAlbumArtRotation)
+        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, config.minimizedNestedBlurredBg)
+        OverlayPreferences.setExpandedAlbumArtStyle(context, config.expandedAlbumArtStyle)
+        OverlayPreferences.setShowExpandedAlbumArtEnabled(context, config.showExpandedAlbumArt)
+        OverlayPreferences.setExpandedAlbumArtShape(context, config.expandedAlbumArtShape)
+        OverlayPreferences.setExpandedAlbumArtRotation(context, config.expandedAlbumArtRotation)
+        OverlayPreferences.setExpandedPlayerLayout(context, config.expandedPlayerLayout)
+        OverlayPreferences.setShowProgressSquigglesEnabled(context, config.showProgressSquiggles)
+        OverlayPreferences.setProgressBarAccentColorEnabled(context, config.progressBarAccentColor)
+        OverlayPreferences.setProgressTimestampPlacement(context, config.progressTimestampPlacement)
+        OverlayPreferences.setPlaybackControlsStyle(
+            context,
+            OverlayPreferences.PlaybackControlsStyle(
+                playPauseBackground = config.playbackPlayPauseBg,
+                skipBackground = config.playbackSkipBg,
+                cornerRadiusDp = config.playbackCornerRadiusDp,
+                material3ButtonGroup = config.playbackM3ButtonGroup,
+                playPauseAccentColor = config.playbackPlayPauseAccent,
+            ),
+        )
+        OverlayPreferences.setTrackInfoStyle(
+            context,
+            OverlayPreferences.TrackInfoStyle(
+                showTitle = config.trackInfoShowTitle,
+                showArtist = config.trackInfoShowArtist,
+                showAlbum = config.trackInfoShowAlbum,
+                albumBesideArtist = config.trackInfoAlbumBesideArtist,
+                titleAccentColor = config.trackInfoTitleAccent,
+            ),
+        )
+        OverlayPreferences.setShowMinimizedTitleEnabled(context, config.showMinimizedTitle)
+        OverlayPreferences.setShowMinimizedVisualizerEnabled(context, config.showMinimizedVisualizer)
+        OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, config.showMinimizedProgressOutline)
+        OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, config.showExpandedProgressOutline)
+        OverlayPreferences.setAlbumArtGlowEnabled(context, config.albumArtGlowEnabled)
+        OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, config.showMinimizedDominantGlow)
+        OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, config.showExpandedDominantGlow)
+        OverlayPreferences.setExpandedGlowSides(
+            context,
+            OverlayPreferences.ExpandedGlowSides(
+                left = config.expandedGlowLeft,
+                right = config.expandedGlowRight,
+                top = config.expandedGlowTop,
+                bottom = config.expandedGlowBottom,
+            ),
+        )
+        OverlayPreferences.setMinimizedBpmPulseEnabled(context, config.minimizedBpmPulseEnabled)
+        OverlayPreferences.setExpandedBpmPulseEnabled(context, config.expandedBpmPulseEnabled)
+        OverlayPreferences.setPulseAmount(context, config.pulseAmount)
+        OverlayPreferences.setPulseEntireIslandEnabled(context, config.pulseEntireIslandEnabled)
+        OverlayPreferences.setWaveformBandCount(context, config.waveformBandCount)
+        OverlayPreferences.setWaveformBarWidth(context, config.waveformBarWidth)
+        OverlayPreferences.setWaveformBarSpacing(context, config.waveformBarSpacing)
+        OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, config.showMinimizedFlashlightOutline)
+        OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, config.showExpandedFlashlightOutline)
+        OverlayPreferences.setFlashlightExpandedStyle(context, config.flashlightExpandedStyle)
+        OverlayPreferences.setFlashlightBeamBlurEnabled(context, config.flashlightBeamBlur)
+        OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, config.flashlightBeamAccentColor)
+    }
 
     private val KNOWN_BACKUP_KEYS: Set<String> by lazy {
         parseFlatJsonObject(toJson(IslandBackupConfig()))?.keys.orEmpty() + setOf(
@@ -169,6 +438,22 @@ object IslandThemePresets {
             add("flashlightBeamAccentColor" to config.flashlightBeamAccentColor.toString())
             add("flashlightTapToToggle" to config.flashlightTapToToggle.toString())
             add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
+            add("tapToExpand" to config.tapToExpand.toString())
+            add("holdToExpandDurationMs" to config.holdToExpandDurationMs.toString())
+            add("hideWhenScreenOff" to config.hideWhenScreenOff.toString())
+            add("hideOnLockScreen" to config.hideOnLockScreen.toString())
+            add("hideInFullscreen" to config.hideInFullscreen.toString())
+            add("hideInLandscape" to config.hideInLandscape.toString())
+            add("hideMusicWhenAppOpen" to config.hideMusicWhenAppOpen.toString())
+            add("showSongAnnouncement" to config.showSongAnnouncement.toString())
+            add("expandedShowTrackInfo" to config.expandedShowTrackInfo.toString())
+            add("expandedShowProgress" to config.expandedShowProgress.toString())
+            add("expandedShowMainControls" to config.expandedShowMainControls.toString())
+            add("expandedShowAppActions" to config.expandedShowAppActions.toString())
+            add("expandedShowVisualizer" to config.expandedShowVisualizer.toString())
+            add("expandedShowBpm" to config.expandedShowBpm.toString())
+            add("visualizerMode" to quote(config.visualizerMode.name))
+            add("previewAudioSource" to quote(config.previewAudioSource.name))
             add("activitiesEnabled" to config.activitiesEnabled.toString())
             add("activityProgress" to config.activityProgress.toString())
             add("activityNavigation" to config.activityNavigation.toString())
@@ -282,6 +567,23 @@ object IslandThemePresets {
             flashlightBeamAccentColor = fields["flashlightBeamAccentColor"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamAccentColor,
             flashlightTapToToggle = fields["flashlightTapToToggle"]?.toBooleanStrictOrNull() ?: defaults.flashlightTapToToggle,
             musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
+            tapToExpand = fields["tapToExpand"]?.toBooleanStrictOrNull() ?: defaults.tapToExpand,
+            holdToExpandDurationMs = (fields["holdToExpandDurationMs"]?.toIntOrNull() ?: defaults.holdToExpandDurationMs)
+                .coerceIn(OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS, OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS),
+            hideWhenScreenOff = fields["hideWhenScreenOff"]?.toBooleanStrictOrNull() ?: defaults.hideWhenScreenOff,
+            hideOnLockScreen = fields["hideOnLockScreen"]?.toBooleanStrictOrNull() ?: defaults.hideOnLockScreen,
+            hideInFullscreen = fields["hideInFullscreen"]?.toBooleanStrictOrNull() ?: defaults.hideInFullscreen,
+            hideInLandscape = fields["hideInLandscape"]?.toBooleanStrictOrNull() ?: defaults.hideInLandscape,
+            hideMusicWhenAppOpen = fields["hideMusicWhenAppOpen"]?.toBooleanStrictOrNull() ?: defaults.hideMusicWhenAppOpen,
+            showSongAnnouncement = fields["showSongAnnouncement"]?.toBooleanStrictOrNull() ?: defaults.showSongAnnouncement,
+            expandedShowTrackInfo = fields["expandedShowTrackInfo"]?.toBooleanStrictOrNull() ?: defaults.expandedShowTrackInfo,
+            expandedShowProgress = fields["expandedShowProgress"]?.toBooleanStrictOrNull() ?: defaults.expandedShowProgress,
+            expandedShowMainControls = fields["expandedShowMainControls"]?.toBooleanStrictOrNull() ?: defaults.expandedShowMainControls,
+            expandedShowAppActions = fields["expandedShowAppActions"]?.toBooleanStrictOrNull() ?: defaults.expandedShowAppActions,
+            expandedShowVisualizer = fields["expandedShowVisualizer"]?.toBooleanStrictOrNull() ?: defaults.expandedShowVisualizer,
+            expandedShowBpm = fields["expandedShowBpm"]?.toBooleanStrictOrNull() ?: defaults.expandedShowBpm,
+            visualizerMode = enumOrDefault(fields["visualizerMode"], defaults.visualizerMode),
+            previewAudioSource = enumOrDefault(fields["previewAudioSource"], defaults.previewAudioSource),
             activitiesEnabled = fields["activitiesEnabled"]?.toBooleanStrictOrNull() ?: defaults.activitiesEnabled,
             activityProgress = fields["activityProgress"]?.toBooleanStrictOrNull() ?: defaults.activityProgress,
             activityNavigation = fields["activityNavigation"]?.toBooleanStrictOrNull() ?: defaults.activityNavigation,
@@ -336,6 +638,7 @@ object IslandThemePresets {
         val playback = OverlayPreferences.getPlaybackControlsStyle(context)
         val trackInfo = OverlayPreferences.getTrackInfoStyle(context)
         val glowSides = OverlayPreferences.getExpandedGlowSides(context)
+        val expandedVisibility = OverlayPreferences.getExpandedElementVisibility(context)
         val activities = OverlayPreferences.getNotificationActivitySettings(context)
         val config = IslandBackupConfig(
             bubbleStyle = OverlayPreferences.getBubbleStyle(context),
@@ -397,6 +700,22 @@ object IslandThemePresets {
             flashlightBeamAccentColor = OverlayPreferences.isFlashlightBeamAccentColorEnabled(context),
             flashlightTapToToggle = OverlayPreferences.isFlashlightTapToToggleEnabled(context),
             musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
+            tapToExpand = OverlayPreferences.isTapToExpandEnabled(context),
+            holdToExpandDurationMs = OverlayPreferences.getHoldToExpandDurationMs(context),
+            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(context),
+            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(context),
+            hideInFullscreen = OverlayPreferences.isHideInFullscreenEnabled(context),
+            hideInLandscape = OverlayPreferences.isHideInLandscapeEnabled(context),
+            hideMusicWhenAppOpen = OverlayPreferences.isHideMusicWhenAppOpenEnabled(context),
+            showSongAnnouncement = OverlayPreferences.isShowSongAnnouncementEnabled(context),
+            expandedShowTrackInfo = expandedVisibility.trackInfo,
+            expandedShowProgress = expandedVisibility.progress,
+            expandedShowMainControls = expandedVisibility.mainControls,
+            expandedShowAppActions = expandedVisibility.appActions,
+            expandedShowVisualizer = expandedVisibility.visualizer,
+            expandedShowBpm = expandedVisibility.bpm,
+            visualizerMode = OverlayPreferences.getVisualizerMode(context),
+            previewAudioSource = OverlayPreferences.getPreviewAudioSource(context),
             activitiesEnabled = activities.enabled,
             activityProgress = activities.progress,
             activityNavigation = activities.navigation,
@@ -428,79 +747,31 @@ object IslandThemePresets {
     }
 
     fun applyToPreferences(context: Context, config: IslandBackupConfig, includeCutout: Boolean = true) {
-        OverlayPreferences.setBubbleStyle(context, config.bubbleStyle)
-        OverlayPreferences.setSmallerBubblesEnabled(context, config.smallerBubbles)
+        applyVisualAppearance(context, config)
         OverlayPreferences.setMinimizedMaxWidthPercent(context, config.minimizedMaxWidthPercent)
-        OverlayPreferences.setIslandCornerRadius(context, config.islandCornerRadius)
-        OverlayPreferences.setIslandSquircleEnabled(context, config.islandSquircleEnabled)
-        OverlayPreferences.setExpandedBackgroundOpacity(context, config.expandedBackgroundOpacity)
-        OverlayPreferences.setBackdropBlurEnabled(context, config.backdropBlurEnabled)
-        OverlayPreferences.setBackdropBlurRadius(context, config.backdropBlurRadius)
-        OverlayPreferences.setCameraCoverStyle(context, config.cameraCoverStyle)
-        OverlayPreferences.setIslandFontStyle(context, config.islandFontStyle)
-        OverlayPreferences.setIslandFontWeight(context, config.islandFontWeight)
-        OverlayPreferences.setMinimizedAlbumArtStyle(context, config.minimizedAlbumArtStyle)
-        OverlayPreferences.setMinimizedAlbumArtShape(context, config.minimizedAlbumArtShape)
-        OverlayPreferences.setMinimizedAlbumArtRotation(context, config.minimizedAlbumArtRotation)
-        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, config.minimizedNestedBlurredBg)
-        OverlayPreferences.setExpandedAlbumArtStyle(context, config.expandedAlbumArtStyle)
-        OverlayPreferences.setShowExpandedAlbumArtEnabled(context, config.showExpandedAlbumArt)
-        OverlayPreferences.setExpandedAlbumArtShape(context, config.expandedAlbumArtShape)
-        OverlayPreferences.setExpandedAlbumArtRotation(context, config.expandedAlbumArtRotation)
-        OverlayPreferences.setExpandedPlayerLayout(context, config.expandedPlayerLayout)
-        OverlayPreferences.setShowProgressSquigglesEnabled(context, config.showProgressSquiggles)
-        OverlayPreferences.setProgressBarAccentColorEnabled(context, config.progressBarAccentColor)
-        OverlayPreferences.setProgressTimestampPlacement(context, config.progressTimestampPlacement)
-        OverlayPreferences.setPlaybackControlsStyle(
-            context,
-            OverlayPreferences.PlaybackControlsStyle(
-                playPauseBackground = config.playbackPlayPauseBg,
-                skipBackground = config.playbackSkipBg,
-                cornerRadiusDp = config.playbackCornerRadiusDp,
-                material3ButtonGroup = config.playbackM3ButtonGroup,
-                playPauseAccentColor = config.playbackPlayPauseAccent,
-            ),
-        )
-        OverlayPreferences.setTrackInfoStyle(
-            context,
-            OverlayPreferences.TrackInfoStyle(
-                showTitle = config.trackInfoShowTitle,
-                showArtist = config.trackInfoShowArtist,
-                showAlbum = config.trackInfoShowAlbum,
-                albumBesideArtist = config.trackInfoAlbumBesideArtist,
-                titleAccentColor = config.trackInfoTitleAccent,
-            ),
-        )
-        OverlayPreferences.setShowMinimizedTitleEnabled(context, config.showMinimizedTitle)
-        OverlayPreferences.setShowMinimizedVisualizerEnabled(context, config.showMinimizedVisualizer)
-        OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, config.showMinimizedProgressOutline)
-        OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, config.showExpandedProgressOutline)
-        OverlayPreferences.setAlbumArtGlowEnabled(context, config.albumArtGlowEnabled)
-        OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, config.showMinimizedDominantGlow)
-        OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, config.showExpandedDominantGlow)
-        OverlayPreferences.setExpandedGlowSides(
-            context,
-            OverlayPreferences.ExpandedGlowSides(
-                left = config.expandedGlowLeft,
-                right = config.expandedGlowRight,
-                top = config.expandedGlowTop,
-                bottom = config.expandedGlowBottom,
-            ),
-        )
-        OverlayPreferences.setMinimizedBpmPulseEnabled(context, config.minimizedBpmPulseEnabled)
-        OverlayPreferences.setExpandedBpmPulseEnabled(context, config.expandedBpmPulseEnabled)
-        OverlayPreferences.setPulseAmount(context, config.pulseAmount)
-        OverlayPreferences.setPulseEntireIslandEnabled(context, config.pulseEntireIslandEnabled)
-        OverlayPreferences.setWaveformBandCount(context, config.waveformBandCount)
-        OverlayPreferences.setWaveformBarWidth(context, config.waveformBarWidth)
-        OverlayPreferences.setWaveformBarSpacing(context, config.waveformBarSpacing)
-        OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, config.showMinimizedFlashlightOutline)
-        OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, config.showExpandedFlashlightOutline)
-        OverlayPreferences.setFlashlightExpandedStyle(context, config.flashlightExpandedStyle)
-        OverlayPreferences.setFlashlightBeamBlurEnabled(context, config.flashlightBeamBlur)
-        OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, config.flashlightBeamAccentColor)
         OverlayPreferences.setFlashlightTapToToggleEnabled(context, config.flashlightTapToToggle)
         OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
+        OverlayPreferences.setTapToExpandEnabled(context, config.tapToExpand)
+        OverlayPreferences.setHoldToExpandDurationMs(context, config.holdToExpandDurationMs)
+        OverlayPreferences.setHideWhenScreenOffEnabled(context, config.hideWhenScreenOff)
+        OverlayPreferences.setHideOnLockScreenEnabled(context, config.hideOnLockScreen)
+        OverlayPreferences.setHideInFullscreenEnabled(context, config.hideInFullscreen)
+        OverlayPreferences.setHideInLandscapeEnabled(context, config.hideInLandscape)
+        OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, config.hideMusicWhenAppOpen)
+        OverlayPreferences.setShowSongAnnouncementEnabled(context, config.showSongAnnouncement)
+        OverlayPreferences.setExpandedElementVisibility(
+            context,
+            OverlayPreferences.ExpandedElementVisibility(
+                trackInfo = config.expandedShowTrackInfo,
+                progress = config.expandedShowProgress,
+                mainControls = config.expandedShowMainControls,
+                appActions = config.expandedShowAppActions,
+                visualizer = config.expandedShowVisualizer,
+                bpm = config.expandedShowBpm,
+            ),
+        )
+        OverlayPreferences.setVisualizerMode(context, config.visualizerMode)
+        OverlayPreferences.setPreviewAudioSource(context, config.previewAudioSource)
         OverlayPreferences.setNotificationActivitySettings(
             context,
             NotificationActivitySettings(

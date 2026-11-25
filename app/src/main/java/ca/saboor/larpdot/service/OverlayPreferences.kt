@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.os.Build
 import androidx.compose.ui.text.font.FontFamily
 import ca.saboor.larpdot.notification.NotificationActivitySettings
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,10 +112,13 @@ object OverlayPreferences {
                 DEFAULT -> FontFamily.Default
                 SERIF -> FontFamily.Serif
                 MONOSPACE -> FontFamily.Monospace
-                ROUNDED -> FontFamily(createTypeface(islandFontWeightFlow.value))
-                CONDENSED -> FontFamily(createTypeface(islandFontWeightFlow.value))
                 CURSIVE -> FontFamily.Cursive
-                CASUAL -> FontFamily(createTypeface(islandFontWeightFlow.value))
+                ROUNDED, CONDENSED, CASUAL -> {
+                    val weight = islandFontWeightFlow.value
+                    fontFamilyCache.computeIfAbsent(this to weight) {
+                        FontFamily(createTypeface(weight))
+                    }
+                }
             }
 
         fun createTypeface(weight: Int = 400, italic: Boolean = false): Typeface {
@@ -301,6 +305,8 @@ object OverlayPreferences {
             }
         }
     }
+
+    private val fontFamilyCache = ConcurrentHashMap<Pair<IslandFontStyle, Int>, FontFamily>()
 
     private fun getPrefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
