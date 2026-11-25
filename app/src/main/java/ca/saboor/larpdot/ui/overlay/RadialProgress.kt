@@ -87,6 +87,13 @@ internal fun activityRadialProgress(
 ): Pair<Int, Color>? {
     if (activity == null) return null
     if (activity.kind == NotificationActivityKind.NAVIGATION) return null
+    if (activity.kind == NotificationActivityKind.VOLUME) {
+        val percent = activity.progress?.coerceIn(0, 100)
+            ?: activity.progressFraction?.let { (it * 100f).roundToInt().coerceIn(0, 100) }
+            ?: return null
+        val color = if (percent <= 0) Color(0xFFFF5252) else primaryColor
+        return percent to color
+    }
     val battery = batteryPercentOf(activity)
     if (battery != null) {
         return battery to batteryGaugeColor(activity.kind, battery, primaryColor)

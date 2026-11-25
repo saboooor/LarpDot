@@ -106,6 +106,8 @@ fun builtInIslandStack(
             val isShortTermKind = activityKind == NotificationActivityKind.BATTERY_CHARGING ||
                 activityKind == NotificationActivityKind.BATTERY_LOW ||
                 activityKind == NotificationActivityKind.SOUND_MODE ||
+                activityKind == NotificationActivityKind.DND ||
+                activityKind == NotificationActivityKind.VOLUME ||
                 activityKind == NotificationActivityKind.BLUETOOTH ||
                 activityKind == NotificationActivityKind.AUDIO_OUTPUT ||
                 activityKind == NotificationActivityKind.SCREENSHOT

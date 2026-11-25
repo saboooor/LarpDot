@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.service
 
+import android.app.NotificationManager
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import org.junit.Assert.*
@@ -159,6 +160,8 @@ class FeatureServicesTest {
             activityBatteryCharging = true,
             activityBatteryLow = false,
             activitySoundMode = true,
+            activityDnd = false,
+            activityVolumeHud = true,
             activityBluetooth = true,
             activityAudioOutput = false,
             activityScreenshotPocket = true,
@@ -167,6 +170,7 @@ class FeatureServicesTest {
             activityPermanentCharging = true,
             activityPermanentLowBattery = false,
             activityPermanentSoundMode = true,
+            activityPermanentDnd = true,
             activityPermanentBluetooth = true,
             activityPermanentAudioOutput = false,
             activityPermanentScreenshotPocket = true,
@@ -365,5 +369,32 @@ class FeatureServicesTest {
                 displayName = "AA:BB:CC:DD:EE:FF",
             ),
         )
+    }
+
+    @Test fun dndFilterAndVolumePercentHelpersClassifyStatesCleanly() {
+        val off = classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_ALL)!!
+        assertFalse(off.isActive)
+        assertEquals("Do Not Disturb Off", off.title)
+
+        val priority = classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)!!
+        assertTrue(priority.isActive)
+        assertEquals("Do Not Disturb", priority.title)
+        assertEquals("Priority interruptions only", priority.subtitle)
+
+        val alarms = classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)!!
+        assertTrue(alarms.isActive)
+        assertEquals("Alarms only", alarms.subtitle)
+
+        val silence = classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_NONE)!!
+        assertTrue(silence.isActive)
+        assertEquals("Total Silence", silence.title)
+
+        assertNull(classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_UNKNOWN))
+
+        assertEquals(0, volumePercent(0, 15))
+        assertEquals(53, volumePercent(8, 15))
+        assertEquals(100, volumePercent(15, 15))
+        assertEquals(100, volumePercent(20, 15))
+        assertEquals(0, volumePercent(5, 0))
     }
 }

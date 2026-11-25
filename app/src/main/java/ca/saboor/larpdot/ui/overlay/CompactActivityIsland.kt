@@ -140,6 +140,13 @@ fun ActivityIcon(
                     activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
                     else -> Color(0xFF4CAF50)
                 }
+                NotificationActivityKind.DND -> {
+                    if (activity.title.contains("Off", ignoreCase = true)) Color(0xFF9E9E9E)
+                    else Color(0xFF9C7CF8)
+                }
+                NotificationActivityKind.VOLUME -> {
+                    if ((activity.progress ?: 1) <= 0) Color(0xFFFF5252) else primaryColor
+                }
                 NotificationActivityKind.BLUETOOTH -> {
                     val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
                     if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor
@@ -150,6 +157,8 @@ fun ActivityIcon(
                 NotificationActivityKind.BLUETOOTH,
                 NotificationActivityKind.AUDIO_OUTPUT,
                 NotificationActivityKind.SCREENSHOT,
+                NotificationActivityKind.DND,
+                NotificationActivityKind.VOLUME,
                 -> activity.title
                 else -> activity.appName
             }
@@ -429,6 +438,8 @@ internal fun activityIcon(kind: NotificationActivityKind): ImageVector = when (k
     NotificationActivityKind.BATTERY_CHARGING -> LarpIcons.BatteryChargingFull
     NotificationActivityKind.BATTERY_LOW -> LarpIcons.BatteryAlert
     NotificationActivityKind.SOUND_MODE -> LarpIcons.VolumeUp
+    NotificationActivityKind.DND -> LarpIcons.DoNotDisturbOn
+    NotificationActivityKind.VOLUME -> LarpIcons.VolumeUp
     NotificationActivityKind.BLUETOOTH -> LarpIcons.BluetoothConnected
     NotificationActivityKind.AUDIO_OUTPUT -> LarpIcons.Headphones
     NotificationActivityKind.SCREENSHOT -> LarpIcons.Screenshot
@@ -446,6 +457,8 @@ internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = whe
         activity.title.contains("Vibrate", ignoreCase = true) || activity.text?.contains("Vibrate", ignoreCase = true) == true -> LarpIcons.Vibration
         else -> LarpIcons.VolumeUp
     }
+    NotificationActivityKind.DND -> LarpIcons.DoNotDisturbOn
+    NotificationActivityKind.VOLUME -> if ((activity.progress ?: 1) <= 0) LarpIcons.VolumeOff else LarpIcons.VolumeUp
     NotificationActivityKind.BLUETOOTH -> bluetoothDeviceIcon(activity)
     NotificationActivityKind.AUDIO_OUTPUT -> audioOutputActivityIcon(activity)
     NotificationActivityKind.SCREENSHOT -> LarpIcons.Screenshot
@@ -504,6 +517,8 @@ internal fun activityIconTint(kind: NotificationActivityKind, fallback: Color): 
     NotificationActivityKind.BATTERY_CHARGING -> Color(0xFF4CAF50)
     NotificationActivityKind.BATTERY_LOW -> Color(0xFFFF5252)
     NotificationActivityKind.SOUND_MODE -> Color(0xFFFFA000)
+    NotificationActivityKind.DND -> Color(0xFF9C7CF8)
+    NotificationActivityKind.VOLUME,
     NotificationActivityKind.TIMER,
     NotificationActivityKind.NAVIGATION,
     NotificationActivityKind.BLUETOOTH,
@@ -574,7 +589,7 @@ internal fun formatCompactActivityDisplayStatus(
 }
 
 internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
-    if (activity.kind == NotificationActivityKind.SOUND_MODE) return ""
+    if (activity.kind == NotificationActivityKind.SOUND_MODE || activity.kind == NotificationActivityKind.DND) return ""
     if (activity.kind == NotificationActivityKind.BLUETOOTH) {
         return batteryPercentOf(activity)?.let { "$it%" }.orEmpty()
     }
@@ -612,6 +627,8 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
             activity.title.contains("Vibrate", ignoreCase = true) || activity.text?.contains("Vibrate", ignoreCase = true) == true -> "Vibrate"
             else -> "Ring"
         }
+        NotificationActivityKind.DND -> ""
+        NotificationActivityKind.VOLUME -> ""
         NotificationActivityKind.BLUETOOTH -> ""
         NotificationActivityKind.AUDIO_OUTPUT -> activity.title
         NotificationActivityKind.SCREENSHOT -> "Share"

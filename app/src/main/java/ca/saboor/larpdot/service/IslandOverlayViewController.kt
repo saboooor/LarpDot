@@ -1368,7 +1368,9 @@ internal fun selectAutoExpandShortTermAlert(
         .filter { info ->
             val previousTitle = seenSignatures[info.key]
             previousTitle == null ||
-                ((info.kind == NotificationActivityKind.SOUND_MODE || info.kind == NotificationActivityKind.AUDIO_OUTPUT) &&
+                ((info.kind == NotificationActivityKind.SOUND_MODE ||
+                    info.kind == NotificationActivityKind.AUDIO_OUTPUT ||
+                    info.kind == NotificationActivityKind.DND) &&
                     previousTitle != info.title)
         }
         .maxByOrNull { it.postedAtMillis }
@@ -1381,6 +1383,8 @@ internal fun isPermanentShortTermAlert(
     NotificationActivityKind.BATTERY_CHARGING -> info.key == "system_battery_charging" && settings.permanentCharging
     NotificationActivityKind.BATTERY_LOW -> settings.permanentLowBattery
     NotificationActivityKind.SOUND_MODE -> settings.permanentSoundMode
+    NotificationActivityKind.DND -> settings.permanentDnd &&
+        !info.title.contains("Off", ignoreCase = true)
     NotificationActivityKind.BLUETOOTH -> settings.permanentBluetooth &&
         info.text?.contains("Disconnected", ignoreCase = true) != true
     NotificationActivityKind.AUDIO_OUTPUT -> settings.permanentAudioOutput

@@ -94,6 +94,8 @@ data class IslandBackupConfig(
     val activityBatteryCharging: Boolean = true,
     val activityBatteryLow: Boolean = true,
     val activitySoundMode: Boolean = true,
+    val activityDnd: Boolean = true,
+    val activityVolumeHud: Boolean = false,
     val activityBluetooth: Boolean = true,
     val activityAudioOutput: Boolean = true,
     val activityScreenshotPocket: Boolean = true,
@@ -102,6 +104,7 @@ data class IslandBackupConfig(
     val activityPermanentCharging: Boolean = false,
     val activityPermanentLowBattery: Boolean = false,
     val activityPermanentSoundMode: Boolean = false,
+    val activityPermanentDnd: Boolean = false,
     val activityPermanentBluetooth: Boolean = false,
     val activityPermanentAudioOutput: Boolean = false,
     val activityPermanentScreenshotPocket: Boolean = false,
@@ -468,6 +471,8 @@ object IslandThemePresets {
             add("activityBatteryCharging" to config.activityBatteryCharging.toString())
             add("activityBatteryLow" to config.activityBatteryLow.toString())
             add("activitySoundMode" to config.activitySoundMode.toString())
+            add("activityDnd" to config.activityDnd.toString())
+            add("activityVolumeHud" to config.activityVolumeHud.toString())
             add("activityBluetooth" to config.activityBluetooth.toString())
             add("activityAudioOutput" to config.activityAudioOutput.toString())
             add("activityScreenshotPocket" to config.activityScreenshotPocket.toString())
@@ -476,6 +481,7 @@ object IslandThemePresets {
             add("activityPermanentCharging" to config.activityPermanentCharging.toString())
             add("activityPermanentLowBattery" to config.activityPermanentLowBattery.toString())
             add("activityPermanentSoundMode" to config.activityPermanentSoundMode.toString())
+            add("activityPermanentDnd" to config.activityPermanentDnd.toString())
             add("activityPermanentBluetooth" to config.activityPermanentBluetooth.toString())
             add("activityPermanentAudioOutput" to config.activityPermanentAudioOutput.toString())
             add("activityPermanentScreenshotPocket" to config.activityPermanentScreenshotPocket.toString())
@@ -602,6 +608,8 @@ object IslandThemePresets {
             activityBatteryCharging = fields["activityBatteryCharging"]?.toBooleanStrictOrNull() ?: defaults.activityBatteryCharging,
             activityBatteryLow = fields["activityBatteryLow"]?.toBooleanStrictOrNull() ?: defaults.activityBatteryLow,
             activitySoundMode = fields["activitySoundMode"]?.toBooleanStrictOrNull() ?: defaults.activitySoundMode,
+            activityDnd = fields["activityDnd"]?.toBooleanStrictOrNull() ?: defaults.activityDnd,
+            activityVolumeHud = fields["activityVolumeHud"]?.toBooleanStrictOrNull() ?: defaults.activityVolumeHud,
             activityBluetooth = fields["activityBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityBluetooth,
             activityAudioOutput = fields["activityAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityAudioOutput,
             activityScreenshotPocket = fields["activityScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityScreenshotPocket,
@@ -610,6 +618,7 @@ object IslandThemePresets {
             activityPermanentCharging = fields["activityPermanentCharging"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentCharging,
             activityPermanentLowBattery = fields["activityPermanentLowBattery"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentLowBattery,
             activityPermanentSoundMode = fields["activityPermanentSoundMode"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentSoundMode,
+            activityPermanentDnd = fields["activityPermanentDnd"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentDnd,
             activityPermanentBluetooth = fields["activityPermanentBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentBluetooth,
             activityPermanentAudioOutput = fields["activityPermanentAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentAudioOutput,
             activityPermanentScreenshotPocket = fields["activityPermanentScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentScreenshotPocket,
@@ -737,6 +746,8 @@ object IslandThemePresets {
             activityBatteryCharging = activities.batteryCharging,
             activityBatteryLow = activities.batteryLow,
             activitySoundMode = activities.soundMode,
+            activityDnd = activities.dnd,
+            activityVolumeHud = activities.volumeHud,
             activityBluetooth = activities.bluetooth,
             activityAudioOutput = activities.audioOutput,
             activityScreenshotPocket = activities.screenshotPocket,
@@ -745,6 +756,7 @@ object IslandThemePresets {
             activityPermanentCharging = activities.permanentCharging,
             activityPermanentLowBattery = activities.permanentLowBattery,
             activityPermanentSoundMode = activities.permanentSoundMode,
+            activityPermanentDnd = activities.permanentDnd,
             activityPermanentBluetooth = activities.permanentBluetooth,
             activityPermanentAudioOutput = activities.permanentAudioOutput,
             activityPermanentScreenshotPocket = activities.permanentScreenshotPocket,
@@ -799,6 +811,8 @@ object IslandThemePresets {
                 batteryCharging = config.activityBatteryCharging,
                 batteryLow = config.activityBatteryLow,
                 soundMode = config.activitySoundMode,
+                dnd = config.activityDnd,
+                volumeHud = config.activityVolumeHud,
                 bluetooth = config.activityBluetooth,
                 audioOutput = config.activityAudioOutput,
                 screenshotPocket = config.activityScreenshotPocket,
@@ -807,6 +821,7 @@ object IslandThemePresets {
                 permanentCharging = config.activityPermanentCharging,
                 permanentLowBattery = config.activityPermanentLowBattery,
                 permanentSoundMode = config.activityPermanentSoundMode,
+                permanentDnd = config.activityPermanentDnd,
                 permanentBluetooth = config.activityPermanentBluetooth,
                 permanentAudioOutput = config.activityPermanentAudioOutput,
                 permanentScreenshotPocket = config.activityPermanentScreenshotPocket,

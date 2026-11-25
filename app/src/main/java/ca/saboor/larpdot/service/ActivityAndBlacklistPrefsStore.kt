@@ -20,6 +20,8 @@ internal object ActivityAndBlacklistPrefsStore {
     private const val KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED = "notification_battery_charging_enabled"
     private const val KEY_NOTIFICATION_BATTERY_LOW_ENABLED = "notification_battery_low_enabled"
     private const val KEY_NOTIFICATION_SOUND_MODE_ENABLED = "notification_sound_mode_enabled"
+    private const val KEY_NOTIFICATION_DND_ENABLED = "notification_dnd_enabled"
+    private const val KEY_NOTIFICATION_VOLUME_HUD_ENABLED = "notification_volume_hud_enabled"
     private const val KEY_NOTIFICATION_BLUETOOTH_ENABLED = "notification_bluetooth_enabled"
     private const val KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED = "notification_audio_output_enabled"
     private const val KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED = "notification_screenshot_pocket_enabled"
@@ -61,6 +63,8 @@ internal object ActivityAndBlacklistPrefsStore {
                 batteryCharging = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, true),
                 batteryLow = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, true),
                 soundMode = prefs.getBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, true),
+                dnd = prefs.getBoolean(KEY_NOTIFICATION_DND_ENABLED, true),
+                volumeHud = prefs.getBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, false),
                 bluetooth = prefs.getBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, true),
                 audioOutput = prefs.getBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, true),
                 screenshotPocket = prefs.getBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, true),
@@ -70,6 +74,7 @@ internal object ActivityAndBlacklistPrefsStore {
                 permanentCharging = prefs.getBoolean("permanent_charging", defaultPermanent),
                 permanentLowBattery = prefs.getBoolean("permanent_lowbattery", defaultPermanent),
                 permanentSoundMode = prefs.getBoolean("permanent_soundmode", defaultPermanent),
+                permanentDnd = prefs.getBoolean("permanent_dnd", false),
                 permanentBluetooth = prefs.getBoolean("permanent_bluetooth", defaultPermanent),
                 permanentAudioOutput = prefs.getBoolean("permanent_audio_output", false),
                 permanentScreenshotPocket = prefs.getBoolean("permanent_screenshot_pocket", false),
@@ -95,6 +100,8 @@ internal object ActivityAndBlacklistPrefsStore {
             .putBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, settings.batteryCharging)
             .putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
             .putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
+            .putBoolean(KEY_NOTIFICATION_DND_ENABLED, settings.dnd)
+            .putBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, settings.volumeHud)
             .putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
             .putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
             .putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
@@ -104,6 +111,7 @@ internal object ActivityAndBlacklistPrefsStore {
             .putBoolean("permanent_charging", settings.permanentCharging)
             .putBoolean("permanent_lowbattery", settings.permanentLowBattery)
             .putBoolean("permanent_soundmode", settings.permanentSoundMode)
+            .putBoolean("permanent_dnd", settings.permanentDnd)
             .putBoolean("permanent_bluetooth", settings.permanentBluetooth)
             .putBoolean("permanent_audio_output", settings.permanentAudioOutput)
             .putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
@@ -114,6 +122,7 @@ internal object ActivityAndBlacklistPrefsStore {
         isNotificationActivitySettingsInitialized = true
         NotificationActivityState.configure(settings)
         ScreenshotPocketManager.syncObserver(context)
+        SystemEventManager.syncDoNotDisturbState(context)
         if (settings.permanentBluetooth) {
             SystemEventManager.syncConnectedBluetoothDevices(context)
         }

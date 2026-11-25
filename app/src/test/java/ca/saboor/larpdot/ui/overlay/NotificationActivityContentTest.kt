@@ -583,4 +583,45 @@ class NotificationActivityContentTest {
         val nonNav = createActivity(kind = NotificationActivityKind.TIMER)
         assertNull(inlineNavigationAction(nonNav))
     }
+
+    @Test
+    fun dndAndVolumeHudRenderIconsRadialProgressAndPinBehavior() {
+        val dndActive = createActivity(
+            kind = NotificationActivityKind.DND,
+            title = "Do Not Disturb",
+            text = "Priority interruptions only",
+        ).copy(key = "system_dnd")
+        val dndOff = dndActive.copy(title = "Do Not Disturb Off", text = "Notifications resumed")
+
+        assertEquals(LarpIcons.DoNotDisturbOn, activityIcon(dndActive))
+        assertEquals("", compactStatusFallback(dndActive))
+        assertEquals(Color(0xFF9C7CF8), activityIconTint(NotificationActivityKind.DND, Color.White))
+
+        val dndPinnedSettings = NotificationActivitySettings(permanentDnd = true)
+        assertTrue(isPermanentShortTermAlert(dndActive, dndPinnedSettings))
+        assertFalse(isPermanentShortTermAlert(dndOff, dndPinnedSettings))
+        assertEquals(
+            dndOff,
+            selectAutoExpandShortTermAlert(
+                listOf(dndOff),
+                mapOf("system_dnd" to "Do Not Disturb"),
+                expandEnabled = true,
+            ) { false },
+        )
+
+        val volMid = createActivity(
+            kind = NotificationActivityKind.VOLUME,
+            title = "Media Volume",
+            text = "60% • Slide to adjust",
+            progress = 60,
+            progressMax = 100,
+        ).copy(key = "system_volume")
+        val volMuted = volMid.copy(title = "Media Muted", text = "Muted • Slide to unmute", progress = 0)
+
+        assertEquals(LarpIcons.VolumeUp, activityIcon(volMid))
+        assertEquals(LarpIcons.VolumeOff, activityIcon(volMuted))
+        assertEquals("60%", compactStatusFallback(volMid))
+        assertEquals(60 to Color.Cyan, activityRadialProgress(volMid, progressRingEnabled = false, primaryColor = Color.Cyan))
+        assertEquals(0 to Color(0xFFFF5252), activityRadialProgress(volMuted, progressRingEnabled = false, primaryColor = Color.Cyan))
+    }
 }

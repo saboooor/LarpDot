@@ -2,6 +2,7 @@ package ca.saboor.larpdot.service
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.NotificationManager
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
@@ -18,14 +19,17 @@ import android.media.AudioManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import ca.saboor.larpdot.notification.EarbudBatteryLevels
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -33,12 +37,15 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
  * Listens for system events (smart battery charging, charge limit, low battery, sound mode,
- * Bluetooth devices, and audio output changes) and surfaces them in the Dynamic Island.
+ * Do Not Disturb, media volume, Bluetooth devices, and audio output changes) and surfaces them in the Dynamic Island.
  */
 object SystemEventManager {
-    // Android publishes this battery event even though its constants are not in the public SDK.
+    // Android publishes these events even though their constants are not in the public SDK.
     private const val BATTERY_LEVEL_CHANGED = "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED"
     private const val EXTRA_BATTERY_LEVEL = "android.bluetooth.device.extra.BATTERY_LEVEL"
+    private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
+    private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+    private const val EXTRA_VOLUME_STREAM_VALUE = "android.media.EXTRA_VOLUME_STREAM_VALUE"
     private const val EAR_BATTERY_REFRESH_MS = 60_000L
     private const val DEDUPE_WINDOW_MS = 1_800L
 
@@ -52,9 +59,12 @@ object SystemEventManager {
 
     private var appContext: Context? = null
     private var isRegistered = false
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val dismissJobs = mutableMapOf<String, Job>()
     private var lastRingerMode: Int? = null
+    private var lastInterruptionFilter: Int? = null
+    private var lastMusicVolume: Int? = null
+    private var lastNonZeroMusicVolume: Int = 1
     private var isChargingActive = false
     private var chargeLimitNotifiedForSession = false
     private var lastChargingPercent = -1
@@ -131,6 +141,31 @@ object SystemEventManager {
                         )
                     }
                 }
+                NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> {
+                    handleInterruptionFilterChanged(context, settings)
+                }
+                VOLUME_CHANGED_ACTION -> {
+                    val streamType = intent.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, -1)
+                    if (streamType != AudioManager.STREAM_MUSIC) return
+                    val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+                    val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                    val currentVol = intent.getIntExtra(
+                        EXTRA_VOLUME_STREAM_VALUE,
+                        am.getStreamVolume(AudioManager.STREAM_MUSIC),
+                    ).coerceIn(0, maxVol)
+                    if (lastMusicVolume == null) {
+                        lastMusicVolume = currentVol
+                        if (currentVol > 0) lastNonZeroMusicVolume = currentVol
+                        return
+                    }
+                    if (lastMusicVolume == currentVol) return
+                    lastMusicVolume = currentVol
+                    if (currentVol > 0) lastNonZeroMusicVolume = currentVol
+
+                    if (settings.volumeHud) {
+                        postVolumeAlert(currentVol, maxVol)
+                    }
+                }
                 BluetoothDevice.ACTION_ACL_CONNECTED,
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                     val device = getBluetoothDevice(intent) ?: return
@@ -196,6 +231,8 @@ object SystemEventManager {
             addAction(Intent.ACTION_BATTERY_LOW)
             addAction(Intent.ACTION_BATTERY_OKAY)
             addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
+            addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+            addAction(VOLUME_CHANGED_ACTION)
             addAction(BATTERY_LEVEL_CHANGED)
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
@@ -210,6 +247,11 @@ object SystemEventManager {
         }
         val am = app.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         lastRingerMode = am?.ringerMode
+        lastMusicVolume = am?.getStreamVolume(AudioManager.STREAM_MUSIC)?.also { vol ->
+            if (vol > 0) lastNonZeroMusicVolume = vol
+        }
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        lastInterruptionFilter = nm?.currentInterruptionFilter
         ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         isRegistered = true
         ShizukuEarbudBattery.initialize()
@@ -228,7 +270,122 @@ object SystemEventManager {
                 }
             }
         }
+        syncDoNotDisturbState(app)
         syncConnectedBluetoothDevices(app)
+    }
+
+    /** Keeps pinned Do Not Disturb status aligned with the current system interruption filter. */
+    fun syncDoNotDisturbState(context: Context) {
+        val settings = OverlayPreferences.getNotificationActivitySettings(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val filter = nm.currentInterruptionFilter
+        lastInterruptionFilter = filter
+        val status = classifyDndFilter(filter)
+        if (settings.enabled && settings.dnd && settings.permanentDnd && status != null && status.isActive) {
+            postAlert(
+                key = "system_dnd",
+                title = status.title,
+                text = status.subtitle,
+                kind = NotificationActivityKind.DND,
+                permanent = true,
+            )
+        } else {
+            dismissAlert("system_dnd")
+        }
+    }
+
+    private fun handleInterruptionFilterChanged(
+        context: Context,
+        settings: ca.saboor.larpdot.notification.NotificationActivitySettings,
+    ) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val filter = nm.currentInterruptionFilter
+        if (lastInterruptionFilter == null) {
+            lastInterruptionFilter = filter
+            return
+        }
+        if (lastInterruptionFilter == filter) return
+        lastInterruptionFilter = filter
+        val status = classifyDndFilter(filter) ?: return
+        if (!settings.dnd) return
+
+        if (status.isActive) {
+            postAlert(
+                key = "system_dnd",
+                title = status.title,
+                text = status.subtitle,
+                kind = NotificationActivityKind.DND,
+                permanent = settings.permanentDnd,
+            )
+        } else if (settings.permanentDnd) {
+            dismissAlert("system_dnd")
+        } else {
+            postAlert(
+                key = "system_dnd",
+                title = status.title,
+                text = status.subtitle,
+                kind = NotificationActivityKind.DND,
+                permanent = false,
+                dismissMs = 2_500L,
+            )
+        }
+    }
+
+    private fun postVolumeAlert(currentVol: Int, maxVol: Int) {
+        val pct = volumePercent(currentVol, maxVol)
+        postAlert(
+            key = "system_volume",
+            title = if (pct == 0) "Media Muted" else "Media Volume",
+            text = if (pct == 0) "Muted • Slide to unmute" else "$pct% • Slide to adjust",
+            kind = NotificationActivityKind.VOLUME,
+            permanent = false,
+            progress = pct,
+            progressMax = 100,
+            dismissMs = 2_400L,
+        )
+    }
+
+    fun setMediaVolumePercent(context: Context, percent: Int) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val targetVol = ((percent.coerceIn(0, 100) / 100f) * maxVol).roundToInt().coerceIn(0, maxVol)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+        lastMusicVolume = targetVol
+        if (targetVol > 0) lastNonZeroMusicVolume = targetVol
+        postVolumeAlert(targetVol, maxVol)
+    }
+
+    fun toggleMediaMute(context: Context) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val currentVol = am.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, maxVol)
+        val nextVol = if (currentVol > 0) {
+            lastNonZeroMusicVolume = currentVol
+            0
+        } else {
+            lastNonZeroMusicVolume.coerceIn(1, maxVol)
+        }
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, nextVol, 0)
+        lastMusicVolume = nextVol
+        postVolumeAlert(nextVol, maxVol)
+    }
+
+    fun openDoNotDisturbSettings(context: Context) {
+        val primary = Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val fallback = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(primary) }
+            .onFailure { runCatching { context.startActivity(fallback) } }
+    }
+
+    fun openSoundSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
     }
 
     /** Refreshes currently connected Bluetooth devices (useful after granting Nearby Devices or pinning BT alerts). */
@@ -773,4 +930,41 @@ internal fun resolveFriendlyBluetoothName(alias: String?, rawName: String?): Str
     }
     val candidate = cleanAlias ?: cleanRaw ?: return "Bluetooth Device"
     return candidate.replace(LE_PREFIX_REGEX, "").trim().ifEmpty { candidate }
+}
+
+internal data class DndStatus(
+    val isActive: Boolean,
+    val title: String,
+    val subtitle: String,
+)
+
+internal fun classifyDndFilter(filter: Int): DndStatus? = when (filter) {
+    NotificationManager.INTERRUPTION_FILTER_ALL -> DndStatus(
+        isActive = false,
+        title = "Do Not Disturb Off",
+        subtitle = "Notifications resumed",
+    )
+    NotificationManager.INTERRUPTION_FILTER_PRIORITY -> DndStatus(
+        isActive = true,
+        title = "Do Not Disturb",
+        subtitle = "Priority interruptions only",
+    )
+    NotificationManager.INTERRUPTION_FILTER_ALARMS -> DndStatus(
+        isActive = true,
+        title = "Do Not Disturb",
+        subtitle = "Alarms only",
+    )
+    NotificationManager.INTERRUPTION_FILTER_NONE -> DndStatus(
+        isActive = true,
+        title = "Total Silence",
+        subtitle = "All sounds and alerts muted",
+    )
+    else -> null
+}
+
+internal fun volumePercent(volume: Int, maxVolume: Int): Int {
+    if (maxVolume <= 0) return 0
+    return ((volume.coerceIn(0, maxVolume).toFloat() / maxVolume.toFloat()) * 100f)
+        .roundToInt()
+        .coerceIn(0, 100)
 }

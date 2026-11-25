@@ -28,19 +28,25 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -57,7 +63,9 @@ import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.ScreenshotPocketManager
+import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.theme.LarpIcons
+import kotlin.math.roundToInt
 
 private val LEADING_BATTERY_PERCENT_REGEX = Regex("""^\d+%(?:\s+remaining|\s+reached)?\s*•\s*""", RegexOption.IGNORE_CASE)
 private val PURE_PERCENT_REGEX = Regex("""^\d+%$""")
@@ -141,6 +149,7 @@ private data class ExpandedActivityLayoutModel(
     val footerActions: List<NotificationActivityAction>,
     val hasNavRightContent: Boolean,
     val isScreenshot: Boolean,
+    val isVolume: Boolean,
     val showProgressBar: Boolean,
     val hasFooter: Boolean,
 ) {
@@ -153,6 +162,7 @@ private fun buildExpandedActivityLayoutModel(
     primaryColor: Color,
 ): ExpandedActivityLayoutModel {
     val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
+    val isVolume = activity.kind == NotificationActivityKind.VOLUME
     val radialProgress = activityRadialProgress(activity, progressOutlineEnabled, primaryColor)
     val hasRadialGauge = radialProgress != null
     val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
@@ -164,8 +174,8 @@ private fun buildExpandedActivityLayoutModel(
     }
     val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT &&
         (activity.mediaUri != null || !activity.heldText.isNullOrBlank())
-    val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
-    val hasFooter = showProgressBar || isScreenshot || footerActions.isNotEmpty()
+    val showProgressBar = !isNavigation && !isVolume && activity.progressFraction != null && !hasRadialGauge
+    val hasFooter = showProgressBar || isScreenshot || isVolume || footerActions.isNotEmpty()
     return ExpandedActivityLayoutModel(
         subtitle = activitySubtitle(activity),
         isNavigation = isNavigation,
@@ -176,6 +186,7 @@ private fun buildExpandedActivityLayoutModel(
         footerActions = footerActions,
         hasNavRightContent = navigationEta != null || inlineAction != null,
         isScreenshot = isScreenshot,
+        isVolume = isVolume,
         showProgressBar = showProgressBar,
         hasFooter = hasFooter,
     )
@@ -277,6 +288,7 @@ internal fun expandedActivitySize(
         }
         val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
         val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
+        val volumeSectionHeight = if (model.isVolume) 56.dp else 0.dp
         val bottomPadding = model.bottomPadding
         val headerBlockHeight = if (spanIconLeftOfCutout) {
             if (model.hasFooter) {
@@ -293,9 +305,13 @@ internal fun expandedActivitySize(
         }
         val height = headerBlockHeight +
             (if (model.showProgressBar) 20.dp else 0.dp) +
-            previewHeight + pocketActionHeight +
+            previewHeight + pocketActionHeight + volumeSectionHeight +
             (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
-        val effectiveWidth = if (model.isScreenshot) maxOf(width, 280.dp).coerceAtMost(maxWidth) else width
+        val effectiveWidth = if (model.isScreenshot || model.isVolume) {
+            maxOf(width, 280.dp).coerceAtMost(maxWidth)
+        } else {
+            width
+        }
         DpSize(effectiveWidth, height.coerceAtMost(maxHeight))
     }
 }
@@ -327,6 +343,12 @@ internal fun ExpandedNotificationActivityContent(
             }
             activity.kind == NotificationActivityKind.AUDIO_OUTPUT || activity.kind == NotificationActivityKind.BLUETOOTH -> {
                 AudioOutputTracker.openOutputSwitcher(context)
+            }
+            activity.kind == NotificationActivityKind.DND -> {
+                SystemEventManager.openDoNotDisturbSettings(context)
+            }
+            activity.kind == NotificationActivityKind.VOLUME -> {
+                SystemEventManager.openSoundSettings(context)
             }
             else -> NotificationActivityState.open(context, activity)
         }
@@ -393,6 +415,10 @@ internal fun ExpandedNotificationActivityContent(
                 onOpen = openApp,
                 onCollapse = onCollapse,
             )
+        }
+
+        if (model.isVolume) {
+            ExpandedVolumeSection(activity = activity)
         }
 
         if (model.footerActions.isNotEmpty()) {
@@ -712,5 +738,51 @@ private fun ExpandedScreenshotSection(
         ) {
             Icon(LarpIcons.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(18.dp))
         }
+    }
+}
+
+@Composable
+private fun ExpandedVolumeSection(activity: NotificationActivityInfo) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val reportedPercent = (activity.progress ?: 0).coerceIn(0, 100)
+    var sliderValue by remember(reportedPercent) { mutableFloatStateOf(reportedPercent.toFloat()) }
+    val isMuted = sliderValue.roundToInt() <= 0
+
+    Spacer(Modifier.height(10.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        FilledTonalButton(
+            onClick = {
+                haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                SystemEventManager.toggleMediaMute(context)
+            },
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.heightIn(min = 40.dp),
+        ) {
+            Icon(
+                imageVector = if (isMuted) LarpIcons.VolumeOff else LarpIcons.VolumeUp,
+                contentDescription = if (isMuted) "Unmute media" else "Mute media",
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = { raw ->
+                val snapped = raw.roundToInt().coerceIn(0, 100)
+                sliderValue = snapped.toFloat()
+                SystemEventManager.setMediaVolumePercent(context, snapped)
+            },
+            valueRange = 0f..100f,
+            modifier = Modifier.weight(1f),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = Color.White.copy(alpha = 0.22f),
+            ),
+        )
     }
 }

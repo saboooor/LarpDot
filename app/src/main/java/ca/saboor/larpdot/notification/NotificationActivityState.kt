@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import ca.saboor.larpdot.service.OverlayPreferences
 
@@ -33,6 +33,8 @@ enum class NotificationActivityKind {
     BATTERY_CHARGING,
     BATTERY_LOW,
     SOUND_MODE,
+    DND,
+    VOLUME,
     BLUETOOTH,
     AUDIO_OUTPUT,
     SCREENSHOT,
@@ -47,6 +49,8 @@ data class NotificationActivitySettings(
     val batteryCharging: Boolean = true,
     val batteryLow: Boolean = true,
     val soundMode: Boolean = true,
+    val dnd: Boolean = true,
+    val volumeHud: Boolean = false,
     val bluetooth: Boolean = true,
     val audioOutput: Boolean = true,
     val screenshotPocket: Boolean = true,
@@ -56,6 +60,7 @@ data class NotificationActivitySettings(
     val permanentCharging: Boolean = permanentShortTerm,
     val permanentLowBattery: Boolean = permanentShortTerm,
     val permanentSoundMode: Boolean = permanentShortTerm,
+    val permanentDnd: Boolean = false,
     val permanentBluetooth: Boolean = permanentShortTerm,
     val permanentAudioOutput: Boolean = false,
     val permanentScreenshotPocket: Boolean = false,
@@ -70,6 +75,8 @@ data class NotificationActivitySettings(
         NotificationActivityKind.BATTERY_CHARGING -> batteryCharging
         NotificationActivityKind.BATTERY_LOW -> batteryLow
         NotificationActivityKind.SOUND_MODE -> soundMode
+        NotificationActivityKind.DND -> dnd
+        NotificationActivityKind.VOLUME -> volumeHud
         NotificationActivityKind.BLUETOOTH -> bluetooth
         NotificationActivityKind.AUDIO_OUTPUT -> audioOutput
         NotificationActivityKind.SCREENSHOT -> screenshotPocket
@@ -137,7 +144,7 @@ object NotificationActivityState {
     val shortTermActivities = _shortTermActivities.asStateFlow()
 
     private var settings: NotificationActivitySettings = NotificationActivitySettings()
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var isBlacklistObserverStarted = false
 
     fun isPackageBlacklisted(packageName: String?): Boolean {
@@ -329,7 +336,9 @@ object NotificationActivityState {
         NotificationActivityKind.BATTERY_LOW -> 5
         NotificationActivityKind.BATTERY_CHARGING -> 5
         NotificationActivityKind.SCREENSHOT -> 5
+        NotificationActivityKind.VOLUME -> 5
         NotificationActivityKind.SOUND_MODE -> 4
+        NotificationActivityKind.DND -> 4
         NotificationActivityKind.BLUETOOTH -> 4
         NotificationActivityKind.AUDIO_OUTPUT -> 4
         NotificationActivityKind.NAVIGATION -> 3

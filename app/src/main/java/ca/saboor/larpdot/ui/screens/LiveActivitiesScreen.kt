@@ -183,6 +183,28 @@ fun LiveActivitiesScreen(
             },
         ),
         ActivityToggleItem(
+            title = "Do Not Disturb",
+            subtitle = "Focus & silence state",
+            icon = LarpIcons.DoNotDisturbOn,
+            checked = settings.dnd,
+            onCheckedChange = {
+                OverlayPreferences.setNotificationActivitySettings(context, settings.copy(dnd = it))
+            },
+            permanent = settings.permanentDnd,
+            onPermanentChange = {
+                OverlayPreferences.setNotificationActivitySettings(context, settings.copy(permanentDnd = it))
+            },
+        ),
+        ActivityToggleItem(
+            title = "Volume HUD",
+            subtitle = "Media volume pill",
+            icon = LarpIcons.Tune,
+            checked = settings.volumeHud,
+            onCheckedChange = {
+                OverlayPreferences.setNotificationActivitySettings(context, settings.copy(volumeHud = it))
+            },
+        ),
+        ActivityToggleItem(
             title = "Bluetooth",
             subtitle = "Watch & earbuds",
             icon = LarpIcons.Bluetooth,
