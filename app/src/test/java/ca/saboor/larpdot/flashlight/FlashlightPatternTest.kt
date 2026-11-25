@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.flashlight
 
+import ca.saboor.larpdot.service.formatFlashlightTileSubtitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -39,5 +40,32 @@ class FlashlightPatternTest {
         assertEquals("1:00", formatAutoOffRemaining(60_000L))
         assertEquals("4:59", formatAutoOffRemaining(298_500L))
         assertEquals("0:00", formatAutoOffRemaining(-5_000L))
+    }
+
+    @Test fun flashlightTileSubtitleReflectsAvailabilityModeBoostAndStrength() {
+        assertEquals(
+            "Unavailable",
+            formatFlashlightTileSubtitle(false, false, FlashlightMode.STEADY, false, true, 5, 10),
+        )
+        assertEquals(
+            "Off",
+            formatFlashlightTileSubtitle(true, false, FlashlightMode.STEADY, false, true, 5, 10),
+        )
+        assertEquals(
+            "SOS",
+            formatFlashlightTileSubtitle(true, true, FlashlightMode.SOS, false, true, 5, 10),
+        )
+        assertEquals(
+            "50%",
+            formatFlashlightTileSubtitle(true, true, FlashlightMode.STEADY, false, true, 5, 10),
+        )
+        assertEquals(
+            "Boost • 100%",
+            formatFlashlightTileSubtitle(true, true, FlashlightMode.STEADY, true, true, 10, 10),
+        )
+        assertEquals(
+            "On",
+            formatFlashlightTileSubtitle(true, true, FlashlightMode.STEADY, false, false, 1, 1),
+        )
     }
 }

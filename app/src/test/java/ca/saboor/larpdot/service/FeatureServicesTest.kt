@@ -45,6 +45,19 @@ class FeatureServicesTest {
             "64% • 27W • 24m left",
             BatteryStatusFormatter.buildChargingSubtitle(64, 27.1f, 24 * 60_000L),
         )
+        assertEquals(
+            "64% • 27W • 24m left • 34°C",
+            BatteryStatusFormatter.buildChargingSubtitle(64, 27.1f, 24 * 60_000L, 34.2f),
+        )
+        assertEquals(
+            "82% • 18W • 43°C (Warm)",
+            BatteryStatusFormatter.buildChargingSubtitle(82, 18.0f, -1L, 42.6f),
+        )
+        assertEquals(36.5f, BatteryStatusFormatter.tenthsCelsiusToCelsius(365)!!, 0.01f)
+        assertNull(BatteryStatusFormatter.tenthsCelsiusToCelsius(0))
+        assertNull(BatteryStatusFormatter.tenthsCelsiusToCelsius(9999))
+        assertFalse(BatteryStatusFormatter.isBatteryWarm(38.0f))
+        assertTrue(BatteryStatusFormatter.isBatteryWarm(42.0f))
 
         assertTrue(BatteryStatusFormatter.shouldTriggerChargeLimit(true, 80, 80, false))
         assertFalse(BatteryStatusFormatter.shouldTriggerChargeLimit(true, 79, 80, false))

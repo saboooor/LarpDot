@@ -40,15 +40,33 @@ object BatteryStatusFormatter {
         }
     }
 
+    const val WARM_BATTERY_CELSIUS = 42.0f
+
+    fun tenthsCelsiusToCelsius(tenths: Int): Float? {
+        if (tenths == Int.MIN_VALUE || tenths == 0) return null
+        val celsius = tenths / 10f
+        return celsius.takeIf { it in -20f..85f }
+    }
+
+    fun isBatteryWarm(celsius: Float?): Boolean = celsius != null && celsius >= WARM_BATTERY_CELSIUS
+
+    fun formatTemperatureCelsius(celsius: Float?): String? {
+        if (celsius == null) return null
+        val rounded = celsius.roundToInt()
+        return if (isBatteryWarm(celsius)) "${rounded}°C (Warm)" else "${rounded}°C"
+    }
+
     fun buildChargingSubtitle(
         percent: Int,
         watts: Float?,
         timeRemainingMs: Long,
+        temperatureCelsius: Float? = null,
     ): String {
         val parts = buildList {
             if (percent > 0) add("$percent%")
             if (watts != null) add("${watts.roundToInt()}W")
             formatTimeRemaining(timeRemainingMs)?.let(::add)
+            formatTemperatureCelsius(temperatureCelsius)?.let(::add)
         }
         return if (parts.isEmpty()) "Connected to power" else parts.joinToString(" • ")
     }

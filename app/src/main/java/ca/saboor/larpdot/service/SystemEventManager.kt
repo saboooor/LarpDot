@@ -68,6 +68,7 @@ object SystemEventManager {
     private var isChargingActive = false
     private var chargeLimitNotifiedForSession = false
     private var lastChargingPercent = -1
+    private var lastChargingWarmState = false
 
     fun hasBluetoothPermission(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
@@ -454,9 +455,16 @@ object SystemEventManager {
             )
         }
 
-        // Keep pinned charging alert fresh with live percentage, wattage, and time-to-full.
-        if (settings.batteryCharging && settings.permanentCharging && pct != lastChargingPercent) {
+        // Keep pinned charging alert fresh with live percentage, wattage, temperature, and time-to-full.
+        val tempC = BatteryStatusFormatter.tenthsCelsiusToCelsius(
+            intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0),
+        )
+        val isWarm = BatteryStatusFormatter.isBatteryWarm(tempC)
+        if (settings.batteryCharging && settings.permanentCharging &&
+            (pct != lastChargingPercent || isWarm != lastChargingWarmState)
+        ) {
             lastChargingPercent = pct
+            lastChargingWarmState = isWarm
             postChargingAlert(context, permanent = true, batteryIntent = intent)
         }
     }
@@ -469,6 +477,9 @@ object SystemEventManager {
         val statusIntent = batteryIntent ?: context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val pct = extractBatteryPercent(statusIntent)
         val voltageMv = statusIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
+        val tempC = BatteryStatusFormatter.tenthsCelsiusToCelsius(
+            statusIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0,
+        )
 
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         val currentNow = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0
@@ -478,10 +489,11 @@ object SystemEventManager {
         } else -1L
 
         lastChargingPercent = pct
+        lastChargingWarmState = BatteryStatusFormatter.isBatteryWarm(tempC)
         postAlert(
             key = "system_battery_charging",
             title = BatteryStatusFormatter.classifyChargingTitle(watts),
-            text = BatteryStatusFormatter.buildChargingSubtitle(pct, watts, timeRemainingMs),
+            text = BatteryStatusFormatter.buildChargingSubtitle(pct, watts, timeRemainingMs, tempC),
             kind = NotificationActivityKind.BATTERY_CHARGING,
             permanent = permanent,
             progress = pct.takeIf { it > 0 },

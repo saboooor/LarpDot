@@ -12,8 +12,8 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
+import android.util.LruCache
 import ca.saboor.larpdot.media.MediaPlaybackState
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,9 +132,11 @@ data class EarbudBatteryLevels(val left: Int?, val right: Int?)
  * documented notification fields; no package-specific text dictionaries are involved.
  */
 object NotificationActivityState {
+    private const val MAX_CACHED_APP_ICONS = 64
+
     private val lock = Any()
     private val activities = linkedMapOf<String, NotificationActivityInfo>()
-    private val appIconCache = ConcurrentHashMap<String, Bitmap>()
+    private val appIconCache = LruCache<String, Bitmap>(MAX_CACHED_APP_ICONS)
     private var appContext: Context? = null
 
     private val _current = MutableStateFlow<NotificationActivityInfo?>(null)
@@ -347,12 +349,17 @@ object NotificationActivityState {
     }
 
     fun getOrLoadAppIcon(context: Context, packageName: String): Bitmap? {
-        return appIconCache.getOrPut(packageName) {
-            runCatching {
-                val drawable = context.packageManager.getApplicationIcon(packageName)
-                drawableToBitmap(drawable)
-            }.getOrNull() ?: return null
+        synchronized(appIconCache) {
+            appIconCache.get(packageName)?.takeUnless { it.isRecycled }?.let { return it }
         }
+        val loaded = runCatching {
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            drawableToBitmap(drawable)
+        }.getOrNull() ?: return null
+        synchronized(appIconCache) {
+            appIconCache.put(packageName, loaded)
+        }
+        return loaded
     }
 
     internal fun drawableToBitmap(drawable: Drawable, sizePx: Int = 96): Bitmap {

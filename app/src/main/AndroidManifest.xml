@@ -139,6 +139,18 @@
             </intent-filter>
         </service>
 
+        <!-- Quick Settings Tile to toggle LarpDot Flashlight with live strength/mode status -->
+        <service
+            android:name=".service.FlashlightTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_flashlight"
+            android:label="@string/qs_flashlight_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Share target ("Hold in Island") for tucking photos/files into the island pocket -->
         <activity
             android:name=".service.ShareToIslandActivity"
