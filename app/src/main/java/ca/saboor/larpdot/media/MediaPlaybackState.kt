@@ -336,6 +336,13 @@ object MediaPlaybackState {
             if (isNewTrack) {
                 lastAnnouncedTrackKey = trackKey
                 MusicSleepTimer.onTrackChanged(trackKey)
+                MediaPlaybackHistory.record(
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    appName = current.appName.takeIf { samePlayer },
+                    packageName = controller.packageName,
+                )
                 triggerSongAnnouncement()
             }
         } else if (wasPlaying) {

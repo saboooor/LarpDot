@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,11 +16,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,14 +41,18 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.media.MediaHistoryEntry
+import ca.saboor.larpdot.media.MediaPlaybackHistory
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MusicSleepTimer
 import ca.saboor.larpdot.media.SleepTimerState
+import ca.saboor.larpdot.media.formatRelativePlayedTime
 import ca.saboor.larpdot.media.formatSleepTimerBadge
 import ca.saboor.larpdot.service.AudioCaptureService
 import ca.saboor.larpdot.service.ForegroundAppTracker
@@ -695,6 +702,103 @@ private fun MusicSettingsPage(
                     }
                 }
             }
+
+            motionItem(key = "recent_history") {
+                RecentlyPlayedCard(context = context)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentlyPlayedCard(context: Context) {
+    val history by MediaPlaybackHistory.entries.collectAsState()
+    val nowMillis = remember(history) { System.currentTimeMillis() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionHeader(title = "Recently Played")
+            if (history.isNotEmpty()) {
+                TextButton(onClick = { MediaPlaybackHistory.clear() }) {
+                    Text("Clear")
+                }
+            }
+        }
+        LarpCard {
+            if (history.isEmpty()) {
+                Text(
+                    text = "Tracks you play will appear here for quick copy and player jump-back.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    history.take(8).forEachIndexed { index, entry ->
+                        if (index > 0) LarpDivider()
+                        RecentTrackRow(
+                            entry = entry,
+                            relativeTime = formatRelativePlayedTime(entry.playedAtMillis, nowMillis),
+                            onCopy = { MediaPlaybackHistory.copyTrack(context, entry) },
+                            onOpen = { MediaPlaybackHistory.openPlayerApp(context, entry) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentTrackRow(
+    entry: MediaHistoryEntry,
+    relativeTime: String,
+    onCopy: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (entry.packageName != null) Modifier.clickable(onClick = onOpen) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = LarpIcons.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val meta = buildList {
+                if (entry.artist.isNotBlank()) add(entry.artist)
+                if (relativeTime.isNotBlank()) add(relativeTime)
+            }.joinToString(" • ")
+            if (meta.isNotEmpty()) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = LarpIcons.ContentCopy,
+                contentDescription = "Copy ${entry.title}",
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

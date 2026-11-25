@@ -2,6 +2,7 @@ package ca.saboor.larpdot
 
 import android.app.Application
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.media.MediaPlaybackHistory
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.CustomIslandStore
@@ -17,6 +18,7 @@ class LarpDotApplication : Application() {
         CustomIslandWidgets.initialize(this)
         ScreenStateTracker.init(this)
         ForegroundAppTracker.init(this)
+        MediaPlaybackHistory.init(this)
         MediaPlaybackState.initialize(this)
         NotificationActivityState.initialize(this)
         OverlayPreferences.isOverlayEnabled(this)

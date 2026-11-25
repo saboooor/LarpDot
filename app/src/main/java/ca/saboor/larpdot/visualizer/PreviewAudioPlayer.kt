@@ -10,6 +10,7 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +34,7 @@ object PreviewAudioPlayer {
     private var mediaPlayer: MediaPlayer? = null
     private var currentSource: String? = null
     private var tickerJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -89,13 +90,15 @@ object PreviewAudioPlayer {
                 )
                 setDataSource(audioSource)
                 setOnPreparedListener { mp ->
+                    if (mediaPlayer !== mp) return@setOnPreparedListener
                     MediaPlaybackState.pause()
                     mp.start()
                     _isPlaying.value = true
                     _durationMs.value = mp.duration.toLong().coerceAtLeast(1000L)
                     startTicker()
                 }
-                setOnCompletionListener {
+                setOnCompletionListener { mp ->
+                    if (mediaPlayer !== mp) return@setOnCompletionListener
                     _isPlaying.value = false
                     _currentPositionMs.value = 0L
                     stopTicker()
