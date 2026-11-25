@@ -5,6 +5,7 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -30,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -46,14 +50,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.navigation.Destination
 import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.service.DotOverlayService
+import ca.saboor.larpdot.service.NotificationAccessService
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
+import ca.saboor.larpdot.ui.components.hasNotificationAccess
 import ca.saboor.larpdot.ui.screens.AppearanceScreen
 import ca.saboor.larpdot.ui.screens.CustomIslandScreen
 import ca.saboor.larpdot.ui.screens.FlashlightScreen
@@ -74,9 +83,28 @@ fun LarpDotApp() {
 
     val isEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
     val isAccessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
+    val isListenerConnected by NotificationAccessService.isListenerConnected.collectAsState()
     val hideInDnd by OverlayPreferences.hideInDndFlow.collectAsState()
     val isDndActive by SystemEventManager.isDoNotDisturbActive.collectAsState()
     var showSetupDialog by remember { mutableStateOf(false) }
+    var permissionCheckTick by remember { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) permissionCheckTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val needsCoreSetup = remember(permissionCheckTick, isAccessibilityConnected, isListenerConnected, showSetupDialog) {
+        val hasNotif = isListenerConnected || hasNotificationAccess(context)
+        val hasDisplay = isAccessibilityConnected ||
+            DotAccessibilityService.isAccessibilityEnabled(context) ||
+            Settings.canDrawOverlays(context)
+        !hasNotif || !hasDisplay
+    }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
 
@@ -122,15 +150,17 @@ fun LarpDotApp() {
 
     if (showSetupDialog) {
         PermissionsSetupDialog(
+            cutoutInfo = cutoutInfo,
             onDismiss = {
                 showSetupDialog = false
-                val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
+                permissionCheckTick++
+                val hasAccessibility = DotAccessibilityService.isAccessibilityEnabled(context)
                 val hasOverlay = Settings.canDrawOverlays(context)
                 if (isEnabled) {
                     if (hasAccessibility) {
-                        ca.saboor.larpdot.service.DotOverlayService.stop(context)
+                        DotOverlayService.stop(context)
                     } else if (hasOverlay) {
-                        ca.saboor.larpdot.service.DotOverlayService.start(context)
+                        DotOverlayService.start(context)
                     }
                 }
             }
@@ -193,6 +223,15 @@ fun LarpDotApp() {
                                     text = "Setup",
                                     style = MaterialTheme.typography.labelMedium,
                                 )
+                                if (needsCoreSetup) {
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.error),
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))

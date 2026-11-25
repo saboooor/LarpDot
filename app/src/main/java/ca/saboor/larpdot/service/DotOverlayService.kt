@@ -4,13 +4,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.os.Build
 import android.os.IBinder
 import android.view.WindowManager
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -47,6 +49,7 @@ class DotOverlayService : Service() {
 
         val controller = IslandOverlayViewController(this, overlayType)
         overlayController = controller
+        _isRunning.value = true
 
         serviceScope.launch {
             OverlayVisibilityPolicy.visibilityFlow()
@@ -85,6 +88,7 @@ class DotOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        _isRunning.value = false
         flashlightBroadcast.unregister(this)
         serviceJob.cancel()
         overlayController?.destroy()
@@ -93,6 +97,8 @@ class DotOverlayService : Service() {
     }
 
     companion object {
+        private val _isRunning = MutableStateFlow(false)
+        val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
         fun start(context: Context) {
             if (!OverlayPreferences.isOverlayEnabled(context)) return
             try {

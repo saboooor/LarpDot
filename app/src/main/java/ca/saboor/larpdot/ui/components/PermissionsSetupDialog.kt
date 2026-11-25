@@ -6,15 +6,22 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.net.toUri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.service.DotAccessibilityService
+import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.ForegroundAppTracker
+import ca.saboor.larpdot.service.NotificationAccessService
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.ShizukuBatteryStatus
 import ca.saboor.larpdot.service.ShizukuEarbudBattery
 import ca.saboor.larpdot.service.SystemEventManager
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,17 +74,70 @@ internal fun hasNotificationAccess(context: Context): Boolean {
 /**
  * Checks if Overlay ("Display over other apps") permission is granted.
  */
-private fun hasOverlayPermission(context: Context): Boolean {
+internal fun hasOverlayPermission(context: Context): Boolean {
     return Settings.canDrawOverlays(context)
+}
+
+internal fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return runCatching { pm.isIgnoringBatteryOptimizations(context.packageName) }.getOrDefault(false)
+}
+
+internal data class SystemHealthSummary(
+    val isCoreReady: Boolean,
+    val overlayEngineLabel: String,
+    val listenerLabel: String,
+    val grantedCount: Int,
+    val totalCount: Int,
+)
+
+internal fun buildSystemHealthSummary(
+    overlayEnabled: Boolean,
+    accessibilityConnected: Boolean,
+    overlayServiceRunning: Boolean,
+    accessibilityGranted: Boolean,
+    overlayGranted: Boolean,
+    notificationAccessGranted: Boolean,
+    listenerConnected: Boolean,
+    optionalGrants: List<Boolean>,
+): SystemHealthSummary {
+    val hasDisplayPath = accessibilityGranted || overlayGranted
+    val isCoreReady = notificationAccessGranted && hasDisplayPath
+    val overlayEngineLabel = when {
+        !overlayEnabled -> "Standby (toggle off)"
+        accessibilityConnected -> "Accessibility (Shade & Lock)"
+        overlayServiceRunning -> "Standard Overlay"
+        hasDisplayPath -> "Ready to start"
+        else -> "Permission needed"
+    }
+    val listenerLabel = when {
+        listenerConnected -> "Connected"
+        notificationAccessGranted -> "Enabled (waiting)"
+        else -> "Not granted"
+    }
+    val coreItems = listOf(notificationAccessGranted, overlayGranted, accessibilityGranted)
+    val allItems = coreItems + optionalGrants
+    return SystemHealthSummary(
+        isCoreReady = isCoreReady,
+        overlayEngineLabel = overlayEngineLabel,
+        listenerLabel = listenerLabel,
+        grantedCount = allItems.count { it },
+        totalCount = allItems.size,
+    )
 }
 
 @Composable
 fun PermissionsSetupDialog(
     onDismiss: () -> Unit,
+    cutoutInfo: CutoutInfo? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val shizukuStatus by ShizukuEarbudBattery.status.collectAsState()
+    val overlayEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
+    val accessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
+    val overlayServiceRunning by DotOverlayService.isRunning.collectAsState()
+    val listenerConnected by NotificationAccessService.isListenerConnected.collectAsState()
 
     var notificationAccessGranted by remember {
         mutableStateOf(hasNotificationAccess(context))
@@ -86,12 +146,13 @@ fun PermissionsSetupDialog(
         mutableStateOf(hasOverlayPermission(context))
     }
     var accessibilityGranted by remember {
-        mutableStateOf(ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context))
+        mutableStateOf(DotAccessibilityService.isAccessibilityEnabled(context))
     }
 
     var usageAccessGranted by remember { mutableStateOf(ForegroundAppTracker.refreshUsageAccess(context)) }
     var bluetoothGranted by remember { mutableStateOf(SystemEventManager.hasBluetoothPermission(context)) }
     var photosGranted by remember { mutableStateOf(ScreenshotPocketManager.hasPermission(context)) }
+    var batteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
 
     val bluetoothLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -114,9 +175,10 @@ fun PermissionsSetupDialog(
                 usageAccessGranted = ForegroundAppTracker.refreshUsageAccess(context)
                 notificationAccessGranted = hasNotificationAccess(context)
                 overlayGranted = hasOverlayPermission(context)
-                accessibilityGranted = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
+                accessibilityGranted = DotAccessibilityService.isAccessibilityEnabled(context)
                 bluetoothGranted = SystemEventManager.hasBluetoothPermission(context)
                 photosGranted = ScreenshotPocketManager.hasPermission(context)
+                batteryUnrestricted = isIgnoringBatteryOptimizations(context)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ShizukuEarbudBattery.refreshStatus()
             }
         }
@@ -125,6 +187,23 @@ fun PermissionsSetupDialog(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
+
+    val optionalGrants = buildList {
+        add(usageAccessGranted)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(bluetoothGranted)
+        add(photosGranted)
+        add(batteryUnrestricted)
+    }
+    val health = buildSystemHealthSummary(
+        overlayEnabled = overlayEnabled,
+        accessibilityConnected = accessibilityConnected,
+        overlayServiceRunning = overlayServiceRunning,
+        accessibilityGranted = accessibilityGranted,
+        overlayGranted = overlayGranted,
+        notificationAccessGranted = notificationAccessGranted,
+        listenerConnected = listenerConnected,
+        optionalGrants = optionalGrants,
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -161,6 +240,11 @@ fun PermissionsSetupDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                SystemHealthSummaryCard(
+                    health = health,
+                    cutoutInfo = cutoutInfo,
+                )
+
                 Text(
                     text = "Grant notification access and overlay permissions to enable background tracking and on-screen controls.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -233,8 +317,28 @@ fun PermissionsSetupDialog(
                     description = "Automatically catch new screenshots in the island for 1-tap share, copy, or delete.",
                     icon = LarpIcons.PhotoLibrary,
                     isGranted = photosGranted,
+                    pendingStatus = "Optional",
                     onGrantClick = {
                         photosLauncher.launch(ScreenshotPocketManager.requiredPermission())
+                    },
+                )
+
+                // 6. Battery Optimization (Prevent OEM background termination)
+                PermissionSetupCard(
+                    title = "Unrestricted Battery",
+                    description = "Prevents Android from putting the Dynamic Island overlay or notification listener to sleep.",
+                    icon = LarpIcons.BatterySaver,
+                    isGranted = batteryUnrestricted,
+                    pendingStatus = "Recommended",
+                    grantLabel = "Open Battery Settings",
+                    onGrantClick = {
+                        val batteryIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        val fallbackIntent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            "package:${context.packageName}".toUri(),
+                        )
+                        runCatching { context.startActivity(batteryIntent) }
+                            .onFailure { runCatching { context.startActivity(fallbackIntent) } }
                     },
                 )
             }
@@ -250,6 +354,67 @@ fun PermissionsSetupDialog(
         shape = MaterialTheme.shapes.extraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
+}
+
+@Composable
+private fun SystemHealthSummaryCard(
+    health: SystemHealthSummary,
+    cutoutInfo: CutoutInfo?,
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val statusColor = if (health.isCoreReady) Color(0xFF00C853) else MaterialTheme.colorScheme.error
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = if (health.isCoreReady) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            } else {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (health.isCoreReady) "System Ready" else "Core Setup Needed",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = statusColor,
+                )
+                Text(
+                    text = "${health.grantedCount}/${health.totalCount} active",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = "Overlay: ${health.overlayEngineLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "Notifications: ${health.listenerLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (cutoutInfo != null) {
+                val diameterDp = ((cutoutInfo.radiusPx * 2f) / density.coerceAtLeast(1f)).roundToInt()
+                Text(
+                    text = "Cutout: ${diameterDp}dp @ (${cutoutInfo.centerX.roundToInt()}, ${cutoutInfo.centerY.roundToInt()} px)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 @Composable

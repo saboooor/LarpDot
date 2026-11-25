@@ -5,6 +5,17 @@ import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
+internal fun formatIslandTileSubtitle(
+    hasPermission: Boolean,
+    enabled: Boolean,
+    pausedByDnd: Boolean,
+): String = when {
+    !hasPermission -> "Permission needed"
+    !enabled -> "Hidden"
+    pausedByDnd -> "Paused (DND)"
+    else -> "Active"
+}
+
 /** Quick Settings tile to toggle the Dynamic Island overlay on or off without opening the app. */
 class IslandTileService : TileService() {
 
@@ -32,17 +43,20 @@ class IslandTileService : TileService() {
         val tile = qsTile ?: return
         val enabled = OverlayPreferences.isOverlayEnabled(this)
         val hasPermission = DotAccessibilityService.isServiceConnected.value || Settings.canDrawOverlays(this)
+        val pausedByDnd = enabled &&
+            OverlayPreferences.isHideInDndEnabled(this) &&
+            SystemEventManager.isDoNotDisturbActive.value
         tile.state = when {
             !hasPermission -> Tile.STATE_UNAVAILABLE
             enabled -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            tile.subtitle = when {
-                !hasPermission -> "Permission needed"
-                enabled -> "Active"
-                else -> "Hidden"
-            }
+            tile.subtitle = formatIslandTileSubtitle(
+                hasPermission = hasPermission,
+                enabled = enabled,
+                pausedByDnd = pausedByDnd,
+            )
         }
         tile.updateTile()
     }

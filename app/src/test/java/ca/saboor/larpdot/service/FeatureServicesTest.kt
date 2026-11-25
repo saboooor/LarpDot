@@ -479,4 +479,43 @@ class FeatureServicesTest {
         assertTrue(BatteryStatusFormatter.shouldResetLowBatteryAlert(isCharging = false, percent = 23, thresholdPercent = 20))
         assertFalse(BatteryStatusFormatter.shouldResetLowBatteryAlert(isCharging = false, percent = 22, thresholdPercent = 20))
     }
+
+    @Test fun islandTileAndSystemHealthSummariesClassifyAllStates() {
+        assertEquals("Permission needed", formatIslandTileSubtitle(hasPermission = false, enabled = true, pausedByDnd = false))
+        assertEquals("Hidden", formatIslandTileSubtitle(hasPermission = true, enabled = false, pausedByDnd = false))
+        assertEquals("Paused (DND)", formatIslandTileSubtitle(hasPermission = true, enabled = true, pausedByDnd = true))
+        assertEquals("Active", formatIslandTileSubtitle(hasPermission = true, enabled = true, pausedByDnd = false))
+
+        val ready = ca.saboor.larpdot.ui.components.buildSystemHealthSummary(
+            overlayEnabled = true,
+            accessibilityConnected = true,
+            overlayServiceRunning = false,
+            accessibilityGranted = true,
+            overlayGranted = true,
+            notificationAccessGranted = true,
+            listenerConnected = true,
+            optionalGrants = listOf(true, false, true),
+        )
+        assertTrue(ready.isCoreReady)
+        assertEquals("Accessibility (Shade & Lock)", ready.overlayEngineLabel)
+        assertEquals("Connected", ready.listenerLabel)
+        assertEquals(5, ready.grantedCount)
+        assertEquals(6, ready.totalCount)
+
+        val missing = ca.saboor.larpdot.ui.components.buildSystemHealthSummary(
+            overlayEnabled = true,
+            accessibilityConnected = false,
+            overlayServiceRunning = false,
+            accessibilityGranted = false,
+            overlayGranted = false,
+            notificationAccessGranted = false,
+            listenerConnected = false,
+            optionalGrants = listOf(false, false),
+        )
+        assertFalse(missing.isCoreReady)
+        assertEquals("Permission needed", missing.overlayEngineLabel)
+        assertEquals("Not granted", missing.listenerLabel)
+        assertEquals(0, missing.grantedCount)
+        assertEquals(5, missing.totalCount)
+    }
 }

@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.media.session.MediaSessionManager
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.graphics.createBitmap
@@ -14,6 +13,9 @@ import androidx.core.graphics.scale
 import androidx.core.os.BundleCompat
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.notification.NotificationActivityState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Service to listen for system notifications and active media sessions
@@ -46,6 +48,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        _isListenerConnected.value = true
         try {
             MediaPlaybackState.initialize(this)
             NotificationActivityState.initialize(this)
@@ -190,6 +193,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        _isListenerConnected.value = false
         NotificationActivityState.clear()
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
@@ -197,9 +201,15 @@ class NotificationAccessService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        _isListenerConnected.value = false
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
         } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    companion object {
+        private val _isListenerConnected = MutableStateFlow(false)
+        val isListenerConnected: StateFlow<Boolean> = _isListenerConnected.asStateFlow()
     }
 }
