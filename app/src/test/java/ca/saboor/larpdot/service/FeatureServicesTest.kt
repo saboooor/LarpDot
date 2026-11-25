@@ -546,4 +546,16 @@ class FeatureServicesTest {
             ),
         )
     }
+
+    @Test fun soundModeClassificationAndTitleParsingRoundTrip() {
+        val ring = classifySoundMode(android.media.AudioManager.RINGER_MODE_NORMAL)
+        val vibrate = classifySoundMode(android.media.AudioManager.RINGER_MODE_VIBRATE)
+        val silent = classifySoundMode(android.media.AudioManager.RINGER_MODE_SILENT)
+        assertEquals("Ring Mode", ring.first)
+        assertEquals("Vibrate Mode", vibrate.first)
+        assertEquals("Silent Mode", silent.first)
+        assertEquals(android.media.AudioManager.RINGER_MODE_NORMAL, ca.saboor.larpdot.ui.overlay.parseSoundModeFromTitle(ring.first))
+        assertEquals(android.media.AudioManager.RINGER_MODE_VIBRATE, ca.saboor.larpdot.ui.overlay.parseSoundModeFromTitle(vibrate.first))
+        assertEquals(android.media.AudioManager.RINGER_MODE_SILENT, ca.saboor.larpdot.ui.overlay.parseSoundModeFromTitle(silent.first))
+    }
 }

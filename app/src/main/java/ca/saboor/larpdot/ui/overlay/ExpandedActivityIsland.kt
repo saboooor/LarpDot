@@ -154,6 +154,7 @@ private data class ExpandedActivityLayoutModel(
     val hasNavRightContent: Boolean,
     val isScreenshot: Boolean,
     val isVolume: Boolean,
+    val isSoundMode: Boolean,
     val isQuickTimer: Boolean,
     val showProgressBar: Boolean,
     val hasFooter: Boolean,
@@ -168,6 +169,7 @@ private fun buildExpandedActivityLayoutModel(
 ): ExpandedActivityLayoutModel {
     val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
     val isVolume = activity.kind == NotificationActivityKind.VOLUME
+    val isSoundMode = activity.kind == NotificationActivityKind.SOUND_MODE
     val isQuickTimer = activity.key == QuickTimerManager.ACTIVITY_KEY
     val radialProgress = activityRadialProgress(activity, progressOutlineEnabled, primaryColor)
     val hasRadialGauge = radialProgress != null
@@ -181,7 +183,7 @@ private fun buildExpandedActivityLayoutModel(
     val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT &&
         (activity.mediaUri != null || !activity.heldText.isNullOrBlank())
     val showProgressBar = !isNavigation && !isVolume && activity.progressFraction != null && !hasRadialGauge
-    val hasFooter = showProgressBar || isScreenshot || isVolume || isQuickTimer || footerActions.isNotEmpty()
+    val hasFooter = showProgressBar || isScreenshot || isVolume || isSoundMode || isQuickTimer || footerActions.isNotEmpty()
     return ExpandedActivityLayoutModel(
         subtitle = activitySubtitle(activity),
         isNavigation = isNavigation,
@@ -193,6 +195,7 @@ private fun buildExpandedActivityLayoutModel(
         hasNavRightContent = navigationEta != null || inlineAction != null,
         isScreenshot = isScreenshot,
         isVolume = isVolume,
+        isSoundMode = isSoundMode,
         isQuickTimer = isQuickTimer,
         showProgressBar = showProgressBar,
         hasFooter = hasFooter,
@@ -296,6 +299,7 @@ internal fun expandedActivitySize(
         val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
         val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
         val volumeSectionHeight = if (model.isVolume) 56.dp else 0.dp
+        val soundModeSectionHeight = if (model.isSoundMode) 54.dp else 0.dp
         val quickTimerSectionHeight = if (model.isQuickTimer) 56.dp else 0.dp
         val bottomPadding = model.bottomPadding
         val headerBlockHeight = if (spanIconLeftOfCutout) {
@@ -313,9 +317,9 @@ internal fun expandedActivitySize(
         }
         val height = headerBlockHeight +
             (if (model.showProgressBar) 20.dp else 0.dp) +
-            previewHeight + pocketActionHeight + volumeSectionHeight + quickTimerSectionHeight +
+            previewHeight + pocketActionHeight + volumeSectionHeight + soundModeSectionHeight + quickTimerSectionHeight +
             (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
-        val effectiveWidth = if (model.isScreenshot || model.isVolume || model.isQuickTimer) {
+        val effectiveWidth = if (model.isScreenshot || model.isVolume || model.isSoundMode || model.isQuickTimer) {
             maxOf(width, 280.dp).coerceAtMost(maxWidth)
         } else {
             width
@@ -427,6 +431,10 @@ internal fun ExpandedNotificationActivityContent(
 
         if (model.isVolume) {
             ExpandedVolumeSection(activity = activity)
+        }
+
+        if (model.isSoundMode) {
+            ExpandedSoundModeSection(activity = activity)
         }
 
         if (model.isQuickTimer) {
@@ -798,6 +806,60 @@ private fun ExpandedVolumeSection(activity: NotificationActivityInfo) {
             ),
         )
     }
+}
+
+@Composable
+private fun ExpandedSoundModeSection(activity: NotificationActivityInfo) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val activeMode = parseSoundModeFromTitle(activity.title)
+    val choices = listOf(
+        Triple(android.media.AudioManager.RINGER_MODE_NORMAL, "Ring", LarpIcons.VolumeUp),
+        Triple(android.media.AudioManager.RINGER_MODE_VIBRATE, "Vibrate", LarpIcons.Vibration),
+        Triple(android.media.AudioManager.RINGER_MODE_SILENT, "Silent", LarpIcons.VolumeOff),
+    )
+    Spacer(Modifier.height(10.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        choices.forEach { (mode, label, icon) ->
+            val selected = activeMode == mode
+            val onClick = {
+                haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                SystemEventManager.setRingerMode(context, mode)
+                Unit
+            }
+            if (selected) {
+                Button(
+                    onClick = onClick,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                ) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = onClick,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                ) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+internal fun parseSoundModeFromTitle(title: String): Int = when {
+    title.contains("Silent", ignoreCase = true) -> android.media.AudioManager.RINGER_MODE_SILENT
+    title.contains("Vibrate", ignoreCase = true) -> android.media.AudioManager.RINGER_MODE_VIBRATE
+    else -> android.media.AudioManager.RINGER_MODE_NORMAL
 }
 
 @Composable

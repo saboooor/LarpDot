@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -110,7 +111,7 @@ internal fun Modifier.islandDragGestures(
                                 session.onSwipe?.invoke(x > 0f)
                             }
                         }
-                    } else if (!triggered && isCameraDotSwipeDown(x, y, density) && session.onDown != null) {
+                    } else if (!triggered && isCameraDotSwipeDown(x, y, density, OverlayPreferences.swipeDownSensitivityFlow.value) && session.onDown != null) {
                         triggered = true
                         change.consume()
                         session.onDown?.invoke()

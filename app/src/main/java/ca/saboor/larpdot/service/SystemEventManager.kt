@@ -131,11 +131,7 @@ object SystemEventManager {
                     lastRingerMode = currentMode
 
                     if (settings.soundMode) {
-                        val (title, text) = when (currentMode) {
-                            AudioManager.RINGER_MODE_SILENT -> "Silent Mode" to "Calls and alerts muted"
-                            AudioManager.RINGER_MODE_VIBRATE -> "Vibrate Mode" to "Calls and alerts will vibrate"
-                            else -> "Ring Mode" to "Calls and alerts will ring"
-                        }
+                        val (title, text) = classifySoundMode(currentMode)
                         postAlert(
                             key = "system_sound_mode",
                             title = title,
@@ -393,6 +389,39 @@ object SystemEventManager {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
+    }
+
+    /**
+     * Switches the device ringer mode directly from the expanded Sound Mode island.
+     * Falls back to DND policy settings if toggling Silent requires policy access.
+     */
+    fun setRingerMode(context: Context, ringerMode: Int): Boolean {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+        val changed = runCatching {
+            am.ringerMode = ringerMode
+            true
+        }.getOrElse { error ->
+            if (error is SecurityException) {
+                val policyIntent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                runCatching { context.startActivity(policyIntent) }
+                    .onFailure { openSoundSettings(context) }
+            }
+            false
+        }
+        if (!changed) return false
+        lastRingerMode = ringerMode
+        val settings = OverlayPreferences.notificationActivitySettingsFlow.value
+        val (title, text) = classifySoundMode(ringerMode)
+        postAlert(
+            key = "system_sound_mode",
+            title = title,
+            text = text,
+            kind = NotificationActivityKind.SOUND_MODE,
+            permanent = settings.permanentSoundMode,
+        )
+        return true
     }
 
     /** Refreshes currently connected Bluetooth devices (useful after granting Nearby Devices or pinning BT alerts). */
@@ -1024,4 +1053,10 @@ internal fun volumePercent(volume: Int, maxVolume: Int): Int {
     return ((volume.coerceIn(0, maxVolume).toFloat() / maxVolume.toFloat()) * 100f)
         .roundToInt()
         .coerceIn(0, 100)
+}
+
+internal fun classifySoundMode(ringerMode: Int): Pair<String, String> = when (ringerMode) {
+    AudioManager.RINGER_MODE_SILENT -> "Silent Mode" to "Calls and alerts muted"
+    AudioManager.RINGER_MODE_VIBRATE -> "Vibrate Mode" to "Calls and alerts will vibrate"
+    else -> "Ring Mode" to "Calls and alerts will ring"
 }
