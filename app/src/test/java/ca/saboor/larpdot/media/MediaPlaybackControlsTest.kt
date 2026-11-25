@@ -1,12 +1,16 @@
 package ca.saboor.larpdot.media
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.overlay.RotatedShape
 import ca.saboor.larpdot.ui.overlay.formatRemainingTime
 import ca.saboor.larpdot.ui.overlay.formatTime
 import ca.saboor.larpdot.ui.overlay.formatTotalDuration
 import ca.saboor.larpdot.ui.overlay.resolvePlaybackButtonVisuals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class MediaPlaybackControlsTest {
@@ -27,14 +31,24 @@ class MediaPlaybackControlsTest {
         assertEquals("0:00", formatTime(0L))
         assertEquals("0:00", formatTime(-4_000L))
         assertEquals("2:05", formatTime(125_000L))
+        assertEquals("1:15:04", formatTime(4_504_000L))
 
         assertEquals("-1:15", formatRemainingTime(45_000L, 120_000L))
+        assertEquals("-1:05:30", formatRemainingTime(300_000L, 4_230_000L))
         assertEquals("-0:00", formatRemainingTime(150_000L, 120_000L))
         assertEquals("--:--", formatRemainingTime(10_000L, 0L))
 
         assertEquals("3:45", formatTotalDuration(225_000L))
+        assertEquals("2:00:00", formatTotalDuration(7_200_000L))
         assertEquals("--:--", formatTotalDuration(0L))
         assertEquals("--:--", formatTotalDuration(-1_000L))
+    }
+
+    @Test
+    fun rotatedShapeSupportsStructuralEquality() {
+        val base = RoundedCornerShape(12.dp)
+        assertEquals(RotatedShape(base, 45f), RotatedShape(base, 45f))
+        assertNotEquals(RotatedShape(base, 45f), RotatedShape(base, 90f))
     }
 
     @Test

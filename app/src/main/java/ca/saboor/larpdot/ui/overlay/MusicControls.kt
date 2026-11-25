@@ -60,7 +60,7 @@ import ca.saboor.larpdot.ui.theme.LarpMotion
 /**
  * Resolves a Material 3 Expressive shape for nested album art presentation.
  */
-class RotatedShape(
+data class RotatedShape(
     private val baseShape: Shape,
     private val rotationDegrees: Float,
 ) : Shape {
@@ -214,19 +214,21 @@ internal fun MediaTimeLabel(
 }
 
 internal fun formatTime(ms: Long): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val min = totalSec / 60
-    val sec = totalSec % 60
-    return String.format(java.util.Locale.US, "%d:%02d", min, sec)
+    val totalSec = (ms / 1000L).coerceAtLeast(0L)
+    val hours = totalSec / 3600L
+    val min = (totalSec % 3600L) / 60L
+    val sec = totalSec % 60L
+    return if (hours > 0L) {
+        String.format(java.util.Locale.US, "%d:%02d:%02d", hours, min, sec)
+    } else {
+        String.format(java.util.Locale.US, "%d:%02d", min, sec)
+    }
 }
 
 internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
-    if (durationMs <= 0) return "--:--"
-    val remaining = (durationMs - positionMs).coerceAtLeast(0)
-    val totalSec = remaining / 1000
-    val min = totalSec / 60
-    val sec = totalSec % 60
-    return String.format(java.util.Locale.US, "-%d:%02d", min, sec)
+    if (durationMs <= 0L) return "--:--"
+    val remaining = (durationMs - positionMs).coerceAtLeast(0L)
+    return "-${formatTime(remaining)}"
 }
 
 internal fun formatTotalDuration(durationMs: Long): String {

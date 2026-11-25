@@ -3,7 +3,10 @@ package ca.saboor.larpdot.ui.screens
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
 import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -15,7 +18,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,8 +28,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -45,6 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.notification.NotificationActivityKind
+import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.QuickTimerManager
 import ca.saboor.larpdot.service.QuickTimerMode
@@ -451,6 +461,11 @@ fun LiveActivitiesScreen(
         }
 
         item {
+            SectionHeader(title = "Island Pocket")
+            IslandPocketCard(context = context)
+        }
+
+        item {
             SectionHeader(title = "Appearance")
             LarpCard {
                 ActivityToggleGrid(items = appearanceItems)
@@ -624,6 +639,169 @@ private fun QuickTimerCard() {
             },
             dismissButton = {
                 TextButton(onClick = { showCustomDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun IslandPocketCard(context: Context) {
+    val shortTerms by NotificationActivityState.shortTermActivities.collectAsState()
+    val pocketItems = remember(shortTerms) {
+        shortTerms.filter { it.kind == NotificationActivityKind.SCREENSHOT }
+    }
+    var showNoteDialog by remember { mutableStateOf(false) }
+    var noteTitle by remember { mutableStateOf("") }
+    var noteText by remember { mutableStateOf("") }
+
+    LarpCard {
+        Text(
+            text = "Pin clipboard snippets, links, or quick notes into your Dynamic Island for 1-tap copy and share.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val text = clipboard?.primaryClip
+                        ?.takeIf { it.itemCount > 0 }
+                        ?.getItemAt(0)
+                        ?.coerceToText(context)
+                        ?.toString()
+                        ?.trim()
+                        .orEmpty()
+                    if (text.isNotEmpty()) {
+                        ScreenshotPocketManager.holdSharedText(context, text)
+                        Toast.makeText(context, "Clipboard pinned to Island", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Clipboard has no text to pin", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Hold Clipboard", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            OutlinedButton(
+                onClick = {
+                    noteTitle = ""
+                    noteText = ""
+                    showNoteDialog = true
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(LarpIcons.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Quick Note", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (pocketItems.isNotEmpty()) {
+            LarpDivider()
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                pocketItems.forEach { item ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = LarpIcons.PushPin,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                item.text?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = { ScreenshotPocketManager.dismissHeldItem(item.key) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = LarpIcons.Close,
+                                    contentDescription = "Dismiss ${item.title}",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showNoteDialog) {
+        val cleanText = noteText.trim()
+        AlertDialog(
+            onDismissRequest = { showNoteDialog = false },
+            icon = { Icon(LarpIcons.PushPin, contentDescription = null) },
+            title = { Text("Pin note to Island") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = noteTitle,
+                        onValueChange = { if (it.length <= 40) noteTitle = it },
+                        label = { Text("Title (optional)") },
+                        placeholder = { Text("e.g. Gate B14, Verification Code") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { if (it.length <= 500) noteText = it },
+                        label = { Text("Note or link") },
+                        placeholder = { Text("Text or URL to hold in the island") },
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = cleanText.isNotEmpty(),
+                    onClick = {
+                        ScreenshotPocketManager.holdSharedText(
+                            context = context,
+                            text = cleanText,
+                            subject = noteTitle.ifBlank { null },
+                        )
+                        showNoteDialog = false
+                        Toast.makeText(context, "Pinned to Dynamic Island", Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Text("Pin")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoteDialog = false }) {
                     Text("Cancel")
                 }
             },
