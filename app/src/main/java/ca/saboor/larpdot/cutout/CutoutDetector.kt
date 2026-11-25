@@ -11,7 +11,6 @@ import android.view.RoundedCorner
 import android.view.Surface
 import android.view.WindowManager
 import ca.saboor.larpdot.service.OverlayPreferences
-import kotlin.math.abs
 
 data class CutoutInfo(
     val centerX: Float,
@@ -32,26 +31,83 @@ object CutoutDetector {
     fun detect(context: Context): CutoutInfo {
         val hw = detectHardwareCutout(context)
         val config = OverlayPreferences.getCutoutConfig(context)
-        if (!config.isManualEnabled) {
-            return hw
-        }
-
         val density = context.resources.displayMetrics.density
-        val rad = if (config.customDiameterDp > 0f) {
-            (config.customDiameterDp * density) / 2f
-        } else {
-            hw.radiusPx
-        }
+        return applyManualCutoutConfig(hw, config, density)
+    }
 
-        return hw.copy(
-            centerX = hw.centerX + (config.offsetX * density),
-            centerY = hw.centerY + (config.offsetY * density),
+    internal fun applyManualCutoutConfig(
+        hardware: CutoutInfo,
+        config: OverlayPreferences.CutoutConfig,
+        density: Float,
+    ): CutoutInfo {
+        if (!config.isManualEnabled) return hardware
+        val safeDensity = density.coerceAtLeast(0.5f)
+        val rad = if (config.customDiameterDp > 0f) {
+            (config.customDiameterDp * safeDensity) / 2f
+        } else {
+            hardware.radiusPx
+        }
+        return hardware.copy(
+            centerX = hardware.centerX + (config.offsetX * safeDensity),
+            centerY = hardware.centerY + (config.offsetY * safeDensity),
             radiusPx = rad,
             isAutoDetected = false,
             manualOffsetX = config.offsetX,
             manualOffsetY = config.offsetY,
             manualDiameterDp = config.customDiameterDp,
         )
+    }
+
+    internal fun computeFallbackCutoutCenter(
+        screenWidth: Float,
+        screenHeight: Float,
+        statusBarHeight: Float,
+        rotation: Int,
+        density: Float,
+    ): Pair<Float, Float> {
+        val edgeInset = (statusBarHeight / 2f).coerceAtLeast(24f * density)
+        val centerX = when (rotation) {
+            Surface.ROTATION_270 -> screenWidth - edgeInset
+            Surface.ROTATION_90 -> edgeInset
+            else -> screenWidth / 2f
+        }
+        val centerY = when (rotation) {
+            Surface.ROTATION_90, Surface.ROTATION_270 -> screenHeight / 2f
+            Surface.ROTATION_180 -> screenHeight - edgeInset
+            else -> statusBarHeight / 2f
+        }
+        return centerX to centerY
+    }
+
+    internal fun computeDetectedCutoutGeometry(
+        rawCenterX: Float,
+        rawCenterY: Float,
+        rawWidth: Float,
+        rawHeight: Float,
+        screenWidth: Float,
+        screenHeight: Float,
+        rotation: Int,
+        isLandscape: Boolean,
+        density: Float,
+        defaultRadius: Float,
+    ): Triple<Float, Float, Float> {
+        var cx = rawCenterX
+        var cy = rawCenterY
+        if (rotation == Surface.ROTATION_270) {
+            cx = maxOf(cx, screenWidth - cx)
+            if (cy < screenHeight / 4f || cy > screenHeight * 0.75f) {
+                cy = screenHeight / 2f
+            }
+        } else if (rotation == Surface.ROTATION_90 || isLandscape) {
+            cx = minOf(cx, screenWidth - cx)
+            if (cy < screenHeight / 4f || cy > screenHeight * 0.75f) {
+                cy = screenHeight / 2f
+            }
+        }
+        val dimension = if (rawWidth > 0f && rawHeight > 0f) minOf(rawWidth, rawHeight) else maxOf(rawWidth, rawHeight)
+        val computedRadius = (dimension / 2f).coerceIn(12f * density, 16f * density)
+        val rad = if (computedRadius > 0f) computedRadius else defaultRadius
+        return Triple(cx, cy, rad)
     }
 
     /**
@@ -107,16 +163,13 @@ object CutoutDetector {
         val displayCornerRadius = detectDisplayCornerRadius(displayContext)
         val defaultRadius = 16f * density
 
-        val defaultCenterX = when (rotation) {
-            Surface.ROTATION_270 -> screenWidth - (statusBarHeight / 2f).coerceAtLeast(24f * density)
-            Surface.ROTATION_90 -> (statusBarHeight / 2f).coerceAtLeast(24f * density)
-            else -> screenWidth / 2f
-        }
-        val defaultCenterY = when (rotation) {
-            Surface.ROTATION_90, Surface.ROTATION_270 -> screenHeight / 2f
-            Surface.ROTATION_180 -> screenHeight - (statusBarHeight / 2f).coerceAtLeast(24f * density)
-            else -> statusBarHeight / 2f
-        }
+        val (defaultCenterX, defaultCenterY) = computeFallbackCutoutCenter(
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            statusBarHeight = statusBarHeight,
+            rotation = rotation,
+            density = density,
+        )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val cutout: DisplayCutout? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -149,31 +202,18 @@ object CutoutDetector {
                 val targetRect = rects.minByOrNull { it.width() * it.height() } ?: rects.firstOrNull()
 
                 if (exactRect != null || (targetRect != null && !targetRect.isEmpty)) {
-                    var cx = exactRect?.centerX() ?: targetRect!!.centerX().toFloat()
-                    var cy = exactRect?.centerY() ?: targetRect!!.centerY().toFloat()
-                    val w = exactRect?.width() ?: targetRect!!.width().toFloat()
-                    val h = exactRect?.height() ?: targetRect!!.height().toFloat()
-
-                    // In landscape mode:
-                    // In ROTATION_90 (standard landscape): camera hole punch is physically on the left edge.
-                    // In ROTATION_270 (reverse landscape): camera hole punch is physically on the right edge.
-                    if (rotation == Surface.ROTATION_270) {
-                        cx = maxOf(cx, screenWidth - cx)
-                        if (cy < screenHeight / 4f || cy > screenHeight * 0.75f) {
-                            cy = screenHeight / 2f
-                        }
-                    } else if (rotation == Surface.ROTATION_90 || isLandscape) {
-                        cx = minOf(cx, screenWidth - cx)
-                        if (cy < screenHeight / 4f || cy > screenHeight * 0.75f) {
-                            cy = screenHeight / 2f
-                        }
-                    }
-
-                    // On punch-hole cutouts, one dimension often extends to the display edge (e.g. height from top=0),
-                    // so the smaller dimension represents the actual circular camera diameter.
-                    val dimension = if (w > 0f && h > 0f) minOf(w, h) else maxOf(w, h)
-                    val computedRadius = (dimension / 2f).coerceIn(12f * density, 16f * density)
-                    val rad = if (computedRadius > 0f) computedRadius else defaultRadius
+                    val (cx, cy, rad) = computeDetectedCutoutGeometry(
+                        rawCenterX = exactRect?.centerX() ?: targetRect!!.centerX().toFloat(),
+                        rawCenterY = exactRect?.centerY() ?: targetRect!!.centerY().toFloat(),
+                        rawWidth = exactRect?.width() ?: targetRect!!.width().toFloat(),
+                        rawHeight = exactRect?.height() ?: targetRect!!.height().toFloat(),
+                        screenWidth = screenWidth,
+                        screenHeight = screenHeight,
+                        rotation = rotation,
+                        isLandscape = isLandscape,
+                        density = density,
+                        defaultRadius = defaultRadius,
+                    )
 
                     return CutoutInfo(
                         centerX = cx,

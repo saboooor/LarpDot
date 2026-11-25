@@ -315,10 +315,16 @@ object MediaPlaybackState {
         val lastUpdate = state?.lastPositionUpdateTime ?: 0L
         val speed = if ((state?.playbackSpeed ?: 1f) > 0f) state?.playbackSpeed ?: 1f else 1f
         val calculatedPosition = if (isPlaying && lastUpdate > 0L) {
-            val elapsed = SystemClock.elapsedRealtime() - lastUpdate
+            val elapsed = (SystemClock.elapsedRealtime() - lastUpdate).coerceAtLeast(0L)
             (rawPosition + (elapsed * speed).toLong()).coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
         } else {
             rawPosition.coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
+        }
+
+        val resolvedAppName = if (samePlayer && !current.appName.isNullOrBlank()) {
+            current.appName
+        } else {
+            resolveAppName(controller.packageName)
         }
 
         val trackKey = "${title}_${artist}".trim()
@@ -340,7 +346,7 @@ object MediaPlaybackState {
                     title = title,
                     artist = artist,
                     album = album,
-                    appName = current.appName.takeIf { samePlayer },
+                    appName = resolvedAppName,
                     packageName = controller.packageName,
                 )
                 triggerSongAnnouncement()
@@ -385,7 +391,7 @@ object MediaPlaybackState {
             artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
             controller = controller,
             playerPackageName = controller.packageName,
-            appName = current.appName,
+            appName = resolvedAppName,
             sessionActions = sessionActions,
             isSimulated = false,
         )
@@ -462,8 +468,24 @@ object MediaPlaybackState {
         val notifTrackKey = "${newTitle}_${newArtist}".trim()
         if (current.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {
             lastAnnouncedTrackKey = notifTrackKey
+            MusicSleepTimer.onTrackChanged(notifTrackKey)
+            MediaPlaybackHistory.record(
+                title = newTitle,
+                artist = newArtist,
+                album = newAlbum,
+                appName = resolvedAppName,
+                packageName = newPackage,
+            )
             triggerSongAnnouncement()
         }
+    }
+
+    private fun resolveAppName(packageName: String?): String? {
+        if (packageName.isNullOrBlank()) return null
+        val pm = applicationContext?.packageManager ?: return null
+        return runCatching {
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+        }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     /** Returns the grace delay in ms after pausing, or null when set to keep visible until dismissed. */
@@ -520,11 +542,13 @@ object MediaPlaybackState {
             return
         }
         val controller = activeController ?: return
-        val state = controller.playbackState?.state
-        if (state == PlaybackState.STATE_PLAYING) {
-            controller.transportControls.pause()
-        } else {
-            controller.transportControls.play()
+        runCatching {
+            val state = controller.playbackState?.state
+            if (state == PlaybackState.STATE_PLAYING) {
+                controller.transportControls.pause()
+            } else {
+                controller.transportControls.play()
+            }
         }
     }
 
@@ -546,7 +570,7 @@ object MediaPlaybackState {
             triggerSongAnnouncement()
             return
         }
-        activeController?.transportControls?.skipToNext()
+        runCatching { activeController?.transportControls?.skipToNext() }
     }
 
     fun skipPrevious() {
@@ -567,7 +591,7 @@ object MediaPlaybackState {
             triggerSongAnnouncement()
             return
         }
-        activeController?.transportControls?.skipToPrevious()
+        runCatching { activeController?.transportControls?.skipToPrevious() }
     }
 
     const val DEFAULT_QUICK_SEEK_MS: Long = 10_000L
@@ -596,7 +620,7 @@ object MediaPlaybackState {
             _currentTrack.value = track.copy(positionMs = clamped)
             return
         }
-        activeController?.transportControls?.seekTo(clamped)
+        runCatching { activeController?.transportControls?.seekTo(clamped) }
     }
 
     fun performSessionAction(action: MediaSessionAction) {

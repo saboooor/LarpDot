@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.util.LruCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -44,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -51,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -148,16 +151,19 @@ fun AppBlacklistScreen(
         isLoading = false
     }
 
+    val iconCache = remember { LruCache<String, ImageBitmap>(120) }
+
     val filteredApps = remember(appList, searchQuery, currentFilter, blacklistedPackages) {
+        val trimmedQuery = searchQuery.trim()
         appList.filter { app ->
             val matchesFilter = when (currentFilter) {
                 BlacklistFilter.ALL -> true
                 BlacklistFilter.USER -> !app.isSystemApp
                 BlacklistFilter.BLACKLISTED -> blacklistedPackages.contains(app.packageName)
             }
-            val matchesQuery = searchQuery.isBlank() ||
-                    app.label.contains(searchQuery, ignoreCase = true) ||
-                    app.packageName.contains(searchQuery, ignoreCase = true)
+            val matchesQuery = trimmedQuery.isEmpty() ||
+                app.label.contains(trimmedQuery, ignoreCase = true) ||
+                app.packageName.contains(trimmedQuery, ignoreCase = true)
             matchesFilter && matchesQuery
         }
     }
@@ -359,7 +365,9 @@ fun AppBlacklistScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AppIcon(
+                                packageName = app.packageName,
                                 drawable = app.icon,
+                                iconCache = iconCache,
                                 label = app.label,
                                 modifier = Modifier
                                     .size(42.dp)
@@ -405,15 +413,21 @@ fun AppBlacklistScreen(
 
 @Composable
 private fun AppIcon(
+    packageName: String,
     drawable: Drawable?,
+    iconCache: LruCache<String, ImageBitmap>,
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap = remember(drawable) {
-        drawable?.let {
-            runCatching {
-                it.toBitmap(width = 96, height = 96).asImageBitmap()
-            }.getOrNull()
+    val cached = remember(packageName) { iconCache.get(packageName) }
+    val bitmap by produceState(initialValue = cached, key1 = packageName, key2 = drawable) {
+        if (value != null || drawable == null) return@produceState
+        val decoded = withContext(Dispatchers.Default) {
+            runCatching { drawable.toBitmap(width = 96, height = 96).asImageBitmap() }.getOrNull()
+        }
+        if (decoded != null) {
+            iconCache.put(packageName, decoded)
+            value = decoded
         }
     }
 
