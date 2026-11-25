@@ -20,7 +20,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -53,41 +55,54 @@ object ForegroundAppTracker {
         refreshUsageAccess(app)
         scope.launch {
             val usage = app.getSystemService(UsageStatsManager::class.java)
-            var cursor = 0L
-            var previouslyGranted = false
-            while (isActive) {
-                val granted = refreshUsageAccess(app)
-                if (previouslyGranted && !granted) _foregroundPackage.value = null
-                previouslyGranted = granted
-                val trackingNeeded = MediaPlaybackState.currentTrack.value.hasMedia && MediaPlaybackState.isMusicActive.value &&
-                    OverlayPreferences.hideMusicWhenAppOpenFlow.value && ScreenStateTracker.isScreenOn.value
-                if (granted && trackingNeeded && usage != null) {
-                    val now = System.currentTimeMillis()
-                    val start = if (cursor == 0L || cursor > now) now - 24 * 60 * 60 * 1000L else cursor
-                    try {
-                        val events = usage.queryEvents(start, now)
-                        val event = UsageEvents.Event()
-                        var foreground = _foregroundPackage.value
-                        while (events.hasNextEvent()) {
-                            events.getNextEvent(event)
-                            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED && accepted(event.packageName)) {
-                                foreground = event.packageName
-                            } else if (event.eventType == UsageEvents.Event.KEYGUARD_SHOWN) {
-                                foreground = null
-                            }
-                        }
-                        if (_hasUsageAccess.value) _foregroundPackage.value = foreground
-                        // Usage events can arrive late. Re-read the tail without publishing intermediate events.
-                        cursor = now - 5_000L
-                    } catch (_: Exception) {
-                        cursor = 0L
-                        _foregroundPackage.value = null
-                    }
-                } else {
-                    cursor = 0L
-                    if (!ScreenStateTracker.isScreenOn.value) _foregroundPackage.value = null
+            combine(
+                ScreenStateTracker.isScreenOn,
+                MediaPlaybackState.isMusicActive,
+                OverlayPreferences.hideMusicWhenAppOpenFlow,
+            ) { screenOn, musicActive, hideEnabled ->
+                screenOn to (screenOn && musicActive && hideEnabled)
+            }.distinctUntilChanged().collectLatest { (screenOn, trackingNeeded) ->
+                if (!screenOn) {
+                    _foregroundPackage.value = null
+                    return@collectLatest
                 }
-                delay(if (trackingNeeded) 500L else 2_000L)
+                if (!trackingNeeded || usage == null) {
+                    refreshUsageAccess(app)
+                    return@collectLatest
+                }
+                var cursor = 0L
+                var previouslyGranted = false
+                while (isActive) {
+                    val granted = refreshUsageAccess(app)
+                    if (previouslyGranted && !granted) _foregroundPackage.value = null
+                    previouslyGranted = granted
+                    if (granted && MediaPlaybackState.currentTrack.value.hasMedia) {
+                        val now = System.currentTimeMillis()
+                        val start = if (cursor == 0L || cursor > now) now - 24 * 60 * 60 * 1000L else cursor
+                        try {
+                            val events = usage.queryEvents(start, now)
+                            val event = UsageEvents.Event()
+                            var foreground = _foregroundPackage.value
+                            while (events.hasNextEvent()) {
+                                events.getNextEvent(event)
+                                if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED && accepted(event.packageName)) {
+                                    foreground = event.packageName
+                                } else if (event.eventType == UsageEvents.Event.KEYGUARD_SHOWN) {
+                                    foreground = null
+                                }
+                            }
+                            if (_hasUsageAccess.value) _foregroundPackage.value = foreground
+                            // Usage events can arrive late. Re-read the tail without publishing intermediate events.
+                            cursor = now - 5_000L
+                        } catch (_: Exception) {
+                            cursor = 0L
+                            _foregroundPackage.value = null
+                        }
+                    } else {
+                        cursor = 0L
+                    }
+                    delay(if (granted) 500L else 2_000L)
+                }
             }
         }
     }
@@ -111,9 +126,10 @@ object ForegroundAppTracker {
     fun openUsageAccessSettings(context: Context) {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:${context.packageName}".toUri())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try { context.startActivity(intent) }
-        catch (_: android.content.ActivityNotFoundException) {
-            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        runCatching { context.startActivity(intent) }.onFailure {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
         }
     }
 

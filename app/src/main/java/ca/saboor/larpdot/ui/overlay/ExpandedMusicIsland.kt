@@ -162,6 +162,7 @@ internal fun ExpandedIslandContent(
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     val sleepTimerState by MusicSleepTimer.state.collectAsState()
     val sleepTimerBadge = formatSleepTimerBadge(sleepTimerState)
+    val activeAudioOutput by AudioOutputTracker.activeOutput.collectAsState()
     val quickSeekSeconds by OverlayPreferences.musicQuickSeekSecondsFlow.collectAsState()
     LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
         if (mediaInfo.title.isNotBlank()) {
@@ -355,6 +356,7 @@ internal fun ExpandedIslandContent(
             accentColor = accentColor,
             currentBpm = currentBpm,
             sleepTimerBadge = sleepTimerBadge,
+            hasExternalAudioOutput = activeAudioOutput.isExternal,
             quickSeekStepMs = quickSeekSeconds.coerceIn(5, 60) * 1000L,
             trackInfoStyle = trackInfoStyle,
             fontStyle = fontStyle,
@@ -437,6 +439,7 @@ private class ExpandedLayoutParams(
     val accentColor: Color,
     val currentBpm: Float?,
     val sleepTimerBadge: String?,
+    val hasExternalAudioOutput: Boolean,
     val quickSeekStepMs: Long,
     val trackInfoStyle: OverlayPreferences.TrackInfoStyle,
     val fontStyle: OverlayPreferences.IslandFontStyle,
@@ -465,8 +468,11 @@ private class ExpandedLayoutParams(
     val showsTrackText get() = elementVisibility.trackInfo &&
         (trackInfoStyle.showTitle || (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) ||
             (trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()))
+    val hasTrackBadges get() = (elementVisibility.bpm && currentBpm != null) ||
+        sleepTimerBadge != null ||
+        hasExternalAudioOutput
     val showsTrackInfoWithBpm get() = showsTrackText ||
-        (elementVisibility.trackInfo && ((elementVisibility.bpm && currentBpm != null) || sleepTimerBadge != null))
+        (elementVisibility.trackInfo && hasTrackBadges)
     val sessionActions get() = if (elementVisibility.appActions) {
         mediaInfo.sessionActions.filter { it.iconResourceId != 0 && it.iconPackageName != null }
     } else emptyList()
@@ -932,6 +938,14 @@ private fun ExpandedTrackBadgesRow(p: ExpandedLayoutParams) {
                 },
             )
         }
+        if (p.hasExternalAudioOutput) {
+            AudioOutputChip(
+                onClick = {
+                    AudioOutputTracker.openOutputSwitcher(p.context)
+                    p.onCollapse()
+                },
+            )
+        }
     }
 }
 
@@ -1217,7 +1231,7 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 artistAlpha = 0.72f,
                 titleArtistSpacing = 2.dp,
                 textAlign = TextAlign.Start,
-                bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
+                bpmChip = if (p.hasTrackBadges) {
                     { ExpandedTrackBadgesRow(p) }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
@@ -1332,7 +1346,7 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 artistTextStyle = MaterialTheme.typography.bodyMedium,
                 artistAlpha = 0.62f,
                 titleArtistSpacing = 3.dp,
-                bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
+                bpmChip = if (p.hasTrackBadges) {
                     { ExpandedTrackBadgesRow(p) }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },

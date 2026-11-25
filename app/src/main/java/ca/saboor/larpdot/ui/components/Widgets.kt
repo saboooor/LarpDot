@@ -87,6 +87,7 @@ fun LarpCard(
             shape = shape,
             colors = CardDefaults.elevatedCardColors(containerColor = containerColor),
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp),
+            interactionSource = interaction,
         ) {
             Column(
                 modifier = Modifier.padding(18.dp),
@@ -140,6 +141,7 @@ fun AccentCard(
         shape = shape,
         border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f)),
         colors = CardDefaults.cardColors(containerColor = containerColor),
+        interactionSource = interaction,
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
