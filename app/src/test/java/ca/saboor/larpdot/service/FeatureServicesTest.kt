@@ -185,6 +185,7 @@ class FeatureServicesTest {
             activityScreenshotPocket = true,
             activityChargeLimitAlert = true,
             activityChargeLimitPercent = 85,
+            activityLowBatteryThresholdPercent = 25,
             activityPermanentCharging = true,
             activityPermanentLowBattery = false,
             activityPermanentSoundMode = true,
@@ -464,5 +465,18 @@ class FeatureServicesTest {
         assertEquals(100, volumePercent(15, 15))
         assertEquals(100, volumePercent(20, 15))
         assertEquals(0, volumePercent(5, 0))
+    }
+
+    @Test fun lowBatteryThresholdTriggersAndResetsWithHysteresis() {
+        assertTrue(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = false, percent = 20, thresholdPercent = 20, alreadyNotified = false))
+        assertTrue(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = false, percent = 14, thresholdPercent = 20, alreadyNotified = false))
+        assertFalse(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = true, percent = 15, thresholdPercent = 20, alreadyNotified = false))
+        assertFalse(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = false, percent = 21, thresholdPercent = 20, alreadyNotified = false))
+        assertFalse(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = false, percent = 15, thresholdPercent = 20, alreadyNotified = true))
+        assertFalse(BatteryStatusFormatter.shouldTriggerLowBattery(isCharging = false, percent = 0, thresholdPercent = 20, alreadyNotified = false))
+
+        assertTrue(BatteryStatusFormatter.shouldResetLowBatteryAlert(isCharging = true, percent = 10, thresholdPercent = 20))
+        assertTrue(BatteryStatusFormatter.shouldResetLowBatteryAlert(isCharging = false, percent = 23, thresholdPercent = 20))
+        assertFalse(BatteryStatusFormatter.shouldResetLowBatteryAlert(isCharging = false, percent = 22, thresholdPercent = 20))
     }
 }

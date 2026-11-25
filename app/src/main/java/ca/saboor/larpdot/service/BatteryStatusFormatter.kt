@@ -77,4 +77,17 @@ object BatteryStatusFormatter {
         limitPercent: Int,
         alreadyNotified: Boolean,
     ): Boolean = isCharging && !alreadyNotified && percent >= limitPercent.coerceIn(50, 100)
+
+    fun shouldTriggerLowBattery(
+        isCharging: Boolean,
+        percent: Int,
+        thresholdPercent: Int,
+        alreadyNotified: Boolean,
+    ): Boolean = !isCharging && !alreadyNotified && percent in 1..thresholdPercent.coerceIn(5, 35)
+
+    fun shouldResetLowBatteryAlert(
+        isCharging: Boolean,
+        percent: Int,
+        thresholdPercent: Int,
+    ): Boolean = isCharging || percent >= thresholdPercent.coerceIn(5, 35) + 3
 }

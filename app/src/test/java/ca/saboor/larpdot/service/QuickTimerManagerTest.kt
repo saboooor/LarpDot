@@ -24,4 +24,13 @@ class QuickTimerManagerTest {
         assertEquals(0, computeQuickTimerRemainingProgress(-5_000L, 60_000L))
         assertEquals(100, computeQuickTimerRemainingProgress(90_000L, 60_000L))
     }
+
+    @Test
+    fun formatCountdownTitleHandlesSecondsMinutesAndCustomLabels() {
+        assertEquals("45s Timer", formatCountdownTitle(45))
+        assertEquals("5m Timer", formatCountdownTitle(300))
+        assertEquals("2m 30s Timer", formatCountdownTitle(150))
+        assertEquals("Pomodoro", formatCountdownTitle(1500, "  Pomodoro  "))
+        assertEquals("30s Timer", formatCountdownTitle(30, "   "))
+    }
 }

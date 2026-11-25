@@ -72,6 +72,8 @@ object SystemEventManager {
     private var lastNonZeroMusicVolume: Int = 1
     private var isChargingActive = false
     private var chargeLimitNotifiedForSession = false
+    private var lowBatteryNotifiedForSession = false
+    private var lastLowBatteryPercent = -1
     private var lastChargingPercent = -1
     private var lastChargingWarmState = false
 
@@ -108,18 +110,14 @@ object SystemEventManager {
                 Intent.ACTION_BATTERY_LOW -> {
                     if (settings.batteryLow) {
                         val pct = getBatteryPercentage(context)
-                        postAlert(
-                            key = "system_battery_low",
-                            title = "Low Battery",
-                            text = if (pct > 0) "$pct% remaining • Connect charger" else "Battery is running low",
-                            kind = NotificationActivityKind.BATTERY_LOW,
-                            permanent = settings.permanentLowBattery,
-                            progress = pct.takeIf { it > 0 },
-                            progressMax = 100,
-                        )
+                        lowBatteryNotifiedForSession = true
+                        lastLowBatteryPercent = pct
+                        postLowBatteryAlert(pct, settings.permanentLowBattery)
                     }
                 }
                 Intent.ACTION_BATTERY_OKAY -> {
+                    lowBatteryNotifiedForSession = false
+                    lastLowBatteryPercent = -1
                     dismissAlert("system_battery_low")
                 }
                 AudioManager.RINGER_MODE_CHANGED_ACTION -> {
@@ -437,9 +435,36 @@ object SystemEventManager {
                 chargeLimitNotifiedForSession = false
                 lastChargingPercent = -1
             }
+            if (BatteryStatusFormatter.shouldResetLowBatteryAlert(false, pct, settings.lowBatteryThresholdPercent)) {
+                if (lowBatteryNotifiedForSession) {
+                    lowBatteryNotifiedForSession = false
+                    lastLowBatteryPercent = -1
+                    dismissAlert("system_battery_low")
+                }
+            } else if (settings.batteryLow) {
+                if (BatteryStatusFormatter.shouldTriggerLowBattery(
+                        isCharging = false,
+                        percent = pct,
+                        thresholdPercent = settings.lowBatteryThresholdPercent,
+                        alreadyNotified = lowBatteryNotifiedForSession,
+                    )
+                ) {
+                    lowBatteryNotifiedForSession = true
+                    lastLowBatteryPercent = pct
+                    postLowBatteryAlert(pct, settings.permanentLowBattery)
+                } else if (settings.permanentLowBattery && lowBatteryNotifiedForSession && pct != lastLowBatteryPercent && pct > 0) {
+                    lastLowBatteryPercent = pct
+                    postLowBatteryAlert(pct, permanent = true)
+                }
+            }
             return
         }
         isChargingActive = true
+        if (lowBatteryNotifiedForSession) {
+            lowBatteryNotifiedForSession = false
+            lastLowBatteryPercent = -1
+            dismissAlert("system_battery_low")
+        }
 
         // Smart charge limit / battery full alert (fires once per charging session).
         if (settings.chargeLimitAlert && BatteryStatusFormatter.shouldTriggerChargeLimit(
@@ -475,6 +500,18 @@ object SystemEventManager {
             lastChargingWarmState = isWarm
             postChargingAlert(context, permanent = true, batteryIntent = intent)
         }
+    }
+
+    private fun postLowBatteryAlert(percent: Int, permanent: Boolean) {
+        postAlert(
+            key = "system_battery_low",
+            title = "Low Battery",
+            text = if (percent > 0) "$percent% remaining • Connect charger" else "Battery is running low",
+            kind = NotificationActivityKind.BATTERY_LOW,
+            permanent = permanent,
+            progress = percent.takeIf { it > 0 },
+            progressMax = 100,
+        )
     }
 
     private fun postChargingAlert(

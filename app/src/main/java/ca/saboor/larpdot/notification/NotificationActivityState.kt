@@ -57,6 +57,7 @@ data class NotificationActivitySettings(
     val screenshotPocket: Boolean = true,
     val chargeLimitAlert: Boolean = false,
     val chargeLimitPercent: Int = 80,
+    val lowBatteryThresholdPercent: Int = 15,
     val permanentShortTerm: Boolean = false,
     val permanentCharging: Boolean = permanentShortTerm,
     val permanentLowBattery: Boolean = permanentShortTerm,

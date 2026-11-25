@@ -49,5 +49,6 @@ class LarpDotApplication : Application() {
         ca.saboor.larpdot.service.AudioOutputTracker.init(this)
         ca.saboor.larpdot.service.SystemEventManager.init(this)
         ca.saboor.larpdot.service.ScreenshotPocketManager.init(this)
+        ca.saboor.larpdot.service.QuickTimerManager.init(this)
     }
 }

@@ -28,6 +28,7 @@ internal object ActivityAndBlacklistPrefsStore {
     private const val KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED = "notification_screenshot_pocket_enabled"
     private const val KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED = "notification_charge_limit_alert_enabled"
     private const val KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT = "notification_charge_limit_percent"
+    private const val KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT = "notification_low_battery_threshold_percent"
     private const val KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED = "notification_permanent_short_term_enabled"
     private const val KEY_NOTIFICATION_EXPAND_SHORT_TERM = "notification_expand_short_term"
     private const val KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED = "notification_progress_outline_enabled"
@@ -71,6 +72,7 @@ internal object ActivityAndBlacklistPrefsStore {
                 screenshotPocket = prefs.getBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, true),
                 chargeLimitAlert = prefs.getBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, false),
                 chargeLimitPercent = prefs.getInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, 80).coerceIn(50, 100),
+                lowBatteryThresholdPercent = prefs.getInt(KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT, 15).coerceIn(10, 30),
                 permanentShortTerm = defaultPermanent,
                 permanentCharging = prefs.getBoolean("permanent_charging", defaultPermanent),
                 permanentLowBattery = prefs.getBoolean("permanent_lowbattery", defaultPermanent),
@@ -108,6 +110,7 @@ internal object ActivityAndBlacklistPrefsStore {
             putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
             putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
             putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
+            putInt(KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT, settings.lowBatteryThresholdPercent.coerceIn(10, 30))
             putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
             putBoolean("permanent_charging", settings.permanentCharging)
             putBoolean("permanent_lowbattery", settings.permanentLowBattery)

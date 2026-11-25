@@ -114,6 +114,7 @@ data class IslandBackupConfig(
     val activityScreenshotPocket: Boolean = true,
     val activityChargeLimitAlert: Boolean = false,
     val activityChargeLimitPercent: Int = 80,
+    val activityLowBatteryThresholdPercent: Int = 15,
     val activityPermanentCharging: Boolean = false,
     val activityPermanentLowBattery: Boolean = false,
     val activityPermanentSoundMode: Boolean = false,
@@ -586,6 +587,7 @@ object IslandThemePresets {
             add("activityScreenshotPocket" to config.activityScreenshotPocket.toString())
             add("activityChargeLimitAlert" to config.activityChargeLimitAlert.toString())
             add("activityChargeLimitPercent" to config.activityChargeLimitPercent.toString())
+            add("activityLowBatteryThresholdPercent" to config.activityLowBatteryThresholdPercent.toString())
             add("activityPermanentCharging" to config.activityPermanentCharging.toString())
             add("activityPermanentLowBattery" to config.activityPermanentLowBattery.toString())
             add("activityPermanentSoundMode" to config.activityPermanentSoundMode.toString())
@@ -728,6 +730,8 @@ object IslandThemePresets {
             activityScreenshotPocket = fields["activityScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityScreenshotPocket,
             activityChargeLimitAlert = fields["activityChargeLimitAlert"]?.toBooleanStrictOrNull() ?: defaults.activityChargeLimitAlert,
             activityChargeLimitPercent = (fields["activityChargeLimitPercent"]?.toIntOrNull() ?: defaults.activityChargeLimitPercent).coerceIn(70, 100),
+            activityLowBatteryThresholdPercent = (fields["activityLowBatteryThresholdPercent"]?.toIntOrNull()
+                ?: defaults.activityLowBatteryThresholdPercent).coerceIn(10, 30),
             activityPermanentCharging = fields["activityPermanentCharging"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentCharging,
             activityPermanentLowBattery = fields["activityPermanentLowBattery"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentLowBattery,
             activityPermanentSoundMode = fields["activityPermanentSoundMode"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentSoundMode,
@@ -871,6 +875,7 @@ object IslandThemePresets {
             activityScreenshotPocket = activities.screenshotPocket,
             activityChargeLimitAlert = activities.chargeLimitAlert,
             activityChargeLimitPercent = activities.chargeLimitPercent,
+            activityLowBatteryThresholdPercent = activities.lowBatteryThresholdPercent,
             activityPermanentCharging = activities.permanentCharging,
             activityPermanentLowBattery = activities.permanentLowBattery,
             activityPermanentSoundMode = activities.permanentSoundMode,
@@ -941,6 +946,7 @@ object IslandThemePresets {
                 screenshotPocket = config.activityScreenshotPocket,
                 chargeLimitAlert = config.activityChargeLimitAlert,
                 chargeLimitPercent = config.activityChargeLimitPercent,
+                lowBatteryThresholdPercent = config.activityLowBatteryThresholdPercent,
                 permanentCharging = config.activityPermanentCharging,
                 permanentLowBattery = config.activityPermanentLowBattery,
                 permanentSoundMode = config.activityPermanentSoundMode,

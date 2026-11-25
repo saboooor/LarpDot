@@ -18,14 +18,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -155,7 +160,7 @@ fun LiveActivitiesScreen(
         ),
         ActivityToggleItem(
             title = "Low Battery",
-            subtitle = "Low power alert",
+            subtitle = "Alert at ${settings.lowBatteryThresholdPercent}%",
             icon = LarpIcons.BatteryAlert,
             checked = settings.batteryLow,
             onCheckedChange = {
@@ -391,6 +396,30 @@ fun LiveActivitiesScreen(
                 ActivityToggleGrid(items = shortTermItems)
 
                 AnimatedVisibility(
+                    visible = settings.batteryLow,
+                    enter = LarpMotion.reveal,
+                    exit = LarpMotion.conceal,
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LarpDivider()
+                        LarpSliderRow(
+                            title = "Low battery alert threshold",
+                            valueLabel = "${settings.lowBatteryThresholdPercent}%",
+                            value = settings.lowBatteryThresholdPercent.toFloat(),
+                            valueRange = 10f..30f,
+                            steps = 3,
+                            onValueChange = { raw ->
+                                val snapped = ((raw / 5f).roundToInt() * 5).coerceIn(10, 30)
+                                OverlayPreferences.setNotificationActivitySettings(
+                                    context,
+                                    settings.copy(lowBatteryThresholdPercent = snapped),
+                                )
+                            },
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
                     visible = settings.chargeLimitAlert,
                     enter = LarpMotion.reveal,
                     exit = LarpMotion.conceal,
@@ -433,7 +462,11 @@ fun LiveActivitiesScreen(
 @Composable
 private fun QuickTimerCard() {
     val timerState by QuickTimerManager.state.collectAsState()
-    val presets = listOf(1, 3, 5, 10, 15)
+    val presets = listOf(1, 3, 5, 10, 15, 25)
+    var showCustomDialog by remember { mutableStateOf(false) }
+    var customMinutesText by remember { mutableStateOf("2") }
+    var customSecondsText by remember { mutableStateOf("30") }
+    var customLabelText by remember { mutableStateOf("") }
 
     LarpCard {
         Text(
@@ -458,11 +491,19 @@ private fun QuickTimerCard() {
                     label = "${minutes}m",
                     onCheckedChange = { QuickTimerManager.startCountdown(minutes) },
                 )
-            } + LarpButtonOption(
-                checked = (timerState as? QuickTimerState.Running)?.mode == QuickTimerMode.STOPWATCH,
-                label = "Watch",
-                onCheckedChange = { QuickTimerManager.startStopwatch() },
+            } + listOf(
+                LarpButtonOption(
+                    checked = false,
+                    label = "Custom",
+                    onCheckedChange = { showCustomDialog = true },
+                ),
+                LarpButtonOption(
+                    checked = (timerState as? QuickTimerState.Running)?.mode == QuickTimerMode.STOPWATCH,
+                    label = "Watch",
+                    onCheckedChange = { QuickTimerManager.startStopwatch() },
+                ),
             ),
+            maxButtonsPerRow = 4,
         )
 
         if (timerState !is QuickTimerState.Idle) {
@@ -513,6 +554,80 @@ private fun QuickTimerCard() {
                 }
             }
         }
+    }
+
+    if (showCustomDialog) {
+        val mins = customMinutesText.toIntOrNull()?.coerceIn(0, 240) ?: 0
+        val secs = customSecondsText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        val totalSeconds = mins * 60 + secs
+        AlertDialog(
+            onDismissRequest = { showCustomDialog = false },
+            icon = { Icon(LarpIcons.Timer, contentDescription = null) },
+            title = { Text("Custom timer") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = customMinutesText,
+                            onValueChange = { input ->
+                                customMinutesText = input.filter(Char::isDigit).take(3)
+                            },
+                            label = { Text("Min") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = customSecondsText,
+                            onValueChange = { input ->
+                                customSecondsText = input.filter(Char::isDigit).take(2)
+                            },
+                            label = { Text("Sec") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    OutlinedTextField(
+                        value = customLabelText,
+                        onValueChange = { if (it.length <= 24) customLabelText = it },
+                        label = { Text("Label (optional)") },
+                        placeholder = { Text("e.g. Tea, Pomodoro") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (totalSeconds in 1..4) {
+                        Text(
+                            text = "Minimum timer duration is 5 seconds",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = totalSeconds >= 5,
+                    onClick = {
+                        QuickTimerManager.startCountdownSeconds(
+                            totalSeconds = totalSeconds,
+                            label = customLabelText.ifBlank { null },
+                        )
+                        showCustomDialog = false
+                    },
+                ) {
+                    Text("Start")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
