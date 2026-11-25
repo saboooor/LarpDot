@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -142,7 +143,7 @@ object MediaPlaybackState {
     private var sessionMetadata: MediaMetadata? = null
     private var sessionArtwork: Bitmap? = null
 
-    private val playbackScope = CoroutineScope(Dispatchers.Main)
+    private val playbackScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressTickerJob: Job? = null
     private var artworkUpdateJob: Job? = null
     private var lastArtworkCandidate: Bitmap? = null
@@ -562,15 +563,33 @@ object MediaPlaybackState {
         activeController?.transportControls?.skipToPrevious()
     }
 
+    const val DEFAULT_QUICK_SEEK_MS: Long = 10_000L
+
+    internal fun computeSeekTarget(currentMs: Long, deltaMs: Long, durationMs: Long): Long {
+        val safeCurrent = currentMs.coerceAtLeast(0L)
+        val rawTarget = safeCurrent + deltaMs
+        return if (durationMs > 0L) rawTarget.coerceIn(0L, durationMs) else rawTarget.coerceAtLeast(0L)
+    }
+
+    fun seekBy(deltaMs: Long) {
+        val track = _currentTrack.value
+        val target = computeSeekTarget(_positionMs.value, deltaMs, track.durationMs)
+        seekTo(target)
+    }
+
     fun seekTo(positionMs: Long) {
         val track = _currentTrack.value
-        val clamped = positionMs.coerceIn(0L, track.durationMs.coerceAtLeast(0L))
+        val clamped = if (track.durationMs > 0L) {
+            positionMs.coerceIn(0L, track.durationMs)
+        } else {
+            positionMs.coerceAtLeast(0L)
+        }
         _positionMs.value = clamped
         if (track.isSimulated) {
             _currentTrack.value = track.copy(positionMs = clamped)
             return
         }
-        activeController?.transportControls?.seekTo(positionMs)
+        activeController?.transportControls?.seekTo(clamped)
     }
 
     fun performSessionAction(action: MediaSessionAction) {

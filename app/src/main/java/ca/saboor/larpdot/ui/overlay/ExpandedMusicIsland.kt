@@ -11,10 +11,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -866,14 +868,22 @@ private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = 
         fontFamily = p.fontStyle.fontFamily,
         fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
     )
+    var showTotalDuration by remember { mutableStateOf(false) }
     val elapsed: @Composable () -> Unit = {
         MediaTimeLabel(positionState = p.livePositionMs, format = ::formatTime, style = timeTextStyle)
     }
-    val remaining: @Composable () -> Unit = {
+    val trailingTime: @Composable () -> Unit = {
         MediaTimeLabel(
             positionState = p.livePositionMs,
-            format = { position -> formatRemainingTime(position, p.mediaInfo.durationMs) },
+            format = { position ->
+                if (showTotalDuration) formatTotalDuration(p.mediaInfo.durationMs)
+                else formatRemainingTime(position, p.mediaInfo.durationMs)
+            },
             style = timeTextStyle,
+            onClick = {
+                p.hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                showTotalDuration = !showTotalDuration
+            },
         )
     }
 
@@ -885,7 +895,7 @@ private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = 
         ) {
             elapsed()
             bar(Modifier.weight(1f))
-            remaining()
+            trailingTime()
         }
     } else {
         Column(modifier = modifier) {
@@ -895,12 +905,42 @@ private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = 
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 elapsed()
-                remaining()
+                trailingTime()
             }
         }
     }
 }
 
+@Composable
+private fun ExpandedTrackBadgesRow(p: ExpandedLayoutParams) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (p.elementVisibility.bpm && p.currentBpm != null) {
+            BpmChip(bpm = p.currentBpm)
+        }
+        if (p.sleepTimerBadge != null) {
+            SleepTimerChip(
+                label = p.sleepTimerBadge,
+                onClick = {
+                    p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
+                    MusicSleepTimer.cancel()
+                },
+            )
+        }
+    }
+}
+
+private fun quickSeekHandler(p: ExpandedLayoutParams, deltaMs: Long): (() -> Unit)? =
+    if (p.onPlaybackControlsClick == null && p.mediaInfo.durationMs > 0L) {
+        {
+            p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
+            MediaPlaybackState.seekBy(deltaMs)
+        }
+    } else null
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
     val showTimestampedProgress = p.elementVisibility.progress &&
@@ -1010,26 +1050,16 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 if (p.elementVisibility.visualizer && p.elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
                 if (p.elementVisibility.mainControls) {
                     val style = p.playbackControlsStyle
-                    val playOuter = style.cornerRadiusDp.dp
-                    val playInner = (style.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
-                    val playShape = RoundedCornerShape(if (style.material3ButtonGroup) playInner else playOuter)
-                    val playBgColor = if (style.playPauseBackground) {
-                        if (style.playPauseAccentColor) p.accentColor else Color.White.copy(alpha = 0.94f)
-                    } else Color.Transparent
-                    val playIconTint = playPauseIconTint(
-                        hasBackground = style.playPauseBackground,
-                        useAccentColor = style.playPauseAccentColor,
-                        accentColor = p.accentColor,
-                    )
+                    val visuals = resolvePlaybackButtonVisuals(style, p.accentColor)
                     Surface(
                         onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
-                        shape = playShape,
-                        color = playBgColor,
+                        shape = visuals.playShape,
+                        color = visuals.playBgColor,
                         modifier = Modifier
                             .width(64.dp)
                             .height(46.dp)
                             .then(
-                                if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, playShape)
+                                if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, visuals.playShape)
                                 else Modifier
                             )
                             .graphicsLayer {
@@ -1042,7 +1072,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                         Box(contentAlignment = Alignment.Center) {
                             PlaybackIcon(
                                 playing = p.mediaInfo.isPlaying,
-                                tint = playIconTint,
+                                tint = visuals.playTint,
                                 size = 26.dp,
                             )
                         }
@@ -1060,25 +1090,20 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             } else Arrangement.Start,
         ) {
-            val style = p.playbackControlsStyle
-            val skipOuter = style.cornerRadiusDp.dp
-            val skipInner = (style.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
-            val prevShape = if (style.material3ButtonGroup) {
-                RoundedCornerShape(topStart = skipOuter, bottomStart = skipOuter, topEnd = skipInner, bottomEnd = skipInner)
-            } else RoundedCornerShape(skipOuter)
-            val nextShape = if (style.material3ButtonGroup) {
-                RoundedCornerShape(topStart = skipInner, bottomStart = skipInner, topEnd = skipOuter, bottomEnd = skipOuter)
-            } else RoundedCornerShape(skipOuter)
-            val skipBgColor = if (style.skipBackground) Color.White.copy(alpha = 0.14f) else Color.Transparent
+            val visuals = resolvePlaybackButtonVisuals(p.playbackControlsStyle, p.accentColor)
 
             if (p.elementVisibility.mainControls) Surface(
-                onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
-                shape = prevShape,
-                color = skipBgColor,
+                shape = visuals.prevShape,
+                color = visuals.skipBgColor,
                 modifier = Modifier
                     .size(36.dp)
+                    .clip(visuals.prevShape)
+                    .combinedClickable(
+                        onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
+                        onLongClick = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                    )
                     .then(
-                        if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, prevShape)
+                        if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, visuals.prevShape)
                         else Modifier
                     ),
             ) {
@@ -1095,13 +1120,17 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
             if (showInlineProgress) ExpandedTrackProgress(p, Modifier.weight(1f).padding(horizontal = 4.dp))
 
             if (p.elementVisibility.mainControls) Surface(
-                onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
-                shape = nextShape,
-                color = skipBgColor,
+                shape = visuals.nextShape,
+                color = visuals.skipBgColor,
                 modifier = Modifier
                     .size(36.dp)
+                    .clip(visuals.nextShape)
+                    .combinedClickable(
+                        onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+                        onLongClick = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                    )
                     .then(
-                        if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, nextShape)
+                        if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, visuals.nextShape)
                         else Modifier
                     ),
             ) {
@@ -1186,25 +1215,7 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 titleArtistSpacing = 2.dp,
                 textAlign = TextAlign.Start,
                 bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
-                    {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (p.elementVisibility.bpm && p.currentBpm != null) {
-                                BpmChip(bpm = p.currentBpm)
-                            }
-                            if (p.sleepTimerBadge != null) {
-                                SleepTimerChip(
-                                    label = p.sleepTimerBadge,
-                                    onClick = {
-                                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
-                                        MusicSleepTimer.cancel()
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    { ExpandedTrackBadgesRow(p) }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
@@ -1240,6 +1251,8 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
             onPrevious = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
             onPlayPause = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
             onNext = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+            onLongPressPrevious = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+            onLongPressNext = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
             highlight = p.highlightPlaybackControls,
         )
 
@@ -1317,25 +1330,7 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 artistAlpha = 0.62f,
                 titleArtistSpacing = 3.dp,
                 bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
-                    {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (p.elementVisibility.bpm && p.currentBpm != null) {
-                                BpmChip(bpm = p.currentBpm)
-                            }
-                            if (p.sleepTimerBadge != null) {
-                                SleepTimerChip(
-                                    label = p.sleepTimerBadge,
-                                    onClick = {
-                                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
-                                        MusicSleepTimer.cancel()
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    { ExpandedTrackBadgesRow(p) }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
@@ -1376,6 +1371,8 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 onPrevious = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
                 onPlayPause = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
                 onNext = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
+                onLongPressPrevious = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                onLongPressNext = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
                 highlight = p.highlightPlaybackControls,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -1388,6 +1385,7 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                     buttonSize = 38.dp,
                     iconSize = 19.dp,
                     inactiveAlpha = 0.72f,
+                    hapticFeedback = p.hapticFeedback,
                     modifier = Modifier.align(if (index == 0) Alignment.CenterStart else Alignment.CenterEnd),
                 )
             }

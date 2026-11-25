@@ -7,8 +7,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.drawable.BitmapDrawable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -192,6 +194,7 @@ internal fun MediaTimeLabel(
     positionState: androidx.compose.runtime.State<Long>,
     format: (Long) -> String,
     style: androidx.compose.ui.text.TextStyle,
+    onClick: (() -> Unit)? = null,
 ) {
     Text(
         text = format(positionState.value),
@@ -199,6 +202,13 @@ internal fun MediaTimeLabel(
         color = Color.White.copy(alpha = 0.55f),
         maxLines = 1,
         softWrap = false,
+        modifier = if (onClick != null) {
+            Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable(onClick = onClick)
+        } else {
+            Modifier
+        },
     )
 }
 
@@ -216,6 +226,11 @@ internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return String.format(java.util.Locale.US, "-%d:%02d", min, sec)
+}
+
+internal fun formatTotalDuration(durationMs: Long): String {
+    if (durationMs <= 0L) return "--:--"
+    return formatTime(durationMs)
 }
 
 @Composable
@@ -316,25 +331,20 @@ internal fun playPauseIconTint(
     else -> Color.White
 }
 
-@Composable
-internal fun ExpandedPlaybackControlsRow(
-    isPlaying: Boolean,
-    accentColor: Color,
+internal data class PlaybackButtonVisuals(
+    val outerRadius: Dp,
+    val prevShape: RoundedCornerShape,
+    val playShape: RoundedCornerShape,
+    val nextShape: RoundedCornerShape,
+    val skipBgColor: Color,
+    val playBgColor: Color,
+    val playTint: Color,
+)
+
+internal fun resolvePlaybackButtonVisuals(
     style: OverlayPreferences.PlaybackControlsStyle,
-    skipWidth: Dp,
-    skipHeight: Dp,
-    skipIconSize: Dp,
-    playWidth: Dp,
-    playHeight: Dp,
-    playIconSize: Dp,
-    defaultSpacing: Dp,
-    bpmPulseScale: () -> Float,
-    onPrevious: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    highlight: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
+    accentColor: Color,
+): PlaybackButtonVisuals {
     val outerRadius = style.cornerRadiusDp.dp
     val innerRadius = (style.cornerRadiusDp * 0.35f).coerceIn(3f, 8f).dp
     val isGroup = style.material3ButtonGroup
@@ -354,12 +364,47 @@ internal fun ExpandedPlaybackControlsRow(
         useAccentColor = style.playPauseAccentColor,
         accentColor = accentColor,
     )
+    return PlaybackButtonVisuals(
+        outerRadius = outerRadius,
+        prevShape = prevShape,
+        playShape = playShape,
+        nextShape = nextShape,
+        skipBgColor = skipBgColor,
+        playBgColor = playBgColor,
+        playTint = playTint,
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun ExpandedPlaybackControlsRow(
+    isPlaying: Boolean,
+    accentColor: Color,
+    style: OverlayPreferences.PlaybackControlsStyle,
+    skipWidth: Dp,
+    skipHeight: Dp,
+    skipIconSize: Dp,
+    playWidth: Dp,
+    playHeight: Dp,
+    playIconSize: Dp,
+    defaultSpacing: Dp,
+    bpmPulseScale: () -> Float,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onLongPressPrevious: (() -> Unit)? = null,
+    onLongPressNext: (() -> Unit)? = null,
+    highlight: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val visuals = resolvePlaybackButtonVisuals(style, accentColor)
+    val isGroup = style.material3ButtonGroup
 
     Row(
         modifier = modifier
             .then(
                 if (highlight) Modifier
-                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(outerRadius + 4.dp))
+                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(visuals.outerRadius + 4.dp))
                     .padding(3.dp)
                 else Modifier
             ),
@@ -367,10 +412,15 @@ internal fun ExpandedPlaybackControlsRow(
         horizontalArrangement = Arrangement.spacedBy(if (isGroup) 3.dp else defaultSpacing),
     ) {
         Surface(
-            onClick = onPrevious,
-            modifier = Modifier.size(width = skipWidth, height = skipHeight),
-            shape = prevShape,
-            color = skipBgColor,
+            modifier = Modifier
+                .size(width = skipWidth, height = skipHeight)
+                .clip(visuals.prevShape)
+                .combinedClickable(
+                    onClick = onPrevious,
+                    onLongClick = onLongPressPrevious,
+                ),
+            shape = visuals.prevShape,
+            color = visuals.skipBgColor,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
@@ -390,23 +440,28 @@ internal fun ExpandedPlaybackControlsRow(
                     scaleX = scale
                     scaleY = scale
                 },
-            shape = playShape,
-            color = playBgColor,
+            shape = visuals.playShape,
+            color = visuals.playBgColor,
             shadowElevation = if (style.playPauseBackground) 2.dp else 0.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 PlaybackIcon(
                     playing = isPlaying,
-                    tint = playTint,
+                    tint = visuals.playTint,
                     size = playIconSize,
                 )
             }
         }
         Surface(
-            onClick = onNext,
-            modifier = Modifier.size(width = skipWidth, height = skipHeight),
-            shape = nextShape,
-            color = skipBgColor,
+            modifier = Modifier
+                .size(width = skipWidth, height = skipHeight)
+                .clip(visuals.nextShape)
+                .combinedClickable(
+                    onClick = onNext,
+                    onLongClick = onLongPressNext,
+                ),
+            shape = visuals.nextShape,
+            color = visuals.skipBgColor,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
