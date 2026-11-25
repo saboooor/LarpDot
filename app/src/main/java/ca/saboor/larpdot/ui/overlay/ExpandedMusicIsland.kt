@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -83,6 +84,8 @@ import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaSessionAction
 import ca.saboor.larpdot.media.MediaTrackInfo
+import ca.saboor.larpdot.media.MusicSleepTimer
+import ca.saboor.larpdot.media.formatSleepTimerBadge
 import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.AudioOutputChip
@@ -155,6 +158,8 @@ internal fun ExpandedIslandContent(
     val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
 
     val currentBpm by BpmDetector.currentBpm.collectAsState()
+    val sleepTimerState by MusicSleepTimer.state.collectAsState()
+    val sleepTimerBadge = formatSleepTimerBadge(sleepTimerState)
     LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
         if (mediaInfo.title.isNotBlank()) {
             BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
@@ -346,6 +351,7 @@ internal fun ExpandedIslandContent(
             expandedArtProgressProvider = expandedArtProgressProvider,
             accentColor = accentColor,
             currentBpm = currentBpm,
+            sleepTimerBadge = sleepTimerBadge,
             trackInfoStyle = trackInfoStyle,
             fontStyle = fontStyle,
             elementVisibility = elementVisibility,
@@ -378,6 +384,38 @@ internal fun ExpandedIslandContent(
     }
 }
 
+@Composable
+private fun SleepTimerChip(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = Color.White.copy(alpha = 0.14f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Icon(
+                imageVector = LarpIcons.Timer,
+                contentDescription = "Cancel sleep timer",
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(11.dp),
+            )
+            Text(
+                text = label,
+                color = Color.White.copy(alpha = 0.9f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
 private class ExpandedLayoutParams(
     val context: Context,
     val hapticFeedback: HapticFeedback,
@@ -394,6 +432,7 @@ private class ExpandedLayoutParams(
     val expandedArtProgressProvider: (() -> Float)?,
     val accentColor: Color,
     val currentBpm: Float?,
+    val sleepTimerBadge: String?,
     val trackInfoStyle: OverlayPreferences.TrackInfoStyle,
     val fontStyle: OverlayPreferences.IslandFontStyle,
     val elementVisibility: OverlayPreferences.ExpandedElementVisibility,
@@ -422,7 +461,7 @@ private class ExpandedLayoutParams(
         (trackInfoStyle.showTitle || (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) ||
             (trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()))
     val showsTrackInfoWithBpm get() = showsTrackText ||
-        (elementVisibility.trackInfo && elementVisibility.bpm && currentBpm != null)
+        (elementVisibility.trackInfo && ((elementVisibility.bpm && currentBpm != null) || sleepTimerBadge != null))
     val sessionActions get() = if (elementVisibility.appActions) {
         mediaInfo.sessionActions.filter { it.iconResourceId != 0 && it.iconPackageName != null }
     } else emptyList()
@@ -886,6 +925,15 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
         ) {
+            if (p.sleepTimerBadge != null) {
+                SleepTimerChip(
+                    label = p.sleepTimerBadge,
+                    onClick = {
+                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
+                        MusicSleepTimer.cancel()
+                    },
+                )
+            }
             if (p.elementVisibility.bpm && p.currentBpm != null) {
                 BpmChip(bpm = p.currentBpm)
             }
@@ -1137,8 +1185,26 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 artistAlpha = 0.72f,
                 titleArtistSpacing = 2.dp,
                 textAlign = TextAlign.Start,
-                bpmChip = if (p.elementVisibility.bpm && p.currentBpm != null) {
-                    { BpmChip(bpm = p.currentBpm) }
+                bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
+                    {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (p.elementVisibility.bpm && p.currentBpm != null) {
+                                BpmChip(bpm = p.currentBpm)
+                            }
+                            if (p.sleepTimerBadge != null) {
+                                SleepTimerChip(
+                                    label = p.sleepTimerBadge,
+                                    onClick = {
+                                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
+                                        MusicSleepTimer.cancel()
+                                    },
+                                )
+                            }
+                        }
+                    }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
@@ -1250,8 +1316,26 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 artistTextStyle = MaterialTheme.typography.bodyMedium,
                 artistAlpha = 0.62f,
                 titleArtistSpacing = 3.dp,
-                bpmChip = if (p.elementVisibility.bpm && p.currentBpm != null) {
-                    { BpmChip(bpm = p.currentBpm) }
+                bpmChip = if ((p.elementVisibility.bpm && p.currentBpm != null) || p.sleepTimerBadge != null) {
+                    {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (p.elementVisibility.bpm && p.currentBpm != null) {
+                                BpmChip(bpm = p.currentBpm)
+                            }
+                            if (p.sleepTimerBadge != null) {
+                                SleepTimerChip(
+                                    label = p.sleepTimerBadge,
+                                    onClick = {
+                                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
+                                        MusicSleepTimer.cancel()
+                                    },
+                                )
+                            }
+                        }
+                    }
                 } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,

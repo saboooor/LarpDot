@@ -30,6 +30,12 @@ object DominantColorExtractor {
 
         val pixels = IntArray(readable.width * readable.height)
         readable.getPixels(pixels, 0, readable.width, 0, 0, readable.width, readable.height)
+        if (readable !== scaled && readable !== bitmap && !readable.isRecycled) {
+            readable.recycle()
+        }
+        if (scaled !== bitmap && !scaled.isRecycled) {
+            scaled.recycle()
+        }
         return artworkColorsFromPixels(pixels)
     }
 
@@ -76,6 +82,7 @@ object DominantColorExtractor {
         // Score each bin by frequency × saturation × brightness — this down-weights dark
         // backgrounds and washed-out areas so the winning color is genuinely chromatic.
         val candidates = ArrayList<ColorCandidate>()
+        val hsv = FloatArray(3)
         for (bin in 0 until 32768) {
             val count = histogram[bin]
             if (count == 0) continue
@@ -85,7 +92,6 @@ object DominantColorExtractor {
             val c = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
 
             // Compute HSV saturation and value for weighting
-            val hsv = FloatArray(3)
             colorToHsv(c, hsv)
             val s = hsv[1]
             val v = hsv[2]

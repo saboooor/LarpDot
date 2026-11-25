@@ -44,6 +44,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.media.MusicSleepTimer
+import ca.saboor.larpdot.media.SleepTimerState
+import ca.saboor.larpdot.media.formatSleepTimerBadge
 import ca.saboor.larpdot.service.AudioCaptureService
 import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
@@ -627,6 +630,68 @@ private fun MusicSettingsPage(
                             steps = 10,
                             onValueChange = { OverlayPreferences.setPulseAmount(context, it) },
                         )
+
+                        LarpDivider()
+
+                        val sleepTimerState by MusicSleepTimer.state.collectAsState()
+                        val sleepBadge = formatSleepTimerBadge(sleepTimerState)
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Sleep Timer",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = when (sleepTimerState) {
+                                    SleepTimerState.Off -> "Automatically pause music playback after a set duration"
+                                    is SleepTimerState.EndOfTrack -> "Will pause when the current track finishes"
+                                    is SleepTimerState.Countdown -> "Pausing playback in ${sleepBadge.orEmpty()}"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (sleepTimerState == SleepTimerState.Off) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                            )
+                            LarpConnectedButtons(
+                                options = listOf(
+                                    LarpButtonOption(
+                                        checked = sleepTimerState == SleepTimerState.Off,
+                                        label = "Off",
+                                        onCheckedChange = { MusicSleepTimer.cancel() },
+                                    ),
+                                    LarpButtonOption(
+                                        checked = false,
+                                        label = "15m",
+                                        onCheckedChange = { MusicSleepTimer.startMinutes(15) },
+                                    ),
+                                    LarpButtonOption(
+                                        checked = false,
+                                        label = "30m",
+                                        onCheckedChange = { MusicSleepTimer.startMinutes(30) },
+                                    ),
+                                    LarpButtonOption(
+                                        checked = false,
+                                        label = "45m",
+                                        onCheckedChange = { MusicSleepTimer.startMinutes(45) },
+                                    ),
+                                    LarpButtonOption(
+                                        checked = false,
+                                        label = "60m",
+                                        onCheckedChange = { MusicSleepTimer.startMinutes(60) },
+                                    ),
+                                    LarpButtonOption(
+                                        checked = sleepTimerState is SleepTimerState.EndOfTrack,
+                                        label = "End of Track",
+                                        onCheckedChange = { MusicSleepTimer.startEndOfTrack() },
+                                    ),
+                                ),
+                                maxButtonsPerRow = 3,
+                            )
+                        }
                     }
                 }
             }

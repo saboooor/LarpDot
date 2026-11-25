@@ -334,6 +334,7 @@ object MediaPlaybackState {
             _isMusicActive.value = true
             if (isNewTrack) {
                 lastAnnouncedTrackKey = trackKey
+                MusicSleepTimer.onTrackChanged(trackKey)
                 triggerSongAnnouncement()
             }
         } else if (wasPlaying) {

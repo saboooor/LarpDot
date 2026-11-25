@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,9 +27,10 @@ object BpmDetector {
     const val DEFAULT_BPM = 120f
     private const val PREFS_NAME = "bpm_cache_v2"
     private const val MAX_CACHE_ENTRIES = 500
+    private const val FAILURE_RETRY_MS = 15L * 60L * 1000L
 
     private val bpmCache = ConcurrentHashMap<String, Float>()
-    private val failedKeys = ConcurrentHashMap.newKeySet<String>()
+    private val failedKeys = ConcurrentHashMap<String, Long>()
     @Volatile
     private var appContext: Context? = null
 
@@ -47,7 +49,7 @@ object BpmDetector {
     private val _isDetecting = MutableStateFlow(false)
     val isDetecting: StateFlow<Boolean> = _isDetecting.asStateFlow()
 
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var activeJob: Job? = null
     private var lastKey: String? = null
 
@@ -96,11 +98,13 @@ object BpmDetector {
             _currentBpm.value = cached
             _isResolved.value = true
             _detectedTrack.value = "$title • ${artist ?: ""}"
+            _detectedSource.value = "Cache"
             _isDetecting.value = false
             return
         }
 
-        if (key in failedKeys) {
+        val failedAt = failedKeys[key]
+        if (failedAt != null && System.currentTimeMillis() - failedAt < FAILURE_RETRY_MS) {
             lastKey = key
             _currentBpm.value = null
             _isResolved.value = false
@@ -109,6 +113,7 @@ object BpmDetector {
             _isDetecting.value = false
             return
         }
+        if (failedAt != null) failedKeys.remove(key, failedAt)
 
         activeJob?.cancel()
         lastKey = key
@@ -129,7 +134,8 @@ object BpmDetector {
                     _detectedTrack.value = "$title • ${artist ?: ""}"
                     _detectedSource.value = sourceName
                 } else {
-                    failedKeys.add(key)
+                    if (failedKeys.size >= 256) failedKeys.clear()
+                    failedKeys[key] = System.currentTimeMillis()
                     _currentBpm.value = null
                     _isResolved.value = false
                     _detectedTrack.value = "$title • ${artist ?: ""}"
