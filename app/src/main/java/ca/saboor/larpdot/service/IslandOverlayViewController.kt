@@ -153,6 +153,7 @@ class IslandOverlayViewController(
     private var retainedExpandedActivity by mutableStateOf<NotificationActivityInfo?>(null)
     private var expandedCustomIsland by mutableStateOf<CustomIsland?>(null)
     private var isSwipeDownCustomExpanded by mutableStateOf(false)
+    private var isPreviewCustomExpanded by mutableStateOf(false)
     private var swipeDownPullProgress by mutableStateOf<Float?>(null)
     private val seenShortTermTitles = mutableMapOf<String, String>()
     private var autoCollapseJob: Job? = null
@@ -738,6 +739,29 @@ class IslandOverlayViewController(
         )
     }
 
+    private fun expandPreviewCustomIsland(island: CustomIsland) {
+        if (!isOverlayAdded || isHiding) return
+        val cutout = currentCutoutInfo ?: return
+        if (island.main.widgetId == null) return
+        if (isIslandExpanded && _expandedType.value == IslandType.CUSTOM) {
+            expandedCustomIsland = island
+            isPreviewCustomExpanded = true
+            isSwipeDownCustomExpanded = false
+            layoutTouchWindow()
+            return
+        }
+        expandOverlayInternal(
+            type = IslandType.CUSTOM,
+            slot = null,
+            source = compactSurfaceFrame ?: cutoutOriginFrame(cutout),
+            autoExpandedKey = null,
+            initialActivity = null,
+            customOverride = island,
+            swipeDownCustom = false,
+            previewCustom = true,
+        )
+    }
+
     private fun expandOverlay(type: IslandType, slot: IslandSlot?, source: CompactIslandFrame) {
         expandOverlayInternal(
             type = type,
@@ -758,6 +782,7 @@ class IslandOverlayViewController(
         initialActivity: NotificationActivityInfo?,
         customOverride: CustomIsland? = null,
         swipeDownCustom: Boolean = false,
+        previewCustom: Boolean = false,
     ) {
         if (!isOverlayAdded || isHiding || isOverlayMorphing || isIslandExpanded) return
         if (type == IslandType.CUSTOM) {
@@ -765,8 +790,10 @@ class IslandOverlayViewController(
             if (custom.main.widgetId == null) return
             expandedCustomIsland = custom
             isSwipeDownCustomExpanded = swipeDownCustom
+            isPreviewCustomExpanded = previewCustom
         } else {
             isSwipeDownCustomExpanded = false
+            isPreviewCustomExpanded = false
         }
 
         MediaPlaybackState.dismissSongAnnouncement()
@@ -876,6 +903,7 @@ class IslandOverlayViewController(
         retainedExpandedActivity = null
         expandedCustomIsland = null
         isSwipeDownCustomExpanded = false
+        isPreviewCustomExpanded = false
         swipeDownPullProgress = null
         isOverlayMorphing = false
         expansionSourceFrame = null
@@ -1095,13 +1123,20 @@ class IslandOverlayViewController(
 
         val stack = currentStack()
         if ((isIslandExpanded || swipeDownPullProgress != null) && _expandedType.value == IslandType.CUSTOM) {
-            val sourceStillVisible = if (isSwipeDownCustomExpanded) {
-                CustomIslandStore.settings.value.swipeDownIsland != null
-            } else {
-                val slot = selectedSlot
-                if (slot == null) {
-                    stack.primary?.content?.type == IslandType.CUSTOM
-                } else stack.secondary.any { it.content == slot }
+            val sourceStillVisible = when {
+                isPreviewCustomExpanded -> {
+                    val previewId = expandedCustomIsland?.id
+                    previewId != null && CustomIslandStore.settings.value.islands.any {
+                        it.id == previewId && it.main.widgetId != null
+                    }
+                }
+                isSwipeDownCustomExpanded -> CustomIslandStore.settings.value.swipeDownIsland != null
+                else -> {
+                    val slot = selectedSlot
+                    if (slot == null) {
+                        stack.primary?.content?.type == IslandType.CUSTOM
+                    } else stack.secondary.any { it.content == slot }
+                }
             }
             if (!sourceStillVisible) {
                 swipeDownPullProgress = null
@@ -1194,14 +1229,28 @@ class IslandOverlayViewController(
 
     private fun observeCustomIsland() {
         controllerScope.launch {
-            CustomIslandStore.settings.map { it.activeIsland to it.swipeDownIsland }.distinctUntilChanged()
-                .collectLatest { (active, swipeDown) ->
-                    if (_expandedType.value == IslandType.CUSTOM) {
-                        val expected = if (isSwipeDownCustomExpanded) swipeDown else active
+            CustomIslandStore.settings.collectLatest { settings ->
+                if (_expandedType.value == IslandType.CUSTOM) {
+                    if (isPreviewCustomExpanded) {
+                        val previewId = expandedCustomIsland?.id
+                        val updated = previewId?.let { id -> settings.islands.firstOrNull { it.id == id } }
+                        if (updated == null || updated.main.widgetId == null) {
+                            collapseOverlay()
+                        } else if (updated != expandedCustomIsland) {
+                            expandedCustomIsland = updated
+                        }
+                    } else {
+                        val expected = if (isSwipeDownCustomExpanded) settings.swipeDownIsland else settings.activeIsland
                         if (expandedCustomIsland != expected) collapseOverlay()
                     }
-                    updateOverlayLayout()
                 }
+                updateOverlayLayout()
+            }
+        }
+        controllerScope.launch {
+            CustomIslandStore.previewRequests.collect { island ->
+                expandPreviewCustomIsland(island)
+            }
         }
     }
 
@@ -1317,6 +1366,7 @@ class IslandOverlayViewController(
         retainedExpandedActivity = null
         expandedCustomIsland = null
         isSwipeDownCustomExpanded = false
+        isPreviewCustomExpanded = false
         swipeDownPullProgress = null
 
         removeTouchWindow()

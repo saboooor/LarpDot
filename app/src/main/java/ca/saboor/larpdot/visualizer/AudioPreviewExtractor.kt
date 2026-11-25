@@ -14,6 +14,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -111,7 +113,7 @@ object AudioPreviewExtractor {
     private val _extractionState = MutableStateFlow<ExtractionState>(ExtractionState.Idle)
     val extractionState: StateFlow<ExtractionState> = _extractionState.asStateFlow()
 
-    private val extractorScope = CoroutineScope(Dispatchers.IO + Job())
+    private val extractorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var activeJob: Job? = null
     private var lastKey: String? = null
     private var lastBandCount: Int = -1
@@ -657,7 +659,7 @@ object AudioPreviewExtractor {
     private fun sanitizeKey(title: String, artist: String): String {
         val identity = title.trim().lowercase() + "\u0000" + artist.trim().lowercase()
         val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
-            .take(8).joinToString("") { "%02x".format(it) }
+            .take(8).joinToString("") { String.format(Locale.US, "%02x", it) }
         val readable = sanitizeTrackSlug(title, artist)
         return "${readable}_$digest"
     }

@@ -5,7 +5,9 @@ import android.util.AtomicFile
 import android.util.Log
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -197,10 +199,28 @@ internal fun enforceSingleSwipeDownIsland(
     }
 }
 
+internal fun reorderCustomIslands(
+    islands: List<CustomIsland>,
+    id: String,
+    delta: Int,
+): List<CustomIsland> {
+    if (delta == 0 || islands.size < 2) return islands
+    val index = islands.indexOfFirst { it.id == id }
+    if (index < 0) return islands
+    val targetIndex = (index + delta).coerceIn(0, islands.lastIndex)
+    if (targetIndex == index) return islands
+    return islands.toMutableList().apply {
+        val item = removeAt(index)
+        add(targetIndex, item)
+    }
+}
+
 internal object CustomIslandStore {
     private lateinit var file: AtomicFile
     private val mutableSettings = MutableStateFlow(CustomIslandSettings())
     val settings = mutableSettings.asStateFlow()
+    private val mutablePreviewRequests = MutableSharedFlow<CustomIsland>(extraBufferCapacity = 1)
+    val previewRequests = mutablePreviewRequests.asSharedFlow()
 
     fun initialize(context: Context) {
         file = AtomicFile(File(context.noBackupFilesDir, "custom-islands.json"))
@@ -259,6 +279,20 @@ internal object CustomIslandStore {
         if (id == null || settings.value.islands.any { it.id == id && it.isSwipeDownOnly && it.main.widgetId != null }) {
             save(settings.value.copy(swipeDownId = id))
         }
+    }
+
+    fun move(id: String, delta: Int) {
+        val previous = settings.value
+        val reordered = reorderCustomIslands(previous.islands, id, delta)
+        if (reordered != previous.islands) {
+            save(previous.copy(islands = reordered))
+        }
+    }
+
+    fun requestOverlayPreview(id: String): Boolean {
+        val island = settings.value.islands.firstOrNull { it.id == id } ?: return false
+        if (island.main.widgetId == null) return false
+        return mutablePreviewRequests.tryEmit(island)
     }
 
     fun remove(id: String) {

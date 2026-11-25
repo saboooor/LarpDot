@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -258,6 +259,52 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                                 onChooseWidget = { widgetPosition = position },
                                 onChooseIcon = { iconPosition = position },
                             )
+                        }
+                    }
+                    item(key = "actions") {
+                        val islandIndex = settings.islands.indexOfFirst { it.id == pageIsland.id }
+                        val canMoveUp = islandIndex > 0
+                        val canMoveDown = islandIndex in 0 until settings.islands.lastIndex
+                        LarpCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FilledTonalButton(
+                                    onClick = { CustomIslandStore.requestOverlayPreview(pageIsland.id) },
+                                    enabled = pageIsland.main.widgetId != null,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(LarpIcons.OpenInFull, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Test in Island", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (settings.islands.size > 1) {
+                                    IconButton(
+                                        onClick = { CustomIslandStore.move(pageIsland.id, -1) },
+                                        enabled = canMoveUp,
+                                    ) {
+                                        Icon(LarpIcons.KeyboardArrowUp, contentDescription = "Move island up")
+                                    }
+                                    IconButton(
+                                        onClick = { CustomIslandStore.move(pageIsland.id, 1) },
+                                        enabled = canMoveDown,
+                                    ) {
+                                        Icon(LarpIcons.KeyboardArrowDown, contentDescription = "Move island down")
+                                    }
+                                }
+                                IconButton(onClick = { deleteId = pageIsland.id }) {
+                                    Icon(LarpIcons.DeleteOutline, contentDescription = "Delete island")
+                                }
+                            }
+                            if (pageIsland.main.widgetId == null) {
+                                Text(
+                                    "Add an expanded widget to test this island live in the overlay.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
