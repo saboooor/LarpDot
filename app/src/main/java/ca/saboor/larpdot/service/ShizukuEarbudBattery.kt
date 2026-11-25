@@ -106,10 +106,10 @@ internal object ShizukuEarbudBattery {
         device: BluetoothDevice,
         standardLevels: EarbudBatteryLevels?,
     ): EarbudBatteryLevels? {
-        val service = serviceMethod.let { method ->
+        val service = ShizukuBluetoothApi.serviceMethod.let { method ->
             if (method.parameterCount == 0) method.invoke(adapter) else method.invoke(adapter, null)
         } as? IInterface ?: return standardLevels
-        val proxy = asInterface.invoke(null, ShizukuBinderWrapper(service.asBinder())) ?: return standardLevels
+        val proxy = ShizukuBluetoothApi.asInterface.invoke(null, ShizukuBinderWrapper(service.asBinder())) ?: return standardLevels
         // Shizuku forwards the call with shell or root identity. Shell owns the attribution package.
         val source = AttributionSource.Builder(SHELL_UID).setPackageName("com.android.shell").build()
         val left = standardLevels?.left ?: readPercent(proxy, device, LEFT_BATTERY, source)
@@ -119,36 +119,39 @@ internal object ShizukuEarbudBattery {
 
     @RequiresApi(Build.VERSION_CODES.S)
     private fun readPercent(proxy: Any, device: BluetoothDevice, key: Int, source: AttributionSource): Int? {
-        val method = metadataMethod
+        val method = ShizukuBluetoothApi.metadataMethod
         val value = if (method.parameterCount == 3) {
             method.invoke(proxy, device, key, source)
         } else {
             val receiverClass = method.parameterTypes[3]
-            val receiver = hiddenMethod(receiverClass, "get").invoke(null)
+            val receiver = ShizukuBluetoothApi.hiddenMethod(receiverClass, "get").invoke(null)
             method.invoke(proxy, device, key, source, receiver)
-            val result = hiddenMethod(receiverClass, "awaitResultNoInterrupt", Duration::class.java)
+            val result = ShizukuBluetoothApi.hiddenMethod(receiverClass, "awaitResultNoInterrupt", Duration::class.java)
                 .invoke(receiver, Duration.ofMillis(400)) ?: return null
-            hiddenMethod(result.javaClass, "getValue", Any::class.java).invoke(result, null)
+            ShizukuBluetoothApi.hiddenMethod(result.javaClass, "getValue", Any::class.java).invoke(result, null)
         }
         return (value as? ByteArray)?.let { String(it, Charsets.UTF_8).toIntOrNull() }?.takeIf { it in 0..100 }
     }
 
-    private val serviceMethod: Method by lazy {
-        HiddenApiBypass.getDeclaredMethods(BluetoothAdapter::class.java).filterIsInstance<Method>()
-            .filter { it.name == "getBluetoothService" && it.parameterCount <= 1 }
-            .minBy { it.parameterCount }
-            .apply { isAccessible = true }
-    }
-    private val asInterface: Method by lazy {
-        hiddenMethod(Class.forName("android.bluetooth.IBluetooth\$Stub"), "asInterface", IBinder::class.java)
-    }
-    private val metadataMethod: Method by lazy {
-        HiddenApiBypass.getDeclaredMethods(Class.forName("android.bluetooth.IBluetooth")).filterIsInstance<Method>()
-            .filter { it.name == "getMetadata" && it.parameterCount in 3..4 }
-            .minBy { it.parameterCount }
-            .apply { isAccessible = true }
-    }
+    @RequiresApi(Build.VERSION_CODES.S)
+    private object ShizukuBluetoothApi {
+        val serviceMethod: Method by lazy {
+            HiddenApiBypass.getDeclaredMethods(BluetoothAdapter::class.java).filterIsInstance<Method>()
+                .filter { it.name == "getBluetoothService" && it.parameterCount <= 1 }
+                .minBy { it.parameterCount }
+                .apply { isAccessible = true }
+        }
+        val asInterface: Method by lazy {
+            hiddenMethod(Class.forName("android.bluetooth.IBluetooth\$Stub"), "asInterface", IBinder::class.java)
+        }
+        val metadataMethod: Method by lazy {
+            HiddenApiBypass.getDeclaredMethods(Class.forName("android.bluetooth.IBluetooth")).filterIsInstance<Method>()
+                .filter { it.name == "getMetadata" && it.parameterCount in 3..4 }
+                .minBy { it.parameterCount }
+                .apply { isAccessible = true }
+        }
 
-    private fun hiddenMethod(owner: Class<*>, name: String, vararg parameters: Class<*>): Method =
-        HiddenApiBypass.getDeclaredMethod(owner, name, *parameters).apply { isAccessible = true }
+        fun hiddenMethod(owner: Class<*>, name: String, vararg parameters: Class<*>): Method =
+            HiddenApiBypass.getDeclaredMethod(owner, name, *parameters).apply { isAccessible = true }
+    }
 }

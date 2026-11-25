@@ -7,6 +7,7 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ internal enum class BackdropBlurStatus(val description: String) {
  * Ordinary reflection can hide these methods even when the system supports backdrop blur.
  */
 private object BackdropBlurApi {
+    @RequiresApi(Build.VERSION_CODES.P)
     private fun method(owner: Class<*>, name: String, vararg parameters: Class<*>): Method =
         runCatching { owner.getMethod(name, *parameters) }.getOrElse {
             HiddenApiBypass.getDeclaredMethod(owner, name, *parameters)

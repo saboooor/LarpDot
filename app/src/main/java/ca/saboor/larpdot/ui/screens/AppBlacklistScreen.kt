@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -91,7 +92,7 @@ fun AppBlacklistScreen(
     val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var selectedFilterIndex by rememberSaveable { mutableStateOf(0) }
+    var selectedFilterIndex by rememberSaveable { mutableIntStateOf(0) }
     val currentFilter = BlacklistFilter.entries[selectedFilterIndex]
 
     var appList by remember { mutableStateOf<List<AppEntry>>(emptyList()) }

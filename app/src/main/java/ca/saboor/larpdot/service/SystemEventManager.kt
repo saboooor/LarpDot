@@ -136,7 +136,9 @@ object SystemEventManager {
                     val device = getBluetoothDevice(intent) ?: return
                     val connected = action == BluetoothDevice.ACTION_ACL_CONNECTED
                     val id = bluetoothId(device)
-                    val transport = intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_AUTO)
+                    val transport = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_AUTO)
+                    } else BluetoothDevice.TRANSPORT_AUTO
                     if (transport != BluetoothDevice.TRANSPORT_BREDR) {
                         // Ignore an auxiliary link opened by an earbud probe on an already-connected device.
                         val probeAt = earbudProbeStartedAt[id]
@@ -230,13 +232,14 @@ object SystemEventManager {
     }
 
     /** Refreshes currently connected Bluetooth devices (useful after granting Nearby Devices or pinning BT alerts). */
+    @SuppressLint("MissingPermission")
     fun syncConnectedBluetoothDevices(context: Context) {
         val settings = OverlayPreferences.getNotificationActivitySettings(context)
         if (!settings.enabled || !settings.bluetooth || !settings.permanentBluetooth) return
         if (!hasBluetoothPermission(context)) return
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return
         val adapter = btManager.adapter ?: return
-        val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
+        val bonded = try { adapter.bondedDevices.orEmpty() } catch (_: SecurityException) { emptySet() }
         for (device in bonded) {
             val connected = runCatching {
                 val method = runCatching { BluetoothDevice::class.java.getMethod("isConnected") }.getOrElse {
@@ -588,12 +591,13 @@ object SystemEventManager {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun bluetoothDeviceType(device: BluetoothDevice?): String {
         val name = getDeviceName(device).lowercase()
         if (name.contains("buds") || name.contains("airpods") || name.contains("earpod") || name.contains("freebuds")) {
             return "Earbuds"
         }
-        val deviceClass = runCatching { device?.bluetoothClass }.getOrNull() ?: return "Bluetooth"
+        val deviceClass = try { device?.bluetoothClass } catch (_: SecurityException) { null } ?: return "Bluetooth"
         return when (deviceClass.deviceClass) {
             BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES -> "Headphones"
             BluetoothClass.Device.AUDIO_VIDEO_WEARABLE_HEADSET,
@@ -617,40 +621,51 @@ object SystemEventManager {
         }
     }
 
+    @SuppressLint("MissingPermission")
     internal fun getFriendlyBluetoothName(device: BluetoothDevice?): String {
         if (device == null) return "Bluetooth Device"
-        val alias = runCatching {
+        val alias = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 device.alias
             } else {
                 BluetoothDevice::class.java.getMethod("getAliasName").invoke(device) as? String
             }
-        }.getOrNull()
-        val rawName = runCatching { device.name }.getOrNull()
+        } catch (_: SecurityException) {
+            null
+        } catch (_: Exception) {
+            null
+        }
+        val rawName = try { device.name } catch (_: SecurityException) { null }
         return resolveFriendlyBluetoothName(alias = alias, rawName = rawName)
     }
 
+    @SuppressLint("MissingPermission")
     internal fun lookupFriendlyBluetoothNameByAddress(context: Context, address: String?): String? {
         if (address.isNullOrBlank() || !hasBluetoothPermission(context)) return null
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return null
         val adapter = btManager.adapter ?: return null
-        val matched = runCatching {
+        val matched = try {
             adapter.bondedDevices?.firstOrNull { it.address.equals(address, ignoreCase = true) }
                 ?: adapter.getRemoteDevice(address)
-        }.getOrNull() ?: return null
+        } catch (_: SecurityException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        } ?: return null
         return getFriendlyBluetoothName(matched).takeUnless { it == "Bluetooth Device" }
     }
 
     private fun getDeviceName(device: BluetoothDevice?): String = getFriendlyBluetoothName(device)
 
+    @SuppressLint("MissingPermission")
     private fun isUserFacingBluetoothDevice(
         device: BluetoothDevice,
         displayName: String,
         isProfileAudioEvent: Boolean,
     ): Boolean {
-        val bondState = runCatching { device.bondState }.getOrDefault(BluetoothDevice.BOND_NONE)
-        val majorClass = runCatching { device.bluetoothClass?.majorDeviceClass }.getOrNull()
-        val uuids = runCatching { device.uuids?.map { it.uuid.toString() } }.getOrNull().orEmpty()
+        val bondState = try { device.bondState } catch (_: SecurityException) { BluetoothDevice.BOND_NONE }
+        val majorClass = try { device.bluetoothClass?.majorDeviceClass } catch (_: SecurityException) { null }
+        val uuids = try { device.uuids?.map { it.uuid.toString() } } catch (_: SecurityException) { null }.orEmpty()
         return shouldSurfaceBluetoothDevice(
             bondState = bondState,
             majorDeviceClass = majorClass,

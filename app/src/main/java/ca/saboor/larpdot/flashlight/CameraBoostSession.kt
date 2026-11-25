@@ -10,6 +10,7 @@ import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
@@ -96,6 +97,10 @@ internal class CameraBoostSession(
         val surface = reader?.surface ?: return
         val level = policy.requestedLevel
         try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                fail(token, "Flashlight boost requires Android 10 or newer.")
+                return
+            }
             val request = device.createCaptureRequest(CameraDevice.TEMPLATE_MANUAL).apply {
                 addTarget(surface)
                 set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH)

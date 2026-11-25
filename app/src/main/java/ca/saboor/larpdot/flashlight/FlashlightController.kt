@@ -178,17 +178,19 @@ object FlashlightController {
             // Pixel vendor support is determined by the maximum-brightness characteristic.
             // Vendor request keys need not be advertised in availableCaptureRequestKeys,
             // and the boost camera need not have standard flash/lens-facing metadata.
-            boostConfiguration = cameras.firstNotNullOfOrNull { (id, characteristics) ->
-                runCatching {
-                    val max = characteristics.get(CameraCharacteristics.Key<Int>(CameraBoostSession.MAXIMUM_KEY, Integer.TYPE)) ?: 0
-                    val sizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                        ?.getOutputSizes(ImageFormat.YUV_420_888)
-                    val size = sizes?.minByOrNull { it.width.toLong() * it.height }
-                    if (max > 1 && size != null) {
-                        BoostConfiguration(id, max, size)
-                    } else null
-                }.onFailure { Log.d("FlashlightController", "Boost probe failed for camera $id", it) }.getOrNull()
-            }
+            boostConfiguration = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cameras.firstNotNullOfOrNull { (id, characteristics) ->
+                    runCatching {
+                        val max = characteristics.get(CameraCharacteristics.Key<Int>(CameraBoostSession.MAXIMUM_KEY, Integer.TYPE)) ?: 0
+                        val sizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                            ?.getOutputSizes(ImageFormat.YUV_420_888)
+                        val size = sizes?.minByOrNull { it.width.toLong() * it.height }
+                        if (max > 1 && size != null) {
+                            BoostConfiguration(id, max, size)
+                        } else null
+                    }.onFailure { Log.d("FlashlightController", "Boost probe failed for camera $id", it) }.getOrNull()
+                }
+            } else null
             _isBoostSupported.value = (boostConfiguration?.maximum ?: 0) > standardMaximum
             _standardMaxStrength.value = standardMaximum
             val context = appContext!!

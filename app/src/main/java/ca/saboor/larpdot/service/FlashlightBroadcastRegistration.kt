@@ -2,7 +2,7 @@ package ca.saboor.larpdot.service
 
 import android.content.Context
 import android.content.IntentFilter
-import android.os.Build
+import androidx.core.content.ContextCompat
 
 /** Registers the same torch action while either overlay host is active. */
 internal class FlashlightBroadcastRegistration {
@@ -12,11 +12,7 @@ internal class FlashlightBroadcastRegistration {
     fun register(context: Context) {
         if (registered) return
         val filter = IntentFilter("ca.saboor.larpdot.ACTION_TOGGLE_FLASHLIGHT")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         registered = true
     }
 

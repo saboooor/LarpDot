@@ -230,16 +230,17 @@ object NotificationActivityState {
 
         if (activity.contentIntent != null) {
             launched = runCatching {
-                val bundle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                val bundle = if (Build.VERSION.SDK_INT >= 36) {
                     ActivityOptions.makeBasic()
                         .setPendingIntentCreatorBackgroundActivityStartMode(
                             ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS,
                         )
                         .toBundle()
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    @Suppress("DEPRECATION")
                     ActivityOptions.makeBasic()
                         .setPendingIntentBackgroundActivityStartMode(
-                            1, // MODE_BACKGROUND_ACTIVITY_START_ALLOWED on API 34
+                            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED,
                         )
                         .toBundle()
                 } else {

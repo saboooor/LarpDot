@@ -354,6 +354,10 @@ class IslandOverlayViewController(
         }
         val tView = View(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) = Unit
+                override fun onViewDetachedFromWindow(v: View) = resetVelocityTracker()
+            })
             setOnTouchListener { view, event ->
                 if (event.action == MotionEvent.ACTION_OUTSIDE) {
                     if (isIslandExpanded) collapseOverlay()
@@ -1189,13 +1193,14 @@ class IslandOverlayViewController(
     }
 
     private fun applyCutoutMode(params: WindowManager.LayoutParams) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             params.fitInsetsTypes = 0
             params.fitInsetsSides = 0
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
     }
 

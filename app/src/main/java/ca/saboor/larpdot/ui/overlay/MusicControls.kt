@@ -206,7 +206,7 @@ internal fun formatTime(ms: Long): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
     val min = totalSec / 60
     val sec = totalSec % 60
-    return String.format("%d:%02d", min, sec)
+    return String.format(java.util.Locale.US, "%d:%02d", min, sec)
 }
 
 internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
@@ -215,7 +215,7 @@ internal fun formatRemainingTime(positionMs: Long, durationMs: Long): String {
     val totalSec = remaining / 1000
     val min = totalSec / 60
     val sec = totalSec % 60
-    return String.format("-%d:%02d", min, sec)
+    return String.format(java.util.Locale.US, "-%d:%02d", min, sec)
 }
 
 @Composable

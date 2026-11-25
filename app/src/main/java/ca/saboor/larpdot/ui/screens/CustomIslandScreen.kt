@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -428,7 +429,7 @@ private fun CustomIslandSlotSettings(
                     Text(if (slot.colorKey == null) "Color to Transparency" else "Edit Transparency Filter")
                 }
             }
-            var width by remember(widget, slot.width) { mutableStateOf(slot.width.toFloat()) }
+            var width by remember(widget, slot.width) { mutableFloatStateOf(slot.width.toFloat()) }
             LarpSliderRow(
                 title = "Widget Width",
                 value = width,
@@ -440,7 +441,7 @@ private fun CustomIslandSlotSettings(
                 },
             )
             if (position == CustomIslandPosition.MAIN) {
-                var height by remember(widget, slot.height) { mutableStateOf(slot.height.toFloat()) }
+                var height by remember(widget, slot.height) { mutableFloatStateOf(slot.height.toFloat()) }
                 LarpSliderRow(
                     title = "Widget Height",
                     value = height,
