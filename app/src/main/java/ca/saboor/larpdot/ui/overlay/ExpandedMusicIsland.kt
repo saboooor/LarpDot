@@ -280,12 +280,12 @@ internal fun ExpandedIslandContent(
                             if (totalDragX > swipeThresholdPx) {
                                 hasTriggered = true
                                 change.consume()
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                                 MediaPlaybackState.skipNext()
                             } else if (totalDragX < -swipeThresholdPx) {
                                 hasTriggered = true
                                 change.consume()
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                                 MediaPlaybackState.skipPrevious()
                             }
                         }
@@ -783,7 +783,7 @@ private fun ExpandedSessionActionButton(
     } ?: return
     IconButton(
         onClick = {
-            hapticFeedback?.performHapticFeedback(HapticFeedbackType.LongPress)
+            hapticFeedback?.performIslandHaptic(HapticFeedbackType.LongPress)
             MediaPlaybackState.performSessionAction(action)
         },
         modifier = modifier.size(buttonSize),

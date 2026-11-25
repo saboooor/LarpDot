@@ -54,7 +54,9 @@ import ca.saboor.larpdot.service.CustomIslandStore
 import ca.saboor.larpdot.service.CustomIslandWidgets
 import ca.saboor.larpdot.service.customIslandDisplayInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
@@ -75,6 +77,8 @@ fun HomeScreen(
     val density = LocalDensity.current
     val config by OverlayPreferences.cutoutConfigFlow.collectAsState()
     val tapToExpand by OverlayPreferences.tapToExpandFlow.collectAsState()
+    val hapticsEnabled by OverlayPreferences.hapticsEnabledFlow.collectAsState()
+    val expandedAutoCollapseSeconds by OverlayPreferences.expandedAutoCollapseSecondsFlow.collectAsState()
     val holdToExpandDurationMs by OverlayPreferences.holdToExpandDurationMsFlow.collectAsState()
     val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
@@ -142,6 +146,8 @@ fun HomeScreen(
             IslandBehaviorCard(
                 minimizedMaxWidth = minimizedMaxWidth,
                 tapToExpand = tapToExpand,
+                hapticsEnabled = hapticsEnabled,
+                expandedAutoCollapseSeconds = expandedAutoCollapseSeconds,
                 holdToExpandDurationMs = holdToExpandDurationMs,
                 hideWhenScreenOff = hideWhenScreenOff,
                 hideOnLockScreen = hideOnLockScreen,
@@ -330,6 +336,8 @@ private fun IslandPriorityCard(
 private fun IslandBehaviorCard(
     minimizedMaxWidth: Float,
     tapToExpand: Boolean,
+    hapticsEnabled: Boolean,
+    expandedAutoCollapseSeconds: Int,
     holdToExpandDurationMs: Int,
     hideWhenScreenOff: Boolean,
     hideOnLockScreen: Boolean,
@@ -382,6 +390,52 @@ private fun IslandBehaviorCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Haptic Feedback",
+            subtitle = "Vibrate on island taps, holds, swipes, and controls",
+            icon = LarpIcons.Vibration,
+            checked = hapticsEnabled,
+            onCheckedChange = { OverlayPreferences.setHapticsEnabled(context, it) },
+        )
+
+        LarpDivider()
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Auto-Collapse Expanded Island",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = if (expandedAutoCollapseSeconds == 0) {
+                    "Keep expanded islands open until you tap outside or swipe up"
+                } else {
+                    "Automatically collapse after ${expandedAutoCollapseSeconds}s of inactivity"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val autoCollapseOptions = listOf(
+                0 to "Off",
+                5 to "5s",
+                10 to "10s",
+                15 to "15s",
+                30 to "30s",
+            )
+            LarpConnectedButtons(
+                options = autoCollapseOptions.map { (seconds, label) ->
+                    LarpButtonOption(
+                        checked = expandedAutoCollapseSeconds == seconds,
+                        label = label,
+                        onCheckedChange = {
+                            OverlayPreferences.setExpandedAutoCollapseSeconds(context, seconds)
+                        },
+                    )
+                },
+            )
+        }
 
         LarpDivider()
 

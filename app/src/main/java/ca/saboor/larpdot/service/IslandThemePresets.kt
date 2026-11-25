@@ -68,6 +68,8 @@ data class IslandBackupConfig(
     val flashlightTapToToggle: Boolean = true,
     val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
     val tapToExpand: Boolean = false,
+    val hapticsEnabled: Boolean = true,
+    val expandedAutoCollapseSeconds: Int = OverlayPreferences.DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS,
     val holdToExpandDurationMs: Int = OverlayPreferences.DEFAULT_HOLD_TO_EXPAND_DURATION_MS,
     val hideWhenScreenOff: Boolean = true,
     val hideOnLockScreen: Boolean = false,
@@ -439,6 +441,8 @@ object IslandThemePresets {
             add("flashlightTapToToggle" to config.flashlightTapToToggle.toString())
             add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
             add("tapToExpand" to config.tapToExpand.toString())
+            add("hapticsEnabled" to config.hapticsEnabled.toString())
+            add("expandedAutoCollapseSeconds" to config.expandedAutoCollapseSeconds.toString())
             add("holdToExpandDurationMs" to config.holdToExpandDurationMs.toString())
             add("hideWhenScreenOff" to config.hideWhenScreenOff.toString())
             add("hideOnLockScreen" to config.hideOnLockScreen.toString())
@@ -568,6 +572,9 @@ object IslandThemePresets {
             flashlightTapToToggle = fields["flashlightTapToToggle"]?.toBooleanStrictOrNull() ?: defaults.flashlightTapToToggle,
             musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
             tapToExpand = fields["tapToExpand"]?.toBooleanStrictOrNull() ?: defaults.tapToExpand,
+            hapticsEnabled = fields["hapticsEnabled"]?.toBooleanStrictOrNull() ?: defaults.hapticsEnabled,
+            expandedAutoCollapseSeconds = (fields["expandedAutoCollapseSeconds"]?.toIntOrNull()
+                ?: defaults.expandedAutoCollapseSeconds).coerceIn(0, 120),
             holdToExpandDurationMs = (fields["holdToExpandDurationMs"]?.toIntOrNull() ?: defaults.holdToExpandDurationMs)
                 .coerceIn(OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS, OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS),
             hideWhenScreenOff = fields["hideWhenScreenOff"]?.toBooleanStrictOrNull() ?: defaults.hideWhenScreenOff,
@@ -701,6 +708,8 @@ object IslandThemePresets {
             flashlightTapToToggle = OverlayPreferences.isFlashlightTapToToggleEnabled(context),
             musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
             tapToExpand = OverlayPreferences.isTapToExpandEnabled(context),
+            hapticsEnabled = OverlayPreferences.isHapticsEnabled(context),
+            expandedAutoCollapseSeconds = OverlayPreferences.getExpandedAutoCollapseSeconds(context),
             holdToExpandDurationMs = OverlayPreferences.getHoldToExpandDurationMs(context),
             hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(context),
             hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(context),
@@ -752,6 +761,8 @@ object IslandThemePresets {
         OverlayPreferences.setFlashlightTapToToggleEnabled(context, config.flashlightTapToToggle)
         OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
         OverlayPreferences.setTapToExpandEnabled(context, config.tapToExpand)
+        OverlayPreferences.setHapticsEnabled(context, config.hapticsEnabled)
+        OverlayPreferences.setExpandedAutoCollapseSeconds(context, config.expandedAutoCollapseSeconds)
         OverlayPreferences.setHoldToExpandDurationMs(context, config.holdToExpandDurationMs)
         OverlayPreferences.setHideWhenScreenOffEnabled(context, config.hideWhenScreenOff)
         OverlayPreferences.setHideOnLockScreenEnabled(context, config.hideOnLockScreen)

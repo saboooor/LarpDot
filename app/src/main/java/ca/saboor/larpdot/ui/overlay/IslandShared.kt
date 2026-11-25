@@ -33,10 +33,18 @@ import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.intellij.lang.annotations.Language
+
+internal fun HapticFeedback.performIslandHaptic(type: HapticFeedbackType) {
+    if (OverlayPreferences.hapticsEnabledFlow.value) {
+        performHapticFeedback(type)
+    }
+}
 
 internal fun islandOutlineColor(visibility: Float): Color =
     Color.White.copy(alpha = (48f / 255f) * visibility.coerceIn(0f, 1f))

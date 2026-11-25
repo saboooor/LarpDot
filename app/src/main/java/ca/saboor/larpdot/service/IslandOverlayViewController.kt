@@ -156,6 +156,7 @@ class IslandOverlayViewController(
     private var swipeDownPullProgress by mutableStateOf<Float?>(null)
     private val seenShortTermTitles = mutableMapOf<String, String>()
     private var autoCollapseJob: Job? = null
+    private var expandedInactivityJob: Job? = null
     private val dismissalTracker = IslandDismissalTracker()
     private var dismissalRevision by mutableIntStateOf(0)
     private var idleHideJob: Job? = null
@@ -363,6 +364,9 @@ class IslandOverlayViewController(
                     if (isIslandExpanded) collapseOverlay()
                     return@setOnTouchListener false
                 }
+                if (isIslandExpanded && (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_UP)) {
+                    scheduleExpandedAutoCollapse()
+                }
                 val density = context.resources.displayMetrics.density
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
@@ -425,7 +429,7 @@ class IslandOverlayViewController(
                             if (beginInteractiveSwipeDownCustomIsland(initialProgress)) {
                                 interactivePullActive = true
                                 trackingSwipeDown = false
-                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                view.performIslandHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                 return@setOnTouchListener true
                             }
                         }
@@ -454,7 +458,7 @@ class IslandOverlayViewController(
                         if (wasPulling) {
                             val finalProgress = interactivePullProgress(dy, pullRangePx)
                             val commit = shouldCommitSwipeDownPull(finalProgress, finalVelocity, density, cancelled)
-                            if (commit) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            if (commit) view.performIslandHaptic(HapticFeedbackConstants.LONG_PRESS)
                             finishInteractiveSwipeDownCustomIsland(commit)
                             return@setOnTouchListener true
                         }
@@ -466,7 +470,7 @@ class IslandOverlayViewController(
                                 forwardToCompact(cancel)
                                 cancel.recycle()
                             }
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            view.performIslandHaptic(HapticFeedbackConstants.LONG_PRESS)
                             expandSwipeDownCustomIsland()
                             return@setOnTouchListener true
                         }
@@ -505,6 +509,7 @@ class IslandOverlayViewController(
             observeDebugMode()
             observeCustomIsland()
             observeCutoutConfig()
+            observeScreenAndAutoCollapse()
             updateOverlayLayout()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -707,6 +712,7 @@ class IslandOverlayViewController(
             isIslandExpanded = true
             isOverlayMorphing = true
             DotAccessibilityService.dismissNotificationShade()
+            scheduleExpandedAutoCollapse()
             layoutTouchWindow()
         } else {
             isIslandExpanded = false
@@ -777,6 +783,9 @@ class IslandOverlayViewController(
         isIslandExpanded = true
         isOverlayMorphing = true
 
+        if (autoExpandedKey == null) {
+            scheduleExpandedAutoCollapse()
+        }
         syncDrawWindowVisibility()
         layoutTouchWindow()
     }
@@ -802,6 +811,7 @@ class IslandOverlayViewController(
 
         autoCollapseJob?.cancel()
         autoCollapseJob = null
+        cancelExpandedAutoCollapse()
         autoExpandedActivityKey = info.key
         retainedExpandedActivity = info
 
@@ -827,9 +837,28 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun scheduleExpandedAutoCollapse() {
+        expandedInactivityJob?.cancel()
+        expandedInactivityJob = null
+        if (!isOverlayAdded || !isIslandExpanded || autoExpandedActivityKey != null) return
+        val delayMs = resolveExpandedAutoCollapseDelayMs(OverlayPreferences.expandedAutoCollapseSecondsFlow.value) ?: return
+        expandedInactivityJob = controllerScope.launch {
+            delay(delayMs)
+            if (isOverlayAdded && isIslandExpanded && autoExpandedActivityKey == null) {
+                collapseOverlay()
+            }
+        }
+    }
+
+    private fun cancelExpandedAutoCollapse() {
+        expandedInactivityJob?.cancel()
+        expandedInactivityJob = null
+    }
+
     fun collapseOverlay() {
         autoCollapseJob?.cancel()
         autoCollapseJob = null
+        cancelExpandedAutoCollapse()
         if (!isOverlayAdded || !isIslandExpanded) return
 
         isIslandExpanded = false
@@ -840,6 +869,7 @@ class IslandOverlayViewController(
 
     private fun finishCollapse() {
         if (!isOverlayAdded || isIslandExpanded || !isOverlayMorphing) return
+        cancelExpandedAutoCollapse()
         isCompactSurfaceHidden = false
         selectedSlot = null
         autoExpandedActivityKey = null
@@ -1192,6 +1222,24 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun observeScreenAndAutoCollapse() {
+        controllerScope.launch {
+            ScreenStateTracker.isScreenOn.collectLatest { screenOn ->
+                if (!screenOn && (isIslandExpanded || swipeDownPullProgress != null)) {
+                    swipeDownPullProgress = null
+                    collapseOverlay()
+                }
+            }
+        }
+        controllerScope.launch {
+            OverlayPreferences.expandedAutoCollapseSecondsFlow.collectLatest {
+                if (isIslandExpanded && autoExpandedActivityKey == null) {
+                    scheduleExpandedAutoCollapse()
+                }
+            }
+        }
+    }
+
     private fun applyCutoutMode(params: WindowManager.LayoutParams) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             params.layoutInDisplayCutoutMode =
@@ -1246,6 +1294,7 @@ class IslandOverlayViewController(
         idleHideJob = null
         autoCollapseJob?.cancel()
         autoCollapseJob = null
+        cancelExpandedAutoCollapse()
         seenShortTermTitles.clear()
         dismissalTracker.clear()
         islandLifecycle.clear()
@@ -1288,6 +1337,15 @@ class IslandOverlayViewController(
 
     }
 }
+
+private fun View.performIslandHaptic(feedbackConstant: Int) {
+    if (OverlayPreferences.hapticsEnabledFlow.value) {
+        performHapticFeedback(feedbackConstant)
+    }
+}
+
+internal fun resolveExpandedAutoCollapseDelayMs(timeoutSeconds: Int): Long? =
+    if (timeoutSeconds <= 0) null else timeoutSeconds.toLong() * 1000L
 
 private fun WindowManager.LayoutParams.geometryDiffersFrom(other: WindowManager.LayoutParams?): Boolean =
     other == null ||

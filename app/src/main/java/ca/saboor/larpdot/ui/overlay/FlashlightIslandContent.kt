@@ -482,7 +482,7 @@ private fun ExpandedFlashlightBeamLayout(
                         if (onBeamClick != null) {
                             onBeamClick()
                         } else {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                             FlashlightController.toggleFlashlight()
                         }
                     }
@@ -523,7 +523,7 @@ private fun ExpandedFlashlightBeamLayout(
                                 val currentStep = (newFraction * 4).toInt()
                                 if (currentStep != lastHapticStep || newFraction >= 0.99f || newFraction <= 0.06f) {
                                     lastHapticStep = currentStep
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
                                 }
                                 intensityFraction = newFraction
                                 val newLevel = (newFraction * currentMaxStrength).roundToInt().coerceIn(1, currentMaxStrength)
@@ -678,7 +678,7 @@ private fun ExpandedFlashlightBeamLayout(
                 ringSize = 42.dp,
                 contentDescription = if (isFlashlightOn) "Turn Off" else "Turn On",
                 onClick = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                     FlashlightController.toggleFlashlight()
                 },
                 modifier = Modifier.padding(bottom = 2.dp),

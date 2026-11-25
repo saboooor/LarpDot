@@ -23,6 +23,9 @@ object OverlayPreferences {
     private const val KEY_MUSIC_PAUSE_TIMEOUT_SECONDS = "music_pause_timeout_seconds"
     const val DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS = 5
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
+    private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
+    private const val KEY_EXPANDED_AUTO_COLLAPSE_SECONDS = "expanded_auto_collapse_seconds"
+    const val DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS = 0
     private const val KEY_HOLD_TO_EXPAND_DURATION_MS = "hold_to_expand_duration_ms"
     const val DEFAULT_HOLD_TO_EXPAND_DURATION_MS = 300
     const val MIN_HOLD_TO_EXPAND_DURATION_MS = 100
@@ -329,6 +332,13 @@ object OverlayPreferences {
     // ---- Scalar / Enum PrefState instances ----
     private val overlayEnabledPref = BooleanPref(KEY_OVERLAY_ENABLED, false)
     private val tapToExpandPref = BooleanPref(KEY_TAP_TO_EXPAND, false)
+    private val hapticsEnabledPref = BooleanPref(KEY_HAPTICS_ENABLED, true)
+    private val expandedAutoCollapseSecondsPref = IntPref(
+        KEY_EXPANDED_AUTO_COLLAPSE_SECONDS,
+        DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS,
+        0,
+        120,
+    )
     private val holdToExpandDurationMsPref = IntPref(
         KEY_HOLD_TO_EXPAND_DURATION_MS,
         DEFAULT_HOLD_TO_EXPAND_DURATION_MS,
@@ -455,6 +465,8 @@ object OverlayPreferences {
     // ---- Public StateFlows ----
     val isEnabledFlow: StateFlow<Boolean> = overlayEnabledPref.flow
     val tapToExpandFlow: StateFlow<Boolean> = tapToExpandPref.flow
+    val hapticsEnabledFlow: StateFlow<Boolean> = hapticsEnabledPref.flow
+    val expandedAutoCollapseSecondsFlow: StateFlow<Int> = expandedAutoCollapseSecondsPref.flow
     val holdToExpandDurationMsFlow: StateFlow<Int> = holdToExpandDurationMsPref.flow
     val bubbleStyleFlow: StateFlow<BubbleStyle> = bubbleStylePref.flow
     val smallerBubblesFlow: StateFlow<Boolean> = smallerBubblesPref.flow
@@ -558,6 +570,8 @@ object OverlayPreferences {
         backdropBlurEnabledPref.reload(prefs)
         backdropBlurRadiusPref.reload(prefs)
         isTapToExpandEnabled(context)
+        isHapticsEnabled(context)
+        getExpandedAutoCollapseSeconds(context)
         getHoldToExpandDurationMs(context)
     }
 
@@ -613,6 +627,12 @@ object OverlayPreferences {
 
     fun isTapToExpandEnabled(context: Context): Boolean = tapToExpandPref.get(getPrefs(context))
     fun setTapToExpandEnabled(context: Context, enabled: Boolean) = tapToExpandPref.set(getPrefs(context), enabled)
+
+    fun isHapticsEnabled(context: Context): Boolean = hapticsEnabledPref.get(getPrefs(context))
+    fun setHapticsEnabled(context: Context, enabled: Boolean) = hapticsEnabledPref.set(getPrefs(context), enabled)
+
+    fun getExpandedAutoCollapseSeconds(context: Context): Int = expandedAutoCollapseSecondsPref.get(getPrefs(context))
+    fun setExpandedAutoCollapseSeconds(context: Context, seconds: Int) = expandedAutoCollapseSecondsPref.set(getPrefs(context), seconds)
 
     fun getHoldToExpandDurationMs(context: Context): Int = holdToExpandDurationMsPref.get(getPrefs(context))
     fun setHoldToExpandDurationMs(context: Context, durationMs: Int) = holdToExpandDurationMsPref.set(getPrefs(context), durationMs)

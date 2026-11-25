@@ -133,6 +133,8 @@ class FeatureServicesTest {
             flashlightTapToToggle = false,
             musicPauseTimeoutSeconds = 30,
             tapToExpand = true,
+            hapticsEnabled = false,
+            expandedAutoCollapseSeconds = 15,
             holdToExpandDurationMs = 550,
             hideWhenScreenOff = false,
             hideOnLockScreen = true,
@@ -219,6 +221,10 @@ class FeatureServicesTest {
         assertEquals(60_000L, ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(60))
         assertNull(ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(0))
         assertNull(ca.saboor.larpdot.media.MediaPlaybackState.resolvePauseGraceDelayMs(-5))
+
+        assertNull(resolveExpandedAutoCollapseDelayMs(0))
+        assertNull(resolveExpandedAutoCollapseDelayMs(-10))
+        assertEquals(10_000L, resolveExpandedAutoCollapseDelayMs(10))
     }
 
     @Test fun playPauseIconTintAdaptsToAccentLuminance() {

@@ -347,16 +347,16 @@ internal fun CompactIslandOverlay(
         val base = when (type) {
             IslandType.CUSTOM -> IslandDragActions()
             IslandType.FLASHLIGHT -> flashlightDragActions(coroutineScope, density.density) {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
             }
             IslandType.MEDIA -> if (!secondary && isMusicActive) IslandDragActions(onSwipe = { next ->
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                 if (next) MediaPlaybackState.skipNext() else MediaPlaybackState.skipPrevious()
             }) else IslandDragActions()
             IslandType.NOTIFICATION_ACTIVITY -> IslandDragActions()
         }
         val dismissAction: () -> Unit = {
-            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
             onDismiss(type, slot)
         }
         return if (secondary) {
@@ -365,7 +365,7 @@ internal fun CompactIslandOverlay(
             base.copy(
                 onDown = {
                     if (hasSwipeDownCustomIsland) {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
                         onSwipeDownCustomExpand()
                     } else {
                         ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
@@ -389,7 +389,7 @@ internal fun CompactIslandOverlay(
             holdDurationMs = holdToExpandDurationMs,
             model = islandModel(activeDisplayType),
             onExpand = { requestExpand(activeDisplayType) },
-            onFeedback = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) },
+            onFeedback = { hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress) },
             onPress = { MediaPlaybackState.dismissSongAnnouncement() },
         )
 
@@ -595,7 +595,7 @@ internal fun CompactIslandOverlay(
                         onHold = { requestExpand(type.type, type) },
                     ),
                     onExpand = { requestExpand(type.type, type) },
-                    onFeedback = { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onFeedback = { hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress) },
                 )
         val pulse = bpmPulseState.value
         val secondaryPulseScale = if (pulseEntireIsland && isMusicActive && mediaInfo.isPlaying && type.type == IslandType.MEDIA && pulse > 0f) {
