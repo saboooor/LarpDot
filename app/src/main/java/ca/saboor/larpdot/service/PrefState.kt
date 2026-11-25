@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +26,7 @@ internal class BooleanPref(
     fun get(prefs: SharedPreferences): Boolean = if (!initialized) reload(prefs) else _flow.value
 
     fun set(prefs: SharedPreferences, value: Boolean) {
-        prefs.edit().putBoolean(key, value).apply()
+        prefs.edit { putBoolean(key, value) }
         _flow.value = value
         initialized = true
     }
@@ -57,7 +58,7 @@ internal class FloatPref(
 
     fun set(prefs: SharedPreferences, value: Float) {
         val clamped = value.coerceIn(min, max)
-        prefs.edit().putFloat(key, clamped).apply()
+        prefs.edit { putFloat(key, clamped) }
         _flow.value = clamped
         initialized = true
     }
@@ -84,7 +85,7 @@ internal class IntPref(
 
     fun set(prefs: SharedPreferences, value: Int) {
         val clamped = value.coerceIn(min, max)
-        prefs.edit().putInt(key, clamped).apply()
+        prefs.edit { putInt(key, clamped) }
         _flow.value = clamped
         initialized = true
     }
@@ -112,7 +113,7 @@ internal class EnumPref<T : Enum<T>>(
     fun get(prefs: SharedPreferences): T = if (!initialized) reload(prefs) else _flow.value
 
     fun set(prefs: SharedPreferences, value: T) {
-        prefs.edit().putString(key, serialize(value)).apply()
+        prefs.edit { putString(key, serialize(value)) }
         _flow.value = value
         initialized = true
     }

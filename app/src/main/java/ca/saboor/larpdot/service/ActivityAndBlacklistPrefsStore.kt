@@ -2,6 +2,7 @@ package ca.saboor.larpdot.service
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
@@ -91,33 +92,33 @@ internal object ActivityAndBlacklistPrefsStore {
         prefs: SharedPreferences,
         settings: NotificationActivitySettings,
     ) {
-        prefs.edit()
-            .putBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, settings.enabled)
-            .putBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, settings.progress)
-            .putBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, settings.navigation)
-            .putBoolean(KEY_NOTIFICATION_CALLS_ENABLED, settings.calls)
-            .putBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, settings.timers)
-            .putBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, settings.batteryCharging)
-            .putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
-            .putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
-            .putBoolean(KEY_NOTIFICATION_DND_ENABLED, settings.dnd)
-            .putBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, settings.volumeHud)
-            .putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
-            .putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
-            .putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
-            .putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
-            .putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
-            .putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
-            .putBoolean("permanent_charging", settings.permanentCharging)
-            .putBoolean("permanent_lowbattery", settings.permanentLowBattery)
-            .putBoolean("permanent_soundmode", settings.permanentSoundMode)
-            .putBoolean("permanent_dnd", settings.permanentDnd)
-            .putBoolean("permanent_bluetooth", settings.permanentBluetooth)
-            .putBoolean("permanent_audio_output", settings.permanentAudioOutput)
-            .putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
-            .putBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, settings.expandShortTermAlerts)
-            .putBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, settings.progressOutline)
-            .apply()
+        prefs.edit {
+            putBoolean(KEY_NOTIFICATION_ACTIVITIES_ENABLED, settings.enabled)
+            putBoolean(KEY_NOTIFICATION_PROGRESS_ENABLED, settings.progress)
+            putBoolean(KEY_NOTIFICATION_NAVIGATION_ENABLED, settings.navigation)
+            putBoolean(KEY_NOTIFICATION_CALLS_ENABLED, settings.calls)
+            putBoolean(KEY_NOTIFICATION_TIMERS_ENABLED, settings.timers)
+            putBoolean(KEY_NOTIFICATION_BATTERY_CHARGING_ENABLED, settings.batteryCharging)
+            putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
+            putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
+            putBoolean(KEY_NOTIFICATION_DND_ENABLED, settings.dnd)
+            putBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, settings.volumeHud)
+            putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
+            putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
+            putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
+            putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
+            putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
+            putBoolean(KEY_NOTIFICATION_PERMANENT_SHORT_TERM_ENABLED, settings.permanentShortTerm)
+            putBoolean("permanent_charging", settings.permanentCharging)
+            putBoolean("permanent_lowbattery", settings.permanentLowBattery)
+            putBoolean("permanent_soundmode", settings.permanentSoundMode)
+            putBoolean("permanent_dnd", settings.permanentDnd)
+            putBoolean("permanent_bluetooth", settings.permanentBluetooth)
+            putBoolean("permanent_audio_output", settings.permanentAudioOutput)
+            putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
+            putBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, settings.expandShortTermAlerts)
+            putBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, settings.progressOutline)
+        }
         _notificationActivitySettingsFlow.value = settings
         isNotificationActivitySettingsInitialized = true
         NotificationActivityState.configure(settings)
@@ -143,7 +144,7 @@ internal object ActivityAndBlacklistPrefsStore {
 
     fun setAppBlacklistEnabled(prefs: SharedPreferences, enabled: Boolean) {
         ensureAppBlacklistInitialized(prefs)
-        prefs.edit().putBoolean(KEY_APP_BLACKLIST_ENABLED, enabled).apply()
+        prefs.edit { putBoolean(KEY_APP_BLACKLIST_ENABLED, enabled) }
         _appBlacklistEnabledFlow.value = enabled
     }
 
@@ -155,7 +156,7 @@ internal object ActivityAndBlacklistPrefsStore {
     fun setBlacklistedPackages(context: Context, prefs: SharedPreferences, packages: Set<String>) {
         ensureAppBlacklistInitialized(prefs)
         val filtered = packages.filter { it.isNotBlank() && it != context.packageName }.toSet()
-        prefs.edit().putStringSet(KEY_APP_BLACKLIST, HashSet(filtered)).apply()
+        prefs.edit { putStringSet(KEY_APP_BLACKLIST, HashSet(filtered)) }
         _blacklistedPackagesFlow.value = filtered
     }
 
@@ -198,9 +199,7 @@ internal object ActivityAndBlacklistPrefsStore {
 
     fun setIslandPriorityOrder(prefs: SharedPreferences, order: List<IslandPriorityItem>) {
         val normalized = normalizeIslandPriorityOrder(order)
-        prefs.edit()
-            .putString(KEY_ISLAND_PRIORITY_ORDER, normalized.joinToString(",") { it.name })
-            .apply()
+        prefs.edit { putString(KEY_ISLAND_PRIORITY_ORDER, normalized.joinToString(",") { it.name }) }
         _islandPriorityOrderFlow.value = normalized
         isIslandPriorityOrderInitialized = true
     }

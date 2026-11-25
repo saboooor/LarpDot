@@ -2,6 +2,7 @@ package ca.saboor.larpdot.visualizer
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,15 +151,16 @@ object BpmDetector {
         appContext?.let { ctx ->
             try {
                 val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                val editor = prefs.edit()
-                if (bpmCache.size > MAX_CACHE_ENTRIES) {
-                    val excess = bpmCache.keys.filter { it != key }.take(bpmCache.size - MAX_CACHE_ENTRIES)
-                    excess.forEach { oldKey ->
-                        bpmCache.remove(oldKey)
-                        editor.remove(oldKey)
+                prefs.edit {
+                    if (bpmCache.size > MAX_CACHE_ENTRIES) {
+                        val excess = bpmCache.keys.filter { it != key }.take(bpmCache.size - MAX_CACHE_ENTRIES)
+                        excess.forEach { oldKey ->
+                            bpmCache.remove(oldKey)
+                            remove(oldKey)
+                        }
                     }
+                    putFloat(key, bpm)
                 }
-                editor.putFloat(key, bpm).apply()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed saving BPM to disk: ${e.message}")
             }

@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import android.util.LruCache
+import androidx.core.graphics.createBitmap
 import ca.saboor.larpdot.media.MediaPlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -374,7 +375,7 @@ object NotificationActivityState {
         } else {
             sizePx
         }
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)

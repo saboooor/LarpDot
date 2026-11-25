@@ -264,18 +264,16 @@ class AudioCaptureService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Device Audio Capture",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Used to capture device audio for live dynamic island visualizer"
-                setShowBadge(false)
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Device Audio Capture",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "Used to capture device audio for live dynamic island visualizer"
+            setShowBadge(false)
         }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
     }
 
     companion object {
@@ -297,11 +295,7 @@ class AudioCaptureService : Service() {
                 putExtra(EXTRA_RESULT_DATA, resultData)
                 putExtra(EXTRA_BAND_COUNT, bandCount)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {

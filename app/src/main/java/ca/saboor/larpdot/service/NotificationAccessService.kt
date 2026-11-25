@@ -9,6 +9,8 @@ import android.media.session.MediaSessionManager
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.core.os.BundleCompat
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.notification.NotificationActivityState
@@ -34,7 +36,7 @@ class NotificationAccessService : NotificationListenerService() {
         val scale = maxDimensionPx.toFloat() / maxSide.toFloat()
         val targetW = (bitmap.width * scale).toInt().coerceAtLeast(1)
         val targetH = (bitmap.height * scale).toInt().coerceAtLeast(1)
-        return runCatching { Bitmap.createScaledBitmap(bitmap, targetW, targetH, true) }
+        return runCatching { bitmap.scale(targetW, targetH) }
             .getOrDefault(bitmap)
     }
 
@@ -130,7 +132,7 @@ class NotificationAccessService : NotificationListenerService() {
                             if (drawable is BitmapDrawable) {
                                 artwork = drawable.bitmap
                             } else if (drawable != null && drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
-                                val bm = Bitmap.createBitmap(
+                                val bm = createBitmap(
                                     drawable.intrinsicWidth.coerceAtMost(256),
                                     drawable.intrinsicHeight.coerceAtMost(256),
                                     Bitmap.Config.ARGB_8888

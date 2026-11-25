@@ -28,6 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.get
+import androidx.core.graphics.withTranslation
+import androidx.core.view.isVisible
 import ca.saboor.larpdot.service.WidgetColorKey
 import ca.saboor.larpdot.ui.WidgetColorKeyRenderer
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -48,18 +52,17 @@ internal class WidgetPreviewSampler {
         val width = frame.width
         val height = frame.height
         if (width <= 0 || height <= 0 || frame.childCount == 0) return false
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         // Draw children directly onto a software canvas so any RenderEffect filter on the host frame is bypassed.
         for (index in 0 until frame.childCount) {
             val child = frame.getChildAt(index)
-            if (child.visibility == View.VISIBLE) {
-                canvas.save()
-                canvas.translate(child.left.toFloat(), child.top.toFloat())
-                if (!child.matrix.isIdentity) canvas.concat(child.matrix)
-                canvas.translate(-child.scrollX.toFloat(), -child.scrollY.toFloat())
-                child.draw(canvas)
-                canvas.restore()
+            if (child.isVisible) {
+                canvas.withTranslation(child.left.toFloat(), child.top.toFloat()) {
+                    if (!child.matrix.isIdentity) concat(child.matrix)
+                    translate(-child.scrollX.toFloat(), -child.scrollY.toFloat())
+                    child.draw(this)
+                }
             }
         }
         cachedBitmap = bitmap
@@ -71,7 +74,7 @@ internal class WidgetPreviewSampler {
         if (bitmap.width <= 0 || bitmap.height <= 0) return null
         val x = (normalizedX.coerceIn(0f, 1f) * (bitmap.width - 1)).roundToInt()
         val y = (normalizedY.coerceIn(0f, 1f) * (bitmap.height - 1)).roundToInt()
-        return sampleOpaqueRgb(bitmap.getPixel(x, y))
+        return sampleOpaqueRgb(bitmap[x, y])
     }
 
     fun releaseSnapshot() {

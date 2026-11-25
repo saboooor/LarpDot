@@ -394,6 +394,7 @@ class IslandOverlayViewController(
                             downRawY = event.rawY
                             lastRawX = event.rawX
                             lastRawY = event.rawY
+                            resetVelocityTracker()
                             velocityTracker = VelocityTracker.obtain()
                             addScreenSpaceVelocitySample(event)
                             val swipeHeightDp = (CustomIslandStore.settings.value.swipeDownIsland?.main?.height ?: 150).toFloat()
@@ -996,6 +997,7 @@ class IslandOverlayViewController(
         )
     }
 
+    @android.annotation.SuppressLint("RtlHardcoded")
     private fun layoutTouchWindow() {
         if (isHiding) {
             removeTouchWindow()

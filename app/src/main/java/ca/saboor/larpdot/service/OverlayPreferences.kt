@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Typeface
 import android.os.Build
 import androidx.compose.ui.text.font.FontFamily
+import androidx.core.content.edit
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -737,10 +738,10 @@ object OverlayPreferences {
 
     fun isDebugModeEnabled(context: Context): Boolean = isDebugModePref.get(getPrefs(context))
     fun setDebugModeEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_DEBUG_MODE, enabled)
-            .putBoolean(KEY_SHOW_DEBUG_DOT, enabled)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_DEBUG_MODE, enabled)
+            putBoolean(KEY_SHOW_DEBUG_DOT, enabled)
+        }
         isDebugModePref.forceSet(enabled)
     }
 
@@ -801,12 +802,12 @@ object OverlayPreferences {
     }
 
     fun setCutoutConfig(context: Context, config: CutoutConfig) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_MANUAL_CUTOUT_ENABLED, config.isManualEnabled)
-            .putFloat(KEY_CUTOUT_OFFSET_X, config.offsetX)
-            .putFloat(KEY_CUTOUT_OFFSET_Y, config.offsetY)
-            .putFloat(KEY_CUTOUT_DIAMETER, config.customDiameterDp)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_MANUAL_CUTOUT_ENABLED, config.isManualEnabled)
+            putFloat(KEY_CUTOUT_OFFSET_X, config.offsetX)
+            putFloat(KEY_CUTOUT_OFFSET_Y, config.offsetY)
+            putFloat(KEY_CUTOUT_DIAMETER, config.customDiameterDp)
+        }
         _cutoutConfigFlow.value = config
         isCutoutInitialized = true
     }
@@ -828,13 +829,13 @@ object OverlayPreferences {
 
     fun setPlaybackControlsStyle(context: Context, style: PlaybackControlsStyle) {
         val clamped = style.copy(cornerRadiusDp = style.cornerRadiusDp.coerceIn(0f, 32f))
-        getPrefs(context).edit()
-            .putBoolean(KEY_PLAYBACK_PLAY_PAUSE_BG, clamped.playPauseBackground)
-            .putBoolean(KEY_PLAYBACK_PLAY_PAUSE_ACCENT, clamped.playPauseAccentColor)
-            .putBoolean(KEY_PLAYBACK_SKIP_BG, clamped.skipBackground)
-            .putFloat(KEY_PLAYBACK_CORNER_RADIUS, clamped.cornerRadiusDp)
-            .putBoolean(KEY_PLAYBACK_M3_BUTTON_GROUP, clamped.material3ButtonGroup)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_PLAYBACK_PLAY_PAUSE_BG, clamped.playPauseBackground)
+            putBoolean(KEY_PLAYBACK_PLAY_PAUSE_ACCENT, clamped.playPauseAccentColor)
+            putBoolean(KEY_PLAYBACK_SKIP_BG, clamped.skipBackground)
+            putFloat(KEY_PLAYBACK_CORNER_RADIUS, clamped.cornerRadiusDp)
+            putBoolean(KEY_PLAYBACK_M3_BUTTON_GROUP, clamped.material3ButtonGroup)
+        }
         _playbackControlsStyleFlow.value = clamped
         isPlaybackControlsStyleInitialized = true
     }
@@ -855,13 +856,13 @@ object OverlayPreferences {
     }
 
     fun setTrackInfoStyle(context: Context, style: TrackInfoStyle) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_TRACK_INFO_SHOW_TITLE, style.showTitle)
-            .putBoolean(KEY_TRACK_INFO_SHOW_ARTIST, style.showArtist)
-            .putBoolean(KEY_TRACK_INFO_SHOW_ALBUM, style.showAlbum)
-            .putBoolean(KEY_TRACK_INFO_ALBUM_BESIDE_ARTIST, style.albumBesideArtist)
-            .putBoolean(KEY_TRACK_INFO_TITLE_ACCENT, style.titleAccentColor)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_TRACK_INFO_SHOW_TITLE, style.showTitle)
+            putBoolean(KEY_TRACK_INFO_SHOW_ARTIST, style.showArtist)
+            putBoolean(KEY_TRACK_INFO_SHOW_ALBUM, style.showAlbum)
+            putBoolean(KEY_TRACK_INFO_ALBUM_BESIDE_ARTIST, style.albumBesideArtist)
+            putBoolean(KEY_TRACK_INFO_TITLE_ACCENT, style.titleAccentColor)
+        }
         _trackInfoStyleFlow.value = style
         isTrackInfoStyleInitialized = true
     }
@@ -883,14 +884,14 @@ object OverlayPreferences {
     }
 
     fun setExpandedElementVisibility(context: Context, visibility: ExpandedElementVisibility) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_SHOW_EXPANDED_TRACK_INFO, visibility.trackInfo)
-            .putBoolean(KEY_SHOW_EXPANDED_PROGRESS, visibility.progress)
-            .putBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, visibility.mainControls)
-            .putBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, visibility.appActions)
-            .putBoolean(KEY_SHOW_EXPANDED_VISUALIZER, visibility.visualizer)
-            .putBoolean(KEY_SHOW_EXPANDED_BPM, visibility.bpm)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_SHOW_EXPANDED_TRACK_INFO, visibility.trackInfo)
+            putBoolean(KEY_SHOW_EXPANDED_PROGRESS, visibility.progress)
+            putBoolean(KEY_SHOW_EXPANDED_MAIN_CONTROLS, visibility.mainControls)
+            putBoolean(KEY_SHOW_EXPANDED_APP_ACTIONS, visibility.appActions)
+            putBoolean(KEY_SHOW_EXPANDED_VISUALIZER, visibility.visualizer)
+            putBoolean(KEY_SHOW_EXPANDED_BPM, visibility.bpm)
+        }
         _expandedElementVisibilityFlow.value = visibility
         isExpandedElementVisibilityInitialized = true
     }
@@ -910,12 +911,12 @@ object OverlayPreferences {
     }
 
     fun setExpandedGlowSides(context: Context, sides: ExpandedGlowSides) {
-        getPrefs(context).edit()
-            .putBoolean(KEY_EXPANDED_GLOW_LEFT, sides.left)
-            .putBoolean(KEY_EXPANDED_GLOW_RIGHT, sides.right)
-            .putBoolean(KEY_EXPANDED_GLOW_BOTTOM, sides.bottom)
-            .putBoolean(KEY_EXPANDED_GLOW_TOP, sides.top)
-            .apply()
+        getPrefs(context).edit {
+            putBoolean(KEY_EXPANDED_GLOW_LEFT, sides.left)
+            putBoolean(KEY_EXPANDED_GLOW_RIGHT, sides.right)
+            putBoolean(KEY_EXPANDED_GLOW_BOTTOM, sides.bottom)
+            putBoolean(KEY_EXPANDED_GLOW_TOP, sides.top)
+        }
         _expandedGlowSidesFlow.value = sides
         isExpandedGlowSidesInitialized = true
     }
@@ -939,7 +940,7 @@ object OverlayPreferences {
     }
 
     fun setCameraCoverStyle(context: Context, style: CameraCoverStyle) {
-        getPrefs(context).edit().putString(KEY_CAMERA_COVER_STYLE, style.name).apply()
+        getPrefs(context).edit { putString(KEY_CAMERA_COVER_STYLE, style.name) }
         _cameraCoverStyleFlow.value = style
         isCameraCoverStyleInitialized = true
     }
@@ -962,10 +963,10 @@ object OverlayPreferences {
     }
 
     fun setVisualizerMode(context: Context, mode: VisualizerMode) {
-        getPrefs(context).edit()
-            .putString(KEY_VISUALIZER_MODE, mode.key)
-            .putBoolean(KEY_HQ_VISUALIZER_ENABLED, mode == VisualizerMode.AUDIO_PREVIEW)
-            .apply()
+        getPrefs(context).edit {
+            putString(KEY_VISUALIZER_MODE, mode.key)
+            putBoolean(KEY_HQ_VISUALIZER_ENABLED, mode == VisualizerMode.AUDIO_PREVIEW)
+        }
         _visualizerModeFlow.value = mode
         isVisualizerModeInitialized = true
     }

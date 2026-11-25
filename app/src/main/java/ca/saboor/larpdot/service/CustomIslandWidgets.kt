@@ -238,6 +238,7 @@ internal object CustomIslandWidgets {
     }
 }
 
+@android.annotation.SuppressLint("ViewConstructor")
 internal class CustomIslandWidgetView(
     context: Context,
     private val onRemoteViewsUpdate: ((Int, CustomIslandWidgetView, RemoteViews?) -> Unit)? = null,

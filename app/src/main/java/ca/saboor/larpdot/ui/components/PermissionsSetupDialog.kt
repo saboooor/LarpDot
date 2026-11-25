@@ -5,9 +5,9 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.net.toUri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import ca.saboor.larpdot.service.ForegroundAppTracker
@@ -188,7 +188,7 @@ fun PermissionsSetupDialog(
                     onGrantClick = {
                         val intent = Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
+                            "package:${context.packageName}".toUri()
                         )
                         context.startActivity(intent)
                     },

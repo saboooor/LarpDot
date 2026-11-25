@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.drawable.BitmapDrawable
+import androidx.core.graphics.createBitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -156,7 +157,7 @@ internal fun loadMediaSessionActionIcon(
         } else {
             val width = drawable.intrinsicWidth.takeIf { it > 0 }?.coerceAtMost(128) ?: 64
             val height = drawable.intrinsicHeight.takeIf { it > 0 }?.coerceAtMost(128) ?: 64
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+            createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
                 val canvas = AndroidCanvas(bitmap)
                 drawable.setBounds(0, 0, width, height)
                 drawable.draw(canvas)

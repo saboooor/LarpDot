@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,7 +50,7 @@ internal object FlashlightPrefsStore {
     }
 
     fun setFlashlightExpandedStyle(prefs: SharedPreferences, style: OverlayPreferences.FlashlightExpandedStyle) {
-        prefs.edit().putString(KEY_FLASHLIGHT_EXPANDED_STYLE, style.name).apply()
+        prefs.edit { putString(KEY_FLASHLIGHT_EXPANDED_STYLE, style.name) }
         _flashlightExpandedStyleFlow.value = style
     }
 
@@ -76,7 +77,7 @@ internal object FlashlightPrefsStore {
 
     fun getBoostStrength(prefs: SharedPreferences): Int = prefs.getInt(KEY_BOOST_STRENGTH, 1)
     fun setBoostStrength(prefs: SharedPreferences, strength: Int) {
-        prefs.edit().putInt(KEY_BOOST_STRENGTH, strength).apply()
+        prefs.edit { putInt(KEY_BOOST_STRENGTH, strength) }
     }
 
     fun getAutoOffMinutes(prefs: SharedPreferences): Int = autoOffMinutes.get(prefs)

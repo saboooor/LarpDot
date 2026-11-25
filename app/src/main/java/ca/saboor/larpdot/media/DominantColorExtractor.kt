@@ -6,6 +6,8 @@ import android.graphics.Paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import kotlin.math.abs
 
 data class ArtworkColors(val primary: Color, val secondary: Color)
@@ -22,7 +24,7 @@ object DominantColorExtractor {
     fun extractArtworkColors(bitmap: Bitmap): ArtworkColors {
         val size = 48
         val scaled = if (bitmap.width != size || bitmap.height != size) {
-            runCatching { Bitmap.createScaledBitmap(bitmap, size, size, true) }.getOrDefault(bitmap)
+            runCatching { bitmap.scale(size, size) }.getOrDefault(bitmap)
         } else bitmap
         val readable = if (scaled.config == Bitmap.Config.HARDWARE) {
             scaled.copy(Bitmap.Config.ARGB_8888, false) ?: return defaultColors
@@ -221,7 +223,7 @@ object DominantColorExtractor {
      * Iconic Starboy electric neon magenta / crimson palette.
      */
     fun createSampleArtwork(title: String = "Starboy"): Bitmap {
-        val bm = Bitmap.createBitmap(160, 160, Bitmap.Config.ARGB_8888)
+        val bm = createBitmap(160, 160, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bm)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 

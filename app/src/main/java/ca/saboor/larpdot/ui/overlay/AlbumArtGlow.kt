@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.graphics.createBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
@@ -191,7 +192,7 @@ private fun getOrCreateBlurredArtwork(source: Bitmap): ImageBitmap? {
 }
 
 private fun createBlurredArtworkBitmap(source: Bitmap): Bitmap? {
-    val softwareCopy = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && source.config == Bitmap.Config.HARDWARE) {
+    val softwareCopy = if (source.config == Bitmap.Config.HARDWARE) {
         source.copy(Bitmap.Config.ARGB_8888, false) ?: return null
     } else {
         null
@@ -203,7 +204,7 @@ private fun createBlurredArtworkBitmap(source: Bitmap): Bitmap? {
         val cropLeft = (readableSource.width - cropSide) / 2
         val cropTop = (readableSource.height - cropSide) / 2
 
-        val buffer = Bitmap.createBitmap(BLUR_BUFFER_SIZE, BLUR_BUFFER_SIZE, Bitmap.Config.ARGB_8888)
+        val buffer = createBitmap(BLUR_BUFFER_SIZE, BLUR_BUFFER_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(buffer)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         canvas.drawBitmap(
