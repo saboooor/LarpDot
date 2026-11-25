@@ -18,6 +18,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
+import androidx.core.net.toUri
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
@@ -88,10 +89,30 @@ object ScreenshotPocketManager {
         }
     }
 
+    private val HTTP_URL_REGEX = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
+    private val URL_HOST_REGEX = Regex("""^https?://(?:www\.)?([^/:?#]+)""", RegexOption.IGNORE_CASE)
+
     internal fun isScreenshotCandidate(relativePath: String?, displayName: String?): Boolean {
         val path = relativePath.orEmpty().lowercase()
         val name = displayName.orEmpty().lowercase()
         return path.contains("screenshot") || name.contains("screenshot")
+    }
+
+    internal fun extractFirstHttpUrl(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        val raw = HTTP_URL_REGEX.find(text)?.value ?: return null
+        return raw.trimEnd('.', ',', ';', '!', '?', ')', ']', '}')
+    }
+
+    internal fun formatHeldTextTitle(text: String, subject: String? = null): String {
+        val cleanSubject = subject?.trim()?.takeIf { it.isNotEmpty() }
+        if (cleanSubject != null) return cleanSubject.take(40)
+        val url = extractFirstHttpUrl(text)
+        if (url != null) {
+            val host = URL_HOST_REGEX.find(url)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+            if (host != null) return host.take(40)
+        }
+        return "Held Note"
     }
 
     private fun handleMediaStoreChange(context: Context, changedUri: Uri?) {
@@ -119,7 +140,6 @@ object ScreenshotPocketManager {
     fun holdSharedItem(context: Context, uri: Uri, mimeType: String?, label: String? = null) {
         val app = context.applicationContext
         appContext = app
-        val settings = OverlayPreferences.getNotificationActivitySettings(app)
         scope.launch {
             val resolvedName = label?.takeIf { it.isNotBlank() }
                 ?: withContext(Dispatchers.IO) { resolveDisplayName(app, uri) }
@@ -130,7 +150,7 @@ object ScreenshotPocketManager {
             } else null
 
             postPocketItem(
-                key = "system_screenshot_held_${System.currentTimeMillis()}",
+                key = "system_screenshot_held_${System.currentTimeMillis()}_${uri.hashCode()}",
                 title = "Held in Island",
                 subtitle = resolvedName,
                 uri = uri,
@@ -139,6 +159,32 @@ object ScreenshotPocketManager {
                 permanent = true,
             )
         }
+    }
+
+    fun holdSharedText(context: Context, text: String, subject: String? = null) {
+        val cleaned = text.trim()
+        if (cleaned.isEmpty()) return
+        appContext = context.applicationContext
+        val key = "system_screenshot_text_${System.currentTimeMillis()}"
+        val info = NotificationActivityInfo(
+            key = key,
+            packageName = "android",
+            appName = "Pocket",
+            title = formatHeldTextTitle(cleaned, subject),
+            text = cleaned.take(240),
+            kind = NotificationActivityKind.SCREENSHOT,
+            progress = null,
+            progressMax = null,
+            progressIndeterminate = false,
+            chronometerBaseElapsedRealtime = null,
+            chronometerCountsDown = false,
+            postedAtMillis = System.currentTimeMillis(),
+            contentIntent = null,
+            actions = emptyList(),
+            heldText = cleaned,
+            isPinnedShortTerm = true,
+        )
+        NotificationActivityState.postSystemActivity(info)
     }
 
     private fun postPocketItem(
@@ -183,7 +229,7 @@ object ScreenshotPocketManager {
     }
 
     fun openItem(context: Context, uriString: String, mimeType: String?) {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mimeType ?: "image/*")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -191,8 +237,15 @@ object ScreenshotPocketManager {
         runCatching { context.startActivity(intent) }
     }
 
+    fun openUrl(context: Context, url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
+    }
+
     fun shareItem(context: Context, uriString: String, mimeType: String?) {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mimeType ?: "image/*"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -204,8 +257,19 @@ object ScreenshotPocketManager {
         runCatching { context.startActivity(chooser) }
     }
 
+    fun shareText(context: Context, text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        val chooser = Intent.createChooser(send, "Share from Island").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(chooser) }
+    }
+
     fun copyItem(context: Context, uriString: String) {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         val clip = ClipData.newUri(context.contentResolver, "Screenshot", uri)
         runCatching {
@@ -214,8 +278,21 @@ object ScreenshotPocketManager {
         }
     }
 
+    fun copyText(context: Context, text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        runCatching {
+            clipboard.setPrimaryClip(ClipData.newPlainText("Held Text", text))
+            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun dismissHeldItem(key: String) {
+        dismissJobs.remove(key)?.cancel()
+        NotificationActivityState.removeSystemActivity(key)
+    }
+
     fun deleteItem(context: Context, key: String, uriString: String) {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         dismissJobs.remove(key)?.cancel()
         NotificationActivityState.removeSystemActivity(key)
         scope.launch(Dispatchers.IO) {

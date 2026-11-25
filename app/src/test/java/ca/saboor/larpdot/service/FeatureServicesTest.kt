@@ -63,6 +63,15 @@ class FeatureServicesTest {
         assertTrue(ScreenshotPocketManager.isScreenshotCandidate("Pictures/Screenshots/", "IMG_001.png"))
         assertTrue(ScreenshotPocketManager.isScreenshotCandidate("DCIM/", "Screenshot_20261123.png"))
         assertFalse(ScreenshotPocketManager.isScreenshotCandidate("DCIM/Camera/", "PXL_20261123.jpg"))
+
+        assertEquals(
+            "https://github.com/saboooor/LarpDot",
+            ScreenshotPocketManager.extractFirstHttpUrl("Check this out: https://github.com/saboooor/LarpDot."),
+        )
+        assertNull(ScreenshotPocketManager.extractFirstHttpUrl("OTP code: 482910"))
+        assertEquals("github.com", ScreenshotPocketManager.formatHeldTextTitle("https://www.github.com/saboooor/LarpDot"))
+        assertEquals("Tracking Link", ScreenshotPocketManager.formatHeldTextTitle("https://example.com", "Tracking Link"))
+        assertEquals("Held Note", ScreenshotPocketManager.formatHeldTextTitle("Gate code #4421"))
     }
 
     @Test fun trackTimestampPlacementIsSavedIndependentlyOfPlayerLayout() {

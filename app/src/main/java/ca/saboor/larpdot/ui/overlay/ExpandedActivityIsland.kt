@@ -162,7 +162,8 @@ private fun buildExpandedActivityLayoutModel(
     } else {
         activity.actions.take(3)
     }
-    val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null
+    val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT &&
+        (activity.mediaUri != null || !activity.heldText.isNullOrBlank())
     val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
     val hasFooter = showProgressBar || isScreenshot || footerActions.isNotEmpty()
     return ExpandedActivityLayoutModel(
@@ -318,6 +319,11 @@ internal fun ExpandedNotificationActivityContent(
         when {
             activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null -> {
                 ScreenshotPocketManager.openItem(context, activity.mediaUri, activity.mediaMimeType)
+            }
+            activity.kind == NotificationActivityKind.SCREENSHOT && !activity.heldText.isNullOrBlank() -> {
+                val url = ScreenshotPocketManager.extractFirstHttpUrl(activity.heldText)
+                if (url != null) ScreenshotPocketManager.openUrl(context, url)
+                else ScreenshotPocketManager.copyText(context, activity.heldText)
             }
             activity.kind == NotificationActivityKind.AUDIO_OUTPUT || activity.kind == NotificationActivityKind.BLUETOOTH -> {
                 AudioOutputTracker.openOutputSwitcher(context)
@@ -589,7 +595,73 @@ private fun ExpandedScreenshotSection(
     onCollapse: () -> Unit,
 ) {
     val context = LocalContext.current
-    val mediaUri = activity.mediaUri ?: return
+    val mediaUri = activity.mediaUri
+    val heldText = activity.heldText?.takeIf { it.isNotBlank() }
+    if (mediaUri == null && heldText != null) {
+        val url = remember(heldText) { ScreenshotPocketManager.extractFirstHttpUrl(heldText) }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = {
+                    ScreenshotPocketManager.copyText(context, heldText)
+                    onCollapse()
+                },
+                modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+            ) {
+                Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (url != null) {
+                FilledTonalButton(
+                    onClick = {
+                        ScreenshotPocketManager.openUrl(context, url)
+                        onCollapse()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.OpenInFull, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Open", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                FilledTonalButton(
+                    onClick = {
+                        ScreenshotPocketManager.shareText(context, heldText)
+                        onCollapse()
+                    },
+                    modifier = Modifier.heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Share, contentDescription = "Share", modifier = Modifier.size(18.dp))
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = {
+                        ScreenshotPocketManager.shareText(context, heldText)
+                        onCollapse()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Share", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            FilledTonalButton(
+                onClick = {
+                    ScreenshotPocketManager.dismissHeldItem(activity.key)
+                    onCollapse()
+                },
+                modifier = Modifier.heightIn(min = 42.dp),
+            ) {
+                Icon(LarpIcons.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
+            }
+        }
+        return
+    }
+    if (mediaUri == null) return
     val previewBitmap = remember(activity.appIcon) { activity.appIcon?.asImageBitmap() }
     if (previewBitmap != null) {
         Spacer(Modifier.height(12.dp))

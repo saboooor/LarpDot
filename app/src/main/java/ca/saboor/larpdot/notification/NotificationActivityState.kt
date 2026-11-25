@@ -102,6 +102,7 @@ data class NotificationActivityInfo(
     val bluetoothBatteryPercent: Int? = null,
     val mediaUri: String? = null,
     val mediaMimeType: String? = null,
+    val heldText: String? = null,
     val isPinnedShortTerm: Boolean = false,
     val maneuverIcon: Bitmap? = null,
     val earbudBatteryLevels: EarbudBatteryLevels? = null,
