@@ -101,6 +101,7 @@ fun MusicScreen(
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
     val musicPauseTimeoutSeconds by OverlayPreferences.musicPauseTimeoutSecondsFlow.collectAsState()
+    val musicQuickSeekSeconds by OverlayPreferences.musicQuickSeekSecondsFlow.collectAsState()
     val usageAccessGranted by ForegroundAppTracker.hasUsageAccess.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -323,6 +324,7 @@ fun MusicScreen(
                 expandedElementVisibility = expandedElementVisibility,
                 hideMusicWhenAppOpen = hideMusicWhenAppOpen,
                 musicPauseTimeoutSeconds = musicPauseTimeoutSeconds,
+                musicQuickSeekSeconds = musicQuickSeekSeconds,
                 usageAccessGranted = usageAccessGranted,
                 pulseAmount = pulseAmount,
                 onBack = { showMusicSettings = false },
@@ -382,6 +384,7 @@ private fun MusicSettingsPage(
     expandedElementVisibility: OverlayPreferences.ExpandedElementVisibility,
     hideMusicWhenAppOpen: Boolean,
     musicPauseTimeoutSeconds: Int,
+    musicQuickSeekSeconds: Int,
     usageAccessGranted: Boolean,
     pulseAmount: Float,
     onBack: () -> Unit,
@@ -620,6 +623,40 @@ private fun MusicSettingsPage(
                                         label = label,
                                         onCheckedChange = {
                                             OverlayPreferences.setMusicPauseTimeoutSeconds(context, seconds)
+                                        },
+                                    )
+                                },
+                            )
+                        }
+
+                        LarpDivider()
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Quick Seek Step",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = "Long-press Previous or Next in the expanded player to jump ±${musicQuickSeekSeconds}s",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            val quickSeekOptions = listOf(
+                                5 to "5s",
+                                10 to "10s",
+                                15 to "15s",
+                                30 to "30s",
+                            )
+                            LarpConnectedButtons(
+                                options = quickSeekOptions.map { (seconds, label) ->
+                                    LarpButtonOption(
+                                        checked = musicQuickSeekSeconds == seconds,
+                                        label = label,
+                                        onCheckedChange = {
+                                            OverlayPreferences.setMusicQuickSeekSeconds(context, seconds)
                                         },
                                     )
                                 },

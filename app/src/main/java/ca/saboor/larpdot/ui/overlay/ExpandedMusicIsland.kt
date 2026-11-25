@@ -162,6 +162,7 @@ internal fun ExpandedIslandContent(
     val currentBpm by BpmDetector.currentBpm.collectAsState()
     val sleepTimerState by MusicSleepTimer.state.collectAsState()
     val sleepTimerBadge = formatSleepTimerBadge(sleepTimerState)
+    val quickSeekSeconds by OverlayPreferences.musicQuickSeekSecondsFlow.collectAsState()
     LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
         if (mediaInfo.title.isNotBlank()) {
             BpmDetector.syncTrack(mediaInfo.title, mediaInfo.artist)
@@ -354,6 +355,7 @@ internal fun ExpandedIslandContent(
             accentColor = accentColor,
             currentBpm = currentBpm,
             sleepTimerBadge = sleepTimerBadge,
+            quickSeekStepMs = quickSeekSeconds.coerceIn(5, 60) * 1000L,
             trackInfoStyle = trackInfoStyle,
             fontStyle = fontStyle,
             elementVisibility = elementVisibility,
@@ -435,6 +437,7 @@ private class ExpandedLayoutParams(
     val accentColor: Color,
     val currentBpm: Float?,
     val sleepTimerBadge: String?,
+    val quickSeekStepMs: Long,
     val trackInfoStyle: OverlayPreferences.TrackInfoStyle,
     val fontStyle: OverlayPreferences.IslandFontStyle,
     val elementVisibility: OverlayPreferences.ExpandedElementVisibility,
@@ -1100,7 +1103,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                     .clip(visuals.prevShape)
                     .combinedClickable(
                         onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
-                        onLongClick = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                        onLongClick = quickSeekHandler(p, -p.quickSeekStepMs),
                     )
                     .then(
                         if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, visuals.prevShape)
@@ -1127,7 +1130,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                     .clip(visuals.nextShape)
                     .combinedClickable(
                         onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
-                        onLongClick = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                        onLongClick = quickSeekHandler(p, p.quickSeekStepMs),
                     )
                     .then(
                         if (p.highlightPlaybackControls) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, visuals.nextShape)
@@ -1251,8 +1254,8 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
             onPrevious = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
             onPlayPause = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
             onNext = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
-            onLongPressPrevious = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
-            onLongPressNext = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+            onLongPressPrevious = quickSeekHandler(p, -p.quickSeekStepMs),
+            onLongPressNext = quickSeekHandler(p, p.quickSeekStepMs),
             highlight = p.highlightPlaybackControls,
         )
 
@@ -1371,8 +1374,8 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 onPrevious = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipPrevious() },
                 onPlayPause = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.togglePlayPause() },
                 onNext = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
-                onLongPressPrevious = quickSeekHandler(p, -MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
-                onLongPressNext = quickSeekHandler(p, MediaPlaybackState.DEFAULT_QUICK_SEEK_MS),
+                onLongPressPrevious = quickSeekHandler(p, -p.quickSeekStepMs),
+                onLongPressNext = quickSeekHandler(p, p.quickSeekStepMs),
                 highlight = p.highlightPlaybackControls,
                 modifier = Modifier.align(Alignment.Center),
             )

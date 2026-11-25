@@ -5,6 +5,7 @@ import ca.saboor.larpdot.flashlight.StrobeSpeed
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
+import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder
 
 data class IslandBackupConfig(
@@ -70,10 +71,12 @@ data class IslandBackupConfig(
     val flashlightAutoOffMinutes: Int = 0,
     val flashlightStrobeSpeed: StrobeSpeed = StrobeSpeed.NORMAL,
     val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
+    val musicQuickSeekSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_QUICK_SEEK_SECONDS,
     val tapToExpand: Boolean = false,
     val hapticsEnabled: Boolean = true,
     val expandedAutoCollapseSeconds: Int = OverlayPreferences.DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS,
     val holdToExpandDurationMs: Int = OverlayPreferences.DEFAULT_HOLD_TO_EXPAND_DURATION_MS,
+    val swipeDownSensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
     val hideWhenScreenOff: Boolean = true,
     val hideOnLockScreen: Boolean = false,
     val hideInFullscreen: Boolean = false,
@@ -449,10 +452,12 @@ object IslandThemePresets {
             add("flashlightAutoOffMinutes" to config.flashlightAutoOffMinutes.toString())
             add("flashlightStrobeSpeed" to quote(config.flashlightStrobeSpeed.name))
             add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
+            add("musicQuickSeekSeconds" to config.musicQuickSeekSeconds.toString())
             add("tapToExpand" to config.tapToExpand.toString())
             add("hapticsEnabled" to config.hapticsEnabled.toString())
             add("expandedAutoCollapseSeconds" to config.expandedAutoCollapseSeconds.toString())
             add("holdToExpandDurationMs" to config.holdToExpandDurationMs.toString())
+            add("swipeDownSensitivity" to quote(config.swipeDownSensitivity.name))
             add("hideWhenScreenOff" to config.hideWhenScreenOff.toString())
             add("hideOnLockScreen" to config.hideOnLockScreen.toString())
             add("hideInFullscreen" to config.hideInFullscreen.toString())
@@ -586,12 +591,14 @@ object IslandThemePresets {
             flashlightAutoOffMinutes = (fields["flashlightAutoOffMinutes"]?.toIntOrNull() ?: defaults.flashlightAutoOffMinutes).coerceIn(0, 60),
             flashlightStrobeSpeed = enumOrDefault(fields["flashlightStrobeSpeed"], defaults.flashlightStrobeSpeed),
             musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
+            musicQuickSeekSeconds = (fields["musicQuickSeekSeconds"]?.toIntOrNull() ?: defaults.musicQuickSeekSeconds).coerceIn(5, 60),
             tapToExpand = fields["tapToExpand"]?.toBooleanStrictOrNull() ?: defaults.tapToExpand,
             hapticsEnabled = fields["hapticsEnabled"]?.toBooleanStrictOrNull() ?: defaults.hapticsEnabled,
             expandedAutoCollapseSeconds = (fields["expandedAutoCollapseSeconds"]?.toIntOrNull()
                 ?: defaults.expandedAutoCollapseSeconds).coerceIn(0, 120),
             holdToExpandDurationMs = (fields["holdToExpandDurationMs"]?.toIntOrNull() ?: defaults.holdToExpandDurationMs)
                 .coerceIn(OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS, OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS),
+            swipeDownSensitivity = enumOrDefault(fields["swipeDownSensitivity"], defaults.swipeDownSensitivity),
             hideWhenScreenOff = fields["hideWhenScreenOff"]?.toBooleanStrictOrNull() ?: defaults.hideWhenScreenOff,
             hideOnLockScreen = fields["hideOnLockScreen"]?.toBooleanStrictOrNull() ?: defaults.hideOnLockScreen,
             hideInFullscreen = fields["hideInFullscreen"]?.toBooleanStrictOrNull() ?: defaults.hideInFullscreen,
@@ -728,10 +735,12 @@ object IslandThemePresets {
             flashlightAutoOffMinutes = OverlayPreferences.getFlashlightAutoOffMinutes(context),
             flashlightStrobeSpeed = OverlayPreferences.getFlashlightStrobeSpeed(context),
             musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
+            musicQuickSeekSeconds = OverlayPreferences.getMusicQuickSeekSeconds(context),
             tapToExpand = OverlayPreferences.isTapToExpandEnabled(context),
             hapticsEnabled = OverlayPreferences.isHapticsEnabled(context),
             expandedAutoCollapseSeconds = OverlayPreferences.getExpandedAutoCollapseSeconds(context),
             holdToExpandDurationMs = OverlayPreferences.getHoldToExpandDurationMs(context),
+            swipeDownSensitivity = OverlayPreferences.getSwipeDownSensitivity(context),
             hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(context),
             hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(context),
             hideInFullscreen = OverlayPreferences.isHideInFullscreenEnabled(context),
@@ -787,10 +796,12 @@ object IslandThemePresets {
         OverlayPreferences.setFlashlightAutoOffMinutes(context, config.flashlightAutoOffMinutes)
         OverlayPreferences.setFlashlightStrobeSpeed(context, config.flashlightStrobeSpeed)
         OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
+        OverlayPreferences.setMusicQuickSeekSeconds(context, config.musicQuickSeekSeconds)
         OverlayPreferences.setTapToExpandEnabled(context, config.tapToExpand)
         OverlayPreferences.setHapticsEnabled(context, config.hapticsEnabled)
         OverlayPreferences.setExpandedAutoCollapseSeconds(context, config.expandedAutoCollapseSeconds)
         OverlayPreferences.setHoldToExpandDurationMs(context, config.holdToExpandDurationMs)
+        OverlayPreferences.setSwipeDownSensitivity(context, config.swipeDownSensitivity)
         OverlayPreferences.setHideWhenScreenOffEnabled(context, config.hideWhenScreenOff)
         OverlayPreferences.setHideOnLockScreenEnabled(context, config.hideOnLockScreen)
         OverlayPreferences.setHideInFullscreenEnabled(context, config.hideInFullscreen)

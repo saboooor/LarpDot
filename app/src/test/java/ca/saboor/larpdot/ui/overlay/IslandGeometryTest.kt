@@ -380,4 +380,53 @@ class IslandGeometryTest {
         assertEquals("Clock", wingedInfo.title)
         assertEquals("Always • 280×140 dp • Left: Star", wingedInfo.subtitle)
     }
+
+    @Test fun swipeDownSensitivityScalesTouchZoneTriggerAndCommitThresholds() {
+        val tightBounds = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.TIGHT,
+        )
+        val balancedBounds = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.BALANCED,
+        )
+        val easyBounds = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.EASY,
+        )
+        assertTrue(tightBounds.width < balancedBounds.width)
+        assertTrue(balancedBounds.width < easyBounds.width)
+        assertTrue(tightBounds.bottom < balancedBounds.bottom)
+        assertTrue(balancedBounds.bottom < easyBounds.bottom)
+
+        // Small 15px downward drag at density=3 (5dp): triggers Easy, not Balanced or Tight
+        assertTrue(isCameraDotSwipeDown(dx = 0f, dy = 15f, density = 3f, sensitivity = SwipeDownSensitivity.EASY))
+        assertFalse(isCameraDotSwipeDown(dx = 0f, dy = 15f, density = 3f, sensitivity = SwipeDownSensitivity.BALANCED))
+        assertFalse(isCameraDotSwipeDown(dx = 0f, dy = 15f, density = 3f, sensitivity = SwipeDownSensitivity.TIGHT))
+
+        // Shallow pull progress 0.16 with zero velocity: commits on Easy, snaps back on Balanced & Tight
+        assertTrue(shouldCommitSwipeDownPull(progress = 0.16f, velocityYPxPerSec = 0f, density = 3f, sensitivity = SwipeDownSensitivity.EASY))
+        assertFalse(shouldCommitSwipeDownPull(progress = 0.16f, velocityYPxPerSec = 0f, density = 3f, sensitivity = SwipeDownSensitivity.BALANCED))
+        assertFalse(shouldCommitSwipeDownPull(progress = 0.25f, velocityYPxPerSec = 0f, density = 3f, sensitivity = SwipeDownSensitivity.TIGHT))
+        assertTrue(shouldCommitSwipeDownPull(progress = 0.32f, velocityYPxPerSec = 0f, density = 3f, sensitivity = SwipeDownSensitivity.TIGHT))
+
+        assertEquals(SwipeDownSensitivity.EASY, SwipeDownSensitivity.fromKey("easy"))
+        assertEquals(SwipeDownSensitivity.TIGHT, SwipeDownSensitivity.fromKey("TIGHT"))
+        assertEquals(SwipeDownSensitivity.BALANCED, SwipeDownSensitivity.fromKey("unknown"))
+    }
 }

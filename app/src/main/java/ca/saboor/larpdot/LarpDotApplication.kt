@@ -32,6 +32,8 @@ class LarpDotApplication : Application() {
         OverlayPreferences.getFlashlightStrobeSpeed(this)
         OverlayPreferences.isHapticsEnabled(this)
         OverlayPreferences.getExpandedAutoCollapseSeconds(this)
+        OverlayPreferences.getSwipeDownSensitivity(this)
+        OverlayPreferences.getMusicQuickSeekSeconds(this)
         OverlayPreferences.isHideWhenScreenOffEnabled(this)
         OverlayPreferences.isHideOnLockScreenEnabled(this)
         OverlayPreferences.isHideInFullscreenEnabled(this)

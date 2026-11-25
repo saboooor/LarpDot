@@ -23,7 +23,10 @@ object OverlayPreferences {
     private const val KEY_SHOW_SONG_ANNOUNCEMENT = "show_song_announcement"
     private const val KEY_MUSIC_PAUSE_TIMEOUT_SECONDS = "music_pause_timeout_seconds"
     const val DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS = 5
+    private const val KEY_MUSIC_QUICK_SEEK_SECONDS = "music_quick_seek_seconds"
+    const val DEFAULT_MUSIC_QUICK_SEEK_SECONDS = 10
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
+    private const val KEY_SWIPE_DOWN_SENSITIVITY = "swipe_down_sensitivity"
     private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
     private const val KEY_EXPANDED_AUTO_COLLAPSE_SECONDS = "expanded_auto_collapse_seconds"
     const val DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS = 0
@@ -347,6 +350,12 @@ object OverlayPreferences {
         MIN_HOLD_TO_EXPAND_DURATION_MS,
         MAX_HOLD_TO_EXPAND_DURATION_MS,
     )
+    private val swipeDownSensitivityPref = EnumPref(
+        KEY_SWIPE_DOWN_SENSITIVITY,
+        ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity.BALANCED,
+        parse = ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity::fromKey,
+        serialize = { it.key },
+    )
     private val bubbleStylePref = EnumPref(
         KEY_BUBBLE_STYLE,
         BubbleStyle.IPHONE,
@@ -449,6 +458,12 @@ object OverlayPreferences {
         0,
         300,
     )
+    private val musicQuickSeekSecondsPref = IntPref(
+        KEY_MUSIC_QUICK_SEEK_SECONDS,
+        DEFAULT_MUSIC_QUICK_SEEK_SECONDS,
+        5,
+        60,
+    )
     private val waveformBandCountPref = IntPref(KEY_WAVEFORM_BAND_COUNT, DEFAULT_WAVEFORM_BAND_COUNT)
     private val waveformBarWidthPref = FloatPref(KEY_WAVEFORM_BAR_WIDTH, DEFAULT_WAVEFORM_BAR_WIDTH)
     private val waveformBarSpacingPref = FloatPref(KEY_WAVEFORM_BAR_SPACING, DEFAULT_WAVEFORM_BAR_SPACING)
@@ -471,6 +486,8 @@ object OverlayPreferences {
     val hapticsEnabledFlow: StateFlow<Boolean> = hapticsEnabledPref.flow
     val expandedAutoCollapseSecondsFlow: StateFlow<Int> = expandedAutoCollapseSecondsPref.flow
     val holdToExpandDurationMsFlow: StateFlow<Int> = holdToExpandDurationMsPref.flow
+    val swipeDownSensitivityFlow: StateFlow<ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity> =
+        swipeDownSensitivityPref.flow
     val bubbleStyleFlow: StateFlow<BubbleStyle> = bubbleStylePref.flow
     val smallerBubblesFlow: StateFlow<Boolean> = smallerBubblesPref.flow
     val showMinimizedTitleFlow: StateFlow<Boolean> = showMinimizedTitlePref.flow
@@ -508,6 +525,7 @@ object OverlayPreferences {
     val hideInDndFlow: StateFlow<Boolean> = hideInDndPref.flow
     val hideMusicWhenAppOpenFlow: StateFlow<Boolean> = hideMusicWhenAppOpenPref.flow
     val musicPauseTimeoutSecondsFlow: StateFlow<Int> = musicPauseTimeoutSecondsPref.flow
+    val musicQuickSeekSecondsFlow: StateFlow<Int> = musicQuickSeekSecondsPref.flow
     val waveformBandCountFlow: StateFlow<Int> = waveformBandCountPref.flow
     val waveformBarWidthFlow: StateFlow<Float> = waveformBarWidthPref.flow
     val waveformBarSpacingFlow: StateFlow<Float> = waveformBarSpacingPref.flow
@@ -580,6 +598,7 @@ object OverlayPreferences {
         isHapticsEnabled(context)
         getExpandedAutoCollapseSeconds(context)
         getHoldToExpandDurationMs(context)
+        getSwipeDownSensitivity(context)
     }
 
     fun initializeMusicSettings(context: Context) {
@@ -590,6 +609,7 @@ object OverlayPreferences {
         isShowMinimizedTitleEnabled(context)
         isShowSongAnnouncementEnabled(context)
         getMusicPauseTimeoutSeconds(context)
+        getMusicQuickSeekSeconds(context)
         islandFontWeightPref.reload(prefs)
         getFlashlightExpandedStyle(context)
         isFlashlightBeamBlurEnabled(context)
@@ -643,6 +663,11 @@ object OverlayPreferences {
 
     fun getHoldToExpandDurationMs(context: Context): Int = holdToExpandDurationMsPref.get(getPrefs(context))
     fun setHoldToExpandDurationMs(context: Context, durationMs: Int) = holdToExpandDurationMsPref.set(getPrefs(context), durationMs)
+
+    fun getSwipeDownSensitivity(context: Context): ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity =
+        swipeDownSensitivityPref.get(getPrefs(context))
+    fun setSwipeDownSensitivity(context: Context, sensitivity: ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity) =
+        swipeDownSensitivityPref.set(getPrefs(context), sensitivity)
 
     fun getBubbleStyle(context: Context): BubbleStyle = bubbleStylePref.get(getPrefs(context))
     fun setBubbleStyle(context: Context, style: BubbleStyle) = bubbleStylePref.set(getPrefs(context), style)
@@ -768,6 +793,10 @@ object OverlayPreferences {
     /** Seconds to keep the music island visible after pausing; 0 means keep until dismissed. */
     fun getMusicPauseTimeoutSeconds(context: Context): Int = musicPauseTimeoutSecondsPref.get(getPrefs(context))
     fun setMusicPauseTimeoutSeconds(context: Context, seconds: Int) = musicPauseTimeoutSecondsPref.set(getPrefs(context), seconds)
+
+    /** Step in seconds jumped on long-press of Previous/Next in the expanded music player. */
+    fun getMusicQuickSeekSeconds(context: Context): Int = musicQuickSeekSecondsPref.get(getPrefs(context))
+    fun setMusicQuickSeekSeconds(context: Context, seconds: Int) = musicQuickSeekSecondsPref.set(getPrefs(context), seconds)
 
     fun getWaveformBandCount(context: Context): Int = waveformBandCountPref.get(getPrefs(context))
     fun setWaveformBandCount(context: Context, count: Int) = waveformBandCountPref.set(getPrefs(context), count)

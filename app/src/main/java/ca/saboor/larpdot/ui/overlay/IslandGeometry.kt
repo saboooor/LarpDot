@@ -63,6 +63,62 @@ internal fun activeIslandTouchBounds(
     }
 }
 
+/** Sensitivity profiles for the swipe-down-from-camera custom island gesture. */
+enum class SwipeDownSensitivity(
+    val key: String,
+    val label: String,
+    val description: String,
+    val edgeHalfExtraDp: Float,
+    val minEdgeHalfDp: Float,
+    val inwardReachExtraDp: Float,
+    val triggerDyDp: Float,
+    val angleRatio: Float,
+    val commitProgress: Float,
+    val commitVelocityDpPerSec: Float,
+) {
+    TIGHT(
+        key = "tight",
+        label = "Tight",
+        description = "Smaller touch zone around the camera so status bar swipes are rarely intercepted",
+        edgeHalfExtraDp = 26f,
+        minEdgeHalfDp = 42f,
+        inwardReachExtraDp = 10f,
+        triggerDyDp = 10f,
+        angleRatio = 0.9f,
+        commitProgress = 0.30f,
+        commitVelocityDpPerSec = 260f,
+    ),
+    BALANCED(
+        key = "balanced",
+        label = "Balanced",
+        description = "Balanced touch zone and downward pull threshold around the camera cutout",
+        edgeHalfExtraDp = 40f,
+        minEdgeHalfDp = 56f,
+        inwardReachExtraDp = 16f,
+        triggerDyDp = 6f,
+        angleRatio = 0.7f,
+        commitProgress = 0.22f,
+        commitVelocityDpPerSec = 180f,
+    ),
+    EASY(
+        key = "easy",
+        label = "Easy",
+        description = "Wider camera touch zone and lighter downward flick for effortless opening",
+        edgeHalfExtraDp = 56f,
+        minEdgeHalfDp = 72f,
+        inwardReachExtraDp = 24f,
+        triggerDyDp = 4f,
+        angleRatio = 0.55f,
+        commitProgress = 0.14f,
+        commitVelocityDpPerSec = 120f,
+    );
+
+    companion object {
+        fun fromKey(key: String?): SwipeDownSensitivity =
+            entries.firstOrNull { it.key == key || it.name == key } ?: BALANCED
+    }
+}
+
 /**
  * Generous touch zone anchored to the screen edge around the camera dot for the swipe-down
  * custom island, so swipes starting on or just above the camera intercept before the status bar.
@@ -74,10 +130,11 @@ internal fun cameraDotSwipeBounds(
     screenWidthPx: Float,
     density: Float,
     isLandscape: Boolean,
+    sensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
 ): Rect {
     val safeRadius = cameraRadiusPx.coerceAtLeast(12f * density)
-    val alongEdgeHalf = maxOf(safeRadius + 40f * density, 56f * density)
-    val inwardReach = safeRadius + 16f * density
+    val alongEdgeHalf = maxOf(safeRadius + sensitivity.edgeHalfExtraDp * density, sensitivity.minEdgeHalfDp * density)
+    val inwardReach = safeRadius + sensitivity.inwardReachExtraDp * density
     return if (isLandscape) {
         val onLeft = cameraCenterX < screenWidthPx / 2f
         val left = if (onLeft) 0f else (cameraCenterX - inwardReach).coerceAtLeast(0f)
@@ -149,8 +206,12 @@ internal fun fitCompactMediaWings(
 }
 
 /** Shared downward swipe threshold from the camera dot (responsive for quick and angled thumb swipes). */
-internal fun isCameraDotSwipeDown(dx: Float, dy: Float, density: Float): Boolean =
-    dy > 6f * density && dy > kotlin.math.abs(dx) * 0.7f
+internal fun isCameraDotSwipeDown(
+    dx: Float,
+    dy: Float,
+    density: Float,
+    sensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
+): Boolean = dy > sensitivity.triggerDyDp * density && dy > kotlin.math.abs(dx) * sensitivity.angleRatio
 
 /**
  * Maps vertical finger drag distance to interactive expansion progress (0..1 linear tracking,
@@ -170,14 +231,15 @@ internal fun shouldCommitSwipeDownPull(
     velocityYPxPerSec: Float,
     density: Float,
     cancelled: Boolean = false,
+    sensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
 ): Boolean {
     if (cancelled) {
         // SystemUI can pilfer top-edge touches mid-swipe; commit if the user was actively pulling down.
         return progress >= 0.04f && velocityYPxPerSec >= 0f
     }
-    if (velocityYPxPerSec > 180f * density) return true
+    if (velocityYPxPerSec > sensitivity.commitVelocityDpPerSec * density) return true
     if (velocityYPxPerSec < -300f * density) return false
-    return progress >= 0.22f
+    return progress >= sensitivity.commitProgress
 }
 
 /** Natural content widths, before applying the user's upper limit. */

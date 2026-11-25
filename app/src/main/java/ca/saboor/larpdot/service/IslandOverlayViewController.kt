@@ -420,7 +420,8 @@ class IslandOverlayViewController(
                             swipeDownPullProgress = interactivePullProgress(dy, pullRangePx)
                             return@setOnTouchListener true
                         }
-                        if (trackingSwipeDown && isCameraDotSwipeDown(dx = dx, dy = dy, density = density)) {
+                        val sensitivity = OverlayPreferences.swipeDownSensitivityFlow.value
+                        if (trackingSwipeDown && isCameraDotSwipeDown(dx = dx, dy = dy, density = density, sensitivity = sensitivity)) {
                             if (forwardedDownToCompact) {
                                 forwardedDownToCompact = false
                                 val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
@@ -457,15 +458,22 @@ class IslandOverlayViewController(
                         forwardedDownToCompact = false
                         val dx = lastRawX - downRawX
                         val dy = lastRawY - downRawY
+                        val sensitivity = OverlayPreferences.swipeDownSensitivityFlow.value
                         if (wasPulling) {
                             val finalProgress = interactivePullProgress(dy, pullRangePx)
-                            val commit = shouldCommitSwipeDownPull(finalProgress, finalVelocity, density, cancelled)
+                            val commit = shouldCommitSwipeDownPull(
+                                progress = finalProgress,
+                                velocityYPxPerSec = finalVelocity,
+                                density = density,
+                                cancelled = cancelled,
+                                sensitivity = sensitivity,
+                            )
                             if (commit) view.performIslandHaptic(HapticFeedbackConstants.LONG_PRESS)
                             finishInteractiveSwipeDownCustomIsland(commit)
                             return@setOnTouchListener true
                         }
-                        if (wasTracking && (isCameraDotSwipeDown(dx, dy, density) ||
-                                (dy > 4f * density && finalVelocity > 180f * density))
+                        if (wasTracking && (isCameraDotSwipeDown(dx, dy, density, sensitivity) ||
+                                (dy > 4f * density && finalVelocity > sensitivity.commitVelocityDpPerSec * density))
                         ) {
                             if (wasForwarded) {
                                 val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
@@ -977,6 +985,7 @@ class IslandOverlayViewController(
             screenWidthPx = screenWidth,
             density = density,
             isLandscape = isLandscape,
+            sensitivity = OverlayPreferences.swipeDownSensitivityFlow.value,
         )
         val compactBounds = if (currentStack().primary != null) compactSurfaceFrame?.bounds else null
         val combined = if (compactBounds != null) {
@@ -1287,6 +1296,11 @@ class IslandOverlayViewController(
                 if (isIslandExpanded && autoExpandedActivityKey == null) {
                     scheduleExpandedAutoCollapse()
                 }
+            }
+        }
+        controllerScope.launch {
+            OverlayPreferences.swipeDownSensitivityFlow.collectLatest {
+                scheduleTouchLayout()
             }
         }
     }

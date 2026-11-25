@@ -61,6 +61,7 @@ import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
+import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.islandPriorityOrderWithCustom
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import kotlin.math.roundToInt
@@ -80,6 +81,7 @@ fun HomeScreen(
     val hapticsEnabled by OverlayPreferences.hapticsEnabledFlow.collectAsState()
     val expandedAutoCollapseSeconds by OverlayPreferences.expandedAutoCollapseSecondsFlow.collectAsState()
     val holdToExpandDurationMs by OverlayPreferences.holdToExpandDurationMsFlow.collectAsState()
+    val swipeDownSensitivity by OverlayPreferences.swipeDownSensitivityFlow.collectAsState()
     val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
@@ -151,6 +153,7 @@ fun HomeScreen(
                 hapticsEnabled = hapticsEnabled,
                 expandedAutoCollapseSeconds = expandedAutoCollapseSeconds,
                 holdToExpandDurationMs = holdToExpandDurationMs,
+                swipeDownSensitivity = swipeDownSensitivity,
                 hideWhenScreenOff = hideWhenScreenOff,
                 hideOnLockScreen = hideOnLockScreen,
                 hideInFullscreen = hideInFullscreen,
@@ -342,6 +345,7 @@ private fun IslandBehaviorCard(
     hapticsEnabled: Boolean,
     expandedAutoCollapseSeconds: Int,
     holdToExpandDurationMs: Int,
+    swipeDownSensitivity: SwipeDownSensitivity,
     hideWhenScreenOff: Boolean,
     hideOnLockScreen: Boolean,
     hideInFullscreen: Boolean,
@@ -394,6 +398,31 @@ private fun IslandBehaviorCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        LarpDivider()
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Swipe-Down Pull Sensitivity",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = swipeDownSensitivity.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            LarpConnectedButtons(
+                options = SwipeDownSensitivity.entries.map { option ->
+                    LarpButtonOption(
+                        checked = swipeDownSensitivity == option,
+                        label = option.label,
+                        onCheckedChange = {
+                            OverlayPreferences.setSwipeDownSensitivity(context, option)
+                        },
+                    )
+                },
+            )
+        }
 
         LarpDivider()
 
