@@ -20,12 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -53,10 +50,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.FlashlightPreviewElement
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.IslandPreviewInspectorHeader
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
@@ -82,7 +82,6 @@ fun FlashlightScreen(
 
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val beamBlur by OverlayPreferences.flashlightBeamBlurFlow.collectAsState()
-    val beamAccentColor by OverlayPreferences.flashlightBeamAccentColorFlow.collectAsState()
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isFlashlightAvailable by FlashlightController.isFlashlightAvailable.collectAsState()
     val isStrengthSupported by FlashlightController.isStrengthSupported.collectAsState()
@@ -150,7 +149,6 @@ fun FlashlightScreen(
         FlashlightController.refreshHardware()
         OverlayPreferences.getFlashlightExpandedStyle(context)
         OverlayPreferences.isFlashlightBeamBlurEnabled(context)
-        OverlayPreferences.isFlashlightBeamAccentColorEnabled(context)
         OverlayPreferences.isShowFlashlightIslandEnabled(context)
         OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)
@@ -192,12 +190,9 @@ fun FlashlightScreen(
                 }
 
                 item(key = "expanded_style_layout") {
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        OverlayPreferences.FlashlightExpandedStyle.entries.forEach { style ->
-                            toggleableItem(
+                    LarpConnectedButtons(
+                        options = OverlayPreferences.FlashlightExpandedStyle.entries.map { style ->
+                            LarpButtonOption(
                                 checked = expandedStyle == style,
                                 label = style.label,
                                 onCheckedChange = {
@@ -208,10 +203,9 @@ fun FlashlightScreen(
                                         selectedPreviewElement = null
                                     }
                                 },
-                                weight = 1f,
                             )
-                        }
-                    }
+                        },
+                    )
                 }
 
                 item(key = "preview") {
@@ -234,7 +228,6 @@ fun FlashlightScreen(
                             showMinimizedOutline = showMinimizedOutline,
                             tapToToggle = tapToToggle,
                             beamBlur = beamBlur,
-                            beamAccentColor = beamAccentColor,
                         )
                     }
                 }
@@ -272,7 +265,6 @@ private fun FlashlightPreviewInspectorCard(
     showMinimizedOutline: Boolean,
     tapToToggle: Boolean,
     beamBlur: Boolean,
-    beamAccentColor: Boolean,
 ) {
     val (title, icon) = when (element) {
         FlashlightPreviewElement.MINIMIZED_PILL -> "Minimized Pill" to LarpIcons.FlashlightOn
@@ -285,41 +277,7 @@ private fun FlashlightPreviewInspectorCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = LarpIcons.Close,
-                        contentDescription = "Close $title settings",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-
-            LarpDivider()
+            IslandPreviewInspectorHeader(title, icon, onDismiss)
 
             when (element) {
                 FlashlightPreviewElement.MINIMIZED_PILL -> {
@@ -352,36 +310,6 @@ private fun FlashlightPreviewInspectorCard(
                         checked = beamBlur,
                         onCheckedChange = { OverlayPreferences.setFlashlightBeamBlurEnabled(context, it) },
                     )
-
-                    LarpDivider()
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text("Beam Color", style = MaterialTheme.typography.titleMedium)
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            toggleableItem(
-                                checked = !beamAccentColor,
-                                label = "White",
-                                onCheckedChange = {
-                                    OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, false)
-                                },
-                                weight = 1f,
-                            )
-                            toggleableItem(
-                                checked = beamAccentColor,
-                                label = "Accent Color",
-                                onCheckedChange = {
-                                    OverlayPreferences.setFlashlightBeamAccentColorEnabled(context, true)
-                                },
-                                weight = 1f,
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -614,27 +542,24 @@ private fun CompactTapActionSelector(
             )
         }
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            toggleableItem(
-                checked = tapToToggle,
-                label = "Tap to Toggle",
-                onCheckedChange = {
-                    OverlayPreferences.setFlashlightTapToToggleEnabled(context, true)
-                },
-                weight = 1f,
-            )
-            toggleableItem(
-                checked = !tapToToggle,
-                label = "Tap to Expand",
-                onCheckedChange = {
-                    OverlayPreferences.setFlashlightTapToToggleEnabled(context, false)
-                },
-                weight = 1f,
-            )
-        }
+        LarpConnectedButtons(
+            options = listOf(
+                LarpButtonOption(
+                    checked = tapToToggle,
+                    label = "Tap to Toggle",
+                    onCheckedChange = {
+                        OverlayPreferences.setFlashlightTapToToggleEnabled(context, true)
+                    },
+                ),
+                LarpButtonOption(
+                    checked = !tapToToggle,
+                    label = "Tap to Expand",
+                    onCheckedChange = {
+                        OverlayPreferences.setFlashlightTapToToggleEnabled(context, false)
+                    },
+                ),
+            ),
+        )
 
         Text(
             text = "Swipe right on the flashlight island to raise brightness, or left to lower it. Hold to keep stepping; move farther for faster, larger steps. Tap or long-press to open the island card or toggle power.",

@@ -1,9 +1,80 @@
 package ca.saboor.larpdot.ui.overlay
 
+import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.CustomIslandCondition
+import ca.saboor.larpdot.service.CustomIslandIcon
+import ca.saboor.larpdot.service.CustomIslandSettings
+import ca.saboor.larpdot.service.CustomIslandVisibility
+import ca.saboor.larpdot.service.enforceSingleSwipeDownIsland
 import org.junit.Assert.*
 import org.junit.Test
 
 class IslandStackTest {
+    private val customIsland = CustomIsland("test", "Test island")
+
+    @Test fun customIslandTakesThePrimarySlotWhenBuiltInIslandsAreIdle() {
+        val idle = builtInIslandSlots(false, false, null, emptyList(), custom = customIsland)
+        assertEquals(listOf(IslandSlot(IslandType.CUSTOM)), idle.ordered.map { it.content })
+
+        val busy = builtInIslandSlots(true, true, null, emptyList(), custom = customIsland)
+        assertEquals(
+            listOf(IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.FLASHLIGHT)),
+            busy.ordered.map { it.content },
+        )
+    }
+
+    @Test fun alwaysShowsCustomIslandAlongsideBuiltInActivities() {
+        val always = customIsland.copy(visibility = CustomIslandVisibility.ALWAYS)
+        val stack = builtInIslandSlots(true, true, null, emptyList(), custom = always)
+        assertEquals(
+            listOf(IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.FLASHLIGHT)),
+            stack.ordered.map { it.content },
+        )
+    }
+
+    @Test fun customPriorityCanPlaceTheActiveIslandInASecondarySlot() {
+        val always = customIsland.copy(visibility = CustomIslandVisibility.ALWAYS)
+        val custom = IslandPriorityItem.Custom(always.id)
+        val stack = builtInIslandSlots(
+            music = true,
+            flashlight = true,
+            activity = null,
+            shortTerms = emptyList(),
+            priorityOrder = listOf(IslandPriorityItem.MEDIA, custom, IslandPriorityItem.FLASHLIGHT),
+            custom = always,
+        )
+        assertEquals(
+            listOf(IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.FLASHLIGHT)),
+            stack.ordered.map { it.content },
+        )
+    }
+
+    @Test fun customPriorityUsesStableIdsAndIgnoresDeletedIslands() {
+        val existing = IslandPriorityItem.Custom(customIsland.id)
+        val added = customIsland.copy(id = "another", name = "Another")
+        val order = islandPriorityOrderWithCustom(
+            listOf(IslandPriorityItem.MEDIA, IslandPriorityItem.Custom("deleted"), existing),
+            listOf(customIsland.copy(name = "Renamed"), added),
+        )
+        assertEquals(listOf(IslandPriorityItem.Custom(added.id), IslandPriorityItem.MEDIA, existing), order.take(3))
+        assertEquals(existing, IslandPriorityItem.fromName(existing.name))
+        assertEquals(IslandPriorityItem.MEDIA, IslandPriorityItem.fromName("MEDIA"))
+    }
+
+    @Test fun conditionalIslandOnlyAppearsWhenItsSelectedActivityIsVisible() {
+        val conditional = customIsland.copy(
+            visibility = CustomIslandVisibility.CONDITIONAL,
+            condition = CustomIslandCondition.FLASHLIGHT,
+        )
+        val noMatch = builtInIslandSlots(true, false, null, emptyList(), custom = conditional)
+        assertEquals(listOf(IslandSlot(IslandType.MEDIA)), noMatch.ordered.map { it.content })
+        val match = builtInIslandSlots(false, true, null, emptyList(), custom = conditional)
+        assertEquals(
+            listOf(IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.FLASHLIGHT)),
+            match.ordered.map { it.content },
+        )
+    }
+
     @Test fun simultaneousStatusesUseDistinctSecondarySlotsAlongsideOtherProviders() {
         fun status(key: String) = ca.saboor.larpdot.notification.NotificationActivityInfo(
             key = key, packageName = "android", appName = "System", title = "Charging", text = null,
@@ -181,6 +252,25 @@ class IslandStackTest {
         assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, false, "", ""), 0.001f)
     }
 
+    @Test fun earbudMiniPillFitsBothRingsAndTheGap() {
+        assertEquals(44f, secondaryItemWidthDp(
+            IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", null,
+            smaller = true, hasEarbudBatteryLevels = true,
+        ), 0.001f)
+        assertEquals(24f, secondaryItemWidthDp(
+            IslandType.NOTIFICATION_ACTIVITY, 24f, false, false, "", null,
+            hasEarbudBatteryLevels = true,
+        ), 0.001f)
+    }
+
+    @Test fun smallerSecondaryMiniPillsReduceExtraSpaceWhileFittingTheirContents() {
+        assertEquals(48f, secondaryItemWidthDp(IslandType.MEDIA, 24f, true, true, "", null, smaller = true), 0.001f)
+        assertEquals(44f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 24f, true, false, "100%", null, smaller = true), 0.001f)
+        assertEquals(51f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 28f, true, false, "100%", null, smaller = true), 0.001f)
+        assertEquals(54f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", "12:30", smaller = true), 0.001f)
+        assertEquals(24f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", null, smaller = true), 0.001f)
+    }
+
     @Test fun stackedPillWidthWithExtentsConstrainsCorrectlyForAsymmetricExtents() {
         val thickness = 28f
         val leftExtent = 56f + 8f // Mini pill on left
@@ -202,35 +292,9 @@ class IslandStackTest {
         assertTrue(180f + halfPill + rightExtent <= availableWidth)
     }
 
-    @Test fun compactMediaReclaimsOnlyUnusedTrailingWing() {
-        val wings = compactMediaWings(
-            extraWidthDp = 120f,
-            hasTrailingBubble = true,
-            showTitle = false,
-            announcing = false,
-            visualizerWidthDp = 19f,
-        )
-        assertEquals(60f, wings.leadingDp, 0.001f)
-        assertEquals(33f, wings.trailingDp, 0.001f)
-        assertEquals(93f, wings.widthDp, 0.001f)
-        assertEquals(33f / 93f, wings.trailingFraction, 0.001f)
-    }
-
-    @Test fun compactMediaKeepsSymmetryForTitleAnnouncementAndWideVisualizer() {
-        val withoutBubble = compactMediaWings(120f, false, false, false, 19f)
-        val withTitle = compactMediaWings(120f, true, true, false, 19f)
-        val announcement = compactMediaWings(120f, true, false, true, 19f)
-        val wideVisualizer = compactMediaWings(120f, true, false, false, 70f)
-        listOf(withoutBubble, withTitle, announcement, wideVisualizer).forEach { wings ->
-            assertEquals(60f, wings.leadingDp, 0.001f)
-            assertEquals(60f, wings.trailingDp, 0.001f)
-        }
-    }
-    @Test fun wideAnnouncementKeepsBothTextWingsEqualWithTrailingBubble() {
-        val wings = compactMediaWings(210f, true, false, true, 19f)
-        assertEquals(105f, wings.leadingDp, 0.001f)
-        assertEquals(105f, wings.trailingDp, 0.001f)
-        assertEquals(0.5f, wings.trailingFraction, 0.001f)
+    @Test fun compactMediaUsesTheWiderWingForBothSides() {
+        assertEquals(CompactMediaWings(60f, 60f), compactMediaWings(120f, 19f))
+        assertEquals(CompactMediaWings(78f, 78f), compactMediaWings(120f, 70f))
     }
 
     @Test fun customPriorityOrderControlsMainIslandWinner() {
@@ -357,6 +421,63 @@ class IslandStackTest {
         assertEquals(listOf(IslandSlot(IslandType.NOTIFICATION_ACTIVITY, "maps_nav")), stack.secondary.map { it.content })
         assertEquals(pinnedBt, resolveIslandSlotActivity(stack.primary?.content, nav, listOf(pinnedBt)))
         assertEquals(nav, resolveIslandSlotActivity(stack.secondary.first().content, nav, listOf(pinnedBt)))
+    }
+
+    @Test fun secondaryDotsAlternateRightThenLeftOutwardFromTheMainIsland() {
+        assertEquals(SecondarySideSplit(emptyList<String>(), emptyList()), splitSecondarySlots(emptyList<String>()))
+        assertEquals(SecondarySideSplit(emptyList(), listOf("1")), splitSecondarySlots(listOf("1")))
+        assertEquals(SecondarySideSplit(listOf("2"), listOf("1")), splitSecondarySlots(listOf("1", "2")))
+        assertEquals(SecondarySideSplit(listOf("2"), listOf("1", "3")), splitSecondarySlots(listOf("1", "2", "3")))
+        assertEquals(SecondarySideSplit(listOf("4", "2"), listOf("1", "3")), splitSecondarySlots(listOf("1", "2", "3", "4")))
+        assertEquals(
+            SecondarySideSplit(listOf("4", "2"), listOf("1", "3", "5")),
+            splitSecondarySlots(listOf("1", "2", "3", "4", "5")),
+        )
+    }
+
+    @Test fun swipeDownCustomIslandNeverCreatesAMinimizedSlotAndIsActiveIndependently() {
+        val swipeDownNoWidget = customIsland.copy(
+            id = "swipe",
+            visibility = CustomIslandVisibility.SWIPE_DOWN,
+            left = customIsland.left.copy(icon = CustomIslandIcon.STAR),
+        )
+        assertFalse(swipeDownNoWidget.hasContent)
+
+        val swipeDownWithWidget = swipeDownNoWidget.copy(
+            main = swipeDownNoWidget.main.copy(widgetId = 42),
+        )
+        assertTrue(swipeDownWithWidget.hasContent)
+
+        // Never appears in compact stack, even when idle or busy
+        val idle = builtInIslandSlots(false, false, null, emptyList(), custom = swipeDownWithWidget)
+        assertTrue(idle.ordered.isEmpty())
+        val busy = builtInIslandSlots(true, false, null, emptyList(), custom = swipeDownWithWidget)
+        assertEquals(listOf(IslandSlot(IslandType.MEDIA)), busy.ordered.map { it.content })
+
+        // Excluded from compact island priority ordering
+        val priority = islandPriorityOrderWithCustom(emptyList(), listOf(customIsland, swipeDownWithWidget))
+        assertTrue(priority.contains(IslandPriorityItem.Custom(customIsland.id)))
+        assertFalse(priority.contains(IslandPriorityItem.Custom(swipeDownWithWidget.id)))
+
+        // Can stay active alongside a regular custom island
+        val regular = customIsland.copy(left = customIsland.left.copy(icon = CustomIslandIcon.HOME))
+        val settings = CustomIslandSettings(
+            islands = listOf(regular, swipeDownWithWidget),
+            activeId = regular.id,
+            swipeDownId = swipeDownWithWidget.id,
+        )
+        assertEquals(regular, settings.activeIsland)
+        assertEquals(swipeDownWithWidget, settings.swipeDownIsland)
+        assertTrue(settings.canUseSwipeDownVisibility(swipeDownWithWidget.id))
+        assertFalse(settings.canUseSwipeDownVisibility(regular.id))
+
+        val duplicateSwipeDown = customIsland.copy(id = "swipe2", visibility = CustomIslandVisibility.SWIPE_DOWN)
+        val normalized = enforceSingleSwipeDownIsland(
+            listOf(swipeDownWithWidget, duplicateSwipeDown),
+            preferredId = duplicateSwipeDown.id,
+        )
+        assertEquals(CustomIslandVisibility.IDLE, normalized[0].visibility)
+        assertEquals(CustomIslandVisibility.SWIPE_DOWN, normalized[1].visibility)
     }
 
 }

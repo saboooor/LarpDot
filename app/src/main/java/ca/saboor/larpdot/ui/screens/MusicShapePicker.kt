@@ -1,5 +1,7 @@
 package ca.saboor.larpdot.ui.screens
 
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
 import androidx.compose.foundation.background
@@ -15,9 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,7 +50,6 @@ private enum class ShapeCategory(val label: String) {
     EXPRESSIVE("Expressive"),
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ShapePickerSection(
     title: String,
@@ -166,33 +164,25 @@ internal fun ShapePickerSection(
         val catRow1 = listOf(ShapeCategory.ALL, ShapeCategory.GEOMETRIC, ShapeCategory.COOKIES)
         val catRow2 = listOf(ShapeCategory.STARS, ShapeCategory.EXPRESSIVE)
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            catRow1.forEach { category ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = catRow1.map { category ->
+                LarpButtonOption(
                     checked = selectedCategory == category,
                     label = category.label,
                     onCheckedChange = { selectedCategory = category },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            catRow2.forEach { category ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = catRow2.map { category ->
+                LarpButtonOption(
                     checked = selectedCategory == category,
                     label = category.label,
                     onCheckedChange = { selectedCategory = category },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         // Horizontal list of shapes ensuring shapes are never squished or distorted
         val shapeListState = rememberLazyListState()
@@ -280,20 +270,16 @@ internal fun ShapePickerSection(
 
         // Quick Rotation Presets ButtonGroup
         val rotationPresets = listOf(0f, 45f, 90f, 180f, 270f)
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            rotationPresets.forEach { preset ->
+        LarpConnectedButtons(
+            options = rotationPresets.map { preset ->
                 val isSelected = (((rotationDegrees % 360f) + 360f) % 360f).roundToInt() == preset.toInt()
-                toggleableItem(
+                LarpButtonOption(
                     checked = isSelected,
                     label = "${preset.toInt()}°",
                     onCheckedChange = { onRotationChanged(preset) },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         // Rotation Slider with Minus & Plus buttons
         Row(

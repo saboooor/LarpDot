@@ -36,6 +36,7 @@ object OverlayPreferences {
     private const val KEY_EXPANDED_PLAYER_LAYOUT = "expanded_player_layout"
     private const val KEY_SHOW_PROGRESS_SQUIGGLES = "show_progress_squiggles"
     private const val KEY_PROGRESS_BAR_ACCENT_COLOR = "progress_bar_accent_color"
+    private const val KEY_PROGRESS_TIMESTAMP_PLACEMENT = "progress_timestamp_placement"
     private const val KEY_PLAYBACK_PLAY_PAUSE_BG = "playback_play_pause_bg"
     private const val KEY_PLAYBACK_PLAY_PAUSE_ACCENT = "playback_play_pause_accent"
     private const val KEY_PLAYBACK_SKIP_BG = "playback_skip_bg"
@@ -44,6 +45,7 @@ object OverlayPreferences {
     private const val KEY_TRACK_INFO_SHOW_TITLE = "track_info_show_title"
     private const val KEY_TRACK_INFO_SHOW_ARTIST = "track_info_show_artist"
     private const val KEY_TRACK_INFO_SHOW_ALBUM = "track_info_show_album"
+    private const val KEY_TRACK_INFO_ALBUM_BESIDE_ARTIST = "track_info_album_beside_artist"
     private const val KEY_TRACK_INFO_TITLE_ACCENT = "track_info_title_accent"
     private const val KEY_SHOW_MINIMIZED_VISUALIZER = "show_minimized_visualizer"
     private const val KEY_SHOW_EXPANDED_TRACK_INFO = "show_expanded_track_info"
@@ -85,7 +87,6 @@ object OverlayPreferences {
     private const val KEY_HIDE_WHEN_SCREEN_OFF = "hide_when_screen_off"
     private const val KEY_HIDE_ON_LOCK_SCREEN = "hide_on_lock_screen"
     private const val KEY_HIDE_MUSIC_WHEN_APP_OPEN = "hide_music_when_app_open"
-    private const val KEY_SHOW_DOT_RIGHT_SIDE_INFO = "show_dot_right_side_info"
     private const val KEY_WAVEFORM_BAND_COUNT = "waveform_band_count"
     const val DEFAULT_WAVEFORM_BAND_COUNT = 5
     private const val KEY_WAVEFORM_BAR_WIDTH = "waveform_bar_width"
@@ -171,6 +172,17 @@ object OverlayPreferences {
         IPHONE("iPhone"),
     }
 
+    enum class ProgressTimestampPlacement(val label: String) {
+        HIDDEN("Hidden"),
+        BELOW("Below"),
+        BESIDE("Beside");
+
+        companion object {
+            internal fun legacyDefault(layout: ExpandedPlayerLayout): ProgressTimestampPlacement =
+                if (layout == ExpandedPlayerLayout.IPHONE) BESIDE else HIDDEN
+        }
+    }
+
     enum class FlashlightExpandedStyle(val label: String) {
         BEAM("Beam"),
         SLIDER("Slider"),
@@ -227,6 +239,7 @@ object OverlayPreferences {
         val showArtist: Boolean = true,
         val showAlbum: Boolean = false,
         val titleAccentColor: Boolean = false,
+        val albumBesideArtist: Boolean = false,
     )
 
     data class CutoutConfig(
@@ -345,6 +358,11 @@ object OverlayPreferences {
     )
     private val showProgressSquigglesPref = BooleanPref(KEY_SHOW_PROGRESS_SQUIGGLES, true)
     private val progressBarAccentColorPref = BooleanPref(KEY_PROGRESS_BAR_ACCENT_COLOR, true)
+    private val progressTimestampPlacementPref = EnumPref(
+        KEY_PROGRESS_TIMESTAMP_PLACEMENT,
+        ProgressTimestampPlacement.HIDDEN,
+        parse = { saved -> ProgressTimestampPlacement.entries.firstOrNull { it.name == saved } ?: ProgressTimestampPlacement.HIDDEN },
+    )
     private val showMinimizedVisualizerPref = BooleanPref(KEY_SHOW_MINIMIZED_VISUALIZER, true)
     private val minimizedAlbumArtShapePref = EnumPref(
         KEY_MINIMIZED_ALBUM_ART_SHAPE,
@@ -400,7 +418,6 @@ object OverlayPreferences {
     )
     private val islandFontWeightPref = IntPref(KEY_ISLAND_FONT_WEIGHT, 400, 100, 900)
     private val minimizedNestedBlurredBgPref = BooleanPref(KEY_MINIMIZED_NESTED_BLURRED_BG, false)
-    private val showDotRightSideInfoPref = BooleanPref(KEY_SHOW_DOT_RIGHT_SIDE_INFO, false)
     private val isDebugModePref = BooleanPref(KEY_DEBUG_MODE, false, fallbackKey = KEY_SHOW_DEBUG_DOT)
     private val hideWhenScreenOffPref = BooleanPref(KEY_HIDE_WHEN_SCREEN_OFF, true)
     private val hideOnLockScreenPref = BooleanPref(KEY_HIDE_ON_LOCK_SCREEN, false)
@@ -444,6 +461,7 @@ object OverlayPreferences {
     val expandedPlayerLayoutFlow: StateFlow<ExpandedPlayerLayout> = expandedPlayerLayoutPref.flow
     val showProgressSquigglesFlow: StateFlow<Boolean> = showProgressSquigglesPref.flow
     val progressBarAccentColorFlow: StateFlow<Boolean> = progressBarAccentColorPref.flow
+    val progressTimestampPlacementFlow: StateFlow<ProgressTimestampPlacement> = progressTimestampPlacementPref.flow
     val showMinimizedVisualizerFlow: StateFlow<Boolean> = showMinimizedVisualizerPref.flow
     val minimizedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = minimizedAlbumArtShapePref.flow
     val expandedAlbumArtShapeFlow: StateFlow<NestedAlbumArtShape> = expandedAlbumArtShapePref.flow
@@ -461,7 +479,6 @@ object OverlayPreferences {
     val islandFontStyleFlow: StateFlow<IslandFontStyle> = islandFontStylePref.flow
     val islandFontWeightFlow: StateFlow<Int> = islandFontWeightPref.flow
     val minimizedNestedBlurredBgFlow: StateFlow<Boolean> = minimizedNestedBlurredBgPref.flow
-    val showDotRightSideInfoFlow: StateFlow<Boolean> = showDotRightSideInfoPref.flow
     val isDebugModeFlow: StateFlow<Boolean> = isDebugModePref.flow
     val hideWhenScreenOffFlow: StateFlow<Boolean> = hideWhenScreenOffPref.flow
     val hideOnLockScreenFlow: StateFlow<Boolean> = hideOnLockScreenPref.flow
@@ -560,6 +577,7 @@ object OverlayPreferences {
         getExpandedPlayerLayout(context)
         isShowProgressSquigglesEnabled(context)
         isProgressBarAccentColorEnabled(context)
+        getProgressTimestampPlacement(context)
         getPlaybackControlsStyle(context)
         getTrackInfoStyle(context)
         isShowMinimizedVisualizerEnabled(context)
@@ -625,6 +643,19 @@ object OverlayPreferences {
     fun isProgressBarAccentColorEnabled(context: Context): Boolean = progressBarAccentColorPref.get(getPrefs(context))
     fun setProgressBarAccentColorEnabled(context: Context, enabled: Boolean) = progressBarAccentColorPref.set(getPrefs(context), enabled)
 
+    fun getProgressTimestampPlacement(context: Context): ProgressTimestampPlacement {
+        val prefs = getPrefs(context)
+        if (!prefs.contains(KEY_PROGRESS_TIMESTAMP_PLACEMENT)) {
+            val placement = ProgressTimestampPlacement.legacyDefault(getExpandedPlayerLayout(context))
+            progressTimestampPlacementPref.set(prefs, placement)
+            return placement
+        }
+        return progressTimestampPlacementPref.get(prefs)
+    }
+
+    fun setProgressTimestampPlacement(context: Context, placement: ProgressTimestampPlacement) =
+        progressTimestampPlacementPref.set(getPrefs(context), placement)
+
     fun isShowMinimizedVisualizerEnabled(context: Context): Boolean = showMinimizedVisualizerPref.get(getPrefs(context))
     fun setShowMinimizedVisualizerEnabled(context: Context, enabled: Boolean) = showMinimizedVisualizerPref.set(getPrefs(context), enabled)
 
@@ -673,9 +704,6 @@ object OverlayPreferences {
 
     fun isMinimizedNestedBlurredBgEnabled(context: Context): Boolean = minimizedNestedBlurredBgPref.get(getPrefs(context))
     fun setMinimizedNestedBlurredBgEnabled(context: Context, enabled: Boolean) = minimizedNestedBlurredBgPref.set(getPrefs(context), enabled)
-
-    fun isShowDotRightSideInfoEnabled(context: Context): Boolean = showDotRightSideInfoPref.get(getPrefs(context))
-    fun setShowDotRightSideInfoEnabled(context: Context, enabled: Boolean) = showDotRightSideInfoPref.set(getPrefs(context), enabled)
 
     fun isDebugModeEnabled(context: Context): Boolean = isDebugModePref.get(getPrefs(context))
     fun setDebugModeEnabled(context: Context, enabled: Boolean) {
@@ -785,6 +813,7 @@ object OverlayPreferences {
                 showTitle = prefs.getBoolean(KEY_TRACK_INFO_SHOW_TITLE, true),
                 showArtist = prefs.getBoolean(KEY_TRACK_INFO_SHOW_ARTIST, true),
                 showAlbum = prefs.getBoolean(KEY_TRACK_INFO_SHOW_ALBUM, false),
+                albumBesideArtist = prefs.getBoolean(KEY_TRACK_INFO_ALBUM_BESIDE_ARTIST, false),
                 titleAccentColor = prefs.getBoolean(KEY_TRACK_INFO_TITLE_ACCENT, false),
             )
             isTrackInfoStyleInitialized = true
@@ -797,6 +826,7 @@ object OverlayPreferences {
             .putBoolean(KEY_TRACK_INFO_SHOW_TITLE, style.showTitle)
             .putBoolean(KEY_TRACK_INFO_SHOW_ARTIST, style.showArtist)
             .putBoolean(KEY_TRACK_INFO_SHOW_ALBUM, style.showAlbum)
+            .putBoolean(KEY_TRACK_INFO_ALBUM_BESIDE_ARTIST, style.albumBesideArtist)
             .putBoolean(KEY_TRACK_INFO_TITLE_ACCENT, style.titleAccentColor)
             .apply()
         _trackInfoStyleFlow.value = style

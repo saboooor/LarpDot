@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
@@ -18,6 +19,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import ca.saboor.larpdot.notification.EarbudBatteryLevels
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
@@ -25,7 +27,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
  * Listens for system events (smart battery charging, charge limit, low battery, sound mode,
@@ -35,9 +39,15 @@ object SystemEventManager {
     // Android publishes this battery event even though its constants are not in the public SDK.
     private const val BATTERY_LEVEL_CHANGED = "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED"
     private const val EXTRA_BATTERY_LEVEL = "android.bluetooth.device.extra.BATTERY_LEVEL"
+    private const val EAR_BATTERY_REFRESH_MS = 60_000L
     private const val DEDUPE_WINDOW_MS = 1_800L
 
     private val bluetoothBatteryLevels = mutableMapOf<String, Int>()
+    private val earbudBatteryLevels = mutableMapOf<String, EarbudBatteryLevels>()
+    private val connectedEarbudCandidates = mutableMapOf<String, BluetoothDevice>()
+    private val earbudBatteryJobs = mutableMapOf<String, Job>()
+    private val earbudProbeStartedAt = mutableMapOf<String, Long>()
+    private val auxiliaryLeConnections = mutableSetOf<String>()
     private val recentBluetoothEvents = mutableMapOf<String, Pair<Boolean, Long>>()
 
     private var appContext: Context? = null
@@ -123,8 +133,21 @@ object SystemEventManager {
                 }
                 BluetoothDevice.ACTION_ACL_CONNECTED,
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                    val device = getBluetoothDevice(intent)
+                    val device = getBluetoothDevice(intent) ?: return
                     val connected = action == BluetoothDevice.ACTION_ACL_CONNECTED
+                    val id = bluetoothId(device)
+                    val transport = intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_AUTO)
+                    if (transport != BluetoothDevice.TRANSPORT_BREDR) {
+                        // Ignore an auxiliary link opened by an earbud probe on an already-connected device.
+                        val probeAt = earbudProbeStartedAt[id]
+                        if (connected && probeAt != null && recentBluetoothEvents[id]?.first == true &&
+                            SystemClock.elapsedRealtime() - probeAt < EARBUD_BATTERY_READ_TIMEOUT_MS + DEDUPE_WINDOW_MS
+                        ) {
+                            auxiliaryLeConnections.add(id)
+                            return
+                        }
+                        if (!connected && auxiliaryLeConnections.remove(id)) return
+                    }
                     val battery = intent.getIntExtra(EXTRA_BATTERY_LEVEL, -1).takeIf { it in 0..100 }
                     handleBluetoothConnection(device, connected, battery, settings, isProfileAudioEvent = false)
                 }
@@ -133,8 +156,9 @@ object SystemEventManager {
                 BluetoothLeAudio.ACTION_LE_AUDIO_CONNECTION_STATE_CHANGED -> {
                     val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
                     if (state != BluetoothProfile.STATE_CONNECTED && state != BluetoothProfile.STATE_DISCONNECTED) return
-                    val device = getBluetoothDevice(intent)
-                    handleBluetoothConnection(device, state == BluetoothProfile.STATE_CONNECTED, null, settings, isProfileAudioEvent = true)
+                    val device = getBluetoothDevice(intent) ?: return
+                    val connected = state == BluetoothProfile.STATE_CONNECTED
+                    handleBluetoothConnection(device, connected, null, settings, isProfileAudioEvent = true)
                 }
                 BATTERY_LEVEL_CHANGED -> {
                     val device = getBluetoothDevice(intent) ?: return
@@ -186,6 +210,22 @@ object SystemEventManager {
         lastRingerMode = am?.ringerMode
         ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         isRegistered = true
+        ShizukuEarbudBattery.initialize()
+        scope.launch {
+            var wasReady = false
+            ShizukuEarbudBattery.status.collectLatest { status ->
+                val ready = status == ShizukuBatteryStatus.READY
+                if (ready != wasReady) {
+                    wasReady = ready
+                    // Revisit active alerts when permission is granted or Shizuku stops.
+                    connectedEarbudCandidates.forEach { (id, device) ->
+                        earbudBatteryJobs.remove(id)?.cancel()
+                        refreshEarbudBatteries(device, id)
+                    }
+                    if (ready) syncConnectedBluetoothDevices(app)
+                }
+            }
+        }
         syncConnectedBluetoothDevices(app)
     }
 
@@ -199,7 +239,10 @@ object SystemEventManager {
         val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
         for (device in bonded) {
             val connected = runCatching {
-                val method = BluetoothDevice::class.java.getMethod("isConnected")
+                val method = runCatching { BluetoothDevice::class.java.getMethod("isConnected") }.getOrElse {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) throw it
+                    HiddenApiBypass.getDeclaredMethod(BluetoothDevice::class.java, "isConnected")
+                }
                 method.invoke(device) as? Boolean == true
             }.getOrDefault(false)
             if (connected) {
@@ -296,6 +339,12 @@ object SystemEventManager {
         if (device == null) return
         val name = getDeviceName(device)
         val id = bluetoothId(device)
+        if (!connected) {
+            connectedEarbudCandidates.remove(id)
+            earbudBatteryJobs.remove(id)?.cancel()
+            earbudBatteryLevels.remove(id)
+            earbudProbeStartedAt.remove(id)
+        }
         if (!isUserFacingBluetoothDevice(device, name, isProfileAudioEvent)) {
             if (!connected) {
                 bluetoothBatteryLevels.remove(id)
@@ -336,7 +385,81 @@ object SystemEventManager {
             permanent = settings.permanentBluetooth && connected,
             bluetoothDeviceType = type,
             bluetoothBatteryPercent = if (connected) bluetoothBatteryLevels[id] else null,
+            earbudBatteries = earbudBatteryLevels[id],
         )
+        if (connected && type in setOf("Earbuds", "Headphones", "Headset", "Audio", "Bluetooth")) {
+            connectedEarbudCandidates[id] = device
+            refreshEarbudBatteries(device, id)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun refreshEarbudBatteries(device: BluetoothDevice, id: String) {
+        val context = appContext ?: return
+        if (id in earbudBatteryJobs || !hasBluetoothPermission(context)) return
+        val deviceType = try {
+            device.type
+        } catch (_: SecurityException) {
+            return
+        }
+        val supportsLe = deviceType != BluetoothDevice.DEVICE_TYPE_CLASSIC
+        if (!supportsLe && ShizukuEarbudBattery.status.value != ShizukuBatteryStatus.READY) {
+            earbudBatteryLevels.remove(id)
+            NotificationActivityState.updateEarbudBatteries("system_bluetooth_$id", null)
+            return
+        }
+
+        earbudBatteryJobs[id] = scope.launch {
+            try {
+                var tryStandardRead = supportsLe
+                var supportsStandardBattery = false
+                var standardPreviouslyComplete = false
+                while (hasBluetoothPermission(context)) {
+                    val settings = OverlayPreferences.notificationActivitySettingsFlow.value
+                    if (!settings.enabled || !settings.bluetooth) break
+
+                    // Surface cached metadata promptly so the brief connection alert can show it
+                    // while GATT discovery runs. Standard readings take precedence once available.
+                    val metadata = if (standardPreviouslyComplete) null else {
+                        ShizukuEarbudBattery.readMissingLevels(context, device)
+                    }
+                    if (!supportsStandardBattery && metadata != null) updateEarbudLevels(id, metadata)
+
+                    val attemptedStandardRead = tryStandardRead
+                    val standard = if (attemptedStandardRead) {
+                        earbudProbeStartedAt[id] = SystemClock.elapsedRealtime()
+                        readEarbudBatteryLevels(context, device)
+                    } else null
+                    supportsStandardBattery = supportsStandardBattery || standard != null
+                    tryStandardRead = supportsStandardBattery
+                    standardPreviouslyComplete = standard?.left != null && standard.right != null
+
+                    // The system companion may populate its cache just after the connection broadcast.
+                    val fallback = if (metadata == null && attemptedStandardRead && !standardPreviouslyComplete) {
+                        ShizukuEarbudBattery.readMissingLevels(context, device, standard)
+                    } else metadata
+                    val levels = mergeEarbudBatteryLevels(standard, fallback)
+                    updateEarbudLevels(id, levels)
+                    if (!settings.permanentBluetooth) {
+                        if (levels?.left == null || levels.right == null) {
+                            delay(700L)
+                            val latest = ShizukuEarbudBattery.readMissingLevels(context, device, standard)
+                            updateEarbudLevels(id, mergeEarbudBatteryLevels(latest, levels))
+                        }
+                        break
+                    }
+                    if (!supportsStandardBattery && ShizukuEarbudBattery.status.value != ShizukuBatteryStatus.READY) break
+                    delay(EAR_BATTERY_REFRESH_MS)
+                }
+            } finally {
+                if (earbudBatteryJobs[id] == coroutineContext[Job]) earbudBatteryJobs.remove(id)
+            }
+        }
+    }
+
+    private fun updateEarbudLevels(id: String, levels: EarbudBatteryLevels?) {
+        if (levels == null) earbudBatteryLevels.remove(id) else earbudBatteryLevels[id] = levels
+        NotificationActivityState.updateEarbudBatteries("system_bluetooth_$id", levels)
     }
 
     private fun handleAudioOutputChanged(
@@ -393,6 +516,7 @@ object SystemEventManager {
         permanent: Boolean,
         bluetoothDeviceType: String? = null,
         bluetoothBatteryPercent: Int? = null,
+        earbudBatteries: EarbudBatteryLevels? = null,
         progress: Int? = null,
         progressMax: Int? = null,
         dismissMs: Long = 3_500L,
@@ -401,6 +525,7 @@ object SystemEventManager {
             key = key,
             bluetoothDeviceType = bluetoothDeviceType,
             bluetoothBatteryPercent = bluetoothBatteryPercent,
+            earbudBatteryLevels = earbudBatteries,
             packageName = "android",
             appName = "System",
             title = title,
@@ -534,6 +659,15 @@ object SystemEventManager {
             isProfileAudioEvent = isProfileAudioEvent,
         )
     }
+}
+
+internal fun mergeEarbudBatteryLevels(
+    standard: EarbudBatteryLevels?,
+    metadata: EarbudBatteryLevels?,
+): EarbudBatteryLevels? {
+    val left = standard?.left ?: metadata?.left
+    val right = standard?.right ?: metadata?.right
+    return if (left != null || right != null) EarbudBatteryLevels(left, right) else null
 }
 
 private val RAW_MAC_REGEX = Regex("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")

@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -115,9 +116,11 @@ internal fun ExpandedIslandContent(
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
     artworkAnchor: ArtworkAnchor? = null,
+    visualizerAnchor: IslandElementAnchor? = null,
     playerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.expandedPlayerLayoutFlow.collectAsState().value,
     showProgressSquiggles: Boolean = OverlayPreferences.showProgressSquigglesFlow.collectAsState().value,
     progressBarAccentColor: Boolean = OverlayPreferences.progressBarAccentColorFlow.collectAsState().value,
+    timestampPlacement: OverlayPreferences.ProgressTimestampPlacement = OverlayPreferences.progressTimestampPlacementFlow.collectAsState().value,
     playbackControlsStyle: OverlayPreferences.PlaybackControlsStyle = OverlayPreferences.playbackControlsStyleFlow.collectAsState().value,
     trackInfoStyle: OverlayPreferences.TrackInfoStyle = OverlayPreferences.trackInfoStyleFlow.collectAsState().value,
     elementVisibility: OverlayPreferences.ExpandedElementVisibility = OverlayPreferences.expandedElementVisibilityFlow.collectAsState().value,
@@ -232,7 +235,7 @@ internal fun ExpandedIslandContent(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .graphicsLayer {
                 // Stretch the side being swiped toward instead of translating
                 val stretchMag = cardDragOffsetAnim.value / maxCardDragOffsetPx // -1..1
@@ -298,6 +301,7 @@ internal fun ExpandedIslandContent(
             albumArtStyle = albumArtStyle,
             playerLayout = playerLayout,
             backgroundOpacity = backgroundOpacity,
+            modifier = Modifier.matchParentSize(),
         )
 
         CameraCover(
@@ -305,12 +309,14 @@ internal fun ExpandedIslandContent(
             centerX = dotCenterXDp,
             centerY = dotCenterYDp,
             diameter = cutoutDiameterDp,
+            modifier = Modifier.matchParentSize(),
         )
 
         if (showDominantGlow && (glowSides.left || glowSides.right || glowSides.bottom || glowSides.top)) {
             ExpandedDominantGlowLayer(
                 accentColor = accentColor,
                 glowSides = glowSides,
+                modifier = Modifier.matchParentSize(),
                 glowAlphaProvider = {
                     if (bpmPulseEnabled && mediaInfo.isPlaying) {
                         0.16f + (0.22f * bpmPulseState.value * pulseAmount)
@@ -332,6 +338,7 @@ internal fun ExpandedIslandContent(
             topContentInset = topContentInset,
             showAlbumArt = showAlbumArt,
             artworkAnchor = artworkAnchor,
+            visualizerAnchor = visualizerAnchor,
             artworkGlow = artworkGlow,
             artworkShape = artworkShape,
             albumArtPlaybackScale = albumArtPlaybackScale,
@@ -345,6 +352,7 @@ internal fun ExpandedIslandContent(
             waveformBandCount = waveformBandCount,
             playbackControlsStyle = playbackControlsStyle,
             progressBarAccentColor = progressBarAccentColor,
+            timestampPlacement = timestampPlacement,
             showProgressSquiggles = showProgressSquiggles,
             activeFractionProvider = activeFractionProvider,
             scrubCallbacks = scrubCallbacks,
@@ -378,6 +386,7 @@ private class ExpandedLayoutParams(
     val topContentInset: Dp,
     val showAlbumArt: Boolean,
     val artworkAnchor: ArtworkAnchor?,
+    val visualizerAnchor: IslandElementAnchor?,
     val artworkGlow: AlbumArtGlowState,
     val artworkShape: Shape,
     val albumArtPlaybackScale: Float,
@@ -391,6 +400,7 @@ private class ExpandedLayoutParams(
     val waveformBandCount: Int,
     val playbackControlsStyle: OverlayPreferences.PlaybackControlsStyle,
     val progressBarAccentColor: Boolean,
+    val timestampPlacement: OverlayPreferences.ProgressTimestampPlacement,
     val showProgressSquiggles: Boolean,
     val activeFractionProvider: () -> Float,
     val scrubCallbacks: ScrubCallbacks,
@@ -406,7 +416,17 @@ private class ExpandedLayoutParams(
     val highlightVisualizer: Boolean,
     val highlightProgressBar: Boolean,
     val highlightPlaybackControls: Boolean,
-)
+) {
+    val showsArtwork get() = showAlbumArt && mediaInfo.albumArt != null
+    val showsTrackText get() = elementVisibility.trackInfo &&
+        (trackInfoStyle.showTitle || (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) ||
+            (trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()))
+    val showsTrackInfoWithBpm get() = showsTrackText ||
+        (elementVisibility.trackInfo && elementVisibility.bpm && currentBpm != null)
+    val sessionActions get() = if (elementVisibility.appActions) {
+        mediaInfo.sessionActions.filter { it.iconResourceId != 0 && it.iconPackageName != null }
+    } else emptyList()
+}
 
 private class ScrubCallbacks(
     val onDragStart: (Float) -> Unit,
@@ -421,13 +441,14 @@ private fun ExpandedMusicBackground(
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle,
     playerLayout: OverlayPreferences.ExpandedPlayerLayout,
     backgroundOpacity: Float,
+    modifier: Modifier,
 ) {
     if (albumArt == null) return
     val density = LocalDensity.current
     val isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
     val imageBitmap = remember(albumArt) { albumArt.asImageBitmap() }
 
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundOpacity }) {
+    Box(modifier.graphicsLayer { alpha = backgroundOpacity }) {
         when (albumArtStyle) {
             OverlayPreferences.ExpandedBackgroundStyle.NONE -> Unit
             OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND,
@@ -675,31 +696,30 @@ private fun ExpandedDominantGlowLayer(
     accentColor: Color,
     glowSides: OverlayPreferences.ExpandedGlowSides,
     glowAlphaProvider: () -> Float,
+    modifier: Modifier,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawWithCache {
-                val leftGradient = Brush.horizontalGradient(
-                    colorStops = arrayOf(0.00f to accentColor, 0.40f to Color.Transparent)
-                )
-                val rightGradient = Brush.horizontalGradient(
-                    colorStops = arrayOf(0.60f to Color.Transparent, 1.00f to accentColor)
-                )
-                val bottomGradient = Brush.verticalGradient(
-                    colorStops = arrayOf(0.40f to Color.Transparent, 1.00f to accentColor)
-                )
-                val topGradient = Brush.verticalGradient(
-                    colorStops = arrayOf(0.00f to accentColor, 0.40f to Color.Transparent)
-                )
-                onDrawBehind {
-                    val alpha = glowAlphaProvider()
-                    if (glowSides.left) drawRect(leftGradient, alpha = alpha)
-                    if (glowSides.right) drawRect(rightGradient, alpha = alpha)
-                    if (glowSides.bottom) drawRect(bottomGradient, alpha = alpha)
-                    if (glowSides.top) drawRect(topGradient, alpha = alpha)
-                }
+        modifier = modifier.drawWithCache {
+            val leftGradient = Brush.horizontalGradient(
+                colorStops = arrayOf(0.00f to accentColor, 0.40f to Color.Transparent)
+            )
+            val rightGradient = Brush.horizontalGradient(
+                colorStops = arrayOf(0.60f to Color.Transparent, 1.00f to accentColor)
+            )
+            val bottomGradient = Brush.verticalGradient(
+                colorStops = arrayOf(0.40f to Color.Transparent, 1.00f to accentColor)
+            )
+            val topGradient = Brush.verticalGradient(
+                colorStops = arrayOf(0.00f to accentColor, 0.40f to Color.Transparent)
+            )
+            onDrawBehind {
+                val alpha = glowAlphaProvider()
+                if (glowSides.left) drawRect(leftGradient, alpha = alpha)
+                if (glowSides.right) drawRect(rightGradient, alpha = alpha)
+                if (glowSides.bottom) drawRect(bottomGradient, alpha = alpha)
+                if (glowSides.top) drawRect(topGradient, alpha = alpha)
             }
+        }
     )
 }
 
@@ -707,16 +727,17 @@ private fun ExpandedDominantGlowLayer(
 private fun ExpandedVisualizerSlot(
     mediaInfo: MediaTrackInfo,
     waveformBandCount: Int,
-    barWidth: Dp,
-    barSpacing: Dp,
     minHeight: Dp,
     barCornerRadius: Dp = 1.5.dp,
     highlight: Boolean,
     onClick: (() -> Unit)?,
+    visualizerAnchor: IslandElementAnchor?,
     contentAlignment: Alignment = Alignment.Center,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    val barWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
+    val barSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
+    BoxWithConstraints(
         modifier = modifier
             .then(
                 if (highlight) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
@@ -728,14 +749,20 @@ private fun ExpandedVisualizerSlot(
             ),
         contentAlignment = contentAlignment,
     ) {
+        if (waveformBandCount <= 0 || maxWidth <= 0.dp) return@BoxWithConstraints
+        val naturalWidth = compactVisualizerWidthDp(true, waveformBandCount, barWidth, barSpacing)
+        // Preserve the width-to-spacing ratio when all the configured bands exceed the header slot.
+        val fit = (maxWidth.value / naturalWidth).coerceAtMost(1f)
+        val renderedBarWidth = (barWidth * fit).dp
         EqualizerWaveform(
             mediaInfo = mediaInfo,
             maxHeightDp = 20f,
             barCount = waveformBandCount,
-            barWidth = barWidth,
-            barSpacing = barSpacing,
+            barWidth = renderedBarWidth,
+            barSpacing = (barSpacing * fit).dp,
             minHeight = minHeight,
-            barCornerRadius = barCornerRadius,
+            barCornerRadius = minOf(barCornerRadius, renderedBarWidth / 2f),
+            visualizerAnchor = visualizerAnchor,
         )
     }
 }
@@ -773,17 +800,84 @@ private fun ExpandedSessionActionButton(
 }
 
 @Composable
+private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = Modifier) {
+    val bar: @Composable (Modifier) -> Unit = { barModifier ->
+        ExpandedMusicProgressBar(
+            durationMs = p.mediaInfo.durationMs,
+            isPlaying = p.mediaInfo.isPlaying,
+            activeFractionProvider = p.activeFractionProvider,
+            accentColor = p.accentColor,
+            useAccentColor = p.progressBarAccentColor,
+            showSquiggles = p.showProgressSquiggles,
+            onDragStart = p.scrubCallbacks.onDragStart,
+            onDragChange = p.scrubCallbacks.onDragChange,
+            onDragEnd = p.scrubCallbacks.onDragEnd,
+            onDragCancel = p.scrubCallbacks.onDragCancel,
+            onProgressBarClick = p.onProgressBarClick,
+            highlight = p.highlightProgressBar,
+            modifier = barModifier,
+        )
+    }
+    if (p.timestampPlacement == OverlayPreferences.ProgressTimestampPlacement.HIDDEN) {
+        bar(modifier)
+        return
+    }
+
+    val timeTextStyle = MaterialTheme.typography.labelSmall.copy(
+        fontFamily = p.fontStyle.fontFamily,
+        fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
+    )
+    val elapsed: @Composable () -> Unit = {
+        MediaTimeLabel(positionState = p.livePositionMs, format = ::formatTime, style = timeTextStyle)
+    }
+    val remaining: @Composable () -> Unit = {
+        MediaTimeLabel(
+            positionState = p.livePositionMs,
+            format = { position -> formatRemainingTime(position, p.mediaInfo.durationMs) },
+            style = timeTextStyle,
+        )
+    }
+
+    if (p.timestampPlacement == OverlayPreferences.ProgressTimestampPlacement.BESIDE) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            elapsed()
+            bar(Modifier.weight(1f))
+            remaining()
+        }
+    } else {
+        Column(modifier = modifier) {
+            bar(Modifier.fillMaxWidth())
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                elapsed()
+                remaining()
+            }
+        }
+    }
+}
+
+@Composable
 private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
+    val showTimestampedProgress = p.elementVisibility.progress &&
+        p.timestampPlacement != OverlayPreferences.ProgressTimestampPlacement.HIDDEN
+    val showInlineProgress = p.elementVisibility.progress && !showTimestampedProgress
+    val sessionActions = p.sessionActions.take(3)
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(
                 start = 24.dp,
                 end = 24.dp,
                 top = if (p.topContentInset > 0.dp) 0.dp else 14.dp,
                 bottom = 20.dp,
             ),
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier
@@ -803,7 +897,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
             )
         }
 
-        Row(
+        if (p.showsArtwork || p.showsTrackText || p.elementVisibility.visualizer || p.elementVisibility.mainControls) Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -835,7 +929,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 Spacer(Modifier.width(14.dp))
             }
 
-            if (p.elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+            if (p.showsTrackText) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
                 trackInfoStyle = p.trackInfoStyle,
                 accentColor = p.accentColor,
@@ -858,12 +952,11 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
                     mediaInfo = p.mediaInfo,
                     waveformBandCount = p.waveformBandCount,
-                    barWidth = if (p.waveformBandCount > 5) 3.2.dp else 4.dp,
-                    barSpacing = if (p.waveformBandCount > 5) 2.4.dp else 3.dp,
                     minHeight = 4.dp,
                     barCornerRadius = 2.dp,
                     highlight = p.highlightVisualizer,
                     onClick = p.onVisualizerClick,
+                    visualizerAnchor = p.visualizerAnchor,
                     modifier = Modifier.height(20.dp),
                 )
                 if (p.elementVisibility.visualizer && p.elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
@@ -910,9 +1003,14 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
             }
         }
 
-        if (p.elementVisibility.progress || p.elementVisibility.mainControls || p.elementVisibility.appActions) Row(
+        if (showTimestampedProgress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
+
+        if (showInlineProgress || p.elementVisibility.mainControls || sessionActions.isNotEmpty()) Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (showTimestampedProgress) {
+                Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            } else Arrangement.Start,
         ) {
             val style = p.playbackControlsStyle
             val skipOuter = style.cornerRadiusDp.dp
@@ -946,23 +1044,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 }
             }
 
-            if (p.elementVisibility.progress) ExpandedMusicProgressBar(
-                durationMs = p.mediaInfo.durationMs,
-                isPlaying = p.mediaInfo.isPlaying,
-                activeFractionProvider = p.activeFractionProvider,
-                accentColor = p.accentColor,
-                useAccentColor = p.progressBarAccentColor,
-                showSquiggles = p.showProgressSquiggles,
-                onDragStart = p.scrubCallbacks.onDragStart,
-                onDragChange = p.scrubCallbacks.onDragChange,
-                onDragEnd = p.scrubCallbacks.onDragEnd,
-                onDragCancel = p.scrubCallbacks.onDragCancel,
-                onProgressBarClick = p.onProgressBarClick,
-                highlight = p.highlightProgressBar,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 4.dp),
-            )
+            if (showInlineProgress) ExpandedTrackProgress(p, Modifier.weight(1f).padding(horizontal = 4.dp))
 
             if (p.elementVisibility.mainControls) Surface(
                 onClick = { p.onPlaybackControlsClick?.invoke() ?: MediaPlaybackState.skipNext() },
@@ -985,31 +1067,26 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 }
             }
 
-            if (p.elementVisibility.appActions) p.mediaInfo.sessionActions
-                .filter { it.iconResourceId != 0 && it.iconPackageName != null }
-                .take(3)
-                .forEach { action ->
-                    ExpandedSessionActionButton(
-                        context = p.context,
-                        action = action,
-                        accentColor = p.accentColor,
-                        buttonSize = 30.dp,
-                        iconSize = 18.dp,
-                        hapticFeedback = p.hapticFeedback,
-                    )
-                }
+            sessionActions.forEach { action ->
+                ExpandedSessionActionButton(
+                    context = p.context,
+                    action = action,
+                    accentColor = p.accentColor,
+                    buttonSize = 30.dp,
+                    iconSize = 18.dp,
+                    hapticFeedback = p.hapticFeedback,
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
-    val materialSessionActions = p.mediaInfo.sessionActions
-        .filter { it.iconResourceId != 0 && it.iconPackageName != null }
-        .take(3)
+    val sessionActions = p.sessionActions.take(3)
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(
                 start = 20.dp,
                 end = 20.dp,
@@ -1017,7 +1094,7 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 bottom = 20.dp,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (p.showAlbumArt && p.mediaInfo.albumArt != null) {
             ExpandedArtwork(
@@ -1046,11 +1123,11 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
             )
         }
 
-        if (p.elementVisibility.trackInfo || p.elementVisibility.visualizer) Row(
+        if (p.showsTrackInfoWithBpm || p.elementVisibility.visualizer) Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (p.elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+            if (p.showsTrackInfoWithBpm) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
                 trackInfoStyle = p.trackInfoStyle,
                 accentColor = p.accentColor,
@@ -1067,35 +1144,20 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 highlight = p.highlightTrackInfo,
                 modifier = Modifier.weight(1f),
             )
-            if (p.elementVisibility.trackInfo && p.elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
+            if (p.showsTrackInfoWithBpm && p.elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
             if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
                 mediaInfo = p.mediaInfo,
                 waveformBandCount = p.waveformBandCount,
-                barWidth = if (p.waveformBandCount > 5) 2.8.dp else 3.5.dp,
-                barSpacing = if (p.waveformBandCount > 5) 2.dp else 2.5.dp,
                 minHeight = 3.dp,
                 highlight = p.highlightVisualizer,
                 onClick = p.onVisualizerClick,
+                visualizerAnchor = p.visualizerAnchor,
                 contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier.size(width = 72.dp, height = 20.dp).padding(end = 14.dp),
             )
         }
 
-        if (p.elementVisibility.progress) ExpandedMusicProgressBar(
-            durationMs = p.mediaInfo.durationMs,
-            isPlaying = p.mediaInfo.isPlaying,
-            activeFractionProvider = p.activeFractionProvider,
-            accentColor = p.accentColor,
-            useAccentColor = p.progressBarAccentColor,
-            showSquiggles = p.showProgressSquiggles,
-            onDragStart = p.scrubCallbacks.onDragStart,
-            onDragChange = p.scrubCallbacks.onDragChange,
-            onDragEnd = p.scrubCallbacks.onDragEnd,
-            onDragCancel = p.scrubCallbacks.onDragCancel,
-            onProgressBarClick = p.onProgressBarClick,
-            highlight = p.highlightProgressBar,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (p.elementVisibility.progress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
 
         if (p.elementVisibility.mainControls) ExpandedPlaybackControlsRow(
             isPlaying = p.mediaInfo.isPlaying,
@@ -1115,12 +1177,12 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
             highlight = p.highlightPlaybackControls,
         )
 
-        if (p.elementVisibility.appActions && materialSessionActions.isNotEmpty()) {
+        if (sessionActions.isNotEmpty()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                materialSessionActions.forEach { action ->
+                sessionActions.forEach { action ->
                     ExpandedSessionActionButton(
                         context = p.context,
                         action = action,
@@ -1137,18 +1199,22 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
 
 @Composable
 private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
+    val sessionActions = p.sessionActions.take(2)
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(
                 start = 22.dp,
                 end = 22.dp,
                 top = if (p.topContentInset > 0.dp) p.topContentInset else 16.dp,
                 bottom = 18.dp,
             ),
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (p.showsArtwork || p.showsTrackInfoWithBpm || p.elementVisibility.visualizer) Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (p.showAlbumArt && p.mediaInfo.albumArt != null) {
                 ExpandedArtwork(
                     artwork = p.mediaInfo.albumArt,
@@ -1175,7 +1241,7 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 )
                 Spacer(Modifier.width(14.dp))
             }
-            if (p.elementVisibility.trackInfo) ExpandedTrackInfoColumn(
+            if (p.showsTrackInfoWithBpm) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
                 trackInfoStyle = p.trackInfoStyle,
                 accentColor = p.accentColor,
@@ -1191,57 +1257,22 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 highlight = p.highlightTrackInfo,
                 modifier = Modifier.weight(1f),
             )
-            if (p.elementVisibility.trackInfo && p.elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
+            if (p.showsTrackInfoWithBpm && p.elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
             if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
                 mediaInfo = p.mediaInfo,
                 waveformBandCount = p.waveformBandCount,
-                barWidth = if (p.waveformBandCount > 5) 2.8.dp else 3.5.dp,
-                barSpacing = if (p.waveformBandCount > 5) 2.dp else 2.5.dp,
                 minHeight = 3.dp,
                 highlight = p.highlightVisualizer,
                 onClick = p.onVisualizerClick,
+                visualizerAnchor = p.visualizerAnchor,
                 contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier.size(width = 72.dp, height = 20.dp).padding(end = 14.dp),
             )
         }
 
-        if (p.elementVisibility.progress) Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val timeTextStyle = MaterialTheme.typography.labelSmall.copy(
-                fontFamily = p.fontStyle.fontFamily,
-                fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
-            )
-            MediaTimeLabel(
-                positionState = p.livePositionMs,
-                format = ::formatTime,
-                style = timeTextStyle,
-            )
-            ExpandedMusicProgressBar(
-                durationMs = p.mediaInfo.durationMs,
-                isPlaying = p.mediaInfo.isPlaying,
-                activeFractionProvider = p.activeFractionProvider,
-                accentColor = p.accentColor,
-                useAccentColor = p.progressBarAccentColor,
-                showSquiggles = p.showProgressSquiggles,
-                onDragStart = p.scrubCallbacks.onDragStart,
-                onDragChange = p.scrubCallbacks.onDragChange,
-                onDragEnd = p.scrubCallbacks.onDragEnd,
-                onDragCancel = p.scrubCallbacks.onDragCancel,
-                onProgressBarClick = p.onProgressBarClick,
-                highlight = p.highlightProgressBar,
-                modifier = Modifier.weight(1f),
-            )
-            MediaTimeLabel(
-                positionState = p.livePositionMs,
-                format = { pos -> formatRemainingTime(pos, p.mediaInfo.durationMs) },
-                style = timeTextStyle,
-            )
-        }
+        if (p.elementVisibility.progress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
 
-        if (p.elementVisibility.mainControls || p.elementVisibility.appActions) Box(
+        if (p.elementVisibility.mainControls || sessionActions.isNotEmpty()) Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
@@ -1265,20 +1296,17 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
                 modifier = Modifier.align(Alignment.Center),
             )
 
-            if (p.elementVisibility.appActions) p.mediaInfo.sessionActions
-                .filter { it.iconResourceId != 0 && it.iconPackageName != null }
-                .take(2)
-                .forEachIndexed { index, action ->
-                    ExpandedSessionActionButton(
-                        context = p.context,
-                        action = action,
-                        accentColor = p.accentColor,
-                        buttonSize = 38.dp,
-                        iconSize = 19.dp,
-                        inactiveAlpha = 0.72f,
-                        modifier = Modifier.align(if (index == 0) Alignment.CenterStart else Alignment.CenterEnd),
-                    )
-                }
+            sessionActions.forEachIndexed { index, action ->
+                ExpandedSessionActionButton(
+                    context = p.context,
+                    action = action,
+                    accentColor = p.accentColor,
+                    buttonSize = 38.dp,
+                    iconSize = 19.dp,
+                    inactiveAlpha = 0.72f,
+                    modifier = Modifier.align(if (index == 0) Alignment.CenterStart else Alignment.CenterEnd),
+                )
+            }
         }
     }
 }
@@ -1301,8 +1329,10 @@ private fun ExpandedTrackInfoColumn(
     modifier: Modifier = Modifier,
 ) {
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
-    val showArtistRow = trackInfoStyle.showArtist || bpmChip != null
-    val showAlbumRow = trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()
+    val showArtist = trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()
+    val showAlbum = trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()
+    val inlineAlbum = trackInfoStyle.albumBesideArtist && showArtist && showAlbum
+    val showArtistRow = showArtist || bpmChip != null
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -1328,9 +1358,9 @@ private fun ExpandedTrackInfoColumn(
         if (showArtistRow) {
             if (trackInfoStyle.showTitle) Spacer(Modifier.height(titleArtistSpacing))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (trackInfoStyle.showArtist) {
+                if (showArtist) {
                     MarqueeText(
-                        text = mediaInfo.artist,
+                        text = if (inlineAlbum) "${mediaInfo.artist} • ${mediaInfo.album}" else mediaInfo.artist,
                         style = artistTextStyle.copy(
                             fontFamily = fontStyle.fontFamily,
                             fontWeight = fontWeight,
@@ -1341,14 +1371,14 @@ private fun ExpandedTrackInfoColumn(
                     )
                 }
                 if (bpmChip != null) {
-                    if (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) {
+                    if (showArtist) {
                         Spacer(Modifier.width(6.dp))
                     }
                     bpmChip()
                 }
             }
         }
-        if (showAlbumRow) {
+        if (showAlbum && !inlineAlbum) {
             if (trackInfoStyle.showTitle || showArtistRow) Spacer(Modifier.height(2.dp))
             MarqueeText(
                 text = mediaInfo.album,

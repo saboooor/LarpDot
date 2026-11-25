@@ -110,7 +110,7 @@ internal fun Modifier.islandDragGestures(
                                 session.onSwipe?.invoke(x > 0f)
                             }
                         }
-                    } else if (!triggered && y > 20f * density && y > abs(x) * 1.3f && session.onDown != null) {
+                    } else if (!triggered && isCameraDotSwipeDown(x, y, density) && session.onDown != null) {
                         triggered = true
                         change.consume()
                         session.onDown?.invoke()

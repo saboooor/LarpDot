@@ -1,18 +1,37 @@
 package ca.saboor.larpdot.ui.overlay
 
 import ca.saboor.larpdot.notification.NotificationActivityKind
+import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.CustomIslandCondition
+import ca.saboor.larpdot.service.CustomIslandVisibility
 
 /** User-orderable island priority buckets; higher entries take the main island first. */
-enum class IslandPriorityItem(
+sealed class IslandPriorityItem(
+    val name: String,
     val label: String,
     val subtitle: String,
 ) {
-    SHORT_TERM_ALERTS("Auto-Dismiss Alerts", "Temporary charging, Bluetooth, sound mode, screenshots"),
-    LIVE_ACTIVITIES("Live Activities", "Calls, timers, downloads & progress"),
-    MEDIA("Music", "Now playing & audio controls"),
-    PINNED_SHORT_TERM("Pinned Alerts", "Pinned Bluetooth battery, charging, sound mode"),
-    NAVIGATION("Navigation", "Turn-by-turn maps & trips"),
-    FLASHLIGHT("Flashlight", "Torch status & brightness"),
+    data object SHORT_TERM_ALERTS : IslandPriorityItem(
+        "SHORT_TERM_ALERTS", "Auto-Dismiss Alerts", "Temporary charging, Bluetooth, sound mode, screenshots",
+    )
+    data object LIVE_ACTIVITIES : IslandPriorityItem("LIVE_ACTIVITIES", "Live Activities", "Calls, timers, downloads & progress")
+    data object MEDIA : IslandPriorityItem("MEDIA", "Music", "Now playing & audio controls")
+    data object PINNED_SHORT_TERM : IslandPriorityItem(
+        "PINNED_SHORT_TERM", "Pinned Alerts", "Pinned Bluetooth battery, charging, sound mode",
+    )
+    data object NAVIGATION : IslandPriorityItem("NAVIGATION", "Navigation", "Turn-by-turn maps & trips")
+    data object FLASHLIGHT : IslandPriorityItem("FLASHLIGHT", "Flashlight", "Torch status & brightness")
+    data class Custom(val islandId: String) : IslandPriorityItem("CUSTOM:$islandId", "Custom Island", "Custom island layout")
+
+    companion object {
+        fun fromName(raw: String): IslandPriorityItem? {
+            val name = raw.trim()
+            if (name.startsWith("CUSTOM:")) {
+                return name.removePrefix("CUSTOM:").takeIf(String::isNotBlank)?.let(::Custom)
+            }
+            return DEFAULT_ISLAND_PRIORITY_ORDER.firstOrNull { it.name == name }
+        }
+    }
 }
 
 val DEFAULT_ISLAND_PRIORITY_ORDER: List<IslandPriorityItem> = listOf(
@@ -25,10 +44,16 @@ val DEFAULT_ISLAND_PRIORITY_ORDER: List<IslandPriorityItem> = listOf(
 )
 
 fun normalizeIslandPriorityOrder(order: List<IslandPriorityItem>): List<IslandPriorityItem> {
-    val result = LinkedHashSet<IslandPriorityItem>(IslandPriorityItem.entries.size)
-    order.forEach { result.add(it) }
-    DEFAULT_ISLAND_PRIORITY_ORDER.forEach { result.add(it) }
-    return result.toList()
+    return (order + DEFAULT_ISLAND_PRIORITY_ORDER).distinct()
+}
+
+internal fun islandPriorityOrderWithCustom(
+    order: List<IslandPriorityItem>,
+    islands: List<CustomIsland>,
+): List<IslandPriorityItem> {
+    val customItems = islands.filterNot { it.isSwipeDownOnly }.map { IslandPriorityItem.Custom(it.id) }
+    val savedItems = order.filter { it !is IslandPriorityItem.Custom || it in customItems }
+    return normalizeIslandPriorityOrder(customItems.filterNot { it in savedItems } + savedItems)
 }
 
 internal fun islandPriorityScore(
@@ -98,11 +123,31 @@ fun builtInIslandStack(
     })
 }
 
+/**
+ * Splits secondary dots across the right and left sides of the main island in alternating order:
+ * 1st -> right, 2nd -> left, 3rd -> right, 4th -> left, ...
+ * Left items are reversed so the earlier (higher-priority) left dot stays closest to the main island
+ * while additional left dots grow outward to the left.
+ */
+internal data class SecondarySideSplit<T>(
+    val left: List<T>,
+    val right: List<T>,
+)
+
+internal fun <T> splitSecondarySlots(secondary: List<T>): SecondarySideSplit<T> {
+    val left = mutableListOf<T>()
+    val right = mutableListOf<T>()
+    secondary.forEachIndexed { index, slot ->
+        if (index % 2 == 0) right.add(slot) else left.add(slot)
+    }
+    return SecondarySideSplit(left = left.asReversed(), right = right)
+}
+
 /** Reserve room for dots while keeping the primary centered on the camera.
- * When there are 2 dots, they flank the primary on left and right, so each side only needs space for 1 dot.
+ * Secondary dots alternate across right and left sides, so each side holds at most ceil(dotCount / 2) dots.
  */
 fun stackedPillWidth(requested: Float, thickness: Float, dotCount: Int, availableWidth: Float): Float {
-    val maxSideDots = if (dotCount == 2) 1 else dotCount
+    val maxSideDots = (dotCount + 1) / 2
     val dotExtent = (thickness + 8f) * maxSideDots
     return requested.coerceAtMost((availableWidth - 2f * dotExtent).coerceAtLeast(thickness))
 }
@@ -137,13 +182,14 @@ internal fun resolveIslandSlotActivity(
         ?: primaryActivity?.takeIf { it.key == key }
 }
 
-fun builtInIslandSlots(
+internal fun builtInIslandSlots(
     music: Boolean, flashlight: Boolean,
     activity: ca.saboor.larpdot.notification.NotificationActivityInfo?,
     shortTerms: List<ca.saboor.larpdot.notification.NotificationActivityInfo>,
     priorityOrder: List<IslandPriorityItem> = DEFAULT_ISLAND_PRIORITY_ORDER,
+    custom: CustomIsland? = null,
 ): IslandStack<IslandSlot> {
-    val normalized = normalizeIslandPriorityOrder(priorityOrder)
+    val normalized = islandPriorityOrderWithCustom(priorityOrder, listOfNotNull(custom))
     val base = builtInIslandStack(
         music = music,
         flashlight = flashlight,
@@ -155,11 +201,26 @@ fun builtInIslandSlots(
     )
     val autoDismissSecondaryPriority = islandPriorityScore(IslandPriorityItem.SHORT_TERM_ALERTS, normalized) - 5
     val pinnedSecondaryPriority = islandPriorityScore(IslandPriorityItem.PINNED_SHORT_TERM, normalized) - 5
-    return resolveIslandStack(base.ordered.map {
+    val candidates = base.ordered.map {
         IslandCandidate(it.id, it.priority, IslandSlot(it.content,
             if (it.content == IslandType.NOTIFICATION_ACTIVITY) activity?.key else null))
     } + shortTerms.filter { it.key != activity?.key }.map { item ->
         val score = if (item.isPinnedShortTerm) pinnedSecondaryPriority else autoDismissSecondaryPriority
         IslandCandidate(item.key, score, IslandSlot(IslandType.NOTIFICATION_ACTIVITY, item.key))
-    })
+    }
+    val showCustom = when (custom?.visibility) {
+        null, CustomIslandVisibility.SWIPE_DOWN -> false
+        CustomIslandVisibility.IDLE -> candidates.isEmpty()
+        CustomIslandVisibility.ALWAYS -> true
+        CustomIslandVisibility.CONDITIONAL -> when (custom.condition) {
+            CustomIslandCondition.MUSIC -> music
+            CustomIslandCondition.FLASHLIGHT -> flashlight
+            CustomIslandCondition.LIVE_ACTIVITY -> activity != null || shortTerms.isNotEmpty()
+        }
+    }
+    val customCandidate = custom?.takeIf { showCustom }?.let {
+        val priority = islandPriorityScore(IslandPriorityItem.Custom(it.id), normalized)
+        IslandCandidate("custom|${it.id}", priority, IslandSlot(IslandType.CUSTOM))
+    }
+    return resolveIslandStack(candidates + listOfNotNull(customCandidate))
 }

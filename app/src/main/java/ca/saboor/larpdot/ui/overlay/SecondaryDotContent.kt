@@ -1,10 +1,5 @@
 package ca.saboor.larpdot.ui.overlay
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.notification.NotificationActivityInfo
+import ca.saboor.larpdot.service.CustomIsland
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.service.ScreenStateTracker
 import ca.saboor.larpdot.ui.theme.LarpIcons
-import ca.saboor.larpdot.ui.theme.LarpMotion
 
 @Composable
 internal fun SecondaryDotContent(
@@ -50,7 +43,23 @@ internal fun SecondaryDotContent(
     notificationActivityStatus: String?,
     flashlightStatus: String,
     artworkAnchor: ArtworkAnchor? = null,
+    visualizerAnchor: IslandElementAnchor? = null,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
+    customIsland: CustomIsland? = null,
 ) {
+    if (type == IslandType.CUSTOM) {
+        val icon = customIsland?.left?.icon ?: customIsland?.right?.icon
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                icon?.image ?: LarpIcons.Apps,
+                contentDescription = customIsland?.name,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(secondaryBubbleIconSize(bubbleThickness)),
+            )
+        }
+        return
+    }
     if (type == IslandType.MEDIA) {
         SecondaryMusicDotContent(
             mediaInfo = mediaInfo,
@@ -62,10 +71,23 @@ internal fun SecondaryDotContent(
             beforeMain = beforeMain,
             bubbleStyle = bubbleStyle,
             artworkAnchor = artworkAnchor,
+            visualizerAnchor = visualizerAnchor,
         )
         return
     }
-    val flashlightAccent = flashlightAccentColor()
+    val earbudLevels = notificationActivity?.pairedEarbudBatteryLevels
+    if (type == IslandType.NOTIFICATION_ACTIVITY && isMiniPill && earbudLevels != null) {
+        CompactEarbudBatteryContent(
+            levels = earbudLevels,
+            thickness = bubbleThickness,
+            centerGap = secondaryEarbudRingGap,
+            isLandscape = isLandscape,
+            leftAnchor = iconAnchor,
+            rightAnchor = progressAnchor,
+        )
+        return
+    }
+    val flashlightAccent = FlashlightWhite
     val showFlashlightRadial by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxTorchStrength by FlashlightController.maxStrength.collectAsState()
@@ -73,7 +95,7 @@ internal fun SecondaryDotContent(
     val flashlightPercentLabel = flashlightStatus.removeSuffix("%").trim()
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val primaryColor = MaterialTheme.colorScheme.primary
-    val bubbleIconSize = (bubbleThickness - 8.dp).coerceIn(12.dp, 20.dp)
+    val bubbleIconSize = secondaryBubbleIconSize(bubbleThickness)
     val extraSpan = if (isLandscape) (bubbleHeight - bubbleWidth).coerceAtLeast(0.dp) else (bubbleWidth - bubbleHeight).coerceAtLeast(0.dp)
     val isPillShaped = isMiniPill && extraSpan > 4.dp
     val iconInset = ((bubbleThickness - bubbleIconSize) / 2f).coerceAtLeast(4.dp)
@@ -81,21 +103,12 @@ internal fun SecondaryDotContent(
     val innerPadding = iconInset
     val contentShift = 0.dp
     val iconScale = (minOf(bubbleWidth, bubbleHeight) / bubbleThickness).coerceIn(0f, 1f)
-    val isScreenOn by ScreenStateTracker.isScreenOn.collectAsState()
-    val pulseAlphaState = if (type == IslandType.FLASHLIGHT && isScreenOn) {
-        val infiniteTransition = rememberInfiniteTransition(label = "dot_torch_pulse")
-        infiniteTransition.animateFloat(
-            initialValue = 0.65f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = LarpMotion.timing(durationMillis = 1000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulse_alpha",
-        )
-    } else null
     val activityRadial = if (type == IslandType.NOTIFICATION_ACTIVITY) {
-        activityRadialProgress(notificationActivity, activitySettings.progressOutline, primaryColor)
+        if (isPillShaped) {
+            activityRadialProgress(notificationActivity, activitySettings.progressOutline, primaryColor)
+        } else {
+            secondaryDotRadialProgress(notificationActivity, activitySettings.progressOutline, primaryColor)
+        }
     } else null
     val hasActivityDotRing = !isPillShaped && activityRadial != null && notificationActivity != null
     val hasFlashlightDotRing = !isPillShaped && type == IslandType.FLASHLIGHT && showFlashlightRadial
@@ -105,9 +118,8 @@ internal fun SecondaryDotContent(
             (type == IslandType.FLASHLIGHT && showFlashlightRadial && flashlightPercentLabel.isNotEmpty())
         )
     val dotRingDiameter = compactBatteryRingDiameter(bubbleThickness)
-    val dotRingIconSize = (dotRingDiameter - 8.dp).coerceIn(10.dp, 13.dp)
     val miniPillRingDiameter = dotRingDiameter
-    val miniPillRingInset = ((bubbleThickness - miniPillRingDiameter) / 2f).coerceAtLeast(3.dp)
+    val miniPillRingInset = compactEndInset(bubbleThickness, miniPillRingDiameter)
     val leadingSlotSize = if (hasDotRing) dotRingDiameter else bubbleIconSize
     val leftContent = @Composable {
         when (type) {
@@ -115,25 +127,21 @@ internal fun SecondaryDotContent(
                 if (notificationActivity != null) {
                     if (!isPillShaped && activityRadial != null) {
                         val (percent, ringColor) = activityRadial
-                        Box(
-                            modifier = Modifier.size(dotRingDiameter),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        RadialProgressIcon(
+                            progress = percent / 100f,
+                            color = ringColor,
+                            diameter = dotRingDiameter,
+                            ringModifier = Modifier.morphingElement(progressAnchor),
+                        ) { iconSize ->
                             ActivityIcon(
                                 activity = notificationActivity,
-                                modifier = Modifier.size(dotRingIconSize),
-                            )
-                            BatteryRadialRing(
-                                percent = percent,
-                                color = ringColor,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.size(iconSize).morphingElement(iconAnchor),
                             )
                         }
                     } else {
                         ActivityIcon(
                             activity = notificationActivity,
-                            modifier = Modifier.size(bubbleIconSize),
+                            modifier = Modifier.size(bubbleIconSize).morphingElement(iconAnchor),
                         )
                     }
                 } else {
@@ -147,37 +155,19 @@ internal fun SecondaryDotContent(
             }
             IslandType.FLASHLIGHT -> {
                 if (hasFlashlightDotRing) {
-                    Box(
-                        modifier = Modifier.size(dotRingDiameter),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = LarpIcons.FlashlightOn,
-                            contentDescription = "Flashlight Active",
-                            tint = flashlightAccent,
-                            modifier = Modifier
-                                .size(dotRingIconSize)
-                                .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
-                        )
-                        RadialProgressRing(
-                            progress = flashlightFraction,
-                            color = flashlightAccent,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                    RadialProgressIcon(
+                        progress = flashlightFraction,
+                        color = flashlightAccent,
+                        diameter = dotRingDiameter,
+                        ringModifier = Modifier.morphingElement(progressAnchor),
+                    ) { iconSize ->
+                        CompactFlashlightIcon(size = iconSize, iconAnchor = iconAnchor)
                     }
                 } else {
-                    Icon(
-                        imageVector = LarpIcons.FlashlightOn,
-                        contentDescription = "Flashlight Active",
-                        tint = flashlightAccent,
-                        modifier = Modifier
-                            .size(bubbleIconSize)
-                            .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
-                    )
+                    CompactFlashlightIcon(size = bubbleIconSize, iconAnchor = iconAnchor)
                 }
             }
-            IslandType.MEDIA -> Unit
+            IslandType.MEDIA, IslandType.CUSTOM -> Unit
         }
     }
 
@@ -186,13 +176,12 @@ internal fun SecondaryDotContent(
             IslandType.NOTIFICATION_ACTIVITY -> {
                 if (activityRadial != null && notificationActivity != null) {
                     val (percent, ringColor) = activityRadial
-                    BatteryRadialGauge(
-                        percent = percent,
+                    RadialProgressGauge(
+                        progress = percent / 100f,
+                        text = percent.toString(),
                         color = ringColor,
                         diameter = miniPillRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (percent >= 100) 6.5.sp else 7.5.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else {
                     val actStatus = notificationActivityStatus ?: ""
@@ -212,11 +201,9 @@ internal fun SecondaryDotContent(
                     RadialProgressGauge(
                         progress = flashlightFraction,
                         text = flashlightPercentLabel,
-                        color = flashlightAccent,
+                        color = FlashlightWhite,
                         diameter = miniPillRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (flashlightPercentLabel.length >= 3) 6.5.sp else 7.5.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else {
                     val isPercentage = flashlightStatus.contains('%')
@@ -230,7 +217,7 @@ internal fun SecondaryDotContent(
                     )
                 }
             }
-            IslandType.MEDIA -> Unit
+            IslandType.MEDIA, IslandType.CUSTOM -> Unit
         }
     }
 

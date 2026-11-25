@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
@@ -33,6 +34,7 @@ class DotAccessibilityService : AccessibilityService() {
 
     private val flashlightBroadcast = FlashlightBroadcastRegistration()
     private var fullscreenCheckJob: Job? = null
+    private var fullscreenConfirmationJob: Job? = null
     private var pendingFullscreenPackage: String? = null
     private var lastFullscreenCheckMs: Long = 0L
 
@@ -66,12 +68,31 @@ class DotAccessibilityService : AccessibilityService() {
 
     private fun runFullscreenCheck(nowMs: Long) {
         lastFullscreenCheckMs = nowMs
-        FullscreenStateTracker.updateFromAccessibilityWindows(
+        val isFullscreen = detectFullscreen() ?: return
+        if (!isFullscreen) {
+            fullscreenConfirmationJob?.cancel()
+            fullscreenConfirmationJob = null
+            FullscreenStateTracker.setFullscreen(false)
+            return
+        }
+        if (FullscreenStateTracker.isFullscreenOrGame.value || fullscreenConfirmationJob?.isActive == true) return
+
+        // The status bar window can disappear briefly as the notification shade closes.
+        fullscreenConfirmationJob = serviceScope.launch {
+            delay(FULLSCREEN_CONFIRMATION_MS)
+            fullscreenConfirmationJob = null
+            if (OverlayPreferences.hideInFullscreenFlow.value && detectFullscreen() == true) {
+                FullscreenStateTracker.setFullscreen(true)
+            }
+        }
+    }
+
+    private fun detectFullscreen(): Boolean? =
+        FullscreenStateTracker.detectFullscreen(
             context = this,
             windows = runCatching { windows }.getOrNull(),
             foregroundPackage = pendingFullscreenPackage,
         )
-    }
 
     override fun onInterrupt() {
     }
@@ -105,7 +126,7 @@ class DotAccessibilityService : AccessibilityService() {
         )
         overlayController = controller
 
-        // Reactively display or hide based on user toggle, screen on/off, lock screen, and active flashlight state
+        // Apply the master toggle and device visibility settings.
         serviceScope.launch {
             OverlayVisibilityPolicy.visibilityFlow().distinctUntilChanged().collectLatest { shouldShow ->
                 if (shouldShow) {
@@ -127,6 +148,8 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         fullscreenCheckJob?.cancel()
         fullscreenCheckJob = null
+        fullscreenConfirmationJob?.cancel()
+        fullscreenConfirmationJob = null
         serviceJob.cancel()
         if (instance == this) instance = null
         _isServiceConnected.value = false
@@ -140,6 +163,8 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         fullscreenCheckJob?.cancel()
         fullscreenCheckJob = null
+        fullscreenConfirmationJob?.cancel()
+        fullscreenConfirmationJob = null
         if (instance == this) instance = null
         _isServiceConnected.value = false
         flashlightBroadcast.unregister(this)
@@ -151,6 +176,7 @@ class DotAccessibilityService : AccessibilityService() {
 
     companion object {
         internal const val FULLSCREEN_CHECK_MIN_INTERVAL_MS = 120L
+        private const val FULLSCREEN_CONFIRMATION_MS = 300L
 
         internal fun fullscreenCheckDelayMs(
             nowMs: Long,
@@ -187,6 +213,13 @@ class DotAccessibilityService : AccessibilityService() {
             } catch (_: Exception) {
                 false
             }
+        }
+
+        fun dismissNotificationShade(): Boolean {
+            val service = instance ?: return false
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                service.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            } else false
         }
 
         fun openAccessibilitySettings(context: Context) {

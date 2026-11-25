@@ -4,6 +4,7 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import ca.saboor.larpdot.notification.EarbudBatteryLevels
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivitySettings
@@ -17,6 +18,40 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NotificationActivityContentTest {
+
+    @Test
+    fun onlyAvailableEarbudUsesTheRegularGaugeAndItsSideIcon() {
+        val device = createActivity(
+            kind = NotificationActivityKind.BLUETOOTH,
+            title = "Pixel Buds Pro",
+            text = "Earbuds • Connected",
+        ).copy(bluetoothDeviceType = "Earbuds", bluetoothBatteryPercent = 85)
+        val rightOnly = device.copy(earbudBatteryLevels = EarbudBatteryLevels(left = null, right = 100))
+        assertNull(rightOnly.pairedEarbudBatteryLevels)
+        assertEquals(100, batteryPercentOf(rightOnly))
+        assertEquals("100%", compactStatusFallback(rightOnly))
+        assertEquals(LarpIcons.RightEarbud, activityIcon(rightOnly))
+        assertTrue(hasCompactStatusContent(rightOnly))
+
+        val leftOnly = device.copy(earbudBatteryLevels = EarbudBatteryLevels(left = 0, right = null))
+        assertNull(leftOnly.pairedEarbudBatteryLevels)
+        assertEquals(0, batteryPercentOf(leftOnly))
+        assertEquals(LarpIcons.LeftEarbud, activityIcon(leftOnly))
+
+        val both = device.copy(earbudBatteryLevels = EarbudBatteryLevels(left = 90, right = 100))
+        assertEquals(both.earbudBatteryLevels, both.pairedEarbudBatteryLevels)
+        assertNull(batteryPercentOf(both))
+        assertEquals(85 to Color.Blue, secondaryDotRadialProgress(both, progressRingEnabled = true, primaryColor = Color.Blue))
+        assertEquals(
+            90 to Color.Blue,
+            secondaryDotRadialProgress(both.copy(bluetoothBatteryPercent = null), progressRingEnabled = true, primaryColor = Color.Blue),
+        )
+        assertNull(
+            secondaryDotRadialProgress(both.copy(text = "Earbuds • Disconnected"), progressRingEnabled = true, primaryColor = Color.Blue),
+        )
+        assertEquals(LarpIcons.Earbuds, activityIcon(both))
+        assertTrue(hasCompactStatusContent(both))
+    }
 
     private fun createActivity(
         kind: NotificationActivityKind,
@@ -196,25 +231,18 @@ class NotificationActivityContentTest {
     @Test
     fun calculateCompactExtraDpExpandsDynamicallyWithTextWidth() {
         val defaultExtra = calculateActivityCompactExtraDp(0f)
-        assertEquals(56f, defaultExtra, 0.001f)
+        assertEquals(52f, defaultExtra, 0.001f)
 
-        val smallExtra = calculateActivityCompactExtraDp(20f)
-        assertEquals(56f, smallExtra, 0.001f)
+        val smallExtra = calculateActivityCompactExtraDp(14f)
+        assertEquals(52f, smallExtra, 0.001f)
 
         val largeExtra = calculateActivityCompactExtraDp(65f)
-        assertEquals(142f, largeExtra, 0.001f)
+        assertEquals(146f, largeExtra, 0.001f)
         assertTrue(largeExtra > smallExtra)
 
-        val navEmpty = compactNavigationWings(0f)
-        assertEquals(28f, navEmpty.leadingDp, 0.001f)
-        assertEquals(28f, navEmpty.trailingDp, 0.001f)
-        assertEquals(0.5f, navEmpty.trailingFraction, 0.001f)
-
-        val navEta = compactNavigationWings(24f)
-        assertEquals(28f, navEta.leadingDp, 0.001f)
-        assertEquals(36f, navEta.trailingDp, 0.001f)
-        assertEquals(64f, navEta.widthDp, 0.001f)
-        assertEquals(36f / 64f, navEta.trailingFraction, 0.001f)
+        assertEquals(52f, compactNavigationExtraDp(0f), 0.001f)
+        assertEquals(64f, compactNavigationExtraDp(24f), 0.001f)
+        assertEquals(136f, compactNavigationExtraDp(80f), 0.001f)
     }
 
     @Test
@@ -384,7 +412,7 @@ class NotificationActivityContentTest {
             title = "Pixel Buds Pro",
             text = "Earbuds • Connected",
         ).copy(bluetoothDeviceType = "Earbuds", bluetoothBatteryPercent = 85)
-        assertEquals("Earbuds", activitySubtitle(earbudsWithBattery))
+        assertEquals("", activitySubtitle(earbudsWithBattery))
         assertEquals(85, batteryPercentOf(earbudsWithBattery))
 
         val genericWithBattery = createActivity(

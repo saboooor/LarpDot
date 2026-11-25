@@ -15,6 +15,7 @@ internal data class CompactIslandFrame(
     val hasBubbleBefore: Boolean = false,
     val hasBubbleAfter: Boolean = false,
     val announcing: Boolean = false,
+    val isMiniPill: Boolean = false,
 ) {
     fun toward(target: CompactIslandFrame, fraction: Float): CompactIslandFrame {
         if (fraction <= 0f) return this
@@ -51,12 +52,44 @@ internal fun activeIslandTouchBounds(
     expandedBounds: Rect?,
     compactBounds: Rect?,
     secondaryBounds: List<Rect>,
+    swipeDownBounds: Rect? = null,
 ): List<Rect> = if (isExpanded) {
-    listOfNotNull(expandedBounds ?: compactBounds)
+    listOfNotNull(expandedBounds ?: compactBounds ?: swipeDownBounds)
 } else {
     buildList {
         compactBounds?.let(::add)
         addAll(secondaryBounds)
+        swipeDownBounds?.let(::add)
+    }
+}
+
+/**
+ * Generous touch zone anchored to the screen edge around the camera dot for the swipe-down
+ * custom island, so swipes starting on or just above the camera intercept before the status bar.
+ */
+internal fun cameraDotSwipeBounds(
+    cameraCenterX: Float,
+    cameraCenterY: Float,
+    cameraRadiusPx: Float,
+    screenWidthPx: Float,
+    density: Float,
+    isLandscape: Boolean,
+): Rect {
+    val safeRadius = cameraRadiusPx.coerceAtLeast(12f * density)
+    val alongEdgeHalf = maxOf(safeRadius + 40f * density, 56f * density)
+    val inwardReach = safeRadius + 16f * density
+    return if (isLandscape) {
+        val onLeft = cameraCenterX < screenWidthPx / 2f
+        val left = if (onLeft) 0f else (cameraCenterX - inwardReach).coerceAtLeast(0f)
+        val right = if (onLeft) (cameraCenterX + inwardReach).coerceAtMost(screenWidthPx) else screenWidthPx
+        val top = (cameraCenterY - alongEdgeHalf).coerceAtLeast(0f)
+        val bottom = cameraCenterY + alongEdgeHalf
+        Rect(left, top, right, bottom)
+    } else {
+        val left = (cameraCenterX - alongEdgeHalf).coerceAtLeast(0f)
+        val right = (cameraCenterX + alongEdgeHalf).coerceAtMost(screenWidthPx)
+        val bottom = cameraCenterY + inwardReach
+        Rect(left, 0f, right, bottom)
     }
 }
 
@@ -103,14 +136,48 @@ internal fun fitCompactMediaWings(
     maxWidthPercent: Float,
     beforeExtent: Float = 0f,
     afterExtent: Float = 0f,
+    symmetric: Boolean = false,
 ): CompactMediaWings {
     val leadingRoom = (cameraX - diameter / 2f - beforeExtent).coerceAtLeast(0f)
     val trailingRoom = (screenWidth - cameraX - diameter / 2f - afterExtent).coerceAtLeast(0f)
     val fraction = maxWidthPercent.coerceIn(40f, 100f) / 100f
-    return CompactMediaWings(
-        minOf(requested.leadingDp, leadingRoom * fraction),
-        minOf(requested.trailingDp, trailingRoom * fraction),
-    )
+    if (symmetric) {
+        val wing = minOf(maxOf(requested.leadingDp, requested.trailingDp), minOf(leadingRoom, trailingRoom) * fraction)
+        return CompactMediaWings(wing, wing)
+    }
+    return CompactMediaWings(minOf(requested.leadingDp, leadingRoom * fraction), minOf(requested.trailingDp, trailingRoom * fraction))
+}
+
+/** Shared downward swipe threshold from the camera dot (responsive for quick and angled thumb swipes). */
+internal fun isCameraDotSwipeDown(dx: Float, dy: Float, density: Float): Boolean =
+    dy > 6f * density && dy > kotlin.math.abs(dx) * 0.7f
+
+/**
+ * Maps vertical finger drag distance to interactive expansion progress (0..1 linear tracking,
+ * with gentle asymptotic rubber-band overscroll past 1f up to 1.08f).
+ */
+internal fun interactivePullProgress(dragYPx: Float, pullRangePx: Float): Float {
+    if (dragYPx <= 0f || pullRangePx <= 0f) return 0f
+    val linear = dragYPx / pullRangePx
+    if (linear <= 1f) return linear
+    val excess = linear - 1f
+    return 1f + (excess / (1f + excess * 2f)) * 0.08f
+}
+
+/** Commits an interactive pull-down on release when dragged far enough or flicked downward. */
+internal fun shouldCommitSwipeDownPull(
+    progress: Float,
+    velocityYPxPerSec: Float,
+    density: Float,
+    cancelled: Boolean = false,
+): Boolean {
+    if (cancelled) {
+        // SystemUI can pilfer top-edge touches mid-swipe; commit if the user was actively pulling down.
+        return progress >= 0.04f && velocityYPxPerSec >= 0f
+    }
+    if (velocityYPxPerSec > 180f * density) return true
+    if (velocityYPxPerSec < -300f * density) return false
+    return progress >= 0.22f
 }
 
 /** Natural content widths, before applying the user's upper limit. */
@@ -121,11 +188,12 @@ internal fun compactTextMediaWings(
     announcing: Boolean,
     announcementArtWidthDp: Float = 0f,
     announcementVisualizerWidthDp: Float = 0f,
+    announcementEndInsetDp: Float = 8f,
 ): CompactMediaWings = if (announcing) {
     CompactMediaWings(
-        (titleWidthDp + announcementArtWidthDp + 8f).coerceAtLeast(12f),
-        (artistWidthDp + announcementVisualizerWidthDp + 8f).coerceAtLeast(12f),
+        (titleWidthDp + if (announcementArtWidthDp > 0f) announcementArtWidthDp else 6f).coerceAtLeast(12f),
+        (artistWidthDp + announcementVisualizerWidthDp + announcementEndInsetDp).coerceAtLeast(12f),
     )
 } else {
-    CompactMediaWings(baseExtraDp / 2f, maxOf(baseExtraDp / 2f, titleWidthDp + 16f))
+    CompactMediaWings(baseExtraDp / 2f, maxOf(baseExtraDp / 2f, titleWidthDp + 8f))
 }

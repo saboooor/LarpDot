@@ -53,6 +53,7 @@ import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.screens.AppearanceScreen
+import ca.saboor.larpdot.ui.screens.CustomIslandScreen
 import ca.saboor.larpdot.ui.screens.FlashlightScreen
 import ca.saboor.larpdot.ui.screens.HomeScreen
 import ca.saboor.larpdot.ui.screens.LiveActivitiesScreen
@@ -69,28 +70,21 @@ fun LarpDotApp() {
     var selectedDestinationName by rememberSaveable { mutableStateOf(Destination.Home.name) }
     val selectedDestination = Destination.valueOf(selectedDestinationName)
 
-    var isEnabled by rememberSaveable { mutableStateOf(OverlayPreferences.isOverlayEnabled(context)) }
+    val isEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
     var showSetupDialog by remember { mutableStateOf(false) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
-
-    val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
-    val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
 
     // Initialize Flashlight controller
     LaunchedEffect(Unit) {
         FlashlightController.init(context)
     }
 
-    // Ensure overlay service is active when overlay is enabled OR when flashlight is on
-    LaunchedEffect(isEnabled, isFlashlightOn, showFlashlightIsland) {
-        val shouldShow = isEnabled || (isFlashlightOn && showFlashlightIsland)
-        val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isServiceConnected.value
-        val hasOverlay = Settings.canDrawOverlays(context)
-        if (shouldShow) {
-            if (!hasAccessibility && hasOverlay) {
-                ca.saboor.larpdot.service.DotOverlayService.start(context)
-            }
+    LaunchedEffect(isEnabled) {
+        if (isEnabled && !ca.saboor.larpdot.service.DotAccessibilityService.isServiceConnected.value &&
+            Settings.canDrawOverlays(context)
+        ) {
+            DotOverlayService.start(context)
         }
     }
 
@@ -104,7 +98,6 @@ fun LarpDotApp() {
 
     // Synchronize overlay service when toggle state changes
     fun handleToggle(enabled: Boolean) {
-        isEnabled = enabled
         ca.saboor.larpdot.service.OverlayPreferences.setOverlayEnabled(context, enabled)
         if (enabled) {
             val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
@@ -119,8 +112,6 @@ fun LarpDotApp() {
                 // Prompt user to grant permissions
                 showSetupDialog = true
             }
-        } else {
-            ca.saboor.larpdot.service.DotOverlayService.stop(context)
         }
     }
 
@@ -236,9 +227,8 @@ fun LarpDotApp() {
                         cutoutInfo = cutoutInfo,
                         isEnabled = isEnabled,
                     )
-                    Destination.Appearance -> AppearanceScreen(
-                        cutoutInfo = cutoutInfo,
-                    )
+                    Destination.Appearance -> AppearanceScreen()
+                    Destination.Custom -> CustomIslandScreen(cutoutInfo)
                     Destination.Music -> MusicScreen(
                         cutoutInfo = cutoutInfo,
                     )

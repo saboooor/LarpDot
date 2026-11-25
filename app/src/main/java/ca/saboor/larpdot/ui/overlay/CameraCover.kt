@@ -10,14 +10,31 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.service.OverlayPreferences.CameraCoverStyle
+import kotlin.math.ceil
 import kotlin.math.sin
+
+internal fun DrawScope.drawCameraCutoutOutline(center: Offset, radius: Float, outside: Boolean = false) {
+    val width = ceil(0.75.dp.toPx())
+    val strokeRadius = if (outside) radius + width / 2f else radius - width / 2f
+    if (strokeRadius > 0f) {
+        drawCircle(Color(0x28FFFFFF), radius = strokeRadius, center = center, style = Stroke(width))
+    }
+}
 
 /** Shared by the expanded player and its settings preview; coordinates are local to the card. */
 @Composable
-internal fun CameraCover(style: CameraCoverStyle, centerX: Dp, centerY: Dp, diameter: Dp) {
+internal fun CameraCover(
+    style: CameraCoverStyle,
+    centerX: Dp,
+    centerY: Dp,
+    diameter: Dp,
+    modifier: Modifier = Modifier,
+) {
     if (style == CameraCoverStyle.NONE) return
     val shader = if (Build.VERSION.SDK_INT >= 33) {
         remember(style) {
@@ -28,7 +45,7 @@ internal fun CameraCover(style: CameraCoverStyle, centerX: Dp, centerY: Dp, diam
     } else null
     val shaderBrush = remember(shader) { shader?.let(::ShaderBrush) }
 
-    Canvas(Modifier.fillMaxSize()) {
+    Canvas(modifier.fillMaxSize()) {
         val center = Offset(centerX.toPx(), centerY.toPx())
         val radius = diameter.toPx() / 2f + 3.dp.toPx()
         when (style) {

@@ -71,7 +71,6 @@ fun LiveActivitiesScreen(
 ) {
     val context = LocalContext.current
     val settings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
-    val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
     var hasBluetoothPermission by remember { mutableStateOf(SystemEventManager.hasBluetoothPermission(context)) }
     var hasScreenshotPermission by remember { mutableStateOf(ScreenshotPocketManager.hasPermission(context)) }
 
@@ -232,15 +231,6 @@ fun LiveActivitiesScreen(
             checked = settings.progressOutline,
             onCheckedChange = {
                 OverlayPreferences.setNotificationActivitySettings(context, settings.copy(progressOutline = it))
-            },
-        ),
-        ActivityToggleItem(
-            title = "Mini Pill Dots",
-            subtitle = "Info on side dots",
-            icon = LarpIcons.MoreHoriz,
-            checked = showDotRightSideInfo,
-            onCheckedChange = {
-                OverlayPreferences.setShowDotRightSideInfoEnabled(context, it)
             },
         ),
     )

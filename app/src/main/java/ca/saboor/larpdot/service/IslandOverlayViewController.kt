@@ -10,7 +10,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Display
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
@@ -21,9 +23,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -37,8 +42,13 @@ import ca.saboor.larpdot.ui.overlay.CompactIslandOverlay
 import ca.saboor.larpdot.ui.overlay.IslandDismissalTracker
 import ca.saboor.larpdot.ui.overlay.IslandLifecycle
 import ca.saboor.larpdot.ui.overlay.activeIslandTouchBounds
+import ca.saboor.larpdot.ui.overlay.cameraDotSwipeBounds
+import ca.saboor.larpdot.ui.overlay.drawCameraCutoutOutline
+import ca.saboor.larpdot.ui.overlay.interactivePullProgress
+import ca.saboor.larpdot.ui.overlay.isCameraDotSwipeDown
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandTouchRegion
+import ca.saboor.larpdot.ui.overlay.shouldCommitSwipeDownPull
 import ca.saboor.larpdot.ui.overlay.IslandType
 import ca.saboor.larpdot.ui.overlay.IslandSurfaceOverlay
 import ca.saboor.larpdot.notification.NotificationActivityInfo
@@ -58,7 +68,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+// Allow cleanup if the draw window stops receiving frames.
+private const val OVERLAY_EXIT_TIMEOUT_MS = 4_000L
 
 /**
  * Dynamic Island overlay controller:
@@ -119,6 +136,8 @@ class IslandOverlayViewController(
     private var isIslandExpanded by mutableStateOf(false)
     private var isOverlayMorphing by mutableStateOf(false)
     private var isCompactSurfaceHidden by mutableStateOf(false)
+    private var isHiding by mutableStateOf(false)
+    private var compactExitFinished by mutableStateOf(false)
     private var compactPressScale by mutableFloatStateOf(1f)
     private var compactStretch by mutableFloatStateOf(0f)
     private var selectedSlot by mutableStateOf<IslandSlot?>(null)
@@ -132,6 +151,9 @@ class IslandOverlayViewController(
     private var expansionSourceStretch by mutableFloatStateOf(0f)
     private var autoExpandedActivityKey by mutableStateOf<String?>(null)
     private var retainedExpandedActivity by mutableStateOf<NotificationActivityInfo?>(null)
+    private var expandedCustomIsland by mutableStateOf<CustomIsland?>(null)
+    private var isSwipeDownCustomExpanded by mutableStateOf(false)
+    private var swipeDownPullProgress by mutableStateOf<Float?>(null)
     private val seenShortTermTitles = mutableMapOf<String, String>()
     private var autoCollapseJob: Job? = null
     private val dismissalTracker = IslandDismissalTracker()
@@ -143,6 +165,7 @@ class IslandOverlayViewController(
 
     private fun dismissIsland(type: IslandType, slot: IslandSlot?) {
         when (type) {
+            IslandType.CUSTOM -> CustomIslandStore.setActive(null)
             IslandType.MEDIA -> mediaDismissToken(MediaPlaybackState.currentTrack.value)?.let(dismissalTracker::dismissMedia)
             IslandType.FLASHLIGHT -> dismissalTracker.dismissFlashlight(FlashlightController.lastFlashlightOnTime)
             IslandType.NOTIFICATION_ACTIVITY -> {
@@ -173,6 +196,7 @@ class IslandOverlayViewController(
         primaryActivity: NotificationActivityInfo?,
         shortTerms: List<NotificationActivityInfo>,
         priorityOrder: List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>,
+        customIsland: CustomIsland?,
     ): VisibleOverlaySnapshot {
         val activeKeys = buildSet {
             primaryActivity?.key?.let(::add)
@@ -190,6 +214,7 @@ class IslandOverlayViewController(
             activity = currentActivity,
             shortTerms = visibleShortTerms,
             priorityOrder = priorityOrder,
+            custom = customIsland,
         )
         return VisibleOverlaySnapshot(
             isMusicAllowed = isMusicAllowed,
@@ -209,6 +234,7 @@ class IslandOverlayViewController(
         primaryActivity = NotificationActivityState.current.value,
         shortTerms = NotificationActivityState.shortTermActivities.value,
         priorityOrder = OverlayPreferences.islandPriorityOrderFlow.value,
+        customIsland = CustomIslandStore.settings.value.activeIsland,
     ).stack
 
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
@@ -241,7 +267,13 @@ class IslandOverlayViewController(
 
     @SuppressLint("ClickableViewAccessibility")
     fun show() {
-        if (isOverlayAdded) return
+        if (isOverlayAdded) {
+            if (isHiding) {
+                isHiding = false
+                updateOverlayLayout()
+            }
+            return
+        }
 
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = wm
@@ -290,21 +322,154 @@ class IslandOverlayViewController(
         compactView = compView
 
         // Setup touch forwarding view
+        var trackingSwipeDown = false
+        var forwardedDownToCompact = false
+        var downRawX = 0f
+        var downRawY = 0f
+        var lastRawX = 0f
+        var lastRawY = 0f
+        var interactivePullActive = false
+        var pullRangePx = 140f
+        var velocityTracker: VelocityTracker? = null
+        fun resetVelocityTracker() {
+            velocityTracker?.recycle()
+            velocityTracker = null
+        }
+        fun addScreenSpaceVelocitySample(event: MotionEvent) {
+            val tracker = velocityTracker ?: return
+            val screenCopy = MotionEvent.obtain(event)
+            screenCopy.setLocation(event.rawX, event.rawY)
+            tracker.addMovement(screenCopy)
+            screenCopy.recycle()
+        }
+        fun forwardToCompact(event: MotionEvent): Boolean {
+            val comp = compactView ?: return false
+            val cParams = compactWindowParams ?: return false
+            val tParams = touchWindowParams ?: return false
+            val copy = MotionEvent.obtain(event)
+            copy.offsetLocation((tParams.x - cParams.x).toFloat(), (tParams.y - cParams.y).toFloat())
+            val handled = comp.dispatchTouchEvent(copy)
+            copy.recycle()
+            return handled
+        }
         val tView = View(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            setOnTouchListener { _, event ->
+            setOnTouchListener { view, event ->
                 if (event.action == MotionEvent.ACTION_OUTSIDE) {
                     if (isIslandExpanded) collapseOverlay()
                     return@setOnTouchListener false
                 }
-                val comp = compactView ?: return@setOnTouchListener false
-                val cParams = compactWindowParams ?: return@setOnTouchListener false
-                val tParams = touchWindowParams ?: return@setOnTouchListener false
-                val copy = MotionEvent.obtain(event)
-                copy.offsetLocation((tParams.x - cParams.x).toFloat(), (tParams.y - cParams.y).toFloat())
-                val handled = comp.dispatchTouchEvent(copy)
-                copy.recycle()
-                handled
+                val density = context.resources.displayMetrics.density
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        interactivePullActive = false
+                        forwardedDownToCompact = false
+                        resetVelocityTracker()
+                        val canSwipeDown = !isIslandExpanded &&
+                            swipeDownPullProgress == null &&
+                            (!isOverlayMorphing || isSwipeDownCustomExpanded)
+                        val isIdle = currentStack().ordered.isEmpty() && canSwipeDown
+                        val swipeZone = if (canSwipeDown) {
+                            currentSwipeDownZone(padded = true)
+                        } else null
+                        val screenX = event.rawX
+                        val screenY = event.rawY
+                        trackingSwipeDown = swipeZone != null && (
+                            isIdle || (
+                                screenX >= swipeZone.left && screenX <= swipeZone.right &&
+                                    screenY >= swipeZone.top && screenY <= swipeZone.bottom
+                                )
+                            )
+                        if (trackingSwipeDown) {
+                            downRawX = event.rawX
+                            downRawY = event.rawY
+                            lastRawX = event.rawX
+                            lastRawY = event.rawY
+                            velocityTracker = VelocityTracker.obtain()
+                            addScreenSpaceVelocitySample(event)
+                            val swipeHeightDp = (CustomIslandStore.settings.value.swipeDownIsland?.main?.height ?: 150).toFloat()
+                            val cutoutDiameterDp = currentCutoutInfo?.let { islandCameraGeometry(it.radiusPx, density).diameter } ?: 24f
+                            pullRangePx = ((swipeHeightDp - cutoutDiameterDp) * density).coerceIn(90f * density, 175f * density)
+                        }
+                        if (isIdle) {
+                            return@setOnTouchListener trackingSwipeDown
+                        }
+                        val handled = forwardToCompact(event)
+                        forwardedDownToCompact = handled
+                        return@setOnTouchListener handled || trackingSwipeDown
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (trackingSwipeDown || interactivePullActive) {
+                            lastRawX = event.rawX
+                            lastRawY = event.rawY
+                            addScreenSpaceVelocitySample(event)
+                        }
+                        val dx = lastRawX - downRawX
+                        val dy = lastRawY - downRawY
+                        if (interactivePullActive) {
+                            swipeDownPullProgress = interactivePullProgress(dy, pullRangePx)
+                            return@setOnTouchListener true
+                        }
+                        if (trackingSwipeDown && isCameraDotSwipeDown(dx = dx, dy = dy, density = density)) {
+                            if (forwardedDownToCompact) {
+                                forwardedDownToCompact = false
+                                val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                                forwardToCompact(cancel)
+                                cancel.recycle()
+                            }
+                            val initialProgress = interactivePullProgress(dy, pullRangePx)
+                            if (beginInteractiveSwipeDownCustomIsland(initialProgress)) {
+                                interactivePullActive = true
+                                trackingSwipeDown = false
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                return@setOnTouchListener true
+                            }
+                        }
+                        return@setOnTouchListener if (forwardedDownToCompact) forwardToCompact(event) else trackingSwipeDown
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val wasPulling = interactivePullActive
+                        val wasTracking = trackingSwipeDown
+                        val wasForwarded = forwardedDownToCompact
+                        val cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL
+                        if (!cancelled && (wasPulling || wasTracking)) {
+                            lastRawX = event.rawX
+                            lastRawY = event.rawY
+                            addScreenSpaceVelocitySample(event)
+                        }
+                        if (wasPulling || wasTracking) {
+                            velocityTracker?.computeCurrentVelocity(1000)
+                        }
+                        val finalVelocity = velocityTracker?.yVelocity ?: 0f
+                        resetVelocityTracker()
+                        interactivePullActive = false
+                        trackingSwipeDown = false
+                        forwardedDownToCompact = false
+                        val dx = lastRawX - downRawX
+                        val dy = lastRawY - downRawY
+                        if (wasPulling) {
+                            val finalProgress = interactivePullProgress(dy, pullRangePx)
+                            val commit = shouldCommitSwipeDownPull(finalProgress, finalVelocity, density, cancelled)
+                            if (commit) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            finishInteractiveSwipeDownCustomIsland(commit)
+                            return@setOnTouchListener true
+                        }
+                        if (wasTracking && (isCameraDotSwipeDown(dx, dy, density) ||
+                                (dy > 4f * density && finalVelocity > 180f * density))
+                        ) {
+                            if (wasForwarded) {
+                                val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                                forwardToCompact(cancel)
+                                cancel.recycle()
+                            }
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            expandSwipeDownCustomIsland()
+                            return@setOnTouchListener true
+                        }
+                        return@setOnTouchListener if (wasForwarded) forwardToCompact(event) else wasTracking
+                    }
+                }
+                forwardToCompact(event)
             }
         }
         touchView = tView
@@ -334,6 +499,7 @@ class IslandOverlayViewController(
             observeShortTermActivities()
             observePriorityOrder()
             observeDebugMode()
+            observeCustomIsland()
             observeCutoutConfig()
             updateOverlayLayout()
         } catch (e: Exception) {
@@ -350,10 +516,13 @@ class IslandOverlayViewController(
             val hideMedia by ForegroundAppTracker.shouldHideMedia.collectAsState()
             val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
             val showFlashlightIsland by OverlayPreferences.showFlashlightIslandFlow.collectAsState()
+            val debugModeEnabled by OverlayPreferences.isDebugModeFlow.collectAsState()
             val activeCutout = currentCutoutInfo ?: initialCutout
             val primaryActivity by NotificationActivityState.current.collectAsState()
             val shortTermActivities by NotificationActivityState.shortTermActivities.collectAsState()
             val priorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
+            val customIslandSettings by CustomIslandStore.settings.collectAsState()
+            val customIsland = customIslandSettings.activeIsland
             val activeExpandedType by expandedType.collectAsState()
             @Suppress("UNUSED_VARIABLE")
             val rev = dismissalRevision
@@ -367,6 +536,7 @@ class IslandOverlayViewController(
                 primaryActivity = primaryActivity,
                 shortTerms = shortTermActivities,
                 priorityOrder = priorityOrder,
+                customIsland = customIsland,
             )
             val compactSlot = snapshot.stack.primary?.content
             val compactType = compactSlot?.type
@@ -391,7 +561,7 @@ class IslandOverlayViewController(
                 }
             }
 
-            val morphing = isIslandExpanded || isOverlayMorphing
+            val morphing = isIslandExpanded || isOverlayMorphing || swipeDownPullProgress != null
             Box(Modifier.fillMaxSize()) {
                 CompactIslandOverlay(
                     cutoutInfo = activeCutout,
@@ -399,11 +569,15 @@ class IslandOverlayViewController(
                     isMusicAllowed = snapshot.isMusicAllowed,
                     notificationActivity = snapshot.currentActivity,
                     shortTermActivities = snapshot.visibleShortTerms,
+                    customIsland = customIsland,
+                    hasSwipeDownCustomIsland = customIslandSettings.swipeDownIsland != null,
                     isFlashlightOn = snapshot.isFlashlightVisible,
                     isExpanded = morphing,
-                    hideCompactStack = isCompactSurfaceHidden && selectedSlot == null,
+                    isExiting = isHiding && !morphing,
+                    hideCompactPill = isCompactSurfaceHidden && selectedSlot == null,
                     hiddenSecondarySlot = selectedSlot.takeIf { isCompactSurfaceHidden },
                     onExpand = ::expandOverlay,
+                    onSwipeDownCustomExpand = ::expandSwipeDownCustomIsland,
                     onDismiss = ::dismissIsland,
                     onCompactFrameChanged = { frame ->
                         if (compactSurfaceFrame != frame) {
@@ -436,10 +610,14 @@ class IslandOverlayViewController(
                         }
                     },
                     onFlashlightToggle = { FlashlightController.toggleFlashlight() },
+                    onExitStateChanged = { compactExitFinished = it },
                 )
+                // Draw the card over the stationary compact stack.
                 if (morphing) expansionSourceFrame?.let { source ->
                     val slot = selectedSlot
-                    val liveFrame = if (slot != null) {
+                    val liveFrame = if (isSwipeDownCustomExpanded) {
+                        compactSurfaceFrame
+                    } else if (slot != null) {
                         secondarySurfaceFrames[slot].takeIf { slot in secondaryTypes }
                     } else {
                         compactSurfaceFrame.takeIf { compactType == activeExpandedType }
@@ -458,7 +636,7 @@ class IslandOverlayViewController(
                         returnFrame = liveFrame,
                         onCollapse = ::collapseOverlay,
                         onFirstFrameDrawn = {
-                            if (isIslandExpanded) isCompactSurfaceHidden = true
+                            if (isIslandExpanded || swipeDownPullProgress != null) isCompactSurfaceHidden = true
                         },
                         onExitFinished = ::finishCollapse,
                         onExpandedBoundsChanged = { bounds ->
@@ -469,10 +647,85 @@ class IslandOverlayViewController(
                         },
                         compactPressScale = expansionSourceScale,
                         compactStretch = expansionSourceStretch,
+                        customIsland = expandedCustomIsland,
+                        interactiveProgress = swipeDownPullProgress,
                     )
+                }
+                if (debugModeEnabled) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCameraCutoutOutline(
+                            center = Offset(activeCutout.centerX, activeCutout.centerY),
+                            radius = activeCutout.radiusPx,
+                            outside = true,
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private fun beginInteractiveSwipeDownCustomIsland(initialProgress: Float): Boolean {
+        if (!isOverlayAdded || isHiding || isIslandExpanded) return false
+        if (isOverlayMorphing && !isSwipeDownCustomExpanded) return false
+        val swipeDown = CustomIslandStore.settings.value.swipeDownIsland ?: return false
+        val cutout = currentCutoutInfo ?: return false
+        if (swipeDown.main.widgetId == null) return false
+
+        MediaPlaybackState.dismissSongAnnouncement()
+        isSongAnnouncementActive = false
+
+        _expandedType.value = IslandType.CUSTOM
+        selectedSlot = null
+        autoExpandedActivityKey = null
+        retainedExpandedActivity = null
+        expandedCustomIsland = swipeDown
+        isSwipeDownCustomExpanded = true
+        expansionSourceFrame = compactSurfaceFrame ?: cutoutOriginFrame(cutout)
+        expandedCardBounds = null
+        expansionSourceScale = compactPressScale
+        expansionSourceStretch = compactStretch
+        isIslandExpanded = false
+        isOverlayMorphing = true
+        swipeDownPullProgress = initialProgress
+
+        syncDrawWindowVisibility()
+        return true
+    }
+
+    private fun finishInteractiveSwipeDownCustomIsland(commit: Boolean) {
+        if (swipeDownPullProgress == null) return
+        swipeDownPullProgress = null
+        if (!isOverlayAdded || isHiding) {
+            finishCollapse()
+            return
+        }
+        if (commit && CustomIslandStore.settings.value.swipeDownIsland != null) {
+            isIslandExpanded = true
+            isOverlayMorphing = true
+            DotAccessibilityService.dismissNotificationShade()
+            layoutTouchWindow()
+        } else {
+            isIslandExpanded = false
+            isOverlayMorphing = true
+            expandedCardBounds = null
+            layoutTouchWindow()
+        }
+        syncDrawWindowVisibility()
+    }
+
+    private fun expandSwipeDownCustomIsland() {
+        val swipeDown = CustomIslandStore.settings.value.swipeDownIsland ?: return
+        val cutout = currentCutoutInfo ?: return
+        DotAccessibilityService.dismissNotificationShade()
+        expandOverlayInternal(
+            type = IslandType.CUSTOM,
+            slot = null,
+            source = compactSurfaceFrame ?: cutoutOriginFrame(cutout),
+            autoExpandedKey = null,
+            initialActivity = null,
+            customOverride = swipeDown,
+            swipeDownCustom = true,
+        )
     }
 
     private fun expandOverlay(type: IslandType, slot: IslandSlot?, source: CompactIslandFrame) {
@@ -493,8 +746,18 @@ class IslandOverlayViewController(
         source: CompactIslandFrame,
         autoExpandedKey: String?,
         initialActivity: NotificationActivityInfo?,
+        customOverride: CustomIsland? = null,
+        swipeDownCustom: Boolean = false,
     ) {
-        if (!isOverlayAdded || isOverlayMorphing || isIslandExpanded) return
+        if (!isOverlayAdded || isHiding || isOverlayMorphing || isIslandExpanded) return
+        if (type == IslandType.CUSTOM) {
+            val custom = customOverride ?: CustomIslandStore.settings.value.activeIsland ?: return
+            if (custom.main.widgetId == null) return
+            expandedCustomIsland = custom
+            isSwipeDownCustomExpanded = swipeDownCustom
+        } else {
+            isSwipeDownCustomExpanded = false
+        }
 
         MediaPlaybackState.dismissSongAnnouncement()
         isSongAnnouncementActive = false
@@ -529,7 +792,7 @@ class IslandOverlayViewController(
         info: NotificationActivityInfo,
         settings: NotificationActivitySettings,
     ) {
-        if (!isOverlayAdded) return
+        if (!isOverlayAdded || isHiding) return
         val cutout = currentCutoutInfo ?: return
         if (isIslandExpanded && autoExpandedActivityKey == null) return
 
@@ -577,12 +840,15 @@ class IslandOverlayViewController(
         selectedSlot = null
         autoExpandedActivityKey = null
         retainedExpandedActivity = null
+        expandedCustomIsland = null
+        isSwipeDownCustomExpanded = false
+        swipeDownPullProgress = null
         isOverlayMorphing = false
         expansionSourceFrame = null
         expandedCardBounds = null
         expansionSourceScale = 1f
         expansionSourceStretch = 0f
-        if (currentStack().ordered.isNotEmpty()) {
+        if (currentStack().ordered.isNotEmpty() || CustomIslandStore.settings.value.swipeDownIsland != null) {
             layoutTouchWindow()
         } else {
             removeTouchWindow()
@@ -590,10 +856,10 @@ class IslandOverlayViewController(
         syncDrawWindowVisibility()
     }
 
-    /** Hide the 460dp translucent draw surface when completely idle so SurfaceFlinger skips compositing it. */
+    /** Hide the translucent draw surface when completely idle so SurfaceFlinger skips compositing it. */
     private fun syncDrawWindowVisibility() {
         val view = compactView ?: return
-        val active = currentStack().ordered.isNotEmpty() ||
+        val active = isHiding || currentStack().ordered.isNotEmpty() ||
             isIslandExpanded ||
             isOverlayMorphing ||
             OverlayPreferences.isDebugModeFlow.value
@@ -603,8 +869,9 @@ class IslandOverlayViewController(
             if (view.visibility != View.VISIBLE) view.visibility = View.VISIBLE
         } else if (view.visibility != View.GONE && idleHideJob?.isActive != true) {
             idleHideJob = controllerScope.launch {
-                delay(420L)
+                awaitCompactExit()
                 if (isOverlayAdded &&
+                    !isHiding &&
                     currentStack().ordered.isEmpty() &&
                     !isIslandExpanded &&
                     !isOverlayMorphing &&
@@ -613,6 +880,12 @@ class IslandOverlayViewController(
                     compactView?.visibility = View.GONE
                 }
             }
+        }
+    }
+
+    private suspend fun awaitCompactExit() {
+        withTimeoutOrNull(OVERLAY_EXIT_TIMEOUT_MS) {
+            snapshotFlow { compactExitFinished }.first { it }
         }
     }
 
@@ -627,7 +900,47 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun currentSwipeDownZone(padded: Boolean = false): Rect? {
+        if (CustomIslandStore.settings.value.swipeDownIsland == null) return null
+        val cutout = currentCutoutInfo ?: return null
+        val dm = context.resources.displayMetrics
+        val density = dm.density
+        val screenWidth = (compactWindowParams?.width ?: dm.widthPixels).toFloat()
+        val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val base = cameraDotSwipeBounds(
+            cameraCenterX = cutout.centerX,
+            cameraCenterY = cutout.centerY,
+            cameraRadiusPx = cutout.radiusPx,
+            screenWidthPx = screenWidth,
+            density = density,
+            isLandscape = isLandscape,
+        )
+        val compactBounds = if (currentStack().primary != null) compactSurfaceFrame?.bounds else null
+        val combined = if (compactBounds != null) {
+            Rect(
+                left = minOf(base.left, compactBounds.left),
+                top = minOf(base.top, compactBounds.top),
+                right = maxOf(base.right, compactBounds.right),
+                bottom = maxOf(base.bottom, compactBounds.bottom),
+            )
+        } else base
+        if (!padded) return combined
+        val pad = 6f * density
+        return Rect(
+            left = (combined.left - pad).coerceAtLeast(0f),
+            top = (combined.top - pad).coerceAtLeast(0f),
+            right = (combined.right + pad).coerceAtMost(screenWidth),
+            bottom = combined.bottom + pad,
+        )
+    }
+
     private fun layoutTouchWindow() {
+        if (isHiding) {
+            removeTouchWindow()
+            return
+        }
+        // Keep the touch window stationary during an active pull so InputDispatcher never cancels the gesture.
+        if (swipeDownPullProgress != null && touchAdded) return
         val wm = windowManager ?: return
         val view = touchView ?: return
 
@@ -636,11 +949,13 @@ class IslandOverlayViewController(
         // FLAG_WATCH_OUTSIDE_TOUCH so taps outside the card both collapse it and pass through.
         val stack = currentStack()
         val secondaryBounds = stack.secondary.mapNotNull { secondarySurfaceFrames[it.content]?.bounds }
+        val swipeDownBounds = if (!isIslandExpanded) currentSwipeDownZone(padded = false) else null
         val bounds = activeIslandTouchBounds(
             isExpanded = isIslandExpanded,
             expandedBounds = expandedCardBounds,
             compactBounds = if (stack.primary != null) compactSurfaceFrame?.bounds else null,
             secondaryBounds = secondaryBounds,
+            swipeDownBounds = swipeDownBounds,
         )
         val region = islandTouchRegion(
             bounds, 6f * context.resources.displayMetrics.density,
@@ -648,6 +963,9 @@ class IslandOverlayViewController(
         if (region == null) {
             removeTouchWindow()
             return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            view.systemGestureExclusionRects = listOf(android.graphics.Rect(0, 0, region.width, region.height))
         }
         val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -741,8 +1059,24 @@ class IslandOverlayViewController(
             }
         }
 
-        val hasVisibleIsland = currentStack().ordered.isNotEmpty()
-        val shouldShowTouch = (hasVisibleIsland || isIslandExpanded) && isOverlayAdded
+        val stack = currentStack()
+        if ((isIslandExpanded || swipeDownPullProgress != null) && _expandedType.value == IslandType.CUSTOM) {
+            val sourceStillVisible = if (isSwipeDownCustomExpanded) {
+                CustomIslandStore.settings.value.swipeDownIsland != null
+            } else {
+                val slot = selectedSlot
+                if (slot == null) {
+                    stack.primary?.content?.type == IslandType.CUSTOM
+                } else stack.secondary.any { it.content == slot }
+            }
+            if (!sourceStillVisible) {
+                swipeDownPullProgress = null
+                collapseOverlay()
+            }
+        }
+        val hasVisibleIsland = stack.ordered.isNotEmpty()
+        val hasSwipeDownTarget = CustomIslandStore.settings.value.swipeDownIsland != null && currentCutoutInfo != null
+        val shouldShowTouch = (hasVisibleIsland || hasSwipeDownTarget || isIslandExpanded) && isOverlayAdded
         if (shouldShowTouch) {
             layoutTouchWindow()
         } else {
@@ -824,6 +1158,19 @@ class IslandOverlayViewController(
         }
     }
 
+    private fun observeCustomIsland() {
+        controllerScope.launch {
+            CustomIslandStore.settings.map { it.activeIsland to it.swipeDownIsland }.distinctUntilChanged()
+                .collectLatest { (active, swipeDown) ->
+                    if (_expandedType.value == IslandType.CUSTOM) {
+                        val expected = if (isSwipeDownCustomExpanded) swipeDown else active
+                        if (expandedCustomIsland != expected) collapseOverlay()
+                    }
+                    updateOverlayLayout()
+                }
+        }
+    }
+
     private fun observeFlashlightState() {
         controllerScope.launch {
             combine(FlashlightController.isFlashlightOn, OverlayPreferences.showFlashlightIslandFlow) { on, enabled ->
@@ -846,6 +1193,10 @@ class IslandOverlayViewController(
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            params.fitInsetsTypes = 0
+            params.fitInsetsSides = 0
+        }
     }
 
     fun onConfigurationChanged(newConfig: Configuration) {
@@ -853,7 +1204,23 @@ class IslandOverlayViewController(
         updateOverlayLayout()
     }
 
-    fun hide() {
+    suspend fun hide() {
+        if (!isOverlayAdded) return
+        if (compactView?.visibility == View.VISIBLE && ScreenStateTracker.isScreenOn.value) {
+            isHiding = true
+            removeTouchWindow()
+            idleHideJob?.cancel()
+            idleHideJob = null
+            if (isOverlayMorphing || isIslandExpanded || swipeDownPullProgress != null) {
+                swipeDownPullProgress = null
+                collapseOverlay()
+                // The screen can turn off before Compose gets another frame.
+                withTimeoutOrNull(OVERLAY_EXIT_TIMEOUT_MS) {
+                    snapshotFlow { isOverlayMorphing }.first { !it }
+                } ?: finishCollapse()
+            }
+            awaitCompactExit()
+        }
         dismiss()
     }
 
@@ -861,9 +1228,11 @@ class IslandOverlayViewController(
         dismiss()
     }
 
-    fun dismiss() {
+    private fun dismiss() {
         if (!isOverlayAdded) return
         isOverlayAdded = false
+        isHiding = false
+        compactExitFinished = false
         rotationDisplayManager?.unregisterDisplayListener(displayListener)
         rotationDisplayManager = null
         lastDisplayRotation = null
@@ -892,6 +1261,9 @@ class IslandOverlayViewController(
         selectedSlot = null
         autoExpandedActivityKey = null
         retainedExpandedActivity = null
+        expandedCustomIsland = null
+        isSwipeDownCustomExpanded = false
+        swipeDownPullProgress = null
 
         removeTouchWindow()
         touchView = null

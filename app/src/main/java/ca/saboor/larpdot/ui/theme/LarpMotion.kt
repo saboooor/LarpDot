@@ -33,11 +33,15 @@ internal object LarpMotion {
     private const val durationScale = 0.72f
     val standard = CubicBezierEasing(0.35f, 0f, 0.2f, 1f)
     val settle = CubicBezierEasing(0.18f, 0.75f, 0.25f, 1f)
+    private val islandVisibilityEasing = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)
 
     fun <T> timing(durationMillis: Int, delayMillis: Int = 0, easing: Easing = standard) =
         tween<T>((durationMillis * durationScale).roundToInt(), (delayMillis * durationScale).roundToInt(), easing)
 
     fun <T> fade(durationMillis: Int = 240) = timing<T>(durationMillis)
+
+    fun <T> islandVisibility(durationMillis: Int = 360) =
+        tween<T>(durationMillis = durationMillis, easing = islandVisibilityEasing)
 
     fun <T> quickSpring(dampingRatio: Float, stiffness: Float, visibilityThreshold: T? = null) =
         spring(dampingRatio, stiffness / (durationScale * durationScale), visibilityThreshold)

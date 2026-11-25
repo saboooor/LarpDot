@@ -10,8 +10,6 @@ class OverlayVisibilityPolicyTest {
     fun overlayShowsWhenEnabledAndScreenUnlocked() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = true,
-            isTorchOn = false,
-            showTorchIsland = true,
             isScreenOn = true,
             hideWhenScreenOff = true,
             isLocked = false,
@@ -21,25 +19,9 @@ class OverlayVisibilityPolicyTest {
     }
 
     @Test
-    fun flashlightIslandShowsWhenMasterIsDisabledAndTorchIsOn() {
+    fun overlayStaysHiddenWhenMasterIsDisabledEvenIfDeviceAllowsIt() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = false,
-            isTorchOn = true,
-            showTorchIsland = true,
-            isScreenOn = true,
-            hideWhenScreenOff = true,
-            isLocked = false,
-            hideOnLockScreen = true,
-        )
-        assertTrue(shouldShow)
-    }
-
-    @Test
-    fun flashlightIslandHidesWhenTorchIslandDisabledAndMasterDisabled() {
-        val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
-            isEnabled = false,
-            isTorchOn = true,
-            showTorchIsland = false,
             isScreenOn = true,
             hideWhenScreenOff = true,
             isLocked = false,
@@ -52,8 +34,6 @@ class OverlayVisibilityPolicyTest {
     fun overlayHidesWhenScreenOffIfConfigured() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = true,
-            isTorchOn = false,
-            showTorchIsland = true,
             isScreenOn = false,
             hideWhenScreenOff = true,
             isLocked = false,
@@ -66,8 +46,6 @@ class OverlayVisibilityPolicyTest {
     fun overlayShowsWhenScreenOffIfNotConfiguredToHide() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = true,
-            isTorchOn = false,
-            showTorchIsland = true,
             isScreenOn = false,
             hideWhenScreenOff = false,
             isLocked = false,
@@ -80,8 +58,6 @@ class OverlayVisibilityPolicyTest {
     fun overlayHidesOnLockScreenIfConfigured() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = true,
-            isTorchOn = false,
-            showTorchIsland = true,
             isScreenOn = true,
             hideWhenScreenOff = false,
             isLocked = true,
@@ -94,8 +70,6 @@ class OverlayVisibilityPolicyTest {
     fun overlayShowsOnLockScreenIfNotConfiguredToHide() {
         val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
             isEnabled = true,
-            isTorchOn = false,
-            showTorchIsland = true,
             isScreenOn = true,
             hideWhenScreenOff = false,
             isLocked = true,
@@ -109,8 +83,6 @@ class OverlayVisibilityPolicyTest {
         assertFalse(
             OverlayVisibilityPolicy.shouldShowOverlay(
                 isEnabled = true,
-                isTorchOn = false,
-                showTorchIsland = true,
                 isScreenOn = true,
                 hideWhenScreenOff = true,
                 isLocked = false,
@@ -122,8 +94,6 @@ class OverlayVisibilityPolicyTest {
         assertTrue(
             OverlayVisibilityPolicy.shouldShowOverlay(
                 isEnabled = true,
-                isTorchOn = false,
-                showTorchIsland = true,
                 isScreenOn = true,
                 hideWhenScreenOff = true,
                 isLocked = false,
@@ -139,8 +109,6 @@ class OverlayVisibilityPolicyTest {
         assertFalse(
             OverlayVisibilityPolicy.shouldShowOverlay(
                 isEnabled = true,
-                isTorchOn = false,
-                showTorchIsland = true,
                 isScreenOn = true,
                 hideWhenScreenOff = true,
                 isLocked = false,
@@ -152,8 +120,6 @@ class OverlayVisibilityPolicyTest {
         assertTrue(
             OverlayVisibilityPolicy.shouldShowOverlay(
                 isEnabled = true,
-                isTorchOn = false,
-                showTorchIsland = true,
                 isScreenOn = true,
                 hideWhenScreenOff = true,
                 isLocked = false,

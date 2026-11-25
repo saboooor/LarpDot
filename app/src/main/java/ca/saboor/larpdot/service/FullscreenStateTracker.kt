@@ -28,14 +28,14 @@ object FullscreenStateTracker {
         _isLandscape.value = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
 
-    fun updateFromAccessibilityWindows(
+    internal fun detectFullscreen(
         context: Context,
         windows: List<AccessibilityWindowInfo>?,
         foregroundPackage: String? = null,
-    ) {
-        if (windows.isNullOrEmpty()) return
+    ): Boolean? {
+        if (windows.isNullOrEmpty()) return null
         val (screenW, screenH) = screenDimensions(context)
-        if (screenW <= 0 || screenH <= 0) return
+        if (screenW <= 0 || screenH <= 0) return null
 
         val rect = Rect()
         var statusBarVisible = false
@@ -67,15 +67,19 @@ object FullscreenStateTracker {
         }
 
         val isGame = activeAppPackage?.let { isGamePackage(context, it) } == true
-        _isFullscreenOrGame.value = isFullscreenState(
+        return isFullscreenState(
             appCoversFullScreen = appCoversFullScreen,
             statusBarVisible = statusBarVisible,
             isGame = isGame,
         )
     }
 
+    internal fun setFullscreen(isFullscreen: Boolean) {
+        _isFullscreenOrGame.value = isFullscreen
+    }
+
     fun reset() {
-        _isFullscreenOrGame.value = false
+        setFullscreen(false)
     }
 
     internal fun isWindowCoveringScreen(

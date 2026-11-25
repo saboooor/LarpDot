@@ -179,9 +179,7 @@ internal object ActivityAndBlacklistPrefsStore {
         if (!isIslandPriorityOrderInitialized) {
             val raw = prefs.getString(KEY_ISLAND_PRIORITY_ORDER, null)
             val parsed = raw?.split(",")
-                ?.mapNotNull { token ->
-                    IslandPriorityItem.entries.firstOrNull { it.name == token.trim() }
-                }
+                ?.mapNotNull(IslandPriorityItem::fromName)
                 .orEmpty()
             _islandPriorityOrderFlow.value = normalizeIslandPriorityOrder(parsed)
             isIslandPriorityOrderInitialized = true

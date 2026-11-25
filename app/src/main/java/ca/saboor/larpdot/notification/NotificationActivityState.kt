@@ -104,7 +104,11 @@ data class NotificationActivityInfo(
     val mediaMimeType: String? = null,
     val isPinnedShortTerm: Boolean = false,
     val maneuverIcon: Bitmap? = null,
+    val earbudBatteryLevels: EarbudBatteryLevels? = null,
 ) {
+    internal val pairedEarbudBatteryLevels: EarbudBatteryLevels?
+        get() = earbudBatteryLevels?.takeIf { it.left != null && it.right != null }
+
     val progressFraction: Float?
         get() = if (progress != null && progressMax != null && progressMax > 0) {
             (progress.toFloat() / progressMax).coerceIn(0f, 1f)
@@ -112,6 +116,8 @@ data class NotificationActivityInfo(
             null
         }
 }
+
+data class EarbudBatteryLevels(val left: Int?, val right: Int?)
 
 /**
  * App-owned interpretation of ongoing system notifications. It deliberately uses only Android's
@@ -278,6 +284,15 @@ object NotificationActivityState {
             val current = activities[key] ?: return
             if (current.kind != NotificationActivityKind.BLUETOOTH) return
             activities[key] = current.copy(bluetoothBatteryPercent = batteryPercent)
+            publishBestLocked()
+        }
+    }
+
+    fun updateEarbudBatteries(key: String, levels: EarbudBatteryLevels?) {
+        synchronized(lock) {
+            val current = activities[key] ?: return
+            if (current.kind != NotificationActivityKind.BLUETOOTH || current.earbudBatteryLevels == levels) return
+            activities[key] = current.copy(earbudBatteryLevels = levels)
             publishBestLocked()
         }
     }

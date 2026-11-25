@@ -29,6 +29,8 @@ data class IslandBackupConfig(
     val expandedPlayerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
     val showProgressSquiggles: Boolean = true,
     val progressBarAccentColor: Boolean = false,
+    val progressTimestampPlacement: OverlayPreferences.ProgressTimestampPlacement =
+        OverlayPreferences.ProgressTimestampPlacement.legacyDefault(expandedPlayerLayout),
     val playbackPlayPauseBg: Boolean = true,
     val playbackSkipBg: Boolean = false,
     val playbackCornerRadiusDp: Float = 22f,
@@ -37,6 +39,7 @@ data class IslandBackupConfig(
     val trackInfoShowTitle: Boolean = true,
     val trackInfoShowArtist: Boolean = true,
     val trackInfoShowAlbum: Boolean = false,
+    val trackInfoAlbumBesideArtist: Boolean = false,
     val trackInfoTitleAccent: Boolean = false,
     val showMinimizedTitle: Boolean = false,
     val showMinimizedVisualizer: Boolean = true,
@@ -57,7 +60,6 @@ data class IslandBackupConfig(
     val waveformBandCount: Int = OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT,
     val waveformBarWidth: Float = 2.5f,
     val waveformBarSpacing: Float = 1.5f,
-    val showDotRightSideInfo: Boolean = true,
     val showMinimizedFlashlightOutline: Boolean = true,
     val showExpandedFlashlightOutline: Boolean = true,
     val flashlightExpandedStyle: OverlayPreferences.FlashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
@@ -130,6 +132,7 @@ object IslandThemePresets {
             add("expandedPlayerLayout" to quote(config.expandedPlayerLayout.name))
             add("showProgressSquiggles" to config.showProgressSquiggles.toString())
             add("progressBarAccentColor" to config.progressBarAccentColor.toString())
+            add("progressTimestampPlacement" to quote(config.progressTimestampPlacement.name))
             add("playbackPlayPauseBg" to config.playbackPlayPauseBg.toString())
             add("playbackSkipBg" to config.playbackSkipBg.toString())
             add("playbackCornerRadiusDp" to config.playbackCornerRadiusDp.toString())
@@ -138,6 +141,7 @@ object IslandThemePresets {
             add("trackInfoShowTitle" to config.trackInfoShowTitle.toString())
             add("trackInfoShowArtist" to config.trackInfoShowArtist.toString())
             add("trackInfoShowAlbum" to config.trackInfoShowAlbum.toString())
+            add("trackInfoAlbumBesideArtist" to config.trackInfoAlbumBesideArtist.toString())
             add("trackInfoTitleAccent" to config.trackInfoTitleAccent.toString())
             add("showMinimizedTitle" to config.showMinimizedTitle.toString())
             add("showMinimizedVisualizer" to config.showMinimizedVisualizer.toString())
@@ -158,7 +162,6 @@ object IslandThemePresets {
             add("waveformBandCount" to config.waveformBandCount.toString())
             add("waveformBarWidth" to config.waveformBarWidth.toString())
             add("waveformBarSpacing" to config.waveformBarSpacing.toString())
-            add("showDotRightSideInfo" to config.showDotRightSideInfo.toString())
             add("showMinimizedFlashlightOutline" to config.showMinimizedFlashlightOutline.toString())
             add("showExpandedFlashlightOutline" to config.showExpandedFlashlightOutline.toString())
             add("flashlightExpandedStyle" to quote(config.flashlightExpandedStyle.name))
@@ -206,13 +209,12 @@ object IslandThemePresets {
         val fields = parseFlatJsonObject(trimmed) ?: return null
         if (fields.keys.none { it in KNOWN_BACKUP_KEYS }) return null
         val defaults = IslandBackupConfig()
+        val expandedPlayerLayout = enumOrDefault(fields["expandedPlayerLayout"], defaults.expandedPlayerLayout)
         val legacyBpmPulse = fields["bpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.bpmPulseEnabled
         val rawPriority = fields["islandPriorityOrder"]
         val parsedPriority = if (!rawPriority.isNullOrBlank()) {
             normalizeIslandPriorityOrder(
-                rawPriority.split(",").mapNotNull { token ->
-                    IslandPriorityItem.entries.firstOrNull { it.name == token.trim() }
-                },
+                rawPriority.split(",").mapNotNull(IslandPriorityItem::fromName),
             )
         } else {
             defaults.islandPriorityOrder
@@ -237,9 +239,13 @@ object IslandThemePresets {
             showExpandedAlbumArt = fields["showExpandedAlbumArt"]?.toBooleanStrictOrNull() ?: defaults.showExpandedAlbumArt,
             expandedAlbumArtShape = enumOrDefault(fields["expandedAlbumArtShape"], defaults.expandedAlbumArtShape),
             expandedAlbumArtRotation = (fields["expandedAlbumArtRotation"]?.toFloatOrNull() ?: defaults.expandedAlbumArtRotation).coerceIn(0f, 360f),
-            expandedPlayerLayout = enumOrDefault(fields["expandedPlayerLayout"], defaults.expandedPlayerLayout),
+            expandedPlayerLayout = expandedPlayerLayout,
             showProgressSquiggles = fields["showProgressSquiggles"]?.toBooleanStrictOrNull() ?: defaults.showProgressSquiggles,
             progressBarAccentColor = fields["progressBarAccentColor"]?.toBooleanStrictOrNull() ?: defaults.progressBarAccentColor,
+            progressTimestampPlacement = enumOrDefault(
+                fields["progressTimestampPlacement"],
+                OverlayPreferences.ProgressTimestampPlacement.legacyDefault(expandedPlayerLayout),
+            ),
             playbackPlayPauseBg = fields["playbackPlayPauseBg"]?.toBooleanStrictOrNull() ?: defaults.playbackPlayPauseBg,
             playbackSkipBg = fields["playbackSkipBg"]?.toBooleanStrictOrNull() ?: defaults.playbackSkipBg,
             playbackCornerRadiusDp = (fields["playbackCornerRadiusDp"]?.toFloatOrNull() ?: defaults.playbackCornerRadiusDp).coerceIn(0f, 32f),
@@ -248,6 +254,7 @@ object IslandThemePresets {
             trackInfoShowTitle = fields["trackInfoShowTitle"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowTitle,
             trackInfoShowArtist = fields["trackInfoShowArtist"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowArtist,
             trackInfoShowAlbum = fields["trackInfoShowAlbum"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowAlbum,
+            trackInfoAlbumBesideArtist = fields["trackInfoAlbumBesideArtist"]?.toBooleanStrictOrNull() ?: defaults.trackInfoAlbumBesideArtist,
             trackInfoTitleAccent = fields["trackInfoTitleAccent"]?.toBooleanStrictOrNull() ?: defaults.trackInfoTitleAccent,
             showMinimizedTitle = fields["showMinimizedTitle"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedTitle,
             showMinimizedVisualizer = fields["showMinimizedVisualizer"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedVisualizer,
@@ -268,7 +275,6 @@ object IslandThemePresets {
             waveformBandCount = (fields["waveformBandCount"]?.toIntOrNull() ?: defaults.waveformBandCount).coerceIn(0, 30),
             waveformBarWidth = (fields["waveformBarWidth"]?.toFloatOrNull() ?: defaults.waveformBarWidth).coerceIn(0.5f, 6f),
             waveformBarSpacing = (fields["waveformBarSpacing"]?.toFloatOrNull() ?: defaults.waveformBarSpacing).coerceIn(0f, 8f),
-            showDotRightSideInfo = fields["showDotRightSideInfo"]?.toBooleanStrictOrNull() ?: defaults.showDotRightSideInfo,
             showMinimizedFlashlightOutline = fields["showMinimizedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedFlashlightOutline,
             showExpandedFlashlightOutline = fields["showExpandedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showExpandedFlashlightOutline,
             flashlightExpandedStyle = enumOrDefault(fields["flashlightExpandedStyle"], defaults.flashlightExpandedStyle),
@@ -354,6 +360,7 @@ object IslandThemePresets {
             expandedPlayerLayout = OverlayPreferences.getExpandedPlayerLayout(context),
             showProgressSquiggles = OverlayPreferences.isShowProgressSquigglesEnabled(context),
             progressBarAccentColor = OverlayPreferences.isProgressBarAccentColorEnabled(context),
+            progressTimestampPlacement = OverlayPreferences.getProgressTimestampPlacement(context),
             playbackPlayPauseBg = playback.playPauseBackground,
             playbackSkipBg = playback.skipBackground,
             playbackCornerRadiusDp = playback.cornerRadiusDp,
@@ -362,6 +369,7 @@ object IslandThemePresets {
             trackInfoShowTitle = trackInfo.showTitle,
             trackInfoShowArtist = trackInfo.showArtist,
             trackInfoShowAlbum = trackInfo.showAlbum,
+            trackInfoAlbumBesideArtist = trackInfo.albumBesideArtist,
             trackInfoTitleAccent = trackInfo.titleAccentColor,
             showMinimizedTitle = OverlayPreferences.isShowMinimizedTitleEnabled(context),
             showMinimizedVisualizer = OverlayPreferences.isShowMinimizedVisualizerEnabled(context),
@@ -382,7 +390,6 @@ object IslandThemePresets {
             waveformBandCount = OverlayPreferences.waveformBandCountFlow.value,
             waveformBarWidth = OverlayPreferences.waveformBarWidthFlow.value,
             waveformBarSpacing = OverlayPreferences.waveformBarSpacingFlow.value,
-            showDotRightSideInfo = OverlayPreferences.isShowDotRightSideInfoEnabled(context),
             showMinimizedFlashlightOutline = OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context),
             showExpandedFlashlightOutline = OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context),
             flashlightExpandedStyle = OverlayPreferences.getFlashlightExpandedStyle(context),
@@ -443,6 +450,7 @@ object IslandThemePresets {
         OverlayPreferences.setExpandedPlayerLayout(context, config.expandedPlayerLayout)
         OverlayPreferences.setShowProgressSquigglesEnabled(context, config.showProgressSquiggles)
         OverlayPreferences.setProgressBarAccentColorEnabled(context, config.progressBarAccentColor)
+        OverlayPreferences.setProgressTimestampPlacement(context, config.progressTimestampPlacement)
         OverlayPreferences.setPlaybackControlsStyle(
             context,
             OverlayPreferences.PlaybackControlsStyle(
@@ -459,6 +467,7 @@ object IslandThemePresets {
                 showTitle = config.trackInfoShowTitle,
                 showArtist = config.trackInfoShowArtist,
                 showAlbum = config.trackInfoShowAlbum,
+                albumBesideArtist = config.trackInfoAlbumBesideArtist,
                 titleAccentColor = config.trackInfoTitleAccent,
             ),
         )
@@ -485,7 +494,6 @@ object IslandThemePresets {
         OverlayPreferences.setWaveformBandCount(context, config.waveformBandCount)
         OverlayPreferences.setWaveformBarWidth(context, config.waveformBarWidth)
         OverlayPreferences.setWaveformBarSpacing(context, config.waveformBarSpacing)
-        OverlayPreferences.setShowDotRightSideInfoEnabled(context, config.showDotRightSideInfo)
         OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, config.showMinimizedFlashlightOutline)
         OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, config.showExpandedFlashlightOutline)
         OverlayPreferences.setFlashlightExpandedStyle(context, config.flashlightExpandedStyle)

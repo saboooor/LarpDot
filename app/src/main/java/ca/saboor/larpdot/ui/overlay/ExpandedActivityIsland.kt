@@ -62,6 +62,20 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 private val LEADING_BATTERY_PERCENT_REGEX = Regex("""^\d+%(?:\s+remaining|\s+reached)?\s*•\s*""", RegexOption.IGNORE_CASE)
 private val PURE_PERCENT_REGEX = Regex("""^\d+%$""")
 
+private val earbudTitleMinWidth = 56.dp
+
+private fun expandedActivityGaugeDiameter(spanIconLeftOfCutout: Boolean): Dp =
+    if (spanIconLeftOfCutout) 44.dp else 42.dp
+
+private fun earbudCardChrome(spanIconLeftOfCutout: Boolean): Dp =
+    if (spanIconLeftOfCutout) 116.dp else 90.dp
+
+private fun shouldStackEarbudGauges(cardWidth: Dp, spanIconLeftOfCutout: Boolean): Boolean {
+    val diameter = expandedActivityGaugeDiameter(spanIconLeftOfCutout)
+    return cardWidth < earbudCardChrome(spanIconLeftOfCutout) +
+        expandedEarbudPairSize(diameter, stacked = false).width + earbudTitleMinWidth
+}
+
 internal fun activitySubtitle(activity: NotificationActivityInfo): String {
     if (activity.kind == NotificationActivityKind.BLUETOOTH) {
         val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
@@ -70,6 +84,7 @@ internal fun activitySubtitle(activity: NotificationActivityInfo): String {
             ?.takeIf {
                 it.isNotBlank() &&
                     !it.equals("Bluetooth", ignoreCase = true) &&
+                    !it.equals("Earbuds", ignoreCase = true) &&
                     !it.equals("Audio", ignoreCase = true)
             }
         return deviceType.orEmpty()
@@ -128,7 +143,9 @@ private data class ExpandedActivityLayoutModel(
     val isScreenshot: Boolean,
     val showProgressBar: Boolean,
     val hasFooter: Boolean,
-)
+) {
+    val bottomPadding: Dp get() = if (isNavigation) 14.dp else 22.dp
+}
 
 private fun buildExpandedActivityLayoutModel(
     activity: NotificationActivityInfo,
@@ -183,6 +200,10 @@ internal fun expandedActivitySize(
     val subtitleStyle = activityTextStyle(false)
     val buttonStyle = MaterialTheme.typography.labelLarge
     val etaStyle = subtitleStyle.copy(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+    val hasEarbudLevels = activity.pairedEarbudBatteryLevels != null
+    val stackEarbudGauges = hasEarbudLevels && shouldStackEarbudGauges(maxWidth, spanIconLeftOfCutout)
+    val gaugeDiameter = expandedActivityGaugeDiameter(spanIconLeftOfCutout)
+    val earbudLevelsSize = if (hasEarbudLevels) expandedEarbudPairSize(gaugeDiameter, stackEarbudGauges) else DpSize.Zero
     return with(density) {
         val titleNatural = measurer.measure(activity.title, titleStyle, softWrap = false).size.width.toDp()
         val subtitleNatural = if (model.subtitle.isNotEmpty()) {
@@ -195,17 +216,21 @@ internal fun expandedActivitySize(
             maxOf(64.dp, measurer.measure(it.title, buttonStyle, softWrap = false).size.width.toDp() + 32.dp)
         } ?: 0.dp
         val navRightWidth = maxOf(etaWidth, inlineButtonWidth)
-        val navRightHeight = if (navRightWidth > 0.dp) {
-            (if (model.navigationEta != null) 20.dp else 0.dp) +
-                (if (model.inlineAction != null) 38.dp else 0.dp) +
-                (if (model.navigationEta != null && model.inlineAction != null) 6.dp else 0.dp) +
-                24.dp
+        val etaHeight = model.navigationEta?.let {
+            measurer.measure(it, etaStyle, maxLines = 1).size.height.toDp()
+        } ?: 0.dp
+        val actionHeight = if (model.inlineAction != null) {
+            maxOf(48.dp, measurer.measure(model.inlineAction.title, buttonStyle, maxLines = 1).size.height.toDp() + 12.dp)
         } else 0.dp
+        val navRightHeight = etaHeight + actionHeight +
+            (if (etaHeight > 0.dp && actionHeight > 0.dp) 6.dp else 0.dp) +
+            (if (spanIconLeftOfCutout && model.hasNavRightContent) 16.dp else 0.dp)
         val buttonWidths = model.footerActions.map {
             maxOf(64.dp, measurer.measure(it.title, buttonStyle, softWrap = false).size.width.toDp() + 48.dp)
         }
         val actionsWidth = buttonWidths.fold(0.dp) { sum, width -> sum + width } + (8.dp * (buttonWidths.size - 1).coerceAtLeast(0))
         val horizontalChrome = when {
+            hasEarbudLevels -> earbudCardChrome(spanIconLeftOfCutout) + earbudLevelsSize.width
             spanIconLeftOfCutout && model.hasRadialGauge -> 160.dp
             spanIconLeftOfCutout && navRightWidth > 0.dp -> 116.dp + navRightWidth
             spanIconLeftOfCutout -> 100.dp
@@ -218,7 +243,9 @@ internal fun expandedActivitySize(
         } else {
             160.dp
         }
-        val width = maxOf(minCardWidth, maxOf(titleNatural, subtitleNatural) + horizontalChrome, actionsWidth + 44.dp).coerceAtMost(maxWidth)
+        val rightSlotHeight = maxOf(navRightHeight, earbudLevelsSize.height)
+        val textNaturalWidth = maxOf(titleNatural, subtitleNatural, if (hasEarbudLevels) earbudTitleMinWidth else 0.dp)
+        val width = maxOf(minCardWidth, textNaturalWidth + horizontalChrome, actionsWidth + 44.dp).coerceAtMost(maxWidth)
         val textWidthPx = (width - horizontalChrome).coerceAtLeast(1.dp).roundToPx()
         val titleMaxLines = if (model.isNavigation) 3 else 2
         val titleHeight = measurer.measure(
@@ -235,7 +262,7 @@ internal fun expandedActivitySize(
                 constraints = Constraints(maxWidth = textWidthPx),
             ).size.height.toDp()
         } else 0.dp
-        val textHeight = titleHeight + subtitleHeight + (if (model.isNavigation) 4.dp else 0.dp)
+        val textHeight = titleHeight + subtitleHeight
         var rows = if (buttonWidths.isEmpty()) 0 else 1
         var rowWidth = 0.dp
         buttonWidths.forEach { button ->
@@ -249,17 +276,17 @@ internal fun expandedActivitySize(
         }
         val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
         val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
-        val bottomPadding = 22.dp
+        val bottomPadding = model.bottomPadding
         val headerBlockHeight = if (spanIconLeftOfCutout) {
             if (model.hasFooter) {
-                maxOf(48.dp, navRightHeight, topInset + textHeight) + bottomPadding
+                maxOf(48.dp, rightSlotHeight, topInset + textHeight) + bottomPadding
             } else {
-                maxOf(64.dp, navRightHeight, topInset + textHeight + bottomPadding)
+                maxOf(64.dp, rightSlotHeight, topInset + textHeight + bottomPadding)
             }
         } else {
             (if (topInset > 0.dp) topInset else 16.dp) + maxOf(
                 if (model.hasRadialGauge) 44.dp else 24.dp,
-                if (navRightWidth > 0.dp) navRightHeight - 16.dp else 0.dp,
+                rightSlotHeight,
                 textHeight,
             ) + bottomPadding
         }
@@ -276,10 +303,13 @@ internal fun expandedActivitySize(
 @Composable
 internal fun ExpandedNotificationActivityContent(
     activity: NotificationActivityInfo,
+    cardWidth: Dp,
     onCollapse: () -> Unit = {},
     modifier: Modifier = Modifier,
     topContentInset: Dp = 0.dp,
     spanIconLeftOfCutout: Boolean = false,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
 ) {
     val context = LocalContext.current
     val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
@@ -301,8 +331,9 @@ internal fun ExpandedNotificationActivityContent(
     val primaryColor = MaterialTheme.colorScheme.primary
     val model = buildExpandedActivityLayoutModel(activity, activitySettings.progressOutline, primaryColor)
     val startPadding = if (spanIconLeftOfCutout) 18.dp else 22.dp
-    val endPadding = if (spanIconLeftOfCutout) (if (model.hasRadialGauge || model.hasNavRightContent) 18.dp else 20.dp) else 22.dp
-    val bottomPadding = 22.dp
+    val hasTrailingContent = model.hasRadialGauge || model.hasNavRightContent || activity.pairedEarbudBatteryLevels != null
+    val endPadding = if (spanIconLeftOfCutout) (if (hasTrailingContent) 18.dp else 20.dp) else 22.dp
+    val bottomPadding = model.bottomPadding
     val columnTopPadding = when {
         spanIconLeftOfCutout -> 0.dp
         topContentInset > 0.dp -> topContentInset
@@ -331,6 +362,10 @@ internal fun ExpandedNotificationActivityContent(
             topContentInset = topContentInset,
             bottomPadding = bottomPadding,
             spanIconLeftOfCutout = spanIconLeftOfCutout,
+            stackEarbudGauges = activity.pairedEarbudBatteryLevels != null &&
+                shouldStackEarbudGauges(cardWidth, spanIconLeftOfCutout),
+            iconAnchor = iconAnchor,
+            progressAnchor = progressAnchor,
         )
 
         if (model.showProgressBar) activity.progressFraction?.let { fraction ->
@@ -381,6 +416,9 @@ private fun ExpandedActivityHeaderRow(
     topContentInset: Dp,
     bottomPadding: Dp,
     spanIconLeftOfCutout: Boolean,
+    stackEarbudGauges: Boolean,
+    iconAnchor: IslandElementAnchor?,
+    progressAnchor: IslandElementAnchor?,
 ) {
     val rowModifier = if (spanIconLeftOfCutout) {
         Modifier
@@ -395,6 +433,8 @@ private fun ExpandedActivityHeaderRow(
         horizontalArrangement = Arrangement.spacedBy(if (spanIconLeftOfCutout) 14.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val earbudLevels = activity.pairedEarbudBatteryLevels
+        val appIconAnchor = if (earbudLevels == null) iconAnchor else null
         if (spanIconLeftOfCutout) {
             Box(
                 modifier = Modifier
@@ -404,14 +444,14 @@ private fun ExpandedActivityHeaderRow(
             ) {
                 ActivityIcon(
                     activity = activity,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(44.dp).morphingElement(appIconAnchor),
                     iconShape = RoundedCornerShape(12.dp),
                 )
             }
         } else {
             ActivityIcon(
                 activity = activity,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(24.dp).morphingElement(appIconAnchor),
                 iconShape = RoundedCornerShape(6.dp),
             )
         }
@@ -451,7 +491,17 @@ private fun ExpandedActivityHeaderRow(
             }
         }
 
-        if (model.radialProgress != null) {
+        val gaugeDiameter = expandedActivityGaugeDiameter(spanIconLeftOfCutout)
+        if (earbudLevels != null) {
+            ExpandedEarbudBatteryContent(
+                levels = earbudLevels,
+                diameter = gaugeDiameter,
+                stacked = stackEarbudGauges,
+                leftAnchor = iconAnchor,
+                rightAnchor = progressAnchor,
+                modifier = Modifier.padding(start = 2.dp, end = if (spanIconLeftOfCutout) 2.dp else 0.dp),
+            )
+        } else if (model.radialProgress != null) {
             val (percent, ringColor) = model.radialProgress
             if (spanIconLeftOfCutout) {
                 Box(
@@ -460,24 +510,20 @@ private fun ExpandedActivityHeaderRow(
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    BatteryRadialGauge(
+                    ExpandedActivityGauge(
                         percent = percent,
                         color = ringColor,
-                        diameter = 44.dp,
-                        strokeWidth = 3.5.dp,
-                        fontSize = if (percent >= 100) 10.sp else 11.5.sp,
-                        showPercentSymbol = true,
+                        diameter = gaugeDiameter,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 }
             } else {
                 Spacer(Modifier.width(2.dp))
-                BatteryRadialGauge(
+                ExpandedActivityGauge(
                     percent = percent,
                     color = ringColor,
-                    diameter = 42.dp,
-                    strokeWidth = 3.5.dp,
-                    fontSize = if (percent >= 100) 9.5.sp else 11.sp,
-                    showPercentSymbol = true,
+                    diameter = gaugeDiameter,
+                    modifier = Modifier.morphingElement(progressAnchor),
                 )
             }
         } else if (model.hasNavRightContent) {
@@ -487,7 +533,7 @@ private fun ExpandedActivityHeaderRow(
                 primaryColor = primaryColor,
                 fontStyle = fontStyle,
                 modifier = if (spanIconLeftOfCutout) {
-                    Modifier.fillMaxHeight().padding(vertical = 12.dp)
+                    Modifier.fillMaxHeight().padding(vertical = 8.dp)
                 } else {
                     Modifier
                 },

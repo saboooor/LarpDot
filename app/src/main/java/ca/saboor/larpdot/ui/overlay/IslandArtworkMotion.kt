@@ -28,10 +28,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
-import kotlin.math.PI
-import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 internal class IslandArtworkMotion(private val fraction: () -> Float) {
     val compact: ArtworkAnchor = ArtworkAnchor { isMoving }
@@ -50,19 +47,19 @@ internal data class ArtworkStyle(
 internal data class ArtworkPlacement(val bounds: Rect, val style: ArtworkStyle)
 
 internal class ArtworkAnchor(val isMoving: () -> Boolean) {
-    private var container: LayoutCoordinates? = null
-    private var tile: LayoutCoordinates? = null
     private var firstSquare = false
     private var style = ArtworkStyle()
     var opacity: () -> Float = { 1f }
         private set
     var placement by mutableStateOf<ArtworkPlacement?>(null)
         private set
-
-    fun placeContainer(coordinates: LayoutCoordinates) {
-        container = coordinates
-        updatePlacement()
+    private val position = IslandElementPosition { bounds ->
+        val side = minOf(bounds.width, bounds.height)
+        val artwork = if (firstSquare) Rect(bounds.topLeft, Size(side, side)) else bounds
+        placement = ArtworkPlacement(artwork, style)
     }
+
+    fun placeContainer(coordinates: LayoutCoordinates) = position.placeContainer(coordinates)
 
     fun placeTile(
         coordinates: LayoutCoordinates,
@@ -70,23 +67,10 @@ internal class ArtworkAnchor(val isMoving: () -> Boolean) {
         firstSquare: Boolean,
         opacity: () -> Float,
     ) {
-        tile = coordinates
         this.style = style
         this.firstSquare = firstSquare
         this.opacity = opacity
-        updatePlacement()
-    }
-
-    private fun updatePlacement() {
-        val container = container?.takeIf { it.isAttached } ?: return
-        val tile = tile?.takeIf { it.isAttached } ?: return
-        val bounds = container.localBoundingBoxOf(tile, clipBounds = false)
-        if (bounds.width <= 0f || bounds.height <= 0f) return
-        val side = minOf(bounds.width, bounds.height)
-        val artwork = if (firstSquare) Rect(bounds.topLeft, Size(side, side)) else bounds
-        // Center-relative coordinates cancel the outer layers' scale, translation and clipping.
-        val center = Offset(container.size.width / 2f, container.size.height / 2f)
-        placement = ArtworkPlacement(artwork.translate(-center), style)
+        position.placeTile(coordinates)
     }
 }
 
@@ -117,7 +101,7 @@ internal fun TravelingArtwork(
     bitmap: ImageBitmap,
     motion: IslandArtworkMotion,
     glow: AlbumArtGlowState,
-    isLandscape: Boolean = false,
+    path: IslandElementPath,
     modifier: Modifier,
 ) {
     val layerPaint = remember { Paint() }
@@ -127,35 +111,12 @@ internal fun TravelingArtwork(
         if (progress <= 0f || progress >= 1f) return@Canvas
         val start = motion.compact.placement ?: return@Canvas
         val end = motion.expanded.placement ?: return@Canvas
-        // Curve around the camera cutout: swing outward toward the wing side while keeping the
-        // tile compact near the cutout, then slide across once below (or clear of) the camera.
-        val wingAxisProgress = progress.pow(2.6f)
-        val clearAxisProgress = 1f - (1f - progress).pow(1.9f)
-        val sizeProgress = progress.pow(1.4f)
-        val tileSize = Size(
-            lerp(start.bounds.width, end.bounds.width, sizeProgress),
-            lerp(start.bounds.height, end.bounds.height, sizeProgress),
-        )
-        val arc = sin(progress * PI).toFloat()
-        val xProgress = if (isLandscape) clearAxisProgress else wingAxisProgress
-        val yProgress = if (isLandscape) wingAxisProgress else clearAxisProgress
-        val baseX = center.x + lerp(start.bounds.center.x, end.bounds.center.x, xProgress)
-        val baseY = center.y + lerp(start.bounds.center.y, end.bounds.center.y, yProgress)
-        val swingAmount = arc * minOf(size.width, size.height) * 0.28f
-        val tileCenter = if (isLandscape) {
-            val swingDir = if (start.bounds.center.y <= 0f) -1f else 1f
-            val minY = (tileSize.height / 2f).coerceAtMost(center.y)
-            val maxY = (size.height - tileSize.height / 2f).coerceAtLeast(center.y)
-            Offset(baseX, (baseY + swingDir * swingAmount).coerceIn(minOf(baseY, minY), maxOf(baseY, maxY)))
-        } else {
-            val swingDir = if (start.bounds.center.x <= 0f) -1f else 1f
-            val minX = (tileSize.width / 2f).coerceAtMost(center.x)
-            val maxX = (size.width - tileSize.width / 2f).coerceAtLeast(center.x)
-            Offset((baseX + swingDir * swingAmount).coerceIn(minOf(baseX, minX), maxOf(baseX, maxX)), baseY)
-        }
-        val opacity = lerp(motion.compact.opacity(), motion.expanded.opacity(), progress)
-        val styleMix = ((progress - 0.15f) / 0.7f).coerceIn(0f, 1f)
-        translate(tileCenter.x - tileSize.width / 2f, tileCenter.y - tileSize.height / 2f) {
+        val frame = path.frameInShell(start.bounds, end.bounds, center, progress)
+        val tile = frame.bounds
+        val tileSize = tile.size
+        val styleMix = frame.morphFraction
+        val opacity = lerp(motion.compact.opacity(), motion.expanded.opacity(), styleMix)
+        translate(tile.left, tile.top) {
             drawMovingAlbumArtGlow(glow, tileSize, opacity)
             if (start.style == end.style) {
                 drawArtwork(bitmap, tileSize, start.style, opacity, layerPaint, reusablePath)

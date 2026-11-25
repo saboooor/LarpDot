@@ -8,20 +8,14 @@ import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.graphics.Shader
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.service.ScreenStateTracker
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import android.os.Build
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,7 +39,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,16 +51,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -83,15 +75,6 @@ import ca.saboor.larpdot.ui.theme.LarpMotion
 val FlashlightWhite = Color.White
 val FlashlightWhiteLight = Color.White
 val FlashlightWhiteDim = Color(0xB3FFFFFF)
-
-@Composable
-internal fun flashlightAccentColor(): Color {
-    val context = LocalContext.current
-    return remember(context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicDarkColorScheme(context).primary
-        else Color(0xFFF2B8B5)
-    }
-}
 
 val FlashlightAmber = Color(0xFFFFB300)
 val FlashlightAmberLight = Color(0xFFFFD54F)
@@ -121,12 +104,36 @@ fun rememberCompactFlashlightStatus(): String {
     }
 }
 
+@Composable
+internal fun CompactFlashlightIcon(size: Dp, iconAnchor: IslandElementAnchor? = null) {
+    Icon(
+        imageVector = LarpIcons.FlashlightOn,
+        contentDescription = "Flashlight Active",
+        tint = FlashlightWhite,
+        modifier = Modifier
+            .size(size)
+            .morphingElement(iconAnchor)
+            .drawWithCache {
+                val radius = (this.size.minDimension * 0.85f).coerceAtLeast(1f)
+                val glow = Brush.radialGradient(
+                    0f to FlashlightWhite.copy(alpha = 0.55f),
+                    0.45f to FlashlightWhite.copy(alpha = 0.2f),
+                    1f to FlashlightWhite.copy(alpha = 0f),
+                    radius = radius,
+                )
+                onDrawBehind {
+                    drawCircle(brush = glow, radius = radius)
+                }
+            },
+    )
+}
+
 /**
  * Minimized pill content when Flashlight is active:
  * Symmetrically aligned capsule keeping the camera cutout centered.
  */
 @Composable
-fun CompactFlashlightContent(
+internal fun CompactFlashlightContent(
     cutoutDiameterDp: Dp,
     onExpand: () -> Unit = {},
     onFlashlightToggle: () -> Unit = {},
@@ -139,8 +146,10 @@ fun CompactFlashlightContent(
     onBackgroundClick: (() -> Unit)? = null,
     highlightIcon: Boolean = false,
     highlightRadial: Boolean = false,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
 ) {
-    val accentColor = flashlightAccentColor()
+    val accentColor = FlashlightWhite
     val highlightColor = MaterialTheme.colorScheme.primary
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
@@ -148,32 +157,8 @@ fun CompactFlashlightContent(
     val percentLabel = status.removeSuffix("%").trim()
     val showGauge = showRadialProgress && percentLabel.isNotEmpty()
     val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
-    val compactRingInset = ((cutoutDiameterDp - compactRingDiameter) / 2f).coerceAtLeast(3.dp)
+    val compactRingInset = compactEndInset(cutoutDiameterDp, compactRingDiameter)
 
-    val isScreenOn by ScreenStateTracker.isScreenOn.collectAsState()
-    val pulseAlphaState = if (isScreenOn) {
-        val infiniteTransition = rememberInfiniteTransition(label = "compact_torch_pulse")
-        infiniteTransition.animateFloat(
-            initialValue = 0.65f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = LarpMotion.timing(durationMillis = 1000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulse_alpha",
-        )
-    } else null
-
-    val icon = @Composable {
-        Icon(
-            imageVector = LarpIcons.FlashlightOn,
-            contentDescription = "Flashlight Active",
-            tint = accentColor,
-            modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer { alpha = pulseAlphaState?.value ?: 1f },
-        )
-    }
 
     val isPercentage = status.contains('%')
     val formattedStatus = remember(status) { formatCompactStatus(status) }
@@ -201,28 +186,26 @@ fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 2.dp),
+                    .padding(top = 8.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                icon()
+                CompactFlashlightIcon(size = 18.dp, iconAnchor = iconAnchor)
             }
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = if (showGauge) compactRingInset else 8.dp),
-                contentAlignment = Alignment.BottomCenter,
+                    .padding(bottom = if (showGauge) compactRingInset else 8.dp),
+                contentAlignment = if (showGauge) Alignment.BottomCenter else Alignment.TopCenter,
             ) {
                 if (showGauge) {
                     RadialProgressGauge(
                         progress = strengthFraction,
                         text = percentLabel,
-                        color = accentColor,
+                        color = FlashlightWhite,
                         diameter = compactRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (percentLabel.length >= 3) 6.5.sp else 7.5.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else if (status.isNotEmpty()) {
                     Text(
@@ -263,10 +246,10 @@ fun CompactFlashlightContent(
                         if (highlightIcon) Modifier.border(1.5.dp, highlightColor, startHighlightShape)
                         else Modifier
                     )
-                    .padding(start = 8.dp, end = 2.dp),
+                    .padding(start = 8.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                icon()
+                CompactFlashlightIcon(size = 18.dp, iconAnchor = iconAnchor)
             }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
             Box(
@@ -278,18 +261,16 @@ fun CompactFlashlightContent(
                         if (highlightRadial) Modifier.border(1.5.dp, highlightColor, endHighlightShape)
                         else Modifier
                     )
-                    .padding(start = 2.dp, end = if (showGauge) compactRingInset else 8.dp),
-                contentAlignment = Alignment.CenterEnd,
+                    .padding(end = if (showGauge) compactRingInset else 8.dp),
+                contentAlignment = if (showGauge) Alignment.CenterEnd else Alignment.CenterStart,
             ) {
                 if (showGauge) {
                     RadialProgressGauge(
                         progress = strengthFraction,
                         text = percentLabel,
-                        color = accentColor,
+                        color = FlashlightWhite,
                         diameter = compactRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (percentLabel.length >= 3) 7.sp else 8.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else if (status.isNotEmpty()) {
                     summary()
@@ -303,21 +284,22 @@ fun CompactFlashlightContent(
  * Taller and narrower Pixel-inspired Dynamic Island Flashlight Card:
  * - Background provided by the island surface.
  * - Standard Material Flashlight icon.
- * - Dynamic colors extracted directly from system wallpaper via Material You (dynamicDarkColorScheme).
  * - Upward-projecting light beam cone originating from the Material Flashlight icon.
  * - Horizontal pill slider bar at the top of the beam with continuous vertical drag control.
  * - Tapping on the expanded island toggles / turns off the flashlight.
  */
 @Composable
-fun ExpandedFlashlightContent(
+internal fun ExpandedFlashlightContent(
     modifier: Modifier = Modifier,
     topContentInset: Dp = 0.dp,
     onBeamClick: (() -> Unit)? = null,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
 ) {
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
-    val accentColor = flashlightAccentColor()
+    val accentColor = FlashlightWhite
     val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
 
@@ -329,6 +311,8 @@ fun ExpandedFlashlightContent(
             accentColor = accentColor,
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
+            iconAnchor = iconAnchor,
+            progressAnchor = progressAnchor,
             modifier = modifier,
         )
     } else {
@@ -340,6 +324,8 @@ fun ExpandedFlashlightContent(
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
             onBeamClick = onBeamClick,
+            iconAnchor = iconAnchor,
+            progressAnchor = progressAnchor,
             modifier = modifier,
         )
     }
@@ -357,6 +343,8 @@ private fun FlashlightTorchToggleButton(
     ringSize: Dp,
     contentDescription: String,
     onClick: () -> Unit,
+    iconAnchor: IslandElementAnchor?,
+    progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
 ) {
     IconButton(onClick = onClick, modifier = modifier.size(buttonSize)) {
@@ -365,14 +353,14 @@ private fun FlashlightTorchToggleButton(
                 imageVector = if (isFlashlightOn) LarpIcons.FlashlightOn else LarpIcons.FlashlightOff,
                 contentDescription = contentDescription,
                 tint = if (isFlashlightOn) accentColor else inactiveTint,
-                modifier = Modifier.size(if (showExpandedRadial) 22.dp else iconSize),
+                modifier = Modifier.size(if (showExpandedRadial) 22.dp else iconSize).morphingElement(iconAnchor),
             )
             if (showExpandedRadial) {
                 RadialProgressRing(
                     progress = progress,
                     color = accentColor,
                     strokeWidth = 3.dp,
-                    modifier = Modifier.size(ringSize),
+                    modifier = Modifier.size(ringSize).morphingElement(progressAnchor),
                 )
             }
         }
@@ -388,6 +376,8 @@ private fun ExpandedFlashlightSliderLayout(
     accentColor: Color,
     showExpandedRadial: Boolean,
     topContentInset: Dp,
+    iconAnchor: IslandElementAnchor?,
+    progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
 ) {
     val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
@@ -410,6 +400,8 @@ private fun ExpandedFlashlightSliderLayout(
             ringSize = 44.dp,
             contentDescription = if (isFlashlightOn) "Turn off flashlight" else "Turn on flashlight",
             onClick = { FlashlightController.toggleFlashlight() },
+            iconAnchor = iconAnchor,
+            progressAnchor = progressAnchor,
         )
         val sliderMax = maxStrength.coerceAtLeast(2).toFloat()
         val sliderValue = torchStrength.toFloat().coerceIn(1f, sliderMax)
@@ -423,6 +415,11 @@ private fun ExpandedFlashlightSliderLayout(
             onValueChange = { FlashlightController.setStrength(it.roundToInt().coerceIn(1, maxStrength.coerceAtLeast(1))) },
             onValueChangeFinished = { FlashlightController.flushStrength(FlashlightController.torchStrength.value) },
             enabled = isFlashlightOn && maxStrength > 1,
+            colors = SliderDefaults.colors(
+                thumbColor = accentColor,
+                activeTrackColor = accentColor,
+                inactiveTrackColor = accentColor.copy(alpha = 0.25f),
+            ),
         )
     }
 }
@@ -436,6 +433,8 @@ private fun ExpandedFlashlightBeamLayout(
     showExpandedRadial: Boolean,
     topContentInset: Dp,
     onBeamClick: (() -> Unit)?,
+    iconAnchor: IslandElementAnchor?,
+    progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -443,8 +442,7 @@ private fun ExpandedFlashlightBeamLayout(
     val currentMaxStrength by rememberUpdatedState(maxStrength)
     val currentIsFlashlightOn by rememberUpdatedState(isFlashlightOn)
     val beamBlur by OverlayPreferences.flashlightBeamBlurFlow.collectAsState()
-    val beamAccentColor by OverlayPreferences.flashlightBeamAccentColorFlow.collectAsState()
-    val beamColor = if (beamAccentColor) accentColor else Color.White
+    val beamColor = accentColor
 
     // Whether user is actively dragging the slider
     var isDragging by remember { mutableStateOf(false) }
@@ -684,6 +682,8 @@ private fun ExpandedFlashlightBeamLayout(
                     FlashlightController.toggleFlashlight()
                 },
                 modifier = Modifier.padding(bottom = 2.dp),
+                iconAnchor = iconAnchor,
+                progressAnchor = progressAnchor,
             )
         }
     }

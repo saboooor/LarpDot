@@ -16,10 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -45,7 +44,6 @@ import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
 import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun VisualizerSettingsContent(
     context: Context,
@@ -142,12 +140,9 @@ internal fun VisualizerSettingsContent(
             }
         }
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            OverlayPreferences.VisualizerMode.entries.forEach { mode ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = OverlayPreferences.VisualizerMode.entries.map { mode ->
+                LarpButtonOption(
                     checked = visualizerMode == mode,
                     label = when (mode) {
                         OverlayPreferences.VisualizerMode.SIMULATED -> "Simulated"
@@ -175,10 +170,9 @@ internal fun VisualizerSettingsContent(
                             }
                         }
                     },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         AnimatedVisibility(
             visible = visualizerMode == OverlayPreferences.VisualizerMode.BPM,
@@ -375,7 +369,6 @@ private fun DeviceAudioCaptureCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AudioPreviewStatusCard(
     context: Context,
@@ -396,12 +389,9 @@ private fun AudioPreviewStatusCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            ButtonGroup(
-                modifier = Modifier.fillMaxWidth(),
-                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-            ) {
-                OverlayPreferences.PreviewAudioSource.entries.forEach { source ->
-                    toggleableItem(
+            LarpConnectedButtons(
+                options = OverlayPreferences.PreviewAudioSource.entries.map { source ->
+                    LarpButtonOption(
                         checked = previewSource == source,
                         label = source.title,
                         onCheckedChange = {
@@ -420,10 +410,9 @@ private fun AudioPreviewStatusCard(
                                 AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
                             }
                         },
-                        weight = 1f,
                     )
-                }
-            }
+                },
+            )
             Text(
                 text = previewSource.subtitle,
                 style = MaterialTheme.typography.bodySmall,

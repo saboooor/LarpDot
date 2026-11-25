@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -48,19 +49,17 @@ class DotOverlayService : Service() {
         overlayController = controller
 
         serviceScope.launch {
-            OverlayVisibilityPolicy.visibilityFlow().distinctUntilChanged().collectLatest { shouldShow ->
-                if (shouldShow) {
-                    controller.show()
-                } else {
-                    controller.hide()
-                    if (!OverlayPreferences.isOverlayEnabled(this@DotOverlayService) &&
-                        !FlashlightController.isFlashlightOn.value &&
-                        ScreenStateTracker.isScreenOn.value
-                    ) {
-                        stopSelf()
+            OverlayVisibilityPolicy.visibilityFlow()
+                .combine(OverlayPreferences.isEnabledFlow) { visible, enabled -> (visible && enabled) to enabled }
+                .distinctUntilChanged()
+                .collectLatest { (shouldShow, enabled) ->
+                    if (shouldShow) {
+                        controller.show()
+                    } else {
+                        controller.hide()
+                        if (!enabled && !OverlayPreferences.isEnabledFlow.value) stopSelf()
                     }
                 }
-            }
         }
 
     }
@@ -71,22 +70,11 @@ class DotOverlayService : Service() {
         }
 
         if (DotAccessibilityService.isServiceConnected.value) {
-            stopSelf()
+            stopSelf(startId)
             return START_NOT_STICKY
         }
+        if (!OverlayPreferences.isOverlayEnabled(this)) return START_NOT_STICKY
 
-        val shouldShow = OverlayVisibilityPolicy.shouldShowOverlay(
-            isEnabled = OverlayPreferences.isOverlayEnabled(this),
-            isTorchOn = FlashlightController.isFlashlightOn.value,
-            showTorchIsland = OverlayPreferences.isShowFlashlightIslandEnabled(this),
-            isScreenOn = ScreenStateTracker.isScreenOn.value,
-            hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(this),
-            isLocked = ScreenStateTracker.isDeviceLocked.value,
-            hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(this),
-        )
-        if (shouldShow) {
-            overlayController?.show()
-        }
         return START_STICKY
     }
 
@@ -106,6 +94,7 @@ class DotOverlayService : Service() {
 
     companion object {
         fun start(context: Context) {
+            if (!OverlayPreferences.isOverlayEnabled(context)) return
             try {
                 val intent = Intent(context, DotOverlayService::class.java)
                 context.startService(intent)

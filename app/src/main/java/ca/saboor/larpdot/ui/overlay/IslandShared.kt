@@ -38,6 +38,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.intellij.lang.annotations.Language
 
+internal fun islandOutlineColor(visibility: Float): Color =
+    Color.White.copy(alpha = (48f / 255f) * visibility.coerceIn(0f, 1f))
+
+internal fun Modifier.islandOutline(shape: Shape, cornerRadius: Dp, visibility: Float = 1f): Modifier =
+    islandFluidProgressBorder(
+        progressFraction = 0f,
+        cornerRadius = cornerRadius,
+        shape = shape,
+        trackColor = islandOutlineColor(visibility),
+    )
+
 /** The small corners face the adjacent bubble, as in a Material 3 button group. */
 internal fun groupedIslandShape(
     radius: Dp,
@@ -68,6 +79,7 @@ enum class IslandType {
     MEDIA,
     FLASHLIGHT,
     NOTIFICATION_ACTIVITY,
+    CUSTOM,
 }
 
 fun secondaryBubbleThicknessDp(mainThicknessDp: Float, smaller: Boolean): Float =
@@ -78,24 +90,17 @@ data class CompactMediaWings(val leadingDp: Float, val trailingDp: Float) {
     val trailingFraction: Float get() = if (widthDp > 0f) trailingDp / widthDp else 0.5f
 }
 
-/** Keep the artwork wing while reclaiming unused equalizer space for a trailing bubble. */
-fun compactMediaWings(
-    extraWidthDp: Float,
-    hasTrailingBubble: Boolean,
-    showTitle: Boolean,
-    announcing: Boolean,
-    visualizerWidthDp: Float,
-): CompactMediaWings {
-    val leading = (extraWidthDp / 2f).coerceAtLeast(0f)
-    val minimumTrailing = maxOf(28f, visualizerWidthDp + 14f)
-    val trailing = when {
-        !hasTrailingBubble -> leading
-        announcing -> leading
-        showTitle -> leading
-        else -> minOf(leading, minimumTrailing)
-    }
-    return CompactMediaWings(leading, trailing)
+internal fun compactMediaWings(extraWidthDp: Float, visualizerWidthDp: Float): CompactMediaWings {
+    val visualizerWing = if (visualizerWidthDp > 0f) visualizerWidthDp + 8f else 0f
+    val wing = maxOf(0f, extraWidthDp / 2f, visualizerWing)
+    return CompactMediaWings(wing, wing)
 }
+
+internal fun secondaryBubbleIconSize(thickness: Dp): Dp =
+    (thickness - 8.dp).coerceIn(12.dp, 20.dp)
+
+internal fun compactEndInset(thickness: Dp, contentSize: Dp): Dp =
+    ((thickness - contentSize) / 2f).coerceAtLeast(0.dp)
 
 fun secondaryItemWidthDp(
     type: IslandType,
@@ -104,24 +109,40 @@ fun secondaryItemWidthDp(
     hasMedia: Boolean,
     flashlightStatus: String,
     activityStatus: String?,
+    smaller: Boolean = false,
+    hasEarbudBatteryLevels: Boolean = false,
 ): Float {
     if (!isMiniPill) return thicknessDp
-    return when (type) {
-        IslandType.MEDIA -> {
-            if (hasMedia) thicknessDp + 28f else thicknessDp
-        }
-        IslandType.FLASHLIGHT -> {
-            if (flashlightStatus.isNotBlank()) thicknessDp + 24f else thicknessDp
-        }
-        IslandType.NOTIFICATION_ACTIVITY -> {
-            if (!activityStatus.isNullOrBlank()) {
-                val extra = if (activityStatus.length > 4) 34f else 24f
-                thicknessDp + extra
-            } else {
-                thicknessDp
-            }
+    if (type == IslandType.NOTIFICATION_ACTIVITY && hasEarbudBatteryLevels) {
+        return (compactRadialGaugeExtraDp(thicknessDp.dp) + secondaryEarbudRingGap).value
+    }
+    val extra = when (type) {
+        IslandType.CUSTOM -> 0f
+        IslandType.MEDIA -> if (hasMedia) 28f else 0f
+        IslandType.FLASHLIGHT -> if (flashlightStatus.isNotBlank()) 24f else 0f
+        IslandType.NOTIFICATION_ACTIVITY -> when {
+            activityStatus.isNullOrBlank() -> 0f
+            activityStatus.length > 4 -> 34f
+            else -> 24f
         }
     }
+    val width = thicknessDp + extra
+    if (!smaller || extra == 0f) return width
+
+    val tighterWidth = width - 4f
+    if (type == IslandType.MEDIA) {
+        // Fit the 14dp artwork, 10.5dp equalizer, and up to 8dp padding on each side.
+        return tighterWidth.coerceAtLeast(41f).coerceAtMost(width)
+    }
+
+    // Leave room for the icon and gauge when the gauge reaches its minimum diameter.
+    val thickness = thicknessDp.dp
+    val icon = secondaryBubbleIconSize(thickness)
+    val ring = compactBatteryRingDiameter(thickness)
+    val iconInset = ((thickness - icon) / 2f).coerceAtLeast(4.dp)
+    val ringInset = compactEndInset(thickness, ring)
+    val gaugeWidth = (iconInset + icon + 2.dp + ring + ringInset).value
+    return maxOf(tighterWidth, gaugeWidth).coerceAtMost(width)
 }
 
 internal fun squircleShape(

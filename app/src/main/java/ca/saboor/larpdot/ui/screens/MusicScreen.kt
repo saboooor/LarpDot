@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -49,6 +47,8 @@ import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.service.AudioCaptureService
 import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.IslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
@@ -227,21 +227,17 @@ fun MusicScreen(
                 }
 
                 item(key = "player_layout") {
-                    ButtonGroup(
-                        modifier = Modifier.fillMaxWidth(),
-                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    ) {
-                        OverlayPreferences.ExpandedPlayerLayout.entries.forEach { layout ->
-                            toggleableItem(
+                    LarpConnectedButtons(
+                        options = OverlayPreferences.ExpandedPlayerLayout.entries.map { layout ->
+                            LarpButtonOption(
                                 checked = expandedPlayerLayout == layout,
                                 label = layout.label,
                                 onCheckedChange = {
                                     OverlayPreferences.setExpandedPlayerLayout(context, layout)
                                 },
-                                weight = 1f,
                             )
-                        }
-                    }
+                        },
+                    )
                 }
 
                 item(key = "preview") {
@@ -412,29 +408,26 @@ private fun MusicSettingsPage(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        ButtonGroup(
-                            modifier = Modifier.fillMaxWidth(),
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                        ) {
-                            toggleableItem(
-                                checked = !showMinimizedTitle,
-                                label = "Visualizer",
-                                onCheckedChange = {
-                                    OverlayPreferences.setShowMinimizedTitleEnabled(context, false)
-                                    OverlayPreferences.setShowMinimizedVisualizerEnabled(context, true)
-                                },
-                                weight = 1f,
-                            )
-                            toggleableItem(
-                                checked = showMinimizedTitle,
-                                label = "Song Title",
-                                onCheckedChange = {
-                                    OverlayPreferences.setShowMinimizedTitleEnabled(context, true)
-                                    OverlayPreferences.setShowMinimizedVisualizerEnabled(context, false)
-                                },
-                                weight = 1f,
-                            )
-                        }
+                        LarpConnectedButtons(
+                            options = listOf(
+                                LarpButtonOption(
+                                    checked = !showMinimizedTitle,
+                                    label = "Visualizer",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setShowMinimizedTitleEnabled(context, false)
+                                        OverlayPreferences.setShowMinimizedVisualizerEnabled(context, true)
+                                    },
+                                ),
+                                LarpButtonOption(
+                                    checked = showMinimizedTitle,
+                                    label = "Song Title",
+                                    onCheckedChange = {
+                                        OverlayPreferences.setShowMinimizedTitleEnabled(context, true)
+                                        OverlayPreferences.setShowMinimizedVisualizerEnabled(context, false)
+                                    },
+                                ),
+                            ),
+                        )
                     }
                 }
             }
@@ -610,21 +603,17 @@ private fun MusicSettingsPage(
                                 60 to "1m",
                                 0 to "Always",
                             )
-                            ButtonGroup(
-                                modifier = Modifier.fillMaxWidth(),
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            ) {
-                                timeoutOptions.forEach { (seconds, label) ->
-                                    toggleableItem(
+                            LarpConnectedButtons(
+                                options = timeoutOptions.map { (seconds, label) ->
+                                    LarpButtonOption(
                                         checked = musicPauseTimeoutSeconds == seconds,
                                         label = label,
                                         onCheckedChange = {
                                             OverlayPreferences.setMusicPauseTimeoutSeconds(context, seconds)
                                         },
-                                        weight = 1f,
                                     )
-                                }
-                            }
+                                },
+                            )
                         }
 
                         LarpDivider()

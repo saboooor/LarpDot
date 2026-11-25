@@ -49,6 +49,7 @@ internal fun EqualizerWaveform(
     barSpacing: Dp = 2.dp,
     minHeight: Dp = 2.8.dp,
     barCornerRadius: Dp = barWidth / 2f,
+    visualizerAnchor: IslandElementAnchor? = null,
 ) {
     if (barCount <= 0) return
 
@@ -59,7 +60,7 @@ internal fun EqualizerWaveform(
     val gradientEnd by animateColorAsState(secondaryColor, LarpMotion.fade(260), label = "waveform_end")
     val totalWidth = barWidth * barCount + barSpacing * (barCount - 1)
     val maxHeight = maxHeightDp.dp
-    val waveformModifier = modifier.width(totalWidth).height(maxHeight)
+    val waveformModifier = modifier.width(totalWidth).height(maxHeight).morphingElement(visualizerAnchor)
 
     val visualizerMode by OverlayPreferences.visualizerModeFlow.collectAsState()
     val realAmplitudes by AudioPreviewExtractor.currentAmplitudes.collectAsState()

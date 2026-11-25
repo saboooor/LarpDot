@@ -7,23 +7,20 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.IslandPreviewInspectorHeader
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
@@ -33,7 +30,6 @@ import ca.saboor.larpdot.ui.theme.LarpMotion
 import ca.saboor.larpdot.visualizer.ExtractionState
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MusicPreviewInspectorCard(
     element: MusicPreviewElement,
@@ -98,41 +94,7 @@ internal fun MusicPreviewInspectorCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = LarpIcons.Close,
-                        contentDescription = "Close $title settings",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-
-            LarpDivider()
+            IslandPreviewInspectorHeader(title, icon, onDismiss)
 
             when (element) {
                 MusicPreviewElement.MINIMIZED_ALBUM_ART -> {
@@ -251,7 +213,6 @@ private fun MinimizedBackgroundSettingsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ExpandedBackgroundSettingsContent(
     context: Context,
@@ -292,33 +253,25 @@ private fun ExpandedBackgroundSettingsContent(
             )
         }
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            expandedStyleRow1.forEach { style ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = expandedStyleRow1.map { style ->
+                LarpButtonOption(
                     checked = expandedStyle == style,
                     label = style.label,
                     onCheckedChange = { OverlayPreferences.setExpandedAlbumArtStyle(context, style) },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            expandedStyleRow2.forEach { style ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = expandedStyleRow2.map { style ->
+                LarpButtonOption(
                     checked = expandedStyle == style,
                     label = style.label,
                     onCheckedChange = { OverlayPreferences.setExpandedAlbumArtStyle(context, style) },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         LarpDivider()
 
@@ -340,43 +293,39 @@ private fun ExpandedBackgroundSettingsContent(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                ButtonGroup(
-                    modifier = Modifier.fillMaxWidth(),
-                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                ) {
-                    toggleableItem(
-                        checked = expandedGlowSides.left,
-                        label = "Left",
-                        onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(left = it))
-                        },
-                        weight = 1f,
-                    )
-                    toggleableItem(
-                        checked = expandedGlowSides.right,
-                        label = "Right",
-                        onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(right = it))
-                        },
-                        weight = 1f,
-                    )
-                    toggleableItem(
-                        checked = expandedGlowSides.bottom,
-                        label = "Bottom",
-                        onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(bottom = it))
-                        },
-                        weight = 1f,
-                    )
-                    toggleableItem(
-                        checked = expandedGlowSides.top,
-                        label = "Top",
-                        onCheckedChange = {
-                            OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(top = it))
-                        },
-                        weight = 1f,
-                    )
-                }
+                LarpConnectedButtons(
+                    options = listOf(
+                        LarpButtonOption(
+                            checked = expandedGlowSides.left,
+                            label = "Left",
+                            onCheckedChange = {
+                                OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(left = it))
+                            },
+                        ),
+                        LarpButtonOption(
+                            checked = expandedGlowSides.right,
+                            label = "Right",
+                            onCheckedChange = {
+                                OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(right = it))
+                            },
+                        ),
+                        LarpButtonOption(
+                            checked = expandedGlowSides.bottom,
+                            label = "Bottom",
+                            onCheckedChange = {
+                                OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(bottom = it))
+                            },
+                        ),
+                        LarpButtonOption(
+                            checked = expandedGlowSides.top,
+                            label = "Top",
+                            onCheckedChange = {
+                                OverlayPreferences.setExpandedGlowSides(context, expandedGlowSides.copy(top = it))
+                            },
+                        ),
+                    ),
+                    singleSelection = false,
+                )
             }
         }
 
@@ -437,14 +386,24 @@ private fun TrackInfoSettingsContent(
             },
         )
         LarpDivider()
-        LarpSwitchRow(
-            title = "Show Album",
-            subtitle = "Display the album name when available",
-            checked = style.showAlbum,
-            onCheckedChange = { enabled ->
-                OverlayPreferences.setTrackInfoStyle(context, style.copy(showAlbum = enabled))
-            },
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Show Album", style = MaterialTheme.typography.titleMedium)
+            val options = listOf(
+                Triple("Off", LarpIcons.Close, style.copy(showAlbum = false)),
+                Triple("Below", LarpIcons.KeyboardArrowDown, style.copy(showAlbum = true, albumBesideArtist = false)),
+                Triple("Beside", LarpIcons.MoreHoriz, style.copy(showAlbum = true, albumBesideArtist = true)),
+            )
+            LarpConnectedButtons(
+                options = options.map { (label, icon, option) ->
+                    LarpButtonOption(
+                        label = label,
+                        checked = style == option,
+                        icon = icon,
+                        onCheckedChange = { OverlayPreferences.setTrackInfoStyle(context, option) },
+                    )
+                },
+            )
+        }
     }
 }
 
@@ -529,6 +488,7 @@ private fun ProgressBarSettingsContent(
     showProgressSquiggles: Boolean,
     progressBarAccentColor: Boolean,
 ) {
+    val timestampPlacement by OverlayPreferences.progressTimestampPlacementFlow.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -541,6 +501,24 @@ private fun ProgressBarSettingsContent(
                 OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(progress = enabled))
             },
         )
+        LarpDivider()
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Timestamps", style = MaterialTheme.typography.titleMedium)
+            LarpConnectedButtons(
+                options = OverlayPreferences.ProgressTimestampPlacement.entries.map { placement ->
+                    LarpButtonOption(
+                        label = placement.label,
+                        checked = timestampPlacement == placement,
+                        icon = when (placement) {
+                            OverlayPreferences.ProgressTimestampPlacement.HIDDEN -> LarpIcons.Close
+                            OverlayPreferences.ProgressTimestampPlacement.BELOW -> LarpIcons.KeyboardArrowDown
+                            OverlayPreferences.ProgressTimestampPlacement.BESIDE -> LarpIcons.MoreHoriz
+                        },
+                        onCheckedChange = { OverlayPreferences.setProgressTimestampPlacement(context, placement) },
+                    )
+                },
+            )
+        }
         LarpDivider()
         LarpSwitchRow(
             title = "Progress Squiggles",
@@ -558,7 +536,6 @@ private fun ProgressBarSettingsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MinimizedAlbumArtSettingsContent(
     context: Context,
@@ -596,19 +573,15 @@ private fun MinimizedAlbumArtSettingsContent(
             )
         }
 
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            minimizedStyles.forEach { style ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = minimizedStyles.map { style ->
+                LarpButtonOption(
                     checked = minimizedStyle == style,
                     label = style.label,
                     onCheckedChange = { OverlayPreferences.setMinimizedAlbumArtStyle(context, style) },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         AnimatedVisibility(
             visible = minimizedStyle == OverlayPreferences.AlbumArtStyle.NESTED,

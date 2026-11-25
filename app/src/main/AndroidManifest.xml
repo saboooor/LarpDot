@@ -18,6 +18,7 @@
     <!-- Overlay over other apps permission -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" tools:ignore="ProtectedPermissions" />
 
     <!-- Package query permission for app blacklist feature -->
     <uses-permission
@@ -39,11 +40,16 @@
     <!-- Hardware camera flash declaration (optional) -->
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
-    <!-- Package visibility for app listing -->
+    <!-- Package visibility for app and widget listings -->
     <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="af.shizuku.plus.api" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
         </intent>
     </queries>
 
@@ -54,6 +60,13 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.LarpDot">
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
             android:name=".MainActivity"

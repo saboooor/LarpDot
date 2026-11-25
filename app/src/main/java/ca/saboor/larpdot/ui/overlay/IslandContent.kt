@@ -17,22 +17,29 @@ internal fun IslandCompactContent(
     announcing: Boolean,
     trailingWingFraction: Float,
     artworkAnchor: ArtworkAnchor? = null,
+    visualizerAnchor: IslandElementAnchor? = null,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
     onExpand: () -> Unit = {},
     onFlashlightToggle: () -> Unit = {},
 ) {
     when (model.type) {
+        IslandType.CUSTOM -> Unit
         IslandType.MEDIA -> CompactIslandContent(
             mediaInfo = media, cutoutDiameterDp = diameter,
             showMinimizedTitle = showTitle, isSongAnnouncement = announcing,
             trailingWingFraction = trailingWingFraction, artworkAnchor = artworkAnchor,
+            visualizerAnchor = visualizerAnchor,
         )
         IslandType.FLASHLIGHT -> CompactFlashlightContent(
             cutoutDiameterDp = diameter, onExpand = onExpand,
             onFlashlightToggle = onFlashlightToggle, isLandscape = landscape, status = model.presentation.status,
+            iconAnchor = iconAnchor, progressAnchor = progressAnchor,
         )
         IslandType.NOTIFICATION_ACTIVITY -> if (activity != null) CompactNotificationActivityContent(
             activity = activity, cutoutDiameterDp = diameter, isLandscape = landscape,
             trailingWingFraction = trailingWingFraction,
+            iconAnchor = iconAnchor, progressAnchor = progressAnchor,
         )
     }
 }

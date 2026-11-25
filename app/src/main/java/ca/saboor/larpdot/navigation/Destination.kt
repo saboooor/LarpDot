@@ -28,4 +28,8 @@ enum class Destination(
         label = "Flashlight",
         icon = LarpIcons.FlashlightOn,
     ),
+    Custom(
+        label = "Custom",
+        icon = LarpIcons.Apps,
+    ),
 }

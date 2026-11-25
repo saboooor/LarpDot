@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -46,7 +49,8 @@ import ca.saboor.larpdot.ui.overlay.ExpandedIslandContent
 import ca.saboor.larpdot.ui.overlay.compactMediaBaseExtraDp
 import ca.saboor.larpdot.ui.overlay.compactVisualizerWidthDp
 import ca.saboor.larpdot.ui.overlay.configuredCompactMediaWings
-import ca.saboor.larpdot.ui.overlay.expandedMediaCardSize
+import ca.saboor.larpdot.ui.overlay.expandedMediaCardMaxHeight
+import ca.saboor.larpdot.ui.overlay.expandedMediaCardWidth
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
 import ca.saboor.larpdot.ui.overlay.rememberLiveMediaPositionMs
@@ -167,14 +171,11 @@ fun ExpandedIslandPreview(
     val mediaWings = configuredCompactMediaWings(
         mediaInfo = previewTrack,
         extraWidthDp = compactExtraDp.value,
-        hasTrailingBubble = false,
         showTitle = showMinimizedTitle,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
         cameraDiameterDp = cutoutDiameterDp.value,
         cameraCenterXPx = cutoutInfo.centerX,
-        bubbleThicknessDp = compactPillThickness.value,
-        hasLeadingBubble = false,
         landscape = false,
     )
     val targetCompactWidth = cutoutDiameterDp + mediaWings.widthDp.dp
@@ -185,22 +186,15 @@ fun ExpandedIslandPreview(
     )
 
     val expandedPlayerLayout by OverlayPreferences.expandedPlayerLayoutFlow.collectAsState()
-    val showExpandedAlbumArt by OverlayPreferences.showExpandedAlbumArtFlow.collectAsState()
-    val expandedElementVisibility by OverlayPreferences.expandedElementVisibilityFlow.collectAsState()
 
     val screenWidthDp = configuration.screenWidthDp.dp
     val screenHeightDp = configuration.screenHeightDp.dp
-    val mediaCardSize = expandedMediaCardSize(
-        mediaInfo = previewTrack,
+    val previewCardWidth = expandedMediaCardWidth(
         playerLayout = expandedPlayerLayout,
-        showExpandedAlbumArt = showExpandedAlbumArt,
-        showAppActions = expandedElementVisibility.appActions,
         screenWidthDp = screenWidthDp,
-        screenHeightDp = screenHeightDp,
         horizontalMarginDp = 16.dp,
     )
-    val previewCardWidth = mediaCardSize.width
-    val previewHeight = if (titleBar) 52.dp else mediaCardSize.height
+    var previewHeight by remember { mutableStateOf(52.dp) }
     val previewHorizontalMarginDp = (screenWidthDp - previewCardWidth) / 2f
 
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(previewCardWidth, previewHeight) / 2f)
@@ -331,7 +325,7 @@ fun ExpandedIslandPreview(
             Surface(
                 modifier = Modifier
                     .width(previewCardWidth)
-                    .height(previewHeight)
+                    .onSizeChanged { size -> previewHeight = with(density) { size.height.toDp() } }
                     .then(
                         Modifier.islandFluidProgressBorder(
                             progressFraction = 0f,
@@ -343,13 +337,15 @@ fun ExpandedIslandPreview(
                             } else Color(0x30FFFFFF),
                             progressColor = Color.Transparent,
                         )
-                    ),
+                    )
+                    .animateContentSize(LarpMotion.resize())
+                    .then(if (titleBar) Modifier.height(52.dp) else Modifier.heightIn(max = expandedMediaCardMaxHeight(screenHeightDp))),
                 shape = containerShape,
                 color = Color.Black.copy(alpha = backgroundOpacity.coerceIn(0f, 1f)),
                 shadowElevation = 14.dp,
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.TopStart,
                 ) {
                     ExpandedIslandContent(
@@ -395,13 +391,15 @@ fun ExpandedIslandPreview(
                     )
                     val punchHoleCenterYDp = 18.dp
 
-                    PreviewCameraCutoutDot(
-                        diameter = cutoutDiameterDp,
-                        modifier = Modifier.offset(
-                            x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
-                            y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
-                        ),
-                    )
+                    Box(Modifier.matchParentSize()) {
+                        PreviewCameraCutoutDot(
+                            diameter = cutoutDiameterDp,
+                            modifier = Modifier.offset(
+                                x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
+                                y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
+                            ),
+                        )
+                    }
                 }
             }
             }

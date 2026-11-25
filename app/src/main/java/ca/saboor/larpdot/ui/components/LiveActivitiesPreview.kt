@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,21 +29,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
+import ca.saboor.larpdot.notification.EarbudBatteryLevels
 import ca.saboor.larpdot.notification.NotificationActivityAction
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.overlay.CompactMediaWings
 import ca.saboor.larpdot.ui.overlay.CompactNotificationActivityContent
 import ca.saboor.larpdot.ui.overlay.ExpandedNotificationActivityContent
-import ca.saboor.larpdot.ui.overlay.activityRadialProgress
-import ca.saboor.larpdot.ui.overlay.compactNavigationWings
-import ca.saboor.larpdot.ui.overlay.compactRadialGaugeExtraDp
 import ca.saboor.larpdot.ui.overlay.expandedActivitySize
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
 import ca.saboor.larpdot.ui.overlay.islandFluidProgressBorder
+import ca.saboor.larpdot.ui.overlay.rememberCompactActivityExtraDp
 import ca.saboor.larpdot.ui.overlay.rememberCompactActivityStatus
-import ca.saboor.larpdot.ui.overlay.rememberCompactStatusExtraDp
-import ca.saboor.larpdot.ui.overlay.rememberCompactStatusTextWidthDp
+import ca.saboor.larpdot.ui.overlay.rememberFittedCompactWings
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
 private enum class LiveActivityPreviewSample(val label: String) {
@@ -59,7 +54,6 @@ private enum class LiveActivityPreviewSample(val label: String) {
     CALL("Call"),
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LiveActivitiesPreview(
     cutoutInfo: CutoutInfo,
@@ -102,7 +96,7 @@ fun LiveActivitiesPreview(
                 key = "preview_bt",
                 packageName = "android",
                 appName = "System",
-                title = "Pixel Buds Pro 2",
+                title = "Wireless Earbuds",
                 text = "Earbuds • Connected",
                 kind = NotificationActivityKind.BLUETOOTH,
                 progress = null,
@@ -114,7 +108,7 @@ fun LiveActivitiesPreview(
                 contentIntent = null,
                 actions = emptyList(),
                 bluetoothDeviceType = "Earbuds",
-                bluetoothBatteryPercent = 84,
+                earbudBatteryLevels = EarbudBatteryLevels(left = 84, right = 76),
             )
             LiveActivityPreviewSample.CHARGING -> NotificationActivityInfo(
                 key = "preview_charging",
@@ -195,24 +189,13 @@ fun LiveActivitiesPreview(
     val compactCornerRadius = cameraGeometry.cornerRadius.dp
 
     val compactStatus = rememberCompactActivityStatus(sampleActivity)
-    val radialGaugeExtra = compactRadialGaugeExtraDp(compactThickness)
-    val hasRadial = activityRadialProgress(sampleActivity, activitySettings.progressOutline, MaterialTheme.colorScheme.primary) != null
-    val isNavigation = sampleActivity.kind == NotificationActivityKind.NAVIGATION
-    val navMeasuredWidth = if (isNavigation && compactStatus.isNotEmpty()) {
-        rememberCompactStatusTextWidthDp(compactStatus, compactFontSize = true)
-    } else 0.dp
-    val navWings = if (isNavigation) compactNavigationWings(navMeasuredWidth.value) else null
-    val targetCompactExtra = if (navWings != null) {
-        navWings.widthDp.dp
-    } else {
-        maxOf(
-            if (hasRadial) radialGaugeExtra else 0.dp,
-            if (compactStatus.isEmpty()) 56.dp else rememberCompactStatusExtraDp(compactStatus),
-        )
-    }
-    val compactTrailingFraction = navWings?.trailingFraction ?: 0.5f
+    val targetCompactExtra = rememberCompactActivityExtraDp(
+        sampleActivity, compactStatus, cutoutDiameterDp, activitySettings.progressOutline,
+    )
+    val wing = targetCompactExtra.value / 2f
+    val fittedWings = rememberFittedCompactWings(CompactMediaWings(wing, wing), cutoutDiameterDp.value, cutoutInfo.centerX)
     val animatedCompactWidth by animateDpAsState(
-        targetValue = cutoutDiameterDp + targetCompactExtra,
+        targetValue = cutoutDiameterDp + fittedWings.widthDp.dp,
         animationSpec = LarpMotion.resize(),
         label = "activity_preview_compact_width",
     )
@@ -244,19 +227,15 @@ fun LiveActivitiesPreview(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            LiveActivityPreviewSample.entries.forEachIndexed { index, sample ->
-                toggleableItem(
+        LarpConnectedButtons(
+            options = LiveActivityPreviewSample.entries.mapIndexed { index, sample ->
+                LarpButtonOption(
                     checked = selectedSampleIndex == index,
                     label = sample.label,
                     onCheckedChange = { selectedSampleIndex = index },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         // Compact Pill Preview
         Box(
@@ -287,9 +266,8 @@ fun LiveActivitiesPreview(
                     CompactNotificationActivityContent(
                         activity = sampleActivity,
                         cutoutDiameterDp = cutoutDiameterDp,
-                        trailingWingFraction = compactTrailingFraction,
                     )
-                    val leadingWidthDp = (animatedCompactWidth - cutoutDiameterDp) * (1f - compactTrailingFraction)
+                    val leadingWidthDp = (animatedCompactWidth - cutoutDiameterDp) / 2f
                     PreviewCameraCutoutDot(
                         diameter = cutoutDiameterDp,
                         modifier = Modifier
@@ -326,6 +304,7 @@ fun LiveActivitiesPreview(
                 ) {
                     ExpandedNotificationActivityContent(
                         activity = sampleActivity,
+                        cardWidth = expandedSize.width,
                         topContentInset = cutoutDiameterDp + 8.dp,
                         spanIconLeftOfCutout = true,
                     )

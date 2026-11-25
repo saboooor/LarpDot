@@ -197,6 +197,8 @@ internal fun MediaTimeLabel(
         text = format(positionState.value),
         style = style,
         color = Color.White.copy(alpha = 0.55f),
+        maxLines = 1,
+        softWrap = false,
     )
 }
 

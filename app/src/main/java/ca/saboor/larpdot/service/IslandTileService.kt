@@ -22,12 +22,8 @@ class IslandTileService : TileService() {
         super.onClick()
         val nextEnabled = !OverlayPreferences.isOverlayEnabled(this)
         OverlayPreferences.setOverlayEnabled(this, nextEnabled)
-        if (!DotAccessibilityService.isServiceConnected.value) {
-            if (nextEnabled && Settings.canDrawOverlays(this)) {
-                DotOverlayService.start(this)
-            } else if (!nextEnabled) {
-                DotOverlayService.stop(this)
-            }
+        if (nextEnabled && !DotAccessibilityService.isServiceConnected.value && Settings.canDrawOverlays(this)) {
+            DotOverlayService.start(this)
         }
         syncTile()
     }

@@ -49,13 +49,17 @@ import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.CustomIslandStore
+import ca.saboor.larpdot.service.CustomIslandWidgets
+import ca.saboor.larpdot.service.customIslandDisplayInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
-import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
+import ca.saboor.larpdot.ui.overlay.islandPriorityOrderWithCustom
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import kotlin.math.roundToInt
 
@@ -77,8 +81,8 @@ fun HomeScreen(
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
     val hideInFullscreen by OverlayPreferences.hideInFullscreenFlow.collectAsState()
     val hideInLandscape by OverlayPreferences.hideInLandscapeFlow.collectAsState()
-    val showDotRightSideInfo by OverlayPreferences.showDotRightSideInfoFlow.collectAsState()
     val islandPriorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
+    val customIslandSettings by CustomIslandStore.settings.collectAsState()
     val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
     val blacklistedPackages by OverlayPreferences.blacklistedPackagesFlow.collectAsState()
     var showBlacklistScreen by rememberSaveable { mutableStateOf(false) }
@@ -102,7 +106,6 @@ fun HomeScreen(
         OverlayPreferences.isHideOnLockScreenEnabled(context)
         OverlayPreferences.isHideInFullscreenEnabled(context)
         OverlayPreferences.isHideInLandscapeEnabled(context)
-        OverlayPreferences.isShowDotRightSideInfoEnabled(context)
         OverlayPreferences.getIslandPriorityOrder(context)
         FlashlightController.init(context)
     }
@@ -130,6 +133,7 @@ fun HomeScreen(
             SectionHeader(title = "Island Priority")
             IslandPriorityCard(
                 islandPriorityOrder = islandPriorityOrder,
+                customIslands = customIslandSettings.islands,
                 onOrderChange = { OverlayPreferences.setIslandPriorityOrder(context, it) },
             )
         }
@@ -143,7 +147,6 @@ fun HomeScreen(
                 hideOnLockScreen = hideOnLockScreen,
                 hideInFullscreen = hideInFullscreen,
                 hideInLandscape = hideInLandscape,
-                showDotRightSideInfo = showDotRightSideInfo,
                 appBlacklistEnabled = appBlacklistEnabled,
                 blacklistedCount = blacklistedPackages.size,
                 onOpenBlacklist = { showBlacklistScreen = true },
@@ -155,8 +158,11 @@ fun HomeScreen(
 @Composable
 private fun IslandPriorityCard(
     islandPriorityOrder: List<IslandPriorityItem>,
+    customIslands: List<CustomIsland>,
     onOrderChange: (List<IslandPriorityItem>) -> Unit,
 ) {
+    val order = islandPriorityOrderWithCustom(islandPriorityOrder, customIslands)
+    val defaultOrder = islandPriorityOrderWithCustom(emptyList(), customIslands)
     LarpCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -169,16 +175,24 @@ private fun IslandPriorityCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            if (islandPriorityOrder != DEFAULT_ISLAND_PRIORITY_ORDER) {
-                TextButton(onClick = { onOrderChange(DEFAULT_ISLAND_PRIORITY_ORDER) }) {
+            if (order != defaultOrder) {
+                TextButton(onClick = { onOrderChange(defaultOrder) }) {
                     Text("Reset")
                 }
             }
         }
 
+        val context = LocalContext.current
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            islandPriorityOrder.forEachIndexed { index, item ->
+            order.forEachIndexed { index, item ->
                 val isTop = index == 0
+                val label = if (item is IslandPriorityItem.Custom) {
+                    customIslands.firstOrNull { it.id == item.islandId }?.let { island ->
+                        customIslandDisplayInfo(island) { widgetId ->
+                            CustomIslandWidgets.widgetLabels(context, widgetId)
+                        }.title
+                    } ?: item.label
+                } else item.label
                 val itemIcon = when (item) {
                     IslandPriorityItem.SHORT_TERM_ALERTS -> LarpIcons.BatteryChargingFull
                     IslandPriorityItem.LIVE_ACTIVITIES -> LarpIcons.NotificationsActive
@@ -186,6 +200,7 @@ private fun IslandPriorityCard(
                     IslandPriorityItem.PINNED_SHORT_TERM -> LarpIcons.PushPin
                     IslandPriorityItem.NAVIGATION -> LarpIcons.Navigation
                     IslandPriorityItem.FLASHLIGHT -> LarpIcons.FlashlightOn
+                    is IslandPriorityItem.Custom -> LarpIcons.Apps
                 }
                 Surface(
                     shape = RoundedCornerShape(16.dp),
@@ -241,7 +256,7 @@ private fun IslandPriorityCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Text(
-                                    text = item.label,
+                                    text = label,
                                     style = MaterialTheme.typography.titleSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -272,7 +287,7 @@ private fun IslandPriorityCard(
                             IconButton(
                                 onClick = {
                                     if (index > 0) {
-                                        val updated = islandPriorityOrder.toMutableList()
+                                        val updated = order.toMutableList()
                                         updated.add(index - 1, updated.removeAt(index))
                                         onOrderChange(updated)
                                     }
@@ -282,24 +297,24 @@ private fun IslandPriorityCard(
                             ) {
                                 Icon(
                                     imageVector = LarpIcons.KeyboardArrowUp,
-                                    contentDescription = "Move ${item.label} up",
+                                    contentDescription = "Move $label up",
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
                             IconButton(
                                 onClick = {
-                                    if (index < islandPriorityOrder.lastIndex) {
-                                        val updated = islandPriorityOrder.toMutableList()
+                                    if (index < order.lastIndex) {
+                                        val updated = order.toMutableList()
                                         updated.add(index + 1, updated.removeAt(index))
                                         onOrderChange(updated)
                                     }
                                 },
-                                enabled = index < islandPriorityOrder.lastIndex,
+                                enabled = index < order.lastIndex,
                                 modifier = Modifier.size(36.dp),
                             ) {
                                 Icon(
                                     imageVector = LarpIcons.KeyboardArrowDown,
-                                    contentDescription = "Move ${item.label} down",
+                                    contentDescription = "Move $label down",
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -320,7 +335,6 @@ private fun IslandBehaviorCard(
     hideOnLockScreen: Boolean,
     hideInFullscreen: Boolean,
     hideInLandscape: Boolean,
-    showDotRightSideInfo: Boolean,
     appBlacklistEnabled: Boolean,
     blacklistedCount: Int,
     onOpenBlacklist: () -> Unit,
@@ -407,16 +421,6 @@ private fun IslandBehaviorCard(
             icon = LarpIcons.ScreenRotation,
             checked = hideInLandscape,
             onCheckedChange = { OverlayPreferences.setHideInLandscapeEnabled(context, it) },
-        )
-
-        LarpDivider()
-
-        LarpSwitchRow(
-            title = "Show Right Side Info on Dots",
-            subtitle = "Show info alongside icons on secondary dots, making them mini pills",
-            icon = LarpIcons.MoreHoriz,
-            checked = showDotRightSideInfo,
-            onCheckedChange = { OverlayPreferences.setShowDotRightSideInfoEnabled(context, it) },
         )
 
         LarpDivider()
@@ -513,7 +517,7 @@ private fun CutoutAlignmentCard(
         val isDebugMode by OverlayPreferences.isDebugModeFlow.collectAsState()
         LarpSwitchRow(
             title = "Debug Mode",
-            subtitle = "Show green cutout alignment dot when idle",
+            subtitle = "Always show the camera cutout outline",
             icon = LarpIcons.BugReport,
             checked = isDebugMode,
             onCheckedChange = { OverlayPreferences.setDebugModeEnabled(context, it) },

@@ -5,8 +5,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,8 +33,8 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.service.OverlayPreferences
@@ -51,7 +53,9 @@ internal fun batteryPercentOf(activity: NotificationActivityInfo?): Int? {
             ?: activity.progressFraction?.let { (it * 100f).roundToInt().coerceIn(0, 100) }
         NotificationActivityKind.BLUETOOTH -> {
             val disconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
-            if (disconnected) null else activity.bluetoothBatteryPercent?.takeIf { it in 0..100 }
+            if (disconnected || activity.pairedEarbudBatteryLevels != null) null
+            else activity.earbudBatteryLevels?.let { it.left ?: it.right }
+                ?: activity.bluetoothBatteryPercent?.takeIf { it in 0..100 }
         }
         else -> null
     }
@@ -68,12 +72,12 @@ internal fun batteryGaugeColor(
 }
 
 internal fun compactBatteryRingDiameter(thickness: Dp): Dp =
-    (thickness - 6.dp).coerceIn(18.dp, 22.dp)
+    (thickness - 6.dp).coerceIn(18.dp, 22.dp).coerceAtMost((thickness - 2.dp).coerceAtLeast(0.dp))
 
 internal fun compactRadialGaugeExtraDp(thickness: Dp): Dp {
     val ringDiameter = compactBatteryRingDiameter(thickness)
-    val ringInset = ((thickness - ringDiameter) / 2f).coerceAtLeast(3.dp)
-    return (ringDiameter + ringInset + 2.dp) * 2
+    val ringInset = compactEndInset(thickness, ringDiameter)
+    return (ringDiameter + ringInset) * 2
 }
 
 internal fun activityRadialProgress(
@@ -91,6 +95,25 @@ internal fun activityRadialProgress(
     val fraction = activity.progressFraction ?: return null
     val percent = (fraction * 100f).roundToInt().coerceIn(0, 100)
     return percent to activityIconTint(activity.kind, primaryColor)
+}
+
+/**
+ * Radial ring for a collapsed secondary dot: matches [activityRadialProgress], and falls back
+ * to the main earbud battery level when paired earbuds are collapsed into a single circular dot.
+ */
+internal fun secondaryDotRadialProgress(
+    activity: NotificationActivityInfo?,
+    progressRingEnabled: Boolean,
+    primaryColor: Color,
+): Pair<Int, Color>? {
+    activityRadialProgress(activity, progressRingEnabled, primaryColor)?.let { return it }
+    if (activity?.kind != NotificationActivityKind.BLUETOOTH) return null
+    val disconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+    if (disconnected) return null
+    val paired = activity.pairedEarbudBatteryLevels ?: return null
+    val percent = activity.bluetoothBatteryPercent?.takeIf { it in 0..100 }
+        ?: minOf(paired.left!!, paired.right!!)
+    return percent to batteryGaugeColor(activity.kind, percent, primaryColor)
 }
 
 internal data class ShapeProgressStart(
@@ -313,18 +336,55 @@ internal fun RadialProgressRing(
 }
 
 @Composable
+internal fun RadialProgressIcon(
+    progress: Float?,
+    color: Color,
+    diameter: Dp,
+    modifier: Modifier = Modifier,
+    ringModifier: Modifier = Modifier,
+    icon: @Composable (Dp) -> Unit,
+) {
+    Box(modifier.size(diameter), contentAlignment = Alignment.Center) {
+        icon((diameter - 8.dp).coerceIn(10.dp, 13.dp))
+        if (progress != null) {
+            RadialProgressRing(progress, color, 2.dp, Modifier.fillMaxSize().then(ringModifier))
+        }
+    }
+}
+
+@Composable
+internal fun ExpandedActivityGauge(
+    percent: Int?,
+    color: Color,
+    diameter: Dp,
+    modifier: Modifier = Modifier,
+) {
+    RadialProgressGauge(
+        progress = (percent ?: 0) / 100f,
+        text = percent?.toString() ?: "—",
+        color = color,
+        diameter = diameter,
+        strokeWidth = 3.5.dp,
+        showPercentSymbol = percent != null,
+        modifier = modifier,
+    )
+}
+
+@Composable
 internal fun RadialProgressGauge(
     progress: Float,
     text: String,
     color: Color,
     diameter: Dp,
-    strokeWidth: Dp,
-    fontSize: TextUnit,
+    strokeWidth: Dp = 2.dp,
     showPercentSymbol: Boolean = diameter >= 30.dp,
     modifier: Modifier = Modifier,
 ) {
     val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
+    val hasThreeOrMoreDigits = text.length >= 3
+    val maxFontSize = if (diameter >= 30.dp) 18.sp else 13.sp
+    val labelPadding = strokeWidth + if (hasThreeOrMoreDigits) 1.5.dp else 0.5.dp
 
     Box(
         modifier = modifier
@@ -343,9 +403,13 @@ internal fun RadialProgressGauge(
         }
         Text(
             text = label,
-            color = Color.White,
-            fontSize = fontSize,
-            lineHeight = fontSize,
+            color = color,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = 4.sp,
+                maxFontSize = if (hasThreeOrMoreDigits) maxFontSize * 0.8f else maxFontSize,
+                stepSize = 0.5.sp,
+            ),
+            modifier = Modifier.padding(horizontal = labelPadding, vertical = strokeWidth),
             fontWeight = fontWeight,
             fontFamily = fontStyle.fontFamily,
             style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
@@ -353,42 +417,4 @@ internal fun RadialProgressGauge(
             softWrap = false,
         )
     }
-}
-
-@Composable
-internal fun BatteryRadialRing(
-    percent: Int,
-    color: Color,
-    strokeWidth: Dp,
-    modifier: Modifier = Modifier,
-) {
-    RadialProgressRing(
-        progress = percent.coerceIn(0, 100) / 100f,
-        color = color,
-        strokeWidth = strokeWidth,
-        modifier = modifier,
-    )
-}
-
-@Composable
-internal fun BatteryRadialGauge(
-    percent: Int,
-    color: Color,
-    diameter: Dp,
-    strokeWidth: Dp,
-    fontSize: TextUnit,
-    showPercentSymbol: Boolean = diameter >= 30.dp,
-    modifier: Modifier = Modifier,
-) {
-    val clamped = percent.coerceIn(0, 100)
-    RadialProgressGauge(
-        progress = clamped / 100f,
-        text = "$clamped",
-        color = color,
-        diameter = diameter,
-        strokeWidth = strokeWidth,
-        fontSize = fontSize,
-        showPercentSymbol = showPercentSymbol,
-        modifier = modifier,
-    )
 }

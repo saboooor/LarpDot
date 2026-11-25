@@ -26,8 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -60,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.LarpButtonOption
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
@@ -237,30 +237,20 @@ fun AppBlacklistScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Filter Tabs
-        ButtonGroup(
-            modifier = Modifier.fillMaxWidth(),
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-        ) {
-            BlacklistFilter.entries.forEachIndexed { index, filter ->
+        LarpConnectedButtons(
+            options = BlacklistFilter.entries.mapIndexed { index, filter ->
                 val filterLabel = when (filter) {
                     BlacklistFilter.ALL -> "All (${appList.size})"
                     BlacklistFilter.BLACKLISTED -> "Blacklisted (${blacklistedPackages.size})"
                 }
-                toggleableItem(
+                LarpButtonOption(
                     checked = selectedFilterIndex == index,
                     label = filterLabel,
-                    icon = {
-                        Icon(
-                            imageVector = filter.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
+                    icon = filter.icon,
                     onCheckedChange = { selectedFilterIndex = index },
-                    weight = 1f,
                 )
-            }
-        }
+            },
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 

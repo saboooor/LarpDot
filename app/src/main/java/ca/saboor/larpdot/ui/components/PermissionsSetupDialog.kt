@@ -12,6 +12,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.ScreenshotPocketManager
+import ca.saboor.larpdot.service.ShizukuBatteryStatus
+import ca.saboor.larpdot.service.ShizukuEarbudBattery
 import ca.saboor.larpdot.service.SystemEventManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +77,7 @@ fun PermissionsSetupDialog(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val shizukuStatus by ShizukuEarbudBattery.status.collectAsState()
 
     var notificationAccessGranted by remember {
         mutableStateOf(hasNotificationAccess(context))
@@ -113,6 +117,7 @@ fun PermissionsSetupDialog(
                 accessibilityGranted = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
                 bluetoothGranted = SystemEventManager.hasBluetoothPermission(context)
                 photosGranted = ScreenshotPocketManager.hasPermission(context)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ShizukuEarbudBattery.refreshStatus()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -219,6 +224,7 @@ fun PermissionsSetupDialog(
                             bluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
                         },
                     )
+                    ShizukuPermissionSetupCard(shizukuStatus)
                 }
 
                 // 5. Photos Access (Zero-step Screenshot Pocket)
@@ -247,12 +253,40 @@ fun PermissionsSetupDialog(
 }
 
 @Composable
+private fun ShizukuPermissionSetupCard(status: ShizukuBatteryStatus) {
+    val context = LocalContext.current
+    val launchIntent = if (
+        status == ShizukuBatteryStatus.NOT_RUNNING || status == ShizukuBatteryStatus.PERMISSION_DENIED
+    ) ShizukuEarbudBattery.managerLaunchIntent(context) else null
+    val requestPermission = status == ShizukuBatteryStatus.NEEDS_PERMISSION
+    PermissionSetupCard(
+        title = "Shizuku",
+        description = when (status) {
+            ShizukuBatteryStatus.NOT_RUNNING -> "Start Shizuku to use Android’s separate earbud battery readings when available."
+            ShizukuBatteryStatus.NEEDS_PERMISSION -> "Allow LarpDot to read separate earbud battery levels when available."
+            ShizukuBatteryStatus.PERMISSION_DENIED -> "Allow LarpDot in Shizuku’s authorized apps."
+            ShizukuBatteryStatus.UNSUPPORTED -> "This Shizuku session does not have access to Bluetooth battery data."
+            ShizukuBatteryStatus.READY -> "Separate earbud levels appear when Android has them."
+        },
+        icon = LarpIcons.Earbuds,
+        isGranted = status == ShizukuBatteryStatus.READY,
+        pendingStatus = "Optional",
+        grantLabel = if (requestPermission) "Allow Shizuku" else "Open Shizuku",
+        onGrantClick = if (requestPermission) ShizukuEarbudBattery::requestPermission else {
+            launchIntent?.let { intent -> { context.startActivity(intent) } }
+        },
+    )
+}
+
+@Composable
 private fun PermissionSetupCard(
     title: String,
     description: String,
     icon: ImageVector,
     isGranted: Boolean,
-    onGrantClick: () -> Unit,
+    pendingStatus: String = "Required",
+    grantLabel: String = "Grant Permission",
+    onGrantClick: (() -> Unit)?,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -306,7 +340,7 @@ private fun PermissionSetupCard(
                         modifier = Modifier.size(12.dp),
                     )
                     Text(
-                        text = if (isGranted) "Granted" else "Required",
+                        text = if (isGranted) "Granted" else pendingStatus,
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                     )
@@ -319,13 +353,13 @@ private fun PermissionSetupCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            if (!isGranted) {
+            if (!isGranted && onGrantClick != null) {
                 FilledTonalButton(
                     onClick = onGrantClick,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.small,
                 ) {
-                    Text("Grant Permission", style = MaterialTheme.typography.labelMedium)
+                    Text(grantLabel, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }

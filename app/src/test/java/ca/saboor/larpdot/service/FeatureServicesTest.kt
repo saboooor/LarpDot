@@ -65,6 +65,17 @@ class FeatureServicesTest {
         assertFalse(ScreenshotPocketManager.isScreenshotCandidate("DCIM/Camera/", "PXL_20261123.jpg"))
     }
 
+    @Test fun trackTimestampPlacementIsSavedIndependentlyOfPlayerLayout() {
+        val legacy = IslandThemePresets.fromJson("""{"expandedPlayerLayout":"IPHONE"}""")!!
+        assertEquals(OverlayPreferences.ProgressTimestampPlacement.BESIDE, legacy.progressTimestampPlacement)
+
+        val configured = legacy.copy(
+            expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
+            progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BELOW,
+        )
+        assertEquals(configured, IslandThemePresets.fromJson(IslandThemePresets.toJson(configured)))
+    }
+
     @Test fun themePresetsRoundTripThroughJson() {
         val original = IslandBackupConfig(
             bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
@@ -94,6 +105,7 @@ class FeatureServicesTest {
             trackInfoShowTitle = true,
             trackInfoShowArtist = false,
             trackInfoShowAlbum = true,
+            trackInfoAlbumBesideArtist = true,
             trackInfoTitleAccent = true,
             showMinimizedTitle = true,
             expandedGlowLeft = false,

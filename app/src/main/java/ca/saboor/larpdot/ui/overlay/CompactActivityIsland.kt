@@ -35,9 +35,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -167,6 +169,7 @@ fun ActivityIcon(
  */
 fun hasCompactStatusContent(activity: NotificationActivityInfo?): Boolean {
     if (activity == null) return false
+    if (activity.pairedEarbudBatteryLevels != null) return true
     if (activity.kind == NotificationActivityKind.NAVIGATION) {
         return compactStatusFallback(activity).isNotBlank()
     }
@@ -197,45 +200,49 @@ fun formatCompactStatus(status: String): AnnotatedString {
     }
 }
 
-/**
- * Calculates the extra width in dp needed for the compact island based on the measured status text width.
- * Status text widens the island dynamically instead of truncating.
- * The extra width is split symmetrically into left and right wings around the central punch hole.
- */
-fun calculateActivityCompactExtraDp(statusTextWidthDp: Float): Float {
-    val minWingWidthDp = 28f
-    val wingPaddingDp = 6f
-    val requiredWingWidthDp = if (statusTextWidthDp <= 0f) {
-        minWingWidthDp
-    } else {
-        maxOf(minWingWidthDp, statusTextWidthDp + wingPaddingDp)
+private val compactActivityIconSize = 18.dp
+private val compactActivityOuterPadding = 8.dp
+private val compactActivityIconWing = compactActivityIconSize + compactActivityOuterPadding
+
+/** Size both wings to whichever needs more space, including the padding used by the renderer. */
+fun calculateActivityCompactExtraDp(statusTextWidthDp: Float): Float =
+    maxOf(compactActivityIconWing.value, statusTextWidthDp + compactActivityOuterPadding.value) * 2f
+
+/** Give the icon and ETA the same space around the camera, including the ETA's padding. */
+internal fun compactNavigationExtraDp(statusTextWidthDp: Float): Float =
+    (statusTextWidthDp + compactActivityOuterPadding.value).coerceIn(compactActivityIconWing.value, 68f) * 2f
+
+@Composable
+internal fun rememberCompactActivityExtraDp(
+    activity: NotificationActivityInfo?,
+    status: String?,
+    cutoutDiameter: Dp,
+    progressOutline: Boolean,
+): Dp {
+    val isNavigation = activity?.kind == NotificationActivityKind.NAVIGATION
+    val hasGauge = activityRadialProgress(activity, progressOutline, MaterialTheme.colorScheme.primary) != null
+    val extra = when {
+        activity?.pairedEarbudBatteryLevels != null -> compactRadialGaugeExtraDp(cutoutDiameter)
+        hasGauge -> maxOf(compactActivityIconWing * 2f, compactRadialGaugeExtraDp(cutoutDiameter))
+        else -> {
+            val textWidth = rememberCompactStatusTextWidthDp(status, compactFontSize = isNavigation).value
+            if (isNavigation) compactNavigationExtraDp(textWidth).dp else calculateActivityCompactExtraDp(textWidth).dp
+        }
     }
-    return requiredWingWidthDp * 2f
+    val maxExtra = (LocalConfiguration.current.screenWidthDp.dp - cutoutDiameter - 32.dp)
+        .coerceAtLeast(compactActivityIconWing * 2f)
+    return extra.coerceAtMost(maxExtra)
 }
 
-internal data class CompactActivityWings(
-    val leadingDp: Float,
-    val trailingDp: Float,
-) {
-    val widthDp: Float get() = leadingDp + trailingDp
-    val trailingFraction: Float get() = if (widthDp > 0f) trailingDp / widthDp else 0.5f
-}
-
-/**
- * Fits the compact navigation pill tightly to its icon on the left (28dp) and ETA text on the right
- * (text width + 10dp horizontal padding + 2dp breathing room), keeping the camera cutout anchored.
- */
-internal fun compactNavigationWings(
-    statusTextWidthDp: Float,
-    maxTrailingDp: Float = 68f,
-): CompactActivityWings {
-    val leadingDp = 28f
-    val trailingDp = if (statusTextWidthDp <= 0f) {
-        leadingDp
-    } else {
-        maxOf(leadingDp, statusTextWidthDp + 12f).coerceAtMost(maxOf(leadingDp, maxTrailingDp))
-    }
-    return CompactActivityWings(leadingDp = leadingDp, trailingDp = trailingDp)
+@Composable
+private fun compactActivityStatusStyle(status: String, compactFontSize: Boolean): TextStyle {
+    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
+    val fontWeightValue by OverlayPreferences.islandFontWeightFlow.collectAsState()
+    return MaterialTheme.typography.labelSmall.copy(
+        fontSize = if (compactFontSize || status.contains('%')) 10.5.sp else 11.5.sp,
+        fontFamily = fontStyle.fontFamily,
+        fontWeight = FontWeight(fontWeightValue),
+    )
 }
 
 @Composable
@@ -246,21 +253,15 @@ internal fun rememberCompactStatusTextWidthDp(
     if (status.isNullOrEmpty()) return 0.dp
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
-    val fontWeightValue by OverlayPreferences.islandFontWeightFlow.collectAsState()
+    val style = compactActivityStatusStyle(status, compactFontSize)
     val normalizedStatus = remember(status) {
         status.map { if (it.isDigit()) '0' else it }.joinToString("")
     }
-    val configuredStyle = MaterialTheme.typography.labelSmall
-    return remember(normalizedStatus, density, configuredStyle, fontStyle, fontWeightValue, compactFontSize) {
+    return remember(normalizedStatus, density, style, textMeasurer) {
         val formatted = formatCompactStatus(normalizedStatus)
         val result = textMeasurer.measure(
             text = formatted,
-            style = configuredStyle.copy(
-                fontSize = if (compactFontSize || normalizedStatus.contains('%')) 10.5.sp else 11.5.sp,
-                fontFamily = fontStyle.fontFamily,
-                fontWeight = FontWeight(fontWeightValue),
-            ),
+            style = style,
             softWrap = false,
         )
         with(density) { result.size.width.toDp() }
@@ -287,10 +288,22 @@ internal fun CompactNotificationActivityContent(
     modifier: Modifier = Modifier,
     isLandscape: Boolean = false,
     trailingWingFraction: Float = 0.5f,
+    iconAnchor: IslandElementAnchor? = null,
+    progressAnchor: IslandElementAnchor? = null,
 ) {
+    activity.pairedEarbudBatteryLevels?.let { levels ->
+        CompactEarbudBatteryContent(
+            levels = levels,
+            thickness = cutoutDiameterDp,
+            centerGap = cutoutDiameterDp,
+            isLandscape = isLandscape,
+            modifier = modifier,
+            leftAnchor = iconAnchor,
+            rightAnchor = progressAnchor,
+        )
+        return
+    }
     val status = rememberCompactActivityStatus(activity)
-    val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
-    val fontWeightValue by OverlayPreferences.islandFontWeightFlow.collectAsState()
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val primaryColor = MaterialTheme.colorScheme.primary
     val radialProgress = activityRadialProgress(activity, activitySettings.progressOutline, primaryColor)
@@ -298,12 +311,13 @@ internal fun CompactNotificationActivityContent(
     val icon = @Composable {
         ActivityIcon(
             activity = activity,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(compactActivityIconSize).morphingElement(iconAnchor),
         )
     }
 
     val isPercentage = status.contains('%')
     val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
+    val statusStyle = compactActivityStatusStyle(status, compactFontSize = isNavigation)
     val formattedStatus = remember(status) { formatCompactStatus(status) }
 
     val summary = @Composable {
@@ -311,10 +325,8 @@ internal fun CompactNotificationActivityContent(
             modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
             text = formattedStatus,
             color = Color.White,
-            fontSize = if (isPercentage || isNavigation) 10.5.sp else 11.5.sp,
-            fontWeight = FontWeight(fontWeightValue),
-            fontFamily = fontStyle.fontFamily,
-            textAlign = TextAlign.End,
+            style = statusStyle,
+            textAlign = TextAlign.Start,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Visible,
@@ -322,7 +334,7 @@ internal fun CompactNotificationActivityContent(
     }
 
     val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
-    val compactRingInset = ((cutoutDiameterDp - compactRingDiameter) / 2f).coerceAtLeast(3.dp)
+    val compactRingInset = compactEndInset(cutoutDiameterDp, compactRingDiameter)
 
     if (isLandscape) {
         Column(
@@ -333,7 +345,7 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 2.dp),
+                    .padding(top = compactActivityOuterPadding),
                 contentAlignment = Alignment.TopCenter,
             ) {
                 icon()
@@ -343,26 +355,23 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = if (radialProgress != null) compactRingInset else 8.dp),
-                contentAlignment = Alignment.BottomCenter,
+                    .padding(bottom = if (radialProgress != null) compactRingInset else compactActivityOuterPadding),
+                contentAlignment = if (radialProgress != null) Alignment.BottomCenter else Alignment.TopCenter,
             ) {
                 if (radialProgress != null) {
                     val (percent, ringColor) = radialProgress
-                    BatteryRadialGauge(
-                        percent = percent,
+                    RadialProgressGauge(
+                        progress = percent / 100f,
+                        text = percent.toString(),
                         color = ringColor,
                         diameter = compactRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (percent >= 100) 6.5.sp else 7.5.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else if (status.isNotEmpty()) {
                     Text(
                         text = formattedStatus,
                         color = Color.White,
-                        fontSize = if (isPercentage) 9.5.sp else 10.sp,
-                        fontWeight = FontWeight(fontWeightValue),
-                        fontFamily = fontStyle.fontFamily,
+                        style = statusStyle.copy(fontSize = if (isPercentage) 9.5.sp else 10.sp),
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Visible,
@@ -382,7 +391,7 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(leadingWeight)
                     .fillMaxHeight()
-                    .padding(start = 8.dp, end = 2.dp),
+                    .padding(start = compactActivityOuterPadding),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 icon()
@@ -392,18 +401,17 @@ internal fun CompactNotificationActivityContent(
                 modifier = Modifier
                     .weight(trailingWeight)
                     .fillMaxHeight()
-                    .padding(start = 2.dp, end = if (radialProgress != null) compactRingInset else 8.dp),
+                    .padding(end = if (radialProgress != null) compactRingInset else compactActivityOuterPadding),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 if (radialProgress != null) {
                     val (percent, ringColor) = radialProgress
-                    BatteryRadialGauge(
-                        percent = percent,
+                    RadialProgressGauge(
+                        progress = percent / 100f,
+                        text = percent.toString(),
                         color = ringColor,
                         diameter = compactRingDiameter,
-                        strokeWidth = 2.dp,
-                        fontSize = if (percent >= 100) 7.sp else 8.sp,
-                        showPercentSymbol = false,
+                        modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else if (status.isNotEmpty()) {
                     summary()
@@ -447,7 +455,10 @@ internal fun bluetoothDeviceIcon(activity: NotificationActivityInfo): ImageVecto
     val type = activity.bluetoothDeviceType.orEmpty().lowercase()
     val name = activity.title.lowercase()
     val disconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+    val levels = activity.earbudBatteryLevels
     val matched = when {
+        !disconnected && levels?.left != null && levels.right == null -> LarpIcons.LeftEarbud
+        !disconnected && levels?.right != null && levels.left == null -> LarpIcons.RightEarbud
         type.contains("earbud") ||
             name.contains("buds") || name.contains("airpods") || name.contains("earpod") ||
             name.contains("freebuds") || name.contains("wf-") || name.contains("ear (") -> LarpIcons.Earbuds
@@ -565,9 +576,7 @@ internal fun formatCompactActivityDisplayStatus(
 internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
     if (activity.kind == NotificationActivityKind.SOUND_MODE) return ""
     if (activity.kind == NotificationActivityKind.BLUETOOTH) {
-        val disconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
-        if (disconnected) return ""
-        return activity.bluetoothBatteryPercent?.let { "$it%" } ?: ""
+        return batteryPercentOf(activity)?.let { "$it%" }.orEmpty()
     }
     // For navigation: NEVER put percentage on the right.
     if (activity.kind == NotificationActivityKind.NAVIGATION) {
