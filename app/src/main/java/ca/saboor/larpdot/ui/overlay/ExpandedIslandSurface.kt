@@ -98,12 +98,12 @@ internal fun IslandSurfaceOverlay(
     onCollapse: () -> Unit,
     onFirstFrameDrawn: () -> Unit,
     onExitFinished: () -> Unit,
-    onExpandedBoundsChanged: (Rect) -> Unit = {},
     compactPressScale: Float,
     compactStretch: Float,
+    modifier: Modifier = Modifier,
+    onExpandedBoundsChanged: (Rect) -> Unit = {},
     customIsland: CustomIsland? = null,
     interactiveProgress: Float? = null,
-    modifier: Modifier = Modifier,
 ) {
     val statusArrivalOffset = rememberStatusArrivalOffset(notificationActivity, !isExpanded && expandedType == IslandType.NOTIFICATION_ACTIVITY)
     val morphProgress = remember { Animatable(0f) }

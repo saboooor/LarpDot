@@ -84,6 +84,9 @@ private fun Transition<Boolean>.isIdleAndHidden(): Boolean =
 internal fun CompactIslandOverlay(
     cutoutInfo: CutoutInfo,
     mediaInfo: MediaTrackInfo,
+    onExpand: (IslandType, IslandSlot?, CompactIslandFrame) -> Unit,
+    onExitStateChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
     isMusicAllowed: Boolean = true,
     notificationActivity: NotificationActivityInfo? = null,
     shortTermActivities: List<NotificationActivityInfo> = emptyList(),
@@ -94,7 +97,6 @@ internal fun CompactIslandOverlay(
     isExiting: Boolean = false,
     hideCompactPill: Boolean = false,
     hiddenSecondarySlot: IslandSlot? = null,
-    onExpand: (IslandType, IslandSlot?, CompactIslandFrame) -> Unit,
     onSwipeDownCustomExpand: () -> Unit = {},
     onDismiss: (IslandType, IslandSlot?) -> Unit = { _, _ -> },
     onCompactFrameChanged: (CompactIslandFrame) -> Unit = {},
@@ -104,8 +106,6 @@ internal fun CompactIslandOverlay(
     onSecondaryScaleChanged: (IslandSlot, Float) -> Unit = { _, _ -> },
     onSecondaryStretchChanged: (IslandSlot, Float) -> Unit = { _, _ -> },
     onFlashlightToggle: () -> Unit = {},
-    onExitStateChanged: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current

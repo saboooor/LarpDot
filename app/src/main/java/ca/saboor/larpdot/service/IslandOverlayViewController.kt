@@ -395,6 +395,8 @@ class IslandOverlayViewController(
                             lastRawX = event.rawX
                             lastRawY = event.rawY
                             resetVelocityTracker()
+                            // Recycled via resetVelocityTracker() on ACTION_UP/ACTION_CANCEL, next ACTION_DOWN, and detach.
+                            @Suppress("Recycle")
                             velocityTracker = VelocityTracker.obtain()
                             addScreenSpaceVelocitySample(event)
                             val swipeHeightDp = (CustomIslandStore.settings.value.swipeDownIsland?.main?.height ?: 150).toFloat()

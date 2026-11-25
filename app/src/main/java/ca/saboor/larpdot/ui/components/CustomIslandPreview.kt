@@ -123,7 +123,7 @@ internal fun CustomIslandPreview(
                         modifier = Modifier.fillMaxSize().padding(cardPadding),
                         contentAlignment = Alignment.Center,
                     ) {
-                        CustomSlotPreview(island.main)
+                        CustomSlotPreview(island.main, modifier = Modifier.fillMaxSize())
                     }
                     PreviewCameraCutoutDot(diameter, Modifier.align(Alignment.TopCenter).offset(y = cameraTop))
                 }
@@ -149,9 +149,9 @@ private fun CustomWingPreview(
         contentAlignment = if (position == CustomIslandPosition.LEFT) Alignment.CenterStart else Alignment.CenterEnd,
     ) {
         CustomSlotPreview(
-            slot,
-            widgetModifier = Modifier.width(slot.width.dp).fillMaxHeight().padding(vertical = customWidgetWingInset),
-            iconModifier = Modifier.size(secondaryBubbleIconSize(diameter)),
+            slot = slot,
+            modifier = Modifier.width(slot.width.dp).fillMaxHeight().padding(vertical = customWidgetWingInset),
+            iconSize = secondaryBubbleIconSize(diameter),
         )
     }
 }
@@ -159,16 +159,17 @@ private fun CustomWingPreview(
 @Composable
 private fun CustomSlotPreview(
     slot: CustomIslandSlot,
-    widgetModifier: Modifier = Modifier.fillMaxSize(),
-    iconModifier: Modifier = Modifier.size(24.dp),
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 24.dp,
 ) {
     val widgetId = slot.widgetId
     val provider = remember(widgetId) { widgetId?.let(CustomIslandWidgets::info) }
+    val iconModifier = Modifier.size(iconSize)
     when {
         widgetId != null && provider != null -> CustomIslandWidget(
             widgetId = widgetId,
             interactive = false,
-            modifier = widgetModifier,
+            modifier = modifier,
             colorKey = slot.colorKey,
         )
         slot.icon != null -> Icon(slot.icon.image, slot.icon.label, iconModifier, MaterialTheme.colorScheme.primary)

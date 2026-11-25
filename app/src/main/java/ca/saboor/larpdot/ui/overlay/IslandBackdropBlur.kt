@@ -63,13 +63,17 @@ internal fun rememberBackdropBlurStatus(): BackdropBlurStatus {
         mutableStateOf(Build.VERSION.SDK_INT >= 31 && runCatching { wm.isCrossWindowBlurEnabled }.getOrDefault(false))
     }
     DisposableEffect(wm) {
-        val listener = Consumer<Boolean> { enabled = it }
-        val registered = Build.VERSION.SDK_INT >= 31 && runCatching {
-            wm.addCrossWindowBlurEnabledListener(context.mainExecutor, listener)
-            true
-        }.getOrDefault(false)
-        onDispose {
-            if (registered && Build.VERSION.SDK_INT >= 31) wm.removeCrossWindowBlurEnabledListener(listener)
+        if (Build.VERSION.SDK_INT < 31) {
+            onDispose { }
+        } else {
+            val listener = Consumer<Boolean> { enabled = it }
+            val registered = runCatching {
+                wm.addCrossWindowBlurEnabledListener(context.mainExecutor, listener)
+                true
+            }.getOrDefault(false)
+            onDispose {
+                if (registered) wm.removeCrossWindowBlurEnabledListener(listener)
+            }
         }
     }
     return when {

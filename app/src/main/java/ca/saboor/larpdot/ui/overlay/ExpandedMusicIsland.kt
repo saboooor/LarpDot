@@ -772,12 +772,12 @@ private fun ExpandedVisualizerSlot(
     mediaInfo: MediaTrackInfo,
     waveformBandCount: Int,
     minHeight: Dp,
-    barCornerRadius: Dp = 1.5.dp,
     highlight: Boolean,
     onClick: (() -> Unit)?,
     visualizerAnchor: IslandElementAnchor?,
-    contentAlignment: Alignment = Alignment.Center,
     modifier: Modifier = Modifier,
+    barCornerRadius: Dp = 1.5.dp,
+    contentAlignment: Alignment = Alignment.Center,
 ) {
     val barWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val barSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
@@ -818,9 +818,9 @@ private fun ExpandedSessionActionButton(
     accentColor: Color,
     buttonSize: Dp,
     iconSize: Dp,
+    modifier: Modifier = Modifier,
     inactiveAlpha: Float = 0.82f,
     hapticFeedback: HapticFeedback? = null,
-    modifier: Modifier = Modifier,
 ) {
     val appIcon = remember(action.iconPackageName, action.iconResourceId) {
         loadMediaSessionActionIcon(context, action.iconPackageName, action.iconResourceId)?.asImageBitmap()
@@ -1408,10 +1408,10 @@ private fun ExpandedTrackInfoColumn(
     artistAlpha: Float,
     titleArtistSpacing: Dp,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     highlight: Boolean = false,
     textAlign: TextAlign? = null,
     bpmChip: (@Composable () -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
     val showArtist = trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()

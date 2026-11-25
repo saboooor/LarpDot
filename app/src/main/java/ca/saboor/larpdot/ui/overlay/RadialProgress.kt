@@ -383,9 +383,9 @@ internal fun RadialProgressGauge(
     text: String,
     color: Color,
     diameter: Dp,
+    modifier: Modifier = Modifier,
     strokeWidth: Dp = 2.dp,
     showPercentSymbol: Boolean = diameter >= 30.dp,
-    modifier: Modifier = Modifier,
 ) {
     val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)

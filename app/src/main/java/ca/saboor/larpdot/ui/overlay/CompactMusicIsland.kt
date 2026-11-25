@@ -189,8 +189,8 @@ private fun CompactMusicBlendedArtwork(
     dotRadiusPx: Float,
     artworkGlow: AlbumArtGlowState,
     artworkAnchor: ArtworkAnchor?,
-    extraBleedDp: Dp = 6.dp,
     modifier: Modifier = Modifier,
+    extraBleedDp: Dp = 6.dp,
 ) {
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     val side = minOf(imageBitmap.width, imageBitmap.height)

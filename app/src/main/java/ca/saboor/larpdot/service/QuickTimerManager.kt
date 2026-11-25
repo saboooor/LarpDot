@@ -395,11 +395,7 @@ object QuickTimerManager {
             if (!vibrator.hasVibrator()) return
             val timings = longArrayOf(0L, 140L, 90L, 140L, 90L, 220L)
             val amplitudes = intArrayOf(0, 180, 0, 180, 0, 230)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
-            } else {
-                vibrator.vibrate(timings, -1)
-            }
+            vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
         }
     }
 }

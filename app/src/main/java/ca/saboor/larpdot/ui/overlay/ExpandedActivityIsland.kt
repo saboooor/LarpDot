@@ -329,8 +329,8 @@ internal fun expandedActivitySize(
 internal fun ExpandedNotificationActivityContent(
     activity: NotificationActivityInfo,
     cardWidth: Dp,
-    onCollapse: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onCollapse: () -> Unit = {},
     topContentInset: Dp = 0.dp,
     spanIconLeftOfCutout: Boolean = false,
     iconAnchor: IslandElementAnchor? = null,

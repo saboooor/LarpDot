@@ -101,7 +101,7 @@ internal fun isCertainDownload(activity: NotificationActivityInfo): Boolean {
 @Composable
 fun ActivityIcon(
     activity: NotificationActivityInfo,
-    modifier: Modifier = Modifier.size(18.dp),
+    modifier: Modifier = Modifier,
     iconShape: Shape = RoundedCornerShape(4.dp),
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary

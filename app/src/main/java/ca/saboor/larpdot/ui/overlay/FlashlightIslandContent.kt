@@ -140,9 +140,9 @@ internal fun CompactFlashlightIcon(size: Dp, iconAnchor: IslandElementAnchor? = 
 @Composable
 internal fun CompactFlashlightContent(
     cutoutDiameterDp: Dp,
+    modifier: Modifier = Modifier,
     onExpand: () -> Unit = {},
     onFlashlightToggle: () -> Unit = {},
-    modifier: Modifier = Modifier,
     isLandscape: Boolean = false,
     status: String = rememberCompactFlashlightStatus(),
     showRadialProgress: Boolean = OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState().value,

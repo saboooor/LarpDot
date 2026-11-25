@@ -259,9 +259,9 @@ internal fun ExpandedMusicProgressBar(
     onDragChange: (Float) -> Unit,
     onDragEnd: (Float) -> Unit,
     onDragCancel: () -> Unit,
+    modifier: Modifier = Modifier,
     onProgressBarClick: (() -> Unit)? = null,
     highlight: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     val activeColor = if (useAccentColor) accentColor else Color.White
     val trackColor = if (useAccentColor) accentColor.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.22f)
@@ -393,10 +393,10 @@ internal fun ExpandedPlaybackControlsRow(
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    modifier: Modifier = Modifier,
     onLongPressPrevious: (() -> Unit)? = null,
     onLongPressNext: (() -> Unit)? = null,
     highlight: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     val visuals = resolvePlaybackButtonVisuals(style, accentColor)
     val isGroup = style.material3ButtonGroup
