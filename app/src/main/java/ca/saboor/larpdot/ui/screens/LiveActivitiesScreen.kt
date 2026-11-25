@@ -41,10 +41,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.QuickTimerManager
+import ca.saboor.larpdot.service.QuickTimerMode
+import ca.saboor.larpdot.service.QuickTimerState
 import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.SystemEventManager
+import ca.saboor.larpdot.service.formatQuickTimerDuration
 import ca.saboor.larpdot.ui.components.AccentCard
+import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
@@ -411,9 +417,100 @@ fun LiveActivitiesScreen(
         }
 
         item {
+            SectionHeader(title = "Quick Timer & Stopwatch")
+            QuickTimerCard()
+        }
+
+        item {
             SectionHeader(title = "Appearance")
             LarpCard {
                 ActivityToggleGrid(items = appearanceItems)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickTimerCard() {
+    val timerState by QuickTimerManager.state.collectAsState()
+    val presets = listOf(1, 3, 5, 10, 15)
+
+    LarpCard {
+        Text(
+            text = when (val state = timerState) {
+                QuickTimerState.Idle -> "Start a countdown timer or stopwatch right in your Dynamic Island"
+                is QuickTimerState.Running -> "${state.label} • ${formatQuickTimerDuration(state.displayMs)}"
+                is QuickTimerState.Paused -> "${state.label} paused at ${formatQuickTimerDuration(state.pausedDisplayMs)}"
+                is QuickTimerState.Finished -> "${state.label} finished!"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (timerState is QuickTimerState.Idle) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+        )
+
+        LarpConnectedButtons(
+            options = presets.map { minutes ->
+                LarpButtonOption(
+                    checked = false,
+                    label = "${minutes}m",
+                    onCheckedChange = { QuickTimerManager.startCountdown(minutes) },
+                )
+            } + LarpButtonOption(
+                checked = (timerState as? QuickTimerState.Running)?.mode == QuickTimerMode.STOPWATCH,
+                label = "Watch",
+                onCheckedChange = { QuickTimerManager.startStopwatch() },
+            ),
+        )
+
+        if (timerState !is QuickTimerState.Idle) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                when (val state = timerState) {
+                    is QuickTimerState.Running -> {
+                        FilledTonalButton(
+                            onClick = { QuickTimerManager.togglePause() },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Pause")
+                        }
+                        if (state.mode == QuickTimerMode.COUNTDOWN) {
+                            FilledTonalButton(onClick = { QuickTimerManager.addOneMinute() }) {
+                                Text("+1m")
+                            }
+                        }
+                        FilledTonalButton(onClick = { QuickTimerManager.stop() }) {
+                            Text("Stop")
+                        }
+                    }
+                    is QuickTimerState.Paused -> {
+                        FilledTonalButton(
+                            onClick = { QuickTimerManager.togglePause() },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Resume")
+                        }
+                        FilledTonalButton(onClick = { QuickTimerManager.stop() }) {
+                            Text("Stop")
+                        }
+                    }
+                    is QuickTimerState.Finished -> {
+                        FilledTonalButton(
+                            onClick = { QuickTimerManager.restart() },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Restart")
+                        }
+                        FilledTonalButton(onClick = { QuickTimerManager.stop() }) {
+                            Text("Dismiss")
+                        }
+                    }
+                    QuickTimerState.Idle -> Unit
+                }
             }
         }
     }

@@ -62,6 +62,9 @@ import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.QuickTimerManager
+import ca.saboor.larpdot.service.QuickTimerMode
+import ca.saboor.larpdot.service.QuickTimerState
 import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -150,6 +153,7 @@ private data class ExpandedActivityLayoutModel(
     val hasNavRightContent: Boolean,
     val isScreenshot: Boolean,
     val isVolume: Boolean,
+    val isQuickTimer: Boolean,
     val showProgressBar: Boolean,
     val hasFooter: Boolean,
 ) {
@@ -163,6 +167,7 @@ private fun buildExpandedActivityLayoutModel(
 ): ExpandedActivityLayoutModel {
     val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
     val isVolume = activity.kind == NotificationActivityKind.VOLUME
+    val isQuickTimer = activity.key == QuickTimerManager.ACTIVITY_KEY
     val radialProgress = activityRadialProgress(activity, progressOutlineEnabled, primaryColor)
     val hasRadialGauge = radialProgress != null
     val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
@@ -175,7 +180,7 @@ private fun buildExpandedActivityLayoutModel(
     val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT &&
         (activity.mediaUri != null || !activity.heldText.isNullOrBlank())
     val showProgressBar = !isNavigation && !isVolume && activity.progressFraction != null && !hasRadialGauge
-    val hasFooter = showProgressBar || isScreenshot || isVolume || footerActions.isNotEmpty()
+    val hasFooter = showProgressBar || isScreenshot || isVolume || isQuickTimer || footerActions.isNotEmpty()
     return ExpandedActivityLayoutModel(
         subtitle = activitySubtitle(activity),
         isNavigation = isNavigation,
@@ -187,6 +192,7 @@ private fun buildExpandedActivityLayoutModel(
         hasNavRightContent = navigationEta != null || inlineAction != null,
         isScreenshot = isScreenshot,
         isVolume = isVolume,
+        isQuickTimer = isQuickTimer,
         showProgressBar = showProgressBar,
         hasFooter = hasFooter,
     )
@@ -289,6 +295,7 @@ internal fun expandedActivitySize(
         val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
         val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
         val volumeSectionHeight = if (model.isVolume) 56.dp else 0.dp
+        val quickTimerSectionHeight = if (model.isQuickTimer) 56.dp else 0.dp
         val bottomPadding = model.bottomPadding
         val headerBlockHeight = if (spanIconLeftOfCutout) {
             if (model.hasFooter) {
@@ -305,9 +312,9 @@ internal fun expandedActivitySize(
         }
         val height = headerBlockHeight +
             (if (model.showProgressBar) 20.dp else 0.dp) +
-            previewHeight + pocketActionHeight + volumeSectionHeight +
+            previewHeight + pocketActionHeight + volumeSectionHeight + quickTimerSectionHeight +
             (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
-        val effectiveWidth = if (model.isScreenshot || model.isVolume) {
+        val effectiveWidth = if (model.isScreenshot || model.isVolume || model.isQuickTimer) {
             maxOf(width, 280.dp).coerceAtMost(maxWidth)
         } else {
             width
@@ -419,6 +426,10 @@ internal fun ExpandedNotificationActivityContent(
 
         if (model.isVolume) {
             ExpandedVolumeSection(activity = activity)
+        }
+
+        if (model.isQuickTimer) {
+            ExpandedQuickTimerSection(onCollapse = onCollapse)
         }
 
         if (model.footerActions.isNotEmpty()) {
@@ -784,5 +795,123 @@ private fun ExpandedVolumeSection(activity: NotificationActivityInfo) {
                 inactiveTrackColor = Color.White.copy(alpha = 0.22f),
             ),
         )
+    }
+}
+
+@Composable
+private fun ExpandedQuickTimerSection(onCollapse: () -> Unit) {
+    val timerState by QuickTimerManager.state.collectAsState()
+    val haptic = LocalHapticFeedback.current
+    if (timerState is QuickTimerState.Idle) return
+
+    Spacer(Modifier.height(12.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when (val state = timerState) {
+            is QuickTimerState.Running -> {
+                Button(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                        QuickTimerManager.togglePause()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Pause", maxLines = 1)
+                }
+                if (state.mode == QuickTimerMode.COUNTDOWN) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                            QuickTimerManager.addOneMinute()
+                        },
+                        modifier = Modifier.heightIn(min = 42.dp),
+                    ) {
+                        Text("+1m", maxLines = 1)
+                    }
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
+                        QuickTimerManager.stop()
+                        onCollapse()
+                    },
+                    modifier = Modifier.heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Stop, contentDescription = "Stop timer", modifier = Modifier.size(18.dp))
+                }
+            }
+            is QuickTimerState.Paused -> {
+                Button(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                        QuickTimerManager.togglePause()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Resume", maxLines = 1)
+                }
+                if (state.mode == QuickTimerMode.COUNTDOWN) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                            QuickTimerManager.addOneMinute()
+                        },
+                        modifier = Modifier.heightIn(min = 42.dp),
+                    ) {
+                        Text("+1m", maxLines = 1)
+                    }
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
+                        QuickTimerManager.stop()
+                        onCollapse()
+                    },
+                    modifier = Modifier.heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Stop, contentDescription = "Stop timer", modifier = Modifier.size(18.dp))
+                }
+            }
+            is QuickTimerState.Finished -> {
+                Button(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                        QuickTimerManager.restart()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Restart", maxLines = 1)
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                        QuickTimerManager.addOneMinute()
+                    },
+                    modifier = Modifier.heightIn(min = 42.dp),
+                ) {
+                    Text("+1m", maxLines = 1)
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
+                        QuickTimerManager.stop()
+                        onCollapse()
+                    },
+                    modifier = Modifier.heightIn(min = 42.dp),
+                ) {
+                    Icon(LarpIcons.Close, contentDescription = "Dismiss timer", modifier = Modifier.size(18.dp))
+                }
+            }
+            QuickTimerState.Idle -> Unit
+        }
     }
 }
