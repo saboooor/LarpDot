@@ -298,6 +298,16 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                                     Icon(LarpIcons.DeleteOutline, contentDescription = "Delete island")
                                 }
                             }
+                            if (!pageIsland.isSwipeDownOnly && (pageIsland.left.hasContent || pageIsland.right.hasContent)) {
+                                OutlinedButton(
+                                    onClick = { CustomIslandStore.swapWings(pageIsland.id) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(LarpIcons.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Swap Left & Right Wings")
+                                }
+                            }
                             if (pageIsland.main.widgetId == null) {
                                 Text(
                                     "Add an expanded widget to test this island live in the overlay.",
@@ -508,6 +518,24 @@ private fun CustomIslandSlotSettings(
                     },
                 )
             }
+            val isDefaultSize = slot.width == position.defaultWidth &&
+                (position != CustomIslandPosition.MAIN || slot.height == position.defaultHeight)
+            if (!isDefaultSize) {
+                TextButton(
+                    onClick = {
+                        CustomIslandStore.configureSlot(
+                            island.id,
+                            position,
+                            slot.copy(
+                                width = position.defaultWidth,
+                                height = if (position == CustomIslandPosition.MAIN) position.defaultHeight else slot.height,
+                            ),
+                        )
+                    },
+                ) {
+                    Text("Reset Widget Size")
+                }
+            }
         } else if (slot.icon != null) {
             Text(slot.icon.label, style = MaterialTheme.typography.titleSmall)
         }
@@ -544,7 +572,17 @@ private fun CustomWidgetPicker(onDismiss: () -> Unit, onPick: (AppWidgetProvider
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (widgets.isNotEmpty()) {
                     OutlinedTextField(
-                        query, { query = it }, label = { Text("Search widgets") }, singleLine = true,
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("Search widgets") },
+                        singleLine = true,
+                        trailingIcon = if (query.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(LarpIcons.Clear, contentDescription = "Clear search")
+                                }
+                            }
+                        } else null,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

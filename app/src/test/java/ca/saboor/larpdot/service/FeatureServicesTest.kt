@@ -518,4 +518,32 @@ class FeatureServicesTest {
         assertEquals(0, missing.grantedCount)
         assertEquals(5, missing.totalCount)
     }
+
+    @Test fun notificationTextDeduplicationSkipsTitleCopiesAndBlanks() {
+        assertEquals(
+            "45% complete",
+            ca.saboor.larpdot.notification.NotificationActivityState.deduplicateNotificationText(
+                "Downloading",
+                "Downloading",
+                "  downloading  ",
+                "45% complete",
+            ),
+        )
+        assertNull(
+            ca.saboor.larpdot.notification.NotificationActivityState.deduplicateNotificationText(
+                "Timer",
+                "Timer",
+                "   ",
+                null,
+            ),
+        )
+        assertEquals(
+            "Turn right on Oak St",
+            ca.saboor.larpdot.notification.NotificationActivityState.deduplicateNotificationText(
+                "5 min • 1.2 mi",
+                null,
+                "Turn right on Oak St",
+            ),
+        )
+    }
 }

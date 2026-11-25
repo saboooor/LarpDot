@@ -199,6 +199,10 @@ internal fun enforceSingleSwipeDownIsland(
     }
 }
 
+internal fun swapCustomIslandWings(island: CustomIsland): CustomIsland =
+    if (island.isSwipeDownOnly || (!island.left.hasContent && !island.right.hasContent)) island
+    else island.copy(left = island.right, right = island.left)
+
 internal fun reorderCustomIslands(
     islands: List<CustomIsland>,
     id: String,
@@ -287,6 +291,10 @@ internal object CustomIslandStore {
         if (reordered != previous.islands) {
             save(previous.copy(islands = reordered))
         }
+    }
+
+    fun swapWings(id: String) {
+        updateIsland(id, ::swapCustomIslandWings)
     }
 
     fun requestOverlayPreview(id: String): Boolean {

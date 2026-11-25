@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import android.util.LruCache
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import ca.saboor.larpdot.media.MediaPlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -365,14 +366,16 @@ object NotificationActivityState {
     }
 
     internal fun drawableToBitmap(drawable: Drawable, sizePx: Int = 96): Bitmap {
+        val maxDimension = (sizePx * 2).coerceAtLeast(sizePx)
         if (drawable is BitmapDrawable && drawable.bitmap != null) {
             val b = drawable.bitmap
-            if (b.width == b.height) {
-                return b
+            if (!b.isRecycled && b.width == b.height) {
+                return if (b.width <= maxDimension) b
+                else runCatching { b.scale(maxDimension, maxDimension) }.getOrDefault(b)
             }
         }
         val size = if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
-            maxOf(drawable.intrinsicWidth, drawable.intrinsicHeight)
+            maxOf(drawable.intrinsicWidth, drawable.intrinsicHeight).coerceAtMost(maxDimension)
         } else {
             sizePx
         }
@@ -445,7 +448,7 @@ object NotificationActivityState {
 
         if (isMediaOrInternalNotification(notification, sbn.packageName)) return null
 
-        val extras = notification.extras
+        val extras = notification.extras ?: return null
         val progress = extras.getInt(Notification.EXTRA_PROGRESS, 0)
         val progressMax = extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
         val indeterminate = extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)
@@ -465,7 +468,8 @@ object NotificationActivityState {
             extras.getCharSequence(Notification.EXTRA_TITLE),
             extras.getCharSequence(Notification.EXTRA_TITLE_BIG),
         ) ?: applicationName(context, sbn.packageName)
-        val text = firstText(
+        val text = deduplicateNotificationText(
+            title,
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
             extras.getCharSequence(Notification.EXTRA_TEXT),
             extras.getCharSequence(Notification.EXTRA_SUB_TEXT),
@@ -508,6 +512,14 @@ object NotificationActivityState {
 
     private fun firstText(vararg values: CharSequence?): String? = values.firstNotNullOfOrNull {
         it?.toString()?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    internal fun deduplicateNotificationText(title: String, vararg candidates: CharSequence?): String? {
+        val cleanTitle = title.trim()
+        return candidates.firstNotNullOfOrNull { raw ->
+            val value = raw?.toString()?.trim()?.takeIf(String::isNotEmpty) ?: return@firstNotNullOfOrNull null
+            if (value.equals(cleanTitle, ignoreCase = true)) null else value
+        }
     }
 
     private fun applicationName(context: Context, packageName: String): String = runCatching {

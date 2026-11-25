@@ -80,4 +80,20 @@ class CustomIslandStoreTest {
         assertEquals("Timer • Music", iconInfo.title)
         assertTrue(iconInfo.subtitle.contains("Left & Right icons"))
     }
+
+    @Test
+    fun swapCustomIslandWingsSwapsLeftAndRightAndSkipsSwipeDownOnly() {
+        val original = island("s1", leftIcon = CustomIslandIcon.TIMER, rightIcon = CustomIslandIcon.MUSIC)
+        val swapped = swapCustomIslandWings(original)
+        assertEquals(CustomIslandIcon.MUSIC, swapped.left.icon)
+        assertEquals(CustomIslandIcon.TIMER, swapped.right.icon)
+
+        val swipeDown = island(
+            "s2",
+            visibility = CustomIslandVisibility.SWIPE_DOWN,
+            mainWidgetId = 5,
+            leftIcon = CustomIslandIcon.STAR,
+        )
+        assertEquals(swipeDown, swapCustomIslandWings(swipeDown))
+    }
 }
