@@ -49,6 +49,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.flashlight.FlashlightMode
+import ca.saboor.larpdot.flashlight.formatAutoOffRemaining
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
@@ -143,6 +145,9 @@ fun FlashlightScreen(
     val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
     val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val tapToToggle by OverlayPreferences.flashlightTapToToggleFlow.collectAsState()
+    val autoOffMinutes by OverlayPreferences.flashlightAutoOffMinutesFlow.collectAsState()
+    val flashlightMode by FlashlightController.flashlightMode.collectAsState()
+    val autoOffRemainingMs by FlashlightController.autoOffRemainingMs.collectAsState()
 
     LaunchedEffect(Unit) {
         FlashlightController.init(context)
@@ -154,6 +159,7 @@ fun FlashlightScreen(
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)
         OverlayPreferences.isFlashlightTapToToggleEnabled(context)
         OverlayPreferences.isFlashlightBoostEnabled(context)
+        OverlayPreferences.getFlashlightAutoOffMinutes(context)
     }
 
     AnimatedContent(
@@ -238,6 +244,9 @@ fun FlashlightScreen(
                 showInIsland = showInIsland,
                 showExpandedOutline = showExpandedOutline,
                 tapToToggle = tapToToggle,
+                autoOffMinutes = autoOffMinutes,
+                flashlightMode = flashlightMode,
+                autoOffRemainingMs = autoOffRemainingMs,
                 isFlashlightOn = isFlashlightOn,
                 isFlashlightAvailable = isFlashlightAvailable,
                 isStrengthSupported = isStrengthSupported,
@@ -322,6 +331,9 @@ private fun FlashlightSettingsPage(
     showInIsland: Boolean,
     showExpandedOutline: Boolean,
     tapToToggle: Boolean,
+    autoOffMinutes: Int,
+    flashlightMode: FlashlightMode,
+    autoOffRemainingMs: Long?,
     isFlashlightOn: Boolean,
     isFlashlightAvailable: Boolean,
     isStrengthSupported: Boolean,
@@ -427,7 +439,15 @@ private fun FlashlightSettingsPage(
                                     style = MaterialTheme.typography.titleMedium,
                                 )
                                 Text(
-                                    text = if (isBoostStarting) "Starting boost…" else if (isFlashlightOn) "Illuminating" else "Off",
+                                    text = when {
+                                        isBoostStarting -> "Starting boost…"
+                                        isFlashlightOn && autoOffRemainingMs != null ->
+                                            "${flashlightMode.label} • Auto-off in ${formatAutoOffRemaining(autoOffRemainingMs)}"
+                                        isFlashlightOn && flashlightMode != FlashlightMode.STEADY ->
+                                            "${flashlightMode.label} active"
+                                        isFlashlightOn -> "Illuminating"
+                                        else -> "Off"
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (isFlashlightOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -437,6 +457,67 @@ private fun FlashlightSettingsPage(
                         Switch(
                             checked = isFlashlightOn || isBoostStarting,
                             onCheckedChange = onSetTorch,
+                        )
+                    }
+
+                    LarpDivider()
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "Signal Mode",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "Switch between steady illumination, rapid strobe, or international Morse SOS",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LarpConnectedButtons(
+                            options = FlashlightMode.entries.map { mode ->
+                                LarpButtonOption(
+                                    checked = flashlightMode == mode && (mode == FlashlightMode.STEADY || isFlashlightOn),
+                                    label = mode.label,
+                                    onCheckedChange = { FlashlightController.setMode(mode) },
+                                )
+                            },
+                        )
+                    }
+
+                    LarpDivider()
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "Safety Auto-Off Timer",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = if (autoOffMinutes == 0) {
+                                "Stay on until you turn the flashlight off manually"
+                            } else {
+                                "Automatically turn off the flashlight after $autoOffMinutes min to protect battery and thermals"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        val autoOffOptions = listOf(0 to "Off", 1 to "1m", 5 to "5m", 10 to "10m", 15 to "15m", 30 to "30m")
+                        LarpConnectedButtons(
+                            options = autoOffOptions.map { (minutes, label) ->
+                                LarpButtonOption(
+                                    checked = autoOffMinutes == minutes,
+                                    label = label,
+                                    onCheckedChange = {
+                                        OverlayPreferences.setFlashlightAutoOffMinutes(context, minutes)
+                                        FlashlightController.refreshAutoOffTimer()
+                                    },
+                                )
+                            },
+                            maxButtonsPerRow = 3,
                         )
                     }
                 }

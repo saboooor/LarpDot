@@ -131,6 +131,7 @@ class FeatureServicesTest {
             flashlightBeamBlur = true,
             flashlightBeamAccentColor = false,
             flashlightTapToToggle = false,
+            flashlightAutoOffMinutes = 10,
             musicPauseTimeoutSeconds = 30,
             tapToExpand = true,
             hapticsEnabled = false,

@@ -552,6 +552,7 @@ object OverlayPreferences {
     val flashlightExpandedStyleFlow: StateFlow<FlashlightExpandedStyle> get() = FlashlightPrefsStore.flashlightExpandedStyleFlow
     val flashlightBeamBlurFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamBlurFlow
     val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamAccentColorFlow
+    val flashlightAutoOffMinutesFlow: StateFlow<Int> get() = FlashlightPrefsStore.flashlightAutoOffMinutesFlow
 
     val appBlacklistEnabledFlow: StateFlow<Boolean> get() = ActivityAndBlacklistPrefsStore.appBlacklistEnabledFlow
     val blacklistedPackagesFlow: StateFlow<Set<String>> get() = ActivityAndBlacklistPrefsStore.blacklistedPackagesFlow
@@ -999,6 +1000,10 @@ object OverlayPreferences {
     fun getBoostStrength(context: Context): Int = FlashlightPrefsStore.getBoostStrength(getPrefs(context))
     fun setBoostStrength(context: Context, strength: Int) =
         FlashlightPrefsStore.setBoostStrength(getPrefs(context), strength)
+    fun getFlashlightAutoOffMinutes(context: Context): Int =
+        FlashlightPrefsStore.getAutoOffMinutes(getPrefs(context))
+    fun setFlashlightAutoOffMinutes(context: Context, minutes: Int) =
+        FlashlightPrefsStore.setAutoOffMinutes(getPrefs(context), minutes)
 
     fun getNotificationActivitySettings(context: Context): NotificationActivitySettings =
         ActivityAndBlacklistPrefsStore.getNotificationActivitySettings(getPrefs(context))

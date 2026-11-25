@@ -74,6 +74,51 @@ object FlashlightController {
     var lastFlashlightOnTime = 0L
         private set
 
+    private var patternActive = false
+    private var patternSteps: List<FlashlightPatternStep> = emptyList()
+    private var patternStepIndex = 0
+    private val patternRunner = object : Runnable {
+        override fun run() {
+            if (!patternActive || patternSteps.isEmpty()) return
+            val step = patternSteps[patternStepIndex % patternSteps.size]
+            patternStepIndex = (patternStepIndex + 1) % patternSteps.size
+            if (!_isSimulated.value) {
+                try {
+                    applyStandardTorch(step.torchOn, desiredLevel.coerceAtMost(standardMaximum))
+                } catch (error: Exception) {
+                    stopPattern()
+                    _lastError.value = "Unable to pulse flashlight: ${error.message}"
+                    notifyState(false)
+                    return
+                }
+            }
+            handler.postDelayed(this, step.durationMs)
+        }
+    }
+
+    private var autoOffDeadlineMs = 0L
+    private val autoOffTicker = object : Runnable {
+        override fun run() {
+            if (!_isFlashlightOn.value && !patternActive && !boostRequested) {
+                _autoOffRemainingMs.value = null
+                return
+            }
+            val remaining = autoOffDeadlineMs - SystemClock.uptimeMillis()
+            if (remaining <= 0L) {
+                _autoOffRemainingMs.value = null
+                setTorch(false)
+            } else {
+                _autoOffRemainingMs.value = remaining
+                handler.postDelayed(this, 1_000L)
+            }
+        }
+    }
+
+    private val _flashlightMode = MutableStateFlow(FlashlightMode.STEADY)
+    val flashlightMode = _flashlightMode.asStateFlow()
+    private val _autoOffRemainingMs = MutableStateFlow<Long?>(null)
+    val autoOffRemainingMs = _autoOffRemainingMs.asStateFlow()
+
     private val _isFlashlightOn = MutableStateFlow(false)
     val isFlashlightOn = _isFlashlightOn.asStateFlow()
     private val _isAvailable = MutableStateFlow(false)
@@ -115,7 +160,7 @@ object FlashlightController {
                         pendingStandardLevel = null
                         handler.removeCallbacks(finishStandardHandoff)
                     }
-                    if (!boostRequested && pendingStandardLevel == null) {
+                    if (!boostRequested && pendingStandardLevel == null && !patternActive) {
                         if (wasOn != enabled) refreshRange()
                         _isAvailable.value = true
                         notifyState(enabled)
@@ -124,6 +169,7 @@ object FlashlightController {
                 override fun onTorchModeUnavailable(cameraId: String) {
                     if (cameraId != activeCameraId) return
                     standardOn = false
+                    stopPattern()
                     if (!boostRequested && pendingStandardLevel == null) {
                         refreshRange()
                         _isAvailable.value = false
@@ -131,7 +177,7 @@ object FlashlightController {
                     }
                 }
                 override fun onTorchStrengthLevelChanged(cameraId: String, newStrengthLevel: Int) {
-                    if (cameraId == activeCameraId && !boostRequested && pendingStandardLevel == null) {
+                    if (cameraId == activeCameraId && !boostRequested && pendingStandardLevel == null && !patternActive) {
                         desiredLevel = newStrengthLevel.coerceIn(1, standardMaximum)
                         _torchStrength.value = desiredLevel
                     }
@@ -263,24 +309,77 @@ object FlashlightController {
         refreshRange()
     }
 
-    fun toggleFlashlight() = setTorch(!(_isFlashlightOn.value || boostRequested || pendingStandardLevel != null))
+    fun setMode(mode: FlashlightMode) {
+        if (mode == FlashlightMode.STEADY) {
+            val wasPattern = patternActive
+            stopPattern()
+            if (wasPattern && _isFlashlightOn.value) {
+                setTorch(true)
+            }
+            return
+        }
+        val steps = flashlightPatternSteps(mode)
+        if (steps.isEmpty()) return
+        _lastError.value = null
+        if (boostRequested) stopBoost()
+        pendingStandardLevel = null
+        handler.removeCallbacks(finishStandardHandoff)
+        handler.removeCallbacks(patternRunner)
+        patternSteps = steps
+        patternStepIndex = 0
+        patternActive = true
+        _flashlightMode.value = mode
+        notifyState(true)
+        handler.post(patternRunner)
+    }
+
+    private fun stopPattern() {
+        patternActive = false
+        patternSteps = emptyList()
+        patternStepIndex = 0
+        handler.removeCallbacks(patternRunner)
+        if (_flashlightMode.value != FlashlightMode.STEADY) {
+            _flashlightMode.value = FlashlightMode.STEADY
+        }
+    }
+
+    fun refreshAutoOffTimer() {
+        val minutes = appContext?.let(OverlayPreferences::getFlashlightAutoOffMinutes) ?: 0
+        handler.removeCallbacks(autoOffTicker)
+        if (minutes <= 0 || (!_isFlashlightOn.value && !patternActive && !boostRequested)) {
+            _autoOffRemainingMs.value = null
+            return
+        }
+        autoOffDeadlineMs = SystemClock.uptimeMillis() + minutes.toLong() * 60_000L
+        _autoOffRemainingMs.value = minutes.toLong() * 60_000L
+        handler.postDelayed(autoOffTicker, 1_000L)
+    }
+
+    fun toggleFlashlight() = setTorch(!(_isFlashlightOn.value || boostRequested || pendingStandardLevel != null || patternActive))
     fun turnOn() = setTorch(true)
     fun turnOff() = setTorch(false)
 
     fun setTorch(enabled: Boolean) {
         val context = appContext ?: return
         _lastError.value = null
-        if (_isSimulated.value) { notifyState(enabled); return }
+        if (_isSimulated.value) {
+            if (!enabled) stopPattern()
+            notifyState(enabled)
+            return
+        }
         if (!enabled) {
+            val hadPattern = patternActive
+            stopPattern()
             val hadBoost = boostRequested || pendingStandardLevel != null
             if (hadBoost) stopBoost()
             pendingStandardLevel = null
             handler.removeCallbacks(finishStandardHandoff)
             try { applyStandardTorch(false, desiredLevel) }
-            catch (error: Exception) { if (!hadBoost) _lastError.value = "Unable to turn off flashlight: ${error.message}" }
-            if (hadBoost) notifyState(false)
+            catch (error: Exception) { if (!hadBoost && !hadPattern) _lastError.value = "Unable to turn off flashlight: ${error.message}" }
+            if (hadBoost || hadPattern) notifyState(false)
             return
         }
+        if (patternActive) stopPattern()
         if (enabled && needsCamera(desiredLevel)) {
             if (boostRequested) return
             if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -380,7 +479,13 @@ object FlashlightController {
     private fun notifyState(enabled: Boolean) {
         val wasOn = _isFlashlightOn.value
         _isFlashlightOn.value = enabled
-        if (enabled && !wasOn) lastFlashlightOnTime = SystemClock.uptimeMillis()
+        if (enabled && !wasOn) {
+            lastFlashlightOnTime = SystemClock.uptimeMillis()
+            refreshAutoOffTimer()
+        } else if (!enabled) {
+            handler.removeCallbacks(autoOffTicker)
+            _autoOffRemainingMs.value = null
+        }
         val context = appContext ?: return
         if (enabled && OverlayPreferences.isShowFlashlightIslandEnabled(context) &&
             !DotAccessibilityService.isServiceConnected.value && Settings.canDrawOverlays(context)) {

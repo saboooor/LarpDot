@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
+import ca.saboor.larpdot.flashlight.FlashlightMode
+import ca.saboor.larpdot.flashlight.formatAutoOffRemaining
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -99,8 +101,10 @@ fun rememberCompactFlashlightStatus(): String {
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
     val standardMaximum by FlashlightController.standardMaxStrength.collectAsState()
-    return remember(torchStrength, maxStrength, standardMaximum) {
-        getFlashlightPercentText(torchStrength, maxStrength, standardMaximum)
+    val mode by FlashlightController.flashlightMode.collectAsState()
+    return remember(torchStrength, maxStrength, standardMaximum, mode) {
+        if (mode != FlashlightMode.STEADY) mode.label
+        else getFlashlightPercentText(torchStrength, maxStrength, standardMaximum)
     }
 }
 
@@ -302,6 +306,7 @@ internal fun ExpandedFlashlightContent(
     val accentColor = FlashlightWhite
     val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
+    val autoOffRemainingMs by FlashlightController.autoOffRemainingMs.collectAsState()
 
     if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
         ExpandedFlashlightSliderLayout(
@@ -311,6 +316,7 @@ internal fun ExpandedFlashlightContent(
             accentColor = accentColor,
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
+            autoOffRemainingMs = autoOffRemainingMs,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
             modifier = modifier,
@@ -323,6 +329,7 @@ internal fun ExpandedFlashlightContent(
             accentColor = accentColor,
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
+            autoOffRemainingMs = autoOffRemainingMs,
             onBeamClick = onBeamClick,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
@@ -376,6 +383,7 @@ private fun ExpandedFlashlightSliderLayout(
     accentColor: Color,
     showExpandedRadial: Boolean,
     topContentInset: Dp,
+    autoOffRemainingMs: Long?,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
@@ -421,6 +429,16 @@ private fun ExpandedFlashlightSliderLayout(
                 inactiveTrackColor = accentColor.copy(alpha = 0.25f),
             ),
         )
+        if (isFlashlightOn && autoOffRemainingMs != null) {
+            Text(
+                text = formatAutoOffRemaining(autoOffRemainingMs),
+                color = FlashlightWhiteDim,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
     }
 }
 
@@ -432,6 +450,7 @@ private fun ExpandedFlashlightBeamLayout(
     accentColor: Color,
     showExpandedRadial: Boolean,
     topContentInset: Dp,
+    autoOffRemainingMs: Long?,
     onBeamClick: (() -> Unit)?,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
@@ -663,6 +682,20 @@ private fun ExpandedFlashlightBeamLayout(
                     topLeft = Offset(centerX - topBeamWidth / 2f, currentSliderY - barHeight / 2f),
                     size = Size(topBeamWidth, barHeight),
                     cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f),
+                )
+            }
+
+            if (isFlashlightOn && autoOffRemainingMs != null) {
+                Text(
+                    text = formatAutoOffRemaining(autoOffRemainingMs),
+                    color = FlashlightWhiteDim,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 14.dp, bottom = 12.dp),
                 )
             }
 

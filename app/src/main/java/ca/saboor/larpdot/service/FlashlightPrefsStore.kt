@@ -17,6 +17,7 @@ internal object FlashlightPrefsStore {
     private val boost = BooleanPref("flashlight_boost_enabled", false)
     private val beamBlur = BooleanPref(KEY_FLASHLIGHT_BEAM_BLUR, false)
     private val beamAccentColor = BooleanPref("flashlight_beam_accent_color", true)
+    private val autoOffMinutes = IntPref("flashlight_auto_off_minutes", 0, 0, 60)
 
     private val _flashlightExpandedStyleFlow = MutableStateFlow(OverlayPreferences.FlashlightExpandedStyle.BEAM)
     val flashlightExpandedStyleFlow: StateFlow<OverlayPreferences.FlashlightExpandedStyle> =
@@ -29,6 +30,7 @@ internal object FlashlightPrefsStore {
     val flashlightBoostFlow: StateFlow<Boolean> get() = boost.flow
     val flashlightBeamBlurFlow: StateFlow<Boolean> get() = beamBlur.flow
     val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = beamAccentColor.flow
+    val flashlightAutoOffMinutesFlow: StateFlow<Int> get() = autoOffMinutes.flow
 
     fun getFlashlightExpandedStyle(prefs: SharedPreferences): OverlayPreferences.FlashlightExpandedStyle {
         val saved = prefs.getString(KEY_FLASHLIGHT_EXPANDED_STYLE, null)
@@ -76,4 +78,7 @@ internal object FlashlightPrefsStore {
     fun setBoostStrength(prefs: SharedPreferences, strength: Int) {
         prefs.edit().putInt(KEY_BOOST_STRENGTH, strength).apply()
     }
+
+    fun getAutoOffMinutes(prefs: SharedPreferences): Int = autoOffMinutes.get(prefs)
+    fun setAutoOffMinutes(prefs: SharedPreferences, minutes: Int) = autoOffMinutes.set(prefs, minutes)
 }
