@@ -242,7 +242,7 @@ class IslandOverlayViewController(
     private val _expandedType = MutableStateFlow(IslandType.MEDIA)
     val expandedType: StateFlow<IslandType> = _expandedType.asStateFlow()
 
-    private var controllerJob = Job()
+    private var controllerJob = kotlinx.coroutines.SupervisorJob()
     private var controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
     private enum class VisibilityKey(val type: IslandType? = null) {
         MUSIC(IslandType.MEDIA), FLASHLIGHT(IslandType.FLASHLIGHT),
@@ -281,7 +281,7 @@ class IslandOverlayViewController(
         windowManager = wm
 
         controllerJob.cancel()
-        controllerJob = Job()
+        controllerJob = kotlinx.coroutines.SupervisorJob()
         controllerScope = CoroutineScope(Dispatchers.Main + controllerJob)
 
         FlashlightController.init(context)

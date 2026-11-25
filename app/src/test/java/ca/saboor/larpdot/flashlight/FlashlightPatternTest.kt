@@ -18,6 +18,15 @@ class FlashlightPatternTest {
         assertTrue(steps[0].torchOn)
         assertFalse(steps[1].torchOn)
         assertTrue(steps.all { it.durationMs > 0L })
+
+        val slow = flashlightPatternSteps(FlashlightMode.STROBE, StrobeSpeed.SLOW)
+        val fast = flashlightPatternSteps(FlashlightMode.STROBE, StrobeSpeed.FAST)
+        assertTrue(slow[0].durationMs > steps[0].durationMs)
+        assertTrue(fast[0].durationMs < steps[0].durationMs)
+
+        assertEquals(FlashlightMode.STROBE, nextFlashlightMode(FlashlightMode.STEADY))
+        assertEquals(FlashlightMode.SOS, nextFlashlightMode(FlashlightMode.STROBE))
+        assertEquals(FlashlightMode.STEADY, nextFlashlightMode(FlashlightMode.SOS))
     }
 
     @Test fun sosFollowsInternationalMorseCode() {

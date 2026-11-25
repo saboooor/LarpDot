@@ -557,6 +557,8 @@ object OverlayPreferences {
     val flashlightBeamBlurFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamBlurFlow
     val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamAccentColorFlow
     val flashlightAutoOffMinutesFlow: StateFlow<Int> get() = FlashlightPrefsStore.flashlightAutoOffMinutesFlow
+    val flashlightStrobeSpeedFlow: StateFlow<ca.saboor.larpdot.flashlight.StrobeSpeed>
+        get() = FlashlightPrefsStore.flashlightStrobeSpeedFlow
 
     val appBlacklistEnabledFlow: StateFlow<Boolean> get() = ActivityAndBlacklistPrefsStore.appBlacklistEnabledFlow
     val blacklistedPackagesFlow: StateFlow<Set<String>> get() = ActivityAndBlacklistPrefsStore.blacklistedPackagesFlow
@@ -1011,6 +1013,10 @@ object OverlayPreferences {
         FlashlightPrefsStore.getAutoOffMinutes(getPrefs(context))
     fun setFlashlightAutoOffMinutes(context: Context, minutes: Int) =
         FlashlightPrefsStore.setAutoOffMinutes(getPrefs(context), minutes)
+    fun getFlashlightStrobeSpeed(context: Context): ca.saboor.larpdot.flashlight.StrobeSpeed =
+        FlashlightPrefsStore.getStrobeSpeed(getPrefs(context))
+    fun setFlashlightStrobeSpeed(context: Context, speed: ca.saboor.larpdot.flashlight.StrobeSpeed) =
+        FlashlightPrefsStore.setStrobeSpeed(getPrefs(context), speed)
 
     fun getNotificationActivitySettings(context: Context): NotificationActivitySettings =
         ActivityAndBlacklistPrefsStore.getNotificationActivitySettings(getPrefs(context))

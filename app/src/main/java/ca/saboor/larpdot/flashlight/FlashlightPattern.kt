@@ -8,17 +8,32 @@ enum class FlashlightMode(val label: String) {
     SOS("SOS"),
 }
 
+enum class StrobeSpeed(val label: String, val stepMs: Long) {
+    SLOW("Slow", 240L),
+    NORMAL("Normal", 110L),
+    FAST("Fast", 60L),
+}
+
+internal fun nextFlashlightMode(current: FlashlightMode): FlashlightMode = when (current) {
+    FlashlightMode.STEADY -> FlashlightMode.STROBE
+    FlashlightMode.STROBE -> FlashlightMode.SOS
+    FlashlightMode.SOS -> FlashlightMode.STEADY
+}
+
 internal data class FlashlightPatternStep(
     val torchOn: Boolean,
     val durationMs: Long,
 )
 
 /** Returns the repeating on/off timing sequence for [mode], or empty for steady illumination. */
-internal fun flashlightPatternSteps(mode: FlashlightMode): List<FlashlightPatternStep> = when (mode) {
+internal fun flashlightPatternSteps(
+    mode: FlashlightMode,
+    strobeSpeed: StrobeSpeed = StrobeSpeed.NORMAL,
+): List<FlashlightPatternStep> = when (mode) {
     FlashlightMode.STEADY -> emptyList()
     FlashlightMode.STROBE -> listOf(
-        FlashlightPatternStep(torchOn = true, durationMs = 110L),
-        FlashlightPatternStep(torchOn = false, durationMs = 110L),
+        FlashlightPatternStep(torchOn = true, durationMs = strobeSpeed.stepMs),
+        FlashlightPatternStep(torchOn = false, durationMs = strobeSpeed.stepMs),
     )
     FlashlightMode.SOS -> {
         val unit = 180L

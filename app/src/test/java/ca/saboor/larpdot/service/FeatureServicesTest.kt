@@ -146,6 +146,7 @@ class FeatureServicesTest {
             flashlightBeamAccentColor = false,
             flashlightTapToToggle = false,
             flashlightAutoOffMinutes = 10,
+            flashlightStrobeSpeed = ca.saboor.larpdot.flashlight.StrobeSpeed.FAST,
             musicPauseTimeoutSeconds = 30,
             tapToExpand = true,
             hapticsEnabled = false,

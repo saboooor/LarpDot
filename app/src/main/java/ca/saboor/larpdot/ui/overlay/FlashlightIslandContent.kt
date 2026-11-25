@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.flashlight.FlashlightMode
 import ca.saboor.larpdot.flashlight.formatAutoOffRemaining
+import ca.saboor.larpdot.flashlight.nextFlashlightMode
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -307,6 +308,7 @@ internal fun ExpandedFlashlightContent(
     val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val autoOffRemainingMs by FlashlightController.autoOffRemainingMs.collectAsState()
+    val flashlightMode by FlashlightController.flashlightMode.collectAsState()
 
     if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
         ExpandedFlashlightSliderLayout(
@@ -317,6 +319,7 @@ internal fun ExpandedFlashlightContent(
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
             autoOffRemainingMs = autoOffRemainingMs,
+            flashlightMode = flashlightMode,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
             modifier = modifier,
@@ -330,10 +333,40 @@ internal fun ExpandedFlashlightContent(
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
             autoOffRemainingMs = autoOffRemainingMs,
+            flashlightMode = flashlightMode,
             onBeamClick = onBeamClick,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
             modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun FlashlightModeChip(
+    mode: FlashlightMode,
+    isFlashlightOn: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val active = isFlashlightOn && mode != FlashlightMode.STEADY
+    Box(
+        modifier = modifier
+            .background(
+                color = if (active) FlashlightWhite.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.09f),
+                shape = RoundedCornerShape(999.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = mode.label,
+            color = if (active) FlashlightWhite else FlashlightWhiteDim,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -384,10 +417,12 @@ private fun ExpandedFlashlightSliderLayout(
     showExpandedRadial: Boolean,
     topContentInset: Dp,
     autoOffRemainingMs: Long?,
+    flashlightMode: FlashlightMode,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
     val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
     Row(
         modifier = modifier.fillMaxSize().padding(
@@ -429,6 +464,14 @@ private fun ExpandedFlashlightSliderLayout(
                 inactiveTrackColor = accentColor.copy(alpha = 0.25f),
             ),
         )
+        FlashlightModeChip(
+            mode = flashlightMode,
+            isFlashlightOn = isFlashlightOn,
+            onClick = {
+                hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                FlashlightController.setMode(nextFlashlightMode(flashlightMode))
+            },
+        )
         if (isFlashlightOn && autoOffRemainingMs != null) {
             Text(
                 text = formatAutoOffRemaining(autoOffRemainingMs),
@@ -451,6 +494,7 @@ private fun ExpandedFlashlightBeamLayout(
     showExpandedRadial: Boolean,
     topContentInset: Dp,
     autoOffRemainingMs: Long?,
+    flashlightMode: FlashlightMode,
     onBeamClick: (() -> Unit)?,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
@@ -684,6 +728,18 @@ private fun ExpandedFlashlightBeamLayout(
                     cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f),
                 )
             }
+
+            FlashlightModeChip(
+                mode = flashlightMode,
+                isFlashlightOn = isFlashlightOn,
+                onClick = {
+                    hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
+                    FlashlightController.setMode(nextFlashlightMode(flashlightMode))
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 10.dp),
+            )
 
             if (isFlashlightOn && autoOffRemainingMs != null) {
                 Text(

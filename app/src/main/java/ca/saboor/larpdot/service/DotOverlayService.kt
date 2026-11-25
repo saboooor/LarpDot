@@ -10,7 +10,7 @@ import android.view.WindowManager
 import ca.saboor.larpdot.flashlight.FlashlightController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
  */
 class DotOverlayService : Service() {
     private var overlayController: IslandOverlayViewController? = null
-    private var serviceJob = Job()
+    private var serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
     private val flashlightBroadcast = FlashlightBroadcastRegistration()

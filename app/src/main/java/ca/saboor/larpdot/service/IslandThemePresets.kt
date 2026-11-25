@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.content.Context
+import ca.saboor.larpdot.flashlight.StrobeSpeed
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
@@ -67,6 +68,7 @@ data class IslandBackupConfig(
     val flashlightBeamAccentColor: Boolean = true,
     val flashlightTapToToggle: Boolean = true,
     val flashlightAutoOffMinutes: Int = 0,
+    val flashlightStrobeSpeed: StrobeSpeed = StrobeSpeed.NORMAL,
     val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
     val tapToExpand: Boolean = false,
     val hapticsEnabled: Boolean = true,
@@ -445,6 +447,7 @@ object IslandThemePresets {
             add("flashlightBeamAccentColor" to config.flashlightBeamAccentColor.toString())
             add("flashlightTapToToggle" to config.flashlightTapToToggle.toString())
             add("flashlightAutoOffMinutes" to config.flashlightAutoOffMinutes.toString())
+            add("flashlightStrobeSpeed" to quote(config.flashlightStrobeSpeed.name))
             add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
             add("tapToExpand" to config.tapToExpand.toString())
             add("hapticsEnabled" to config.hapticsEnabled.toString())
@@ -581,6 +584,7 @@ object IslandThemePresets {
             flashlightBeamAccentColor = fields["flashlightBeamAccentColor"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamAccentColor,
             flashlightTapToToggle = fields["flashlightTapToToggle"]?.toBooleanStrictOrNull() ?: defaults.flashlightTapToToggle,
             flashlightAutoOffMinutes = (fields["flashlightAutoOffMinutes"]?.toIntOrNull() ?: defaults.flashlightAutoOffMinutes).coerceIn(0, 60),
+            flashlightStrobeSpeed = enumOrDefault(fields["flashlightStrobeSpeed"], defaults.flashlightStrobeSpeed),
             musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
             tapToExpand = fields["tapToExpand"]?.toBooleanStrictOrNull() ?: defaults.tapToExpand,
             hapticsEnabled = fields["hapticsEnabled"]?.toBooleanStrictOrNull() ?: defaults.hapticsEnabled,
@@ -722,6 +726,7 @@ object IslandThemePresets {
             flashlightBeamAccentColor = OverlayPreferences.isFlashlightBeamAccentColorEnabled(context),
             flashlightTapToToggle = OverlayPreferences.isFlashlightTapToToggleEnabled(context),
             flashlightAutoOffMinutes = OverlayPreferences.getFlashlightAutoOffMinutes(context),
+            flashlightStrobeSpeed = OverlayPreferences.getFlashlightStrobeSpeed(context),
             musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
             tapToExpand = OverlayPreferences.isTapToExpandEnabled(context),
             hapticsEnabled = OverlayPreferences.isHapticsEnabled(context),
@@ -780,6 +785,7 @@ object IslandThemePresets {
         OverlayPreferences.setMinimizedMaxWidthPercent(context, config.minimizedMaxWidthPercent)
         OverlayPreferences.setFlashlightTapToToggleEnabled(context, config.flashlightTapToToggle)
         OverlayPreferences.setFlashlightAutoOffMinutes(context, config.flashlightAutoOffMinutes)
+        OverlayPreferences.setFlashlightStrobeSpeed(context, config.flashlightStrobeSpeed)
         OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
         OverlayPreferences.setTapToExpandEnabled(context, config.tapToExpand)
         OverlayPreferences.setHapticsEnabled(context, config.hapticsEnabled)

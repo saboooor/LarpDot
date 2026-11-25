@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +30,7 @@ import kotlinx.coroutines.launch
  */
 class DotAccessibilityService : AccessibilityService() {
     private var overlayController: IslandOverlayViewController? = null
-    private var serviceJob = Job()
+    private var serviceJob = SupervisorJob()
     private var serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
     private val flashlightBroadcast = FlashlightBroadcastRegistration()
@@ -100,7 +101,7 @@ class DotAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         serviceJob.cancel()
-        serviceJob = Job()
+        serviceJob = SupervisorJob()
         serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
         instance = this
         _isServiceConnected.value = true

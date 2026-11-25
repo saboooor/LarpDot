@@ -29,6 +29,7 @@ class LarpDotApplication : Application() {
         OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(this)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(this)
         OverlayPreferences.getFlashlightAutoOffMinutes(this)
+        OverlayPreferences.getFlashlightStrobeSpeed(this)
         OverlayPreferences.isHapticsEnabled(this)
         OverlayPreferences.getExpandedAutoCollapseSeconds(this)
         OverlayPreferences.isHideWhenScreenOffEnabled(this)

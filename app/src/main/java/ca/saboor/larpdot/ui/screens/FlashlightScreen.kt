@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.flashlight.FlashlightMode
+import ca.saboor.larpdot.flashlight.StrobeSpeed
 import ca.saboor.larpdot.flashlight.formatAutoOffRemaining
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
@@ -146,6 +147,7 @@ fun FlashlightScreen(
     val showExpandedOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val tapToToggle by OverlayPreferences.flashlightTapToToggleFlow.collectAsState()
     val autoOffMinutes by OverlayPreferences.flashlightAutoOffMinutesFlow.collectAsState()
+    val strobeSpeed by OverlayPreferences.flashlightStrobeSpeedFlow.collectAsState()
     val flashlightMode by FlashlightController.flashlightMode.collectAsState()
     val autoOffRemainingMs by FlashlightController.autoOffRemainingMs.collectAsState()
 
@@ -160,6 +162,7 @@ fun FlashlightScreen(
         OverlayPreferences.isFlashlightTapToToggleEnabled(context)
         OverlayPreferences.isFlashlightBoostEnabled(context)
         OverlayPreferences.getFlashlightAutoOffMinutes(context)
+        OverlayPreferences.getFlashlightStrobeSpeed(context)
     }
 
     AnimatedContent(
@@ -245,6 +248,7 @@ fun FlashlightScreen(
                 showExpandedOutline = showExpandedOutline,
                 tapToToggle = tapToToggle,
                 autoOffMinutes = autoOffMinutes,
+                strobeSpeed = strobeSpeed,
                 flashlightMode = flashlightMode,
                 autoOffRemainingMs = autoOffRemainingMs,
                 isFlashlightOn = isFlashlightOn,
@@ -332,6 +336,7 @@ private fun FlashlightSettingsPage(
     showExpandedOutline: Boolean,
     tapToToggle: Boolean,
     autoOffMinutes: Int,
+    strobeSpeed: StrobeSpeed,
     flashlightMode: FlashlightMode,
     autoOffRemainingMs: Long?,
     isFlashlightOn: Boolean,
@@ -481,6 +486,23 @@ private fun FlashlightSettingsPage(
                                     checked = flashlightMode == mode && (mode == FlashlightMode.STEADY || isFlashlightOn),
                                     label = mode.label,
                                     onCheckedChange = { FlashlightController.setMode(mode) },
+                                )
+                            },
+                        )
+                        Text(
+                            text = "Strobe Speed",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LarpConnectedButtons(
+                            options = StrobeSpeed.entries.map { speed ->
+                                LarpButtonOption(
+                                    checked = strobeSpeed == speed,
+                                    label = speed.label,
+                                    onCheckedChange = {
+                                        OverlayPreferences.setFlashlightStrobeSpeed(context, speed)
+                                        FlashlightController.refreshStrobeSpeed()
+                                    },
                                 )
                             },
                         )

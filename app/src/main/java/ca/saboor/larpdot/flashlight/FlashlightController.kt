@@ -318,7 +318,8 @@ object FlashlightController {
             }
             return
         }
-        val steps = flashlightPatternSteps(mode)
+        val speed = appContext?.let(OverlayPreferences::getFlashlightStrobeSpeed) ?: StrobeSpeed.NORMAL
+        val steps = flashlightPatternSteps(mode, speed)
         if (steps.isEmpty()) return
         _lastError.value = null
         if (boostRequested) stopBoost()
@@ -331,6 +332,12 @@ object FlashlightController {
         _flashlightMode.value = mode
         notifyState(true)
         handler.post(patternRunner)
+    }
+
+    fun refreshStrobeSpeed() {
+        if (patternActive && _flashlightMode.value == FlashlightMode.STROBE) {
+            setMode(FlashlightMode.STROBE)
+        }
     }
 
     private fun stopPattern() {

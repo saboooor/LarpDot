@@ -50,7 +50,7 @@ class FlashlightTileService : TileService() {
             syncTile()
             return
         }
-        FlashlightController.setTorch(!FlashlightController.isFlashlightOn.value)
+        FlashlightController.toggleFlashlight()
         syncTile()
     }
 

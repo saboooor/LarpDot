@@ -41,7 +41,7 @@ import kotlin.math.max
  */
 class AudioCaptureService : Service() {
 
-    private var serviceJob = Job()
+    private var serviceJob = kotlinx.coroutines.SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     private var mediaProjection: MediaProjection? = null

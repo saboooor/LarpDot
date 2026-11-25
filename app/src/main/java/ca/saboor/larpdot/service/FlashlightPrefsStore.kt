@@ -2,6 +2,7 @@ package ca.saboor.larpdot.service
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import ca.saboor.larpdot.flashlight.StrobeSpeed
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +20,11 @@ internal object FlashlightPrefsStore {
     private val beamBlur = BooleanPref(KEY_FLASHLIGHT_BEAM_BLUR, false)
     private val beamAccentColor = BooleanPref("flashlight_beam_accent_color", true)
     private val autoOffMinutes = IntPref("flashlight_auto_off_minutes", 0, 0, 60)
+    private val strobeSpeed = EnumPref(
+        key = "flashlight_strobe_speed",
+        default = StrobeSpeed.NORMAL,
+        parse = { saved -> StrobeSpeed.entries.firstOrNull { it.name == saved } ?: StrobeSpeed.NORMAL },
+    )
 
     private val _flashlightExpandedStyleFlow = MutableStateFlow(OverlayPreferences.FlashlightExpandedStyle.BEAM)
     val flashlightExpandedStyleFlow: StateFlow<OverlayPreferences.FlashlightExpandedStyle> =
@@ -32,6 +38,7 @@ internal object FlashlightPrefsStore {
     val flashlightBeamBlurFlow: StateFlow<Boolean> get() = beamBlur.flow
     val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = beamAccentColor.flow
     val flashlightAutoOffMinutesFlow: StateFlow<Int> get() = autoOffMinutes.flow
+    val flashlightStrobeSpeedFlow: StateFlow<StrobeSpeed> get() = strobeSpeed.flow
 
     fun getFlashlightExpandedStyle(prefs: SharedPreferences): OverlayPreferences.FlashlightExpandedStyle {
         val saved = prefs.getString(KEY_FLASHLIGHT_EXPANDED_STYLE, null)
@@ -82,4 +89,7 @@ internal object FlashlightPrefsStore {
 
     fun getAutoOffMinutes(prefs: SharedPreferences): Int = autoOffMinutes.get(prefs)
     fun setAutoOffMinutes(prefs: SharedPreferences, minutes: Int) = autoOffMinutes.set(prefs, minutes)
+
+    fun getStrobeSpeed(prefs: SharedPreferences): StrobeSpeed = strobeSpeed.get(prefs)
+    fun setStrobeSpeed(prefs: SharedPreferences, speed: StrobeSpeed) = strobeSpeed.set(prefs, speed)
 }

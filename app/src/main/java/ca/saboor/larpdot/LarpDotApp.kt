@@ -49,8 +49,10 @@ import androidx.compose.ui.unit.dp
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.navigation.Destination
+import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.screens.AppearanceScreen
 import ca.saboor.larpdot.ui.screens.CustomIslandScreen
@@ -71,6 +73,9 @@ fun LarpDotApp() {
     val selectedDestination = Destination.valueOf(selectedDestinationName)
 
     val isEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
+    val isAccessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
+    val hideInDnd by OverlayPreferences.hideInDndFlow.collectAsState()
+    val isDndActive by SystemEventManager.isDoNotDisturbActive.collectAsState()
     var showSetupDialog by remember { mutableStateOf(false) }
 
     val cutoutConfig by OverlayPreferences.cutoutConfigFlow.collectAsState()
@@ -138,13 +143,18 @@ fun LarpDotApp() {
             topBar = {
                 TopAppBar(
                     title = {
-                        val hasAccessibility = ca.saboor.larpdot.service.DotAccessibilityService.isAccessibilityEnabled(context)
-                        val statusText = if (!isEnabled) {
-                            "STANDBY"
-                        } else if (hasAccessibility) {
-                            "SHADE & LOCK ON"
-                        } else {
-                            "OVERLAY ON"
+                        val hasAccessibility = isAccessibilityConnected ||
+                            DotAccessibilityService.isAccessibilityEnabled(context)
+                        val statusText = when {
+                            !isEnabled -> "STANDBY"
+                            hideInDnd && isDndActive -> "PAUSED • DND"
+                            hasAccessibility -> "SHADE & LOCK ON"
+                            else -> "OVERLAY ON"
+                        }
+                        val statusColor = when (statusText) {
+                            "STANDBY" -> MaterialTheme.colorScheme.outline
+                            "PAUSED • DND" -> Color(0xFF9C7CF8)
+                            else -> Color(0xFF00E676)
                         }
 
                         Column {
@@ -158,7 +168,7 @@ fun LarpDotApp() {
                                     text = status,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (status == "STANDBY") MaterialTheme.colorScheme.outline else Color(0xFF00E676),
+                                    color = statusColor,
                                 )
                             }
                         }
