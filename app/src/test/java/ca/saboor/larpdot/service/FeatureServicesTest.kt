@@ -154,6 +154,7 @@ class FeatureServicesTest {
             expandedAutoCollapseSeconds = 15,
             holdToExpandDurationMs = 550,
             swipeDownSensitivity = ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity.EASY,
+            animationSpeed = OverlayPreferences.AnimationSpeed.SNAPPY,
             hideWhenScreenOff = false,
             hideOnLockScreen = true,
             hideInFullscreen = true,
@@ -228,6 +229,56 @@ class FeatureServicesTest {
             assertTrue(preset.tagline.isNotBlank())
             assertEquals(preset.style, IslandThemePresets.fromJson(IslandThemePresets.toJson(preset.style)))
         }
+
+        // User theme presets encode/decode round-trip and auto-summary
+        val customPresets = listOf(
+            IslandThemePreset(
+                id = "user_1",
+                name = "Midnight Glass",
+                tagline = IslandThemePresets.summarizePresetStyle(
+                    IslandBackupConfig(
+                        bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
+                        backdropBlurEnabled = true,
+                        islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
+                    ),
+                ),
+                style = IslandBackupConfig(
+                    bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
+                    backdropBlurEnabled = true,
+                    islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
+                    islandCornerRadius = 42f,
+                ),
+            ),
+            IslandThemePreset(
+                id = "user_2",
+                name = "Clean Pill",
+                tagline = IslandThemePresets.summarizePresetStyle(
+                    IslandBackupConfig(
+                        bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
+                        backdropBlurEnabled = false,
+                        expandedBackgroundOpacity = 0.75f,
+                        islandFontStyle = OverlayPreferences.IslandFontStyle.MONOSPACE,
+                    ),
+                ),
+                style = IslandBackupConfig(
+                    bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
+                    backdropBlurEnabled = false,
+                    expandedBackgroundOpacity = 0.75f,
+                    islandFontStyle = OverlayPreferences.IslandFontStyle.MONOSPACE,
+                ),
+            ),
+        )
+        assertEquals("Material 3 • Blur • Rounded", customPresets[0].tagline)
+        assertEquals("iPhone • 75% alpha • Mono", customPresets[1].tagline)
+        val encoded = IslandThemePresets.encodeUserPresets(customPresets)
+        assertEquals(customPresets, IslandThemePresets.decodeUserPresets(encoded))
+        assertTrue(IslandThemePresets.decodeUserPresets("malformed\tline\n").isEmpty())
+
+        // Animation speed scaling clamps cleanly
+        assertEquals(259, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.SNAPPY.durationMultiplier))
+        assertEquals(360, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.DEFAULT.durationMultiplier))
+        assertEquals(475, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.SMOOTH.durationMultiplier))
+        assertEquals(60, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(50, 0.5f))
     }
 
     @Test fun fullscreenAccessibilityThrottleCoalescesRapidBursts() {

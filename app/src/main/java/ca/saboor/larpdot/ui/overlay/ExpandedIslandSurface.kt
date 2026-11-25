@@ -71,10 +71,11 @@ private val islandMorphEasing = Easing { fraction ->
     islandMorphCurve.transform(curveFraction)
 }
 private val minimizeStretchEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
-private val islandMinimizeStretch = keyframes {
-    durationMillis = 525
-    0f at 50 using minimizeStretchEasing
-    0.12f at 325 using minimizeStretchEasing
+private fun islandMinimizeStretch(speedMultiplier: Float = 1f) = keyframes {
+    val scale = speedMultiplier.coerceIn(0.5f, 2.0f)
+    durationMillis = (525 * scale).toInt().coerceAtLeast(180)
+    0f at (50 * scale).toInt().coerceAtLeast(16) using minimizeStretchEasing
+    0.12f at (325 * scale).toInt().coerceAtLeast(90) using minimizeStretchEasing
 }
 
 // Reach zero with zero velocity while matching the original slope outside the eased range.
@@ -144,11 +145,15 @@ internal fun IslandSurfaceOverlay(
         } else {
             collapseFrom = expansion
         }
+        val speedMultiplier = OverlayPreferences.animationSpeedFlow.value.durationMultiplier
         val target = if (isExpanded) 1f else 0f
         val currentClamped = morphProgress.value.coerceIn(0f, 1f)
         val remaining = (if (isExpanded) 1f - currentClamped else currentClamped).coerceIn(0.28f, 1f)
         val contentDuration = (ISLAND_MORPH_DURATION_MS * remaining).toInt().coerceAtLeast(140)
-        val shellDuration = (ISLAND_SHELL_MORPH_DURATION_MS * remaining).toInt().coerceAtLeast(180)
+        val shellDuration = LarpMotion.scaleIslandDuration(
+            baseMillis = (ISLAND_SHELL_MORPH_DURATION_MS * remaining).toInt().coerceAtLeast(180),
+            multiplier = speedMultiplier,
+        )
         val contentAnimation = launch {
             contentProgress.animateTo(
                 targetValue = target,
@@ -156,7 +161,7 @@ internal fun IslandSurfaceOverlay(
             )
         }
         val stretchAnimation = if (!isExpanded && currentClamped > 0.6f) launch {
-            minimizeStretch.animateTo(0f, animationSpec = islandMinimizeStretch)
+            minimizeStretch.animateTo(0f, animationSpec = islandMinimizeStretch(speedMultiplier))
         } else null
         morphProgress.animateTo(
             targetValue = target,

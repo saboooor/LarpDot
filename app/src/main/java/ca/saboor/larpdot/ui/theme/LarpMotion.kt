@@ -40,8 +40,13 @@ internal object LarpMotion {
 
     fun <T> fade(durationMillis: Int = 240) = timing<T>(durationMillis)
 
+    fun scaleIslandDuration(
+        baseMillis: Int,
+        multiplier: Float = ca.saboor.larpdot.service.OverlayPreferences.animationSpeedFlow.value.durationMultiplier,
+    ): Int = (baseMillis * multiplier.coerceIn(0.5f, 2.0f)).roundToInt().coerceAtLeast(60)
+
     fun <T> islandVisibility(durationMillis: Int = 360) =
-        tween<T>(durationMillis = durationMillis, easing = islandVisibilityEasing)
+        tween<T>(durationMillis = scaleIslandDuration(durationMillis), easing = islandVisibilityEasing)
 
     fun <T> quickSpring(dampingRatio: Float, stiffness: Float, visibilityThreshold: T? = null) =
         spring(dampingRatio, stiffness / (durationScale * durationScale), visibilityThreshold)

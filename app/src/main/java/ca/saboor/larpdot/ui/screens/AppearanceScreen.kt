@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,8 +74,12 @@ fun AppearanceScreen(
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
+    val animationSpeed by OverlayPreferences.animationSpeedFlow.collectAsState()
+    val userPresets by IslandThemePresets.userPresets.collectAsState()
     val blurStatus = rememberBackdropBlurStatus()
     var showResetDialog by remember { mutableStateOf(false) }
+    var showSavePresetDialog by remember { mutableStateOf(false) }
+    var newPresetName by remember { mutableStateOf("") }
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -115,6 +121,7 @@ fun AppearanceScreen(
         OverlayPreferences.loadIslandAppearance(context)
         OverlayPreferences.getBubbleStyle(context)
         OverlayPreferences.areSmallerBubblesEnabled(context)
+        IslandThemePresets.loadUserPresets(context)
     }
 
     LazyColumn(
@@ -125,11 +132,105 @@ fun AppearanceScreen(
         item {
             SectionHeader(title = "Quick Presets")
             LarpCard {
-                Text(
-                    text = "Apply a curated visual look without changing your cutout calibration or notifications",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Apply a visual look without changing your cutout calibration or notifications",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            newPresetName = ""
+                            showSavePresetDialog = true
+                        },
+                    ) {
+                        Icon(LarpIcons.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Save")
+                    }
+                }
+                if (userPresets.isNotEmpty()) {
+                    Text(
+                        text = "Saved by you",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        items(userPresets, key = { it.id }) { preset ->
+                            Surface(
+                                onClick = {
+                                    IslandThemePresets.applyThemePreset(context, preset)
+                                    Toast.makeText(context, "Applied ${preset.name}", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                                modifier = Modifier.width(184.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 10.dp, end = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Icon(
+                                                imageVector = LarpIcons.StarBorder,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(15.dp),
+                                            )
+                                            Text(
+                                                text = preset.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                IslandThemePresets.deleteUserPreset(context, preset.id)
+                                                Toast.makeText(context, "Deleted ${preset.name}", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(28.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = LarpIcons.DeleteOutline,
+                                                contentDescription = "Delete ${preset.name}",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = preset.tagline,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    LarpDivider()
+                }
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth(),
@@ -348,6 +449,32 @@ fun AppearanceScreen(
         }
 
         item {
+            SectionHeader(title = "Motion")
+            LarpCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Island Animation Speed",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = animationSpeed.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LarpConnectedButtons(
+                        options = OverlayPreferences.AnimationSpeed.entries.map { option ->
+                            LarpButtonOption(
+                                checked = animationSpeed == option,
+                                label = option.label,
+                                onCheckedChange = { OverlayPreferences.setAnimationSpeed(context, option) },
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        item {
             SectionHeader(title = "Backup")
             LarpCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -425,6 +552,51 @@ fun AppearanceScreen(
                 }
             }
         }
+    }
+
+    if (showSavePresetDialog) {
+        val trimmedName = newPresetName.trim()
+        AlertDialog(
+            onDismissRequest = { showSavePresetDialog = false },
+            icon = { Icon(LarpIcons.Palette, contentDescription = null) },
+            title = { Text("Save custom preset") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Saves your current visual theme so you can switch back to it in one tap.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = newPresetName,
+                        onValueChange = { if (it.length <= 32) newPresetName = it },
+                        label = { Text("Preset name") },
+                        placeholder = { Text("e.g. Midnight Glass") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = trimmedName.isNotEmpty(),
+                    onClick = {
+                        val saved = IslandThemePresets.saveCurrentAsUserPreset(context, trimmedName)
+                        showSavePresetDialog = false
+                        if (saved != null) {
+                            Toast.makeText(context, "Saved \"${saved.name}\"", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSavePresetDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     if (showResetDialog) {

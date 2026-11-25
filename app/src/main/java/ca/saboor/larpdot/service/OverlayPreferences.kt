@@ -27,6 +27,7 @@ object OverlayPreferences {
     const val DEFAULT_MUSIC_QUICK_SEEK_SECONDS = 10
     private const val KEY_TAP_TO_EXPAND = "tap_to_expand"
     private const val KEY_SWIPE_DOWN_SENSITIVITY = "swipe_down_sensitivity"
+    private const val KEY_ANIMATION_SPEED = "island_animation_speed"
     private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
     private const val KEY_EXPANDED_AUTO_COLLAPSE_SECONDS = "expanded_auto_collapse_seconds"
     const val DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS = 0
@@ -161,6 +162,22 @@ object OverlayPreferences {
     enum class BubbleStyle(val label: String) {
         IPHONE("iPhone"),
         MATERIAL_3("Material 3"),
+    }
+
+    enum class AnimationSpeed(
+        val key: String,
+        val label: String,
+        val description: String,
+        val durationMultiplier: Float,
+    ) {
+        SNAPPY("snappy", "Snappy", "Faster expand, collapse, and pill transitions", 0.72f),
+        DEFAULT("default", "Default", "Balanced Dynamic Island motion timing", 1.0f),
+        SMOOTH("smooth", "Smooth", "Slower, silkier expand and morph transitions", 1.32f);
+
+        companion object {
+            fun fromKey(key: String?): AnimationSpeed =
+                entries.firstOrNull { it.key == key || it.name == key } ?: DEFAULT
+        }
     }
 
     enum class AlbumArtStyle(val label: String) {
@@ -356,6 +373,12 @@ object OverlayPreferences {
         parse = ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity::fromKey,
         serialize = { it.key },
     )
+    private val animationSpeedPref = EnumPref(
+        KEY_ANIMATION_SPEED,
+        AnimationSpeed.DEFAULT,
+        parse = AnimationSpeed::fromKey,
+        serialize = { it.key },
+    )
     private val bubbleStylePref = EnumPref(
         KEY_BUBBLE_STYLE,
         BubbleStyle.IPHONE,
@@ -488,6 +511,7 @@ object OverlayPreferences {
     val holdToExpandDurationMsFlow: StateFlow<Int> = holdToExpandDurationMsPref.flow
     val swipeDownSensitivityFlow: StateFlow<ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity> =
         swipeDownSensitivityPref.flow
+    val animationSpeedFlow: StateFlow<AnimationSpeed> = animationSpeedPref.flow
     val bubbleStyleFlow: StateFlow<BubbleStyle> = bubbleStylePref.flow
     val smallerBubblesFlow: StateFlow<Boolean> = smallerBubblesPref.flow
     val showMinimizedTitleFlow: StateFlow<Boolean> = showMinimizedTitlePref.flow
@@ -599,6 +623,7 @@ object OverlayPreferences {
         getExpandedAutoCollapseSeconds(context)
         getHoldToExpandDurationMs(context)
         getSwipeDownSensitivity(context)
+        getAnimationSpeed(context)
     }
 
     fun initializeMusicSettings(context: Context) {
@@ -668,6 +693,9 @@ object OverlayPreferences {
         swipeDownSensitivityPref.get(getPrefs(context))
     fun setSwipeDownSensitivity(context: Context, sensitivity: ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity) =
         swipeDownSensitivityPref.set(getPrefs(context), sensitivity)
+
+    fun getAnimationSpeed(context: Context): AnimationSpeed = animationSpeedPref.get(getPrefs(context))
+    fun setAnimationSpeed(context: Context, speed: AnimationSpeed) = animationSpeedPref.set(getPrefs(context), speed)
 
     fun getBubbleStyle(context: Context): BubbleStyle = bubbleStylePref.get(getPrefs(context))
     fun setBubbleStyle(context: Context, style: BubbleStyle) = bubbleStylePref.set(getPrefs(context), style)

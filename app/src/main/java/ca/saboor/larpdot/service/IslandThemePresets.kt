@@ -1,12 +1,18 @@
 package ca.saboor.larpdot.service
 
 import android.content.Context
+import androidx.core.content.edit
 import ca.saboor.larpdot.flashlight.StrobeSpeed
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
 import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder
+import java.util.UUID
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class IslandBackupConfig(
     val bubbleStyle: OverlayPreferences.BubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
@@ -77,6 +83,7 @@ data class IslandBackupConfig(
     val expandedAutoCollapseSeconds: Int = OverlayPreferences.DEFAULT_EXPANDED_AUTO_COLLAPSE_SECONDS,
     val holdToExpandDurationMs: Int = OverlayPreferences.DEFAULT_HOLD_TO_EXPAND_DURATION_MS,
     val swipeDownSensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
+    val animationSpeed: OverlayPreferences.AnimationSpeed = OverlayPreferences.AnimationSpeed.DEFAULT,
     val hideWhenScreenOff: Boolean = true,
     val hideOnLockScreen: Boolean = false,
     val hideInFullscreen: Boolean = false,
@@ -132,6 +139,96 @@ data class IslandThemePreset(
 
 object IslandThemePresets {
     private const val BACKUP_VERSION = 4
+    private const val USER_PRESETS_PREFS = "larpdot_user_theme_presets"
+    private const val KEY_USER_PRESETS = "saved_presets_v1"
+    const val MAX_USER_PRESETS = 12
+
+    private val _userPresets = MutableStateFlow<List<IslandThemePreset>>(emptyList())
+    val userPresets: StateFlow<List<IslandThemePreset>> = _userPresets.asStateFlow()
+    private var userPresetsLoaded = false
+
+    fun loadUserPresets(context: Context): List<IslandThemePreset> {
+        if (!userPresetsLoaded) {
+            val raw = context.applicationContext
+                .getSharedPreferences(USER_PRESETS_PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_USER_PRESETS, null)
+            _userPresets.value = decodeUserPresets(raw)
+            userPresetsLoaded = true
+        }
+        return _userPresets.value
+    }
+
+    fun saveCurrentAsUserPreset(context: Context, rawName: String): IslandThemePreset? {
+        val name = rawName.trim().replace('\t', ' ').replace('\n', ' ').take(32)
+        if (name.isEmpty()) return null
+        val current = fromJson(exportFromPreferences(context)) ?: IslandBackupConfig()
+        val preset = IslandThemePreset(
+            id = "user_${UUID.randomUUID().toString().take(8)}",
+            name = name,
+            tagline = summarizePresetStyle(current),
+            style = current,
+        )
+        val existing = loadUserPresets(context)
+        val updated = (listOf(preset) + existing.filterNot { it.name.equals(name, ignoreCase = true) })
+            .take(MAX_USER_PRESETS)
+        persistUserPresets(context, updated)
+        return preset
+    }
+
+    fun deleteUserPreset(context: Context, id: String) {
+        val updated = loadUserPresets(context).filterNot { it.id == id }
+        persistUserPresets(context, updated)
+    }
+
+    private fun persistUserPresets(context: Context, presets: List<IslandThemePreset>) {
+        _userPresets.value = presets
+        userPresetsLoaded = true
+        context.applicationContext
+            .getSharedPreferences(USER_PRESETS_PREFS, Context.MODE_PRIVATE)
+            .edit { putString(KEY_USER_PRESETS, encodeUserPresets(presets)) }
+    }
+
+    internal fun summarizePresetStyle(config: IslandBackupConfig): String {
+        val surface = if (config.backdropBlurEnabled) {
+            "Blur"
+        } else {
+            val alphaPct = (config.expandedBackgroundOpacity.coerceIn(0f, 1f) * 100f).roundToInt()
+            if (alphaPct >= 100) "Solid" else "$alphaPct% alpha"
+        }
+        return "${config.bubbleStyle.label} • $surface • ${config.islandFontStyle.label}"
+    }
+
+    internal fun encodeUserPresets(presets: List<IslandThemePreset>): String =
+        presets.take(MAX_USER_PRESETS).joinToString(separator = "\n") { preset ->
+            val cleanId = preset.id.replace('\t', '_').replace('\n', '_')
+            val cleanName = preset.name.trim().replace('\t', ' ').replace('\n', ' ')
+            val cleanTagline = preset.tagline.trim().replace('\t', ' ').replace('\n', ' ')
+            val compactJson = toJson(preset.style).replace("\n", " ").replace('\t', ' ')
+            "$cleanId\t$cleanName\t$cleanTagline\t$compactJson"
+        }
+
+    internal fun decodeUserPresets(raw: String?): List<IslandThemePreset> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.lineSequence()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val parts = line.split('\t', limit = 4)
+                if (parts.size < 4) return@mapNotNull null
+                val id = parts[0].trim()
+                val name = parts[1].trim()
+                val tagline = parts[2].trim()
+                val style = fromJson(parts[3]) ?: return@mapNotNull null
+                if (id.isEmpty() || name.isEmpty()) return@mapNotNull null
+                IslandThemePreset(
+                    id = id,
+                    name = name,
+                    tagline = tagline.ifEmpty { summarizePresetStyle(style) },
+                    style = style,
+                )
+            }
+            .take(MAX_USER_PRESETS)
+            .toList()
+    }
 
     val builtInPresets: List<IslandThemePreset> = listOf(
         IslandThemePreset(
@@ -458,6 +555,7 @@ object IslandThemePresets {
             add("expandedAutoCollapseSeconds" to config.expandedAutoCollapseSeconds.toString())
             add("holdToExpandDurationMs" to config.holdToExpandDurationMs.toString())
             add("swipeDownSensitivity" to quote(config.swipeDownSensitivity.name))
+            add("animationSpeed" to quote(config.animationSpeed.name))
             add("hideWhenScreenOff" to config.hideWhenScreenOff.toString())
             add("hideOnLockScreen" to config.hideOnLockScreen.toString())
             add("hideInFullscreen" to config.hideInFullscreen.toString())
@@ -599,6 +697,7 @@ object IslandThemePresets {
             holdToExpandDurationMs = (fields["holdToExpandDurationMs"]?.toIntOrNull() ?: defaults.holdToExpandDurationMs)
                 .coerceIn(OverlayPreferences.MIN_HOLD_TO_EXPAND_DURATION_MS, OverlayPreferences.MAX_HOLD_TO_EXPAND_DURATION_MS),
             swipeDownSensitivity = enumOrDefault(fields["swipeDownSensitivity"], defaults.swipeDownSensitivity),
+            animationSpeed = enumOrDefault(fields["animationSpeed"], defaults.animationSpeed),
             hideWhenScreenOff = fields["hideWhenScreenOff"]?.toBooleanStrictOrNull() ?: defaults.hideWhenScreenOff,
             hideOnLockScreen = fields["hideOnLockScreen"]?.toBooleanStrictOrNull() ?: defaults.hideOnLockScreen,
             hideInFullscreen = fields["hideInFullscreen"]?.toBooleanStrictOrNull() ?: defaults.hideInFullscreen,
@@ -741,6 +840,7 @@ object IslandThemePresets {
             expandedAutoCollapseSeconds = OverlayPreferences.getExpandedAutoCollapseSeconds(context),
             holdToExpandDurationMs = OverlayPreferences.getHoldToExpandDurationMs(context),
             swipeDownSensitivity = OverlayPreferences.getSwipeDownSensitivity(context),
+            animationSpeed = OverlayPreferences.getAnimationSpeed(context),
             hideWhenScreenOff = OverlayPreferences.isHideWhenScreenOffEnabled(context),
             hideOnLockScreen = OverlayPreferences.isHideOnLockScreenEnabled(context),
             hideInFullscreen = OverlayPreferences.isHideInFullscreenEnabled(context),
@@ -802,6 +902,7 @@ object IslandThemePresets {
         OverlayPreferences.setExpandedAutoCollapseSeconds(context, config.expandedAutoCollapseSeconds)
         OverlayPreferences.setHoldToExpandDurationMs(context, config.holdToExpandDurationMs)
         OverlayPreferences.setSwipeDownSensitivity(context, config.swipeDownSensitivity)
+        OverlayPreferences.setAnimationSpeed(context, config.animationSpeed)
         OverlayPreferences.setHideWhenScreenOffEnabled(context, config.hideWhenScreenOff)
         OverlayPreferences.setHideOnLockScreenEnabled(context, config.hideOnLockScreen)
         OverlayPreferences.setHideInFullscreenEnabled(context, config.hideInFullscreen)
