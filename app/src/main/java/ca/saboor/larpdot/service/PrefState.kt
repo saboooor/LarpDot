@@ -47,8 +47,11 @@ internal class FloatPref(
     val flow: StateFlow<Float> = _flow.asStateFlow()
     private var initialized = false
 
+    private fun sanitize(raw: Float): Float =
+        if (raw.isFinite()) raw.coerceIn(min, max) else default.coerceIn(min, max)
+
     fun reload(prefs: SharedPreferences): Float {
-        val value = prefs.getFloat(key, default).coerceIn(min, max)
+        val value = sanitize(prefs.getFloat(key, default))
         _flow.value = value
         initialized = true
         return value
@@ -57,7 +60,7 @@ internal class FloatPref(
     fun get(prefs: SharedPreferences): Float = if (!initialized) reload(prefs) else _flow.value
 
     fun set(prefs: SharedPreferences, value: Float) {
-        val clamped = value.coerceIn(min, max)
+        val clamped = sanitize(value)
         prefs.edit { putFloat(key, clamped) }
         _flow.value = clamped
         initialized = true
