@@ -13,9 +13,9 @@ import java.util.UUID
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
 
-private val batteryServiceUuid = bluetoothUuid("180d")
-private val batteryLevelUuid = bluetoothUuid("2a19")
-private val presentationFormatUuid = bluetoothUuid("2904")
+internal val BATTERY_SERVICE_UUID: UUID = bluetoothUuid("180f")
+internal val BATTERY_LEVEL_UUID: UUID = bluetoothUuid("2a19")
+internal val PRESENTATION_FORMAT_UUID: UUID = bluetoothUuid("2904")
 internal const val EARBUD_BATTERY_READ_TIMEOUT_MS = 3_000L
 
 private fun bluetoothUuid(id: String): UUID = UUID.fromString("0000$id-0000-1000-8000-00805f9b34fb")
@@ -97,9 +97,9 @@ internal suspend fun readEarbudBatteryLevels(context: Context, device: Bluetooth
                 ) return@withTimeoutOrNull
 
                 for (service in gatt.services) {
-                    if (service.uuid != batteryServiceUuid) continue
-                    val level = service.getCharacteristic(batteryLevelUuid) ?: continue
-                    val format = level.getDescriptor(presentationFormatUuid) ?: continue
+                    if (service.uuid != BATTERY_SERVICE_UUID) continue
+                    val level = service.getCharacteristic(BATTERY_LEVEL_UUID) ?: continue
+                    val format = level.getDescriptor(PRESENTATION_FORMAT_UUID) ?: continue
                     if (!gatt.readDescriptor(format)) continue
                     val side = descriptorValues.receiveCatching().getOrNull()
                         ?.let(::earbudSideFromPresentation) ?: continue

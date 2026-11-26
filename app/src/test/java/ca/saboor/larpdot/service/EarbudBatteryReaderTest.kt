@@ -31,6 +31,12 @@ class EarbudBatteryReaderTest {
         assertNull(earbudBatteryPercent(byteArrayOf()))
     }
 
+    @Test fun usesStandardBluetoothBatteryServiceGattUuids() {
+        assertEquals("0000180f-0000-1000-8000-00805f9b34fb", BATTERY_SERVICE_UUID.toString())
+        assertEquals("00002a19-0000-1000-8000-00805f9b34fb", BATTERY_LEVEL_UUID.toString())
+        assertEquals("00002904-0000-1000-8000-00805f9b34fb", PRESENTATION_FORMAT_UUID.toString())
+    }
+
     private fun presentation(descriptionLowByte: Byte, namespace: Byte = 1): ByteArray =
         byteArrayOf(0x04, 0x00, 0xad.toByte(), 0x27, namespace, descriptionLowByte, 0x01)
 }

@@ -453,6 +453,7 @@ object FlashlightController {
         appContext?.let { OverlayPreferences.setBoostStrength(it, desiredLevel) }
         val active = _isFlashlightOn.value || boostRequested || pendingStandardLevel != null
         if (!active) return
+        if (patternActive) return
         if (boostRequested && needsCamera(desiredLevel)) {
             handler.removeCallbacks(updateBoostStrength)
             handler.postDelayed(updateBoostStrength, 40L)
