@@ -62,15 +62,11 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
-import ca.saboor.larpdot.flashlight.FlashlightMode
-import ca.saboor.larpdot.flashlight.formatAutoOffRemaining
-import ca.saboor.larpdot.flashlight.nextFlashlightMode
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -102,10 +98,8 @@ fun rememberCompactFlashlightStatus(): String {
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxStrength by FlashlightController.maxStrength.collectAsState()
     val standardMaximum by FlashlightController.standardMaxStrength.collectAsState()
-    val mode by FlashlightController.flashlightMode.collectAsState()
-    return remember(torchStrength, maxStrength, standardMaximum, mode) {
-        if (mode != FlashlightMode.STEADY) mode.label
-        else getFlashlightPercentText(torchStrength, maxStrength, standardMaximum)
+    return remember(torchStrength, maxStrength, standardMaximum) {
+        getFlashlightPercentText(torchStrength, maxStrength, standardMaximum)
     }
 }
 
@@ -145,7 +139,8 @@ internal fun CompactFlashlightContent(
     onFlashlightToggle: () -> Unit = {},
     isLandscape: Boolean = false,
     status: String = rememberCompactFlashlightStatus(),
-    showRadialProgress: Boolean = OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState().value,
+    leftSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState().value,
+    rightSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState().value,
     onIconClick: (() -> Unit)? = null,
     onRadialClick: (() -> Unit)? = null,
     onBackgroundClick: (() -> Unit)? = null,
@@ -160,13 +155,20 @@ internal fun CompactFlashlightContent(
     val maxStrength by FlashlightController.maxStrength.collectAsState()
     val strengthFraction = getFlashlightStrengthFraction(torchStrength, maxStrength)
     val percentLabel = status.removeSuffix("%").trim()
-    val showGauge = showRadialProgress && percentLabel.isNotEmpty()
     val compactRingDiameter = compactBatteryRingDiameter(cutoutDiameterDp)
     val compactRingInset = compactEndInset(cutoutDiameterDp, compactRingDiameter)
 
-
     val isPercentage = status.contains('%')
     val formattedStatus = remember(status) { formatCompactStatus(status) }
+
+    val leftHasIcon = leftSide == OverlayPreferences.MinimizedFlashlightSideContent.ICON
+    val rightHasIcon = rightSide == OverlayPreferences.MinimizedFlashlightSideContent.ICON
+    val leftHasRadial = leftSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
+    val rightHasRadial = rightSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
+    val leftIconAnchor = if (leftHasIcon) iconAnchor else null
+    val rightIconAnchor = if (rightHasIcon && !leftHasIcon) iconAnchor else null
+    val rightProgressAnchor = if (rightHasRadial) progressAnchor else null
+    val leftProgressAnchor = if (leftHasRadial && !rightHasRadial) progressAnchor else null
 
     val summary = @Composable {
         Text(
@@ -180,6 +182,48 @@ internal fun CompactFlashlightContent(
         )
     }
 
+    @Composable
+    fun RenderFlashlightWingContent(
+        side: OverlayPreferences.MinimizedFlashlightSideContent,
+        wingIconAnchor: IslandElementAnchor?,
+        wingProgressAnchor: IslandElementAnchor?,
+    ) {
+        when (side) {
+            OverlayPreferences.MinimizedFlashlightSideContent.ICON -> {
+                CompactFlashlightIcon(size = 18.dp, iconAnchor = wingIconAnchor)
+            }
+            OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS -> {
+                if (percentLabel.isNotEmpty()) {
+                    RadialProgressGauge(
+                        progress = strengthFraction,
+                        text = percentLabel,
+                        color = FlashlightWhite,
+                        diameter = compactRingDiameter,
+                        modifier = Modifier.morphingElement(wingProgressAnchor),
+                    )
+                }
+            }
+            OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE -> {
+                if (status.isNotEmpty()) {
+                    if (isLandscape) {
+                        Text(
+                            text = formattedStatus,
+                            color = accentColor,
+                            fontSize = if (isPercentage) 9.5.sp else 10.sp,
+                            fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Visible,
+                            modifier = Modifier.verticalActivityLabel(),
+                        )
+                    } else {
+                        summary()
+                    }
+                }
+            }
+        }
+    }
+
     if (isLandscape) {
         Column(
             modifier = modifier
@@ -191,39 +235,20 @@ internal fun CompactFlashlightContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = if (leftHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                CompactFlashlightIcon(size = 18.dp, iconAnchor = iconAnchor)
+                RenderFlashlightWingContent(leftSide, leftIconAnchor, leftProgressAnchor)
             }
             Spacer(modifier = Modifier.height(cutoutDiameterDp))
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(bottom = if (showGauge) compactRingInset else 8.dp),
-                contentAlignment = if (showGauge) Alignment.BottomCenter else Alignment.TopCenter,
+                    .padding(bottom = if (rightHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
+                contentAlignment = if (rightHasRadial && percentLabel.isNotEmpty()) Alignment.BottomCenter else Alignment.TopCenter,
             ) {
-                if (showGauge) {
-                    RadialProgressGauge(
-                        progress = strengthFraction,
-                        text = percentLabel,
-                        color = FlashlightWhite,
-                        diameter = compactRingDiameter,
-                        modifier = Modifier.morphingElement(progressAnchor),
-                    )
-                } else if (status.isNotEmpty()) {
-                    Text(
-                        text = formattedStatus,
-                        color = accentColor,
-                        fontSize = if (isPercentage) 9.5.sp else 10.sp,
-                        fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Visible,
-                        modifier = Modifier.verticalActivityLabel(),
-                    )
-                }
+                RenderFlashlightWingContent(rightSide, rightIconAnchor, rightProgressAnchor)
             }
         }
     } else {
@@ -251,10 +276,10 @@ internal fun CompactFlashlightContent(
                         if (highlightIcon) Modifier.border(1.5.dp, highlightColor, startHighlightShape)
                         else Modifier
                     )
-                    .padding(start = 8.dp),
+                    .padding(start = if (leftHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                CompactFlashlightIcon(size = 18.dp, iconAnchor = iconAnchor)
+                RenderFlashlightWingContent(leftSide, leftIconAnchor, leftProgressAnchor)
             }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
             Box(
@@ -266,20 +291,10 @@ internal fun CompactFlashlightContent(
                         if (highlightRadial) Modifier.border(1.5.dp, highlightColor, endHighlightShape)
                         else Modifier
                     )
-                    .padding(end = if (showGauge) compactRingInset else 8.dp),
-                contentAlignment = if (showGauge) Alignment.CenterEnd else Alignment.CenterStart,
+                    .padding(end = if (rightHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
+                contentAlignment = Alignment.CenterEnd,
             ) {
-                if (showGauge) {
-                    RadialProgressGauge(
-                        progress = strengthFraction,
-                        text = percentLabel,
-                        color = FlashlightWhite,
-                        diameter = compactRingDiameter,
-                        modifier = Modifier.morphingElement(progressAnchor),
-                    )
-                } else if (status.isNotEmpty()) {
-                    summary()
-                }
+                RenderFlashlightWingContent(rightSide, rightIconAnchor, rightProgressAnchor)
             }
         }
     }
@@ -307,8 +322,6 @@ internal fun ExpandedFlashlightContent(
     val accentColor = FlashlightWhite
     val showExpandedRadial by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
-    val autoOffRemainingMs by FlashlightController.autoOffRemainingMs.collectAsState()
-    val flashlightMode by FlashlightController.flashlightMode.collectAsState()
 
     if (expandedStyle == OverlayPreferences.FlashlightExpandedStyle.SLIDER) {
         ExpandedFlashlightSliderLayout(
@@ -318,8 +331,6 @@ internal fun ExpandedFlashlightContent(
             accentColor = accentColor,
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
-            autoOffRemainingMs = autoOffRemainingMs,
-            flashlightMode = flashlightMode,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
             modifier = modifier,
@@ -332,41 +343,10 @@ internal fun ExpandedFlashlightContent(
             accentColor = accentColor,
             showExpandedRadial = showExpandedRadial,
             topContentInset = topContentInset,
-            autoOffRemainingMs = autoOffRemainingMs,
-            flashlightMode = flashlightMode,
             onBeamClick = onBeamClick,
             iconAnchor = iconAnchor,
             progressAnchor = progressAnchor,
             modifier = modifier,
-        )
-    }
-}
-
-@Composable
-private fun FlashlightModeChip(
-    mode: FlashlightMode,
-    isFlashlightOn: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val active = isFlashlightOn && mode != FlashlightMode.STEADY
-    Box(
-        modifier = modifier
-            .background(
-                color = if (active) FlashlightWhite.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.09f),
-                shape = RoundedCornerShape(999.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = mode.label,
-            color = if (active) FlashlightWhite else FlashlightWhiteDim,
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            softWrap = false,
         )
     }
 }
@@ -416,13 +396,10 @@ private fun ExpandedFlashlightSliderLayout(
     accentColor: Color,
     showExpandedRadial: Boolean,
     topContentInset: Dp,
-    autoOffRemainingMs: Long?,
-    flashlightMode: FlashlightMode,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
     modifier: Modifier = Modifier,
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
     val strengthFraction = if (isFlashlightOn) getFlashlightStrengthFraction(torchStrength, maxStrength) else 0f
     Row(
         modifier = modifier.fillMaxSize().padding(
@@ -464,24 +441,6 @@ private fun ExpandedFlashlightSliderLayout(
                 inactiveTrackColor = accentColor.copy(alpha = 0.25f),
             ),
         )
-        FlashlightModeChip(
-            mode = flashlightMode,
-            isFlashlightOn = isFlashlightOn,
-            onClick = {
-                hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                FlashlightController.setMode(nextFlashlightMode(flashlightMode))
-            },
-        )
-        if (isFlashlightOn && autoOffRemainingMs != null) {
-            Text(
-                text = formatAutoOffRemaining(autoOffRemainingMs),
-                color = FlashlightWhiteDim,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                softWrap = false,
-            )
-        }
     }
 }
 
@@ -493,8 +452,6 @@ private fun ExpandedFlashlightBeamLayout(
     accentColor: Color,
     showExpandedRadial: Boolean,
     topContentInset: Dp,
-    autoOffRemainingMs: Long?,
-    flashlightMode: FlashlightMode,
     onBeamClick: (() -> Unit)?,
     iconAnchor: IslandElementAnchor?,
     progressAnchor: IslandElementAnchor?,
@@ -726,32 +683,6 @@ private fun ExpandedFlashlightBeamLayout(
                     topLeft = Offset(centerX - topBeamWidth / 2f, currentSliderY - barHeight / 2f),
                     size = Size(topBeamWidth, barHeight),
                     cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f),
-                )
-            }
-
-            FlashlightModeChip(
-                mode = flashlightMode,
-                isFlashlightOn = isFlashlightOn,
-                onClick = {
-                    hapticFeedback.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                    FlashlightController.setMode(nextFlashlightMode(flashlightMode))
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 10.dp),
-            )
-
-            if (isFlashlightOn && autoOffRemainingMs != null) {
-                Text(
-                    text = formatAutoOffRemaining(autoOffRemainingMs),
-                    color = FlashlightWhiteDim,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 14.dp, bottom = 12.dp),
                 )
             }
 

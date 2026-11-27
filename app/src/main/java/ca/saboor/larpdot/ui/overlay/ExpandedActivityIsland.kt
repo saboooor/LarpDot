@@ -24,15 +24,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -63,13 +58,8 @@ import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.service.QuickTimerManager
-import ca.saboor.larpdot.service.QuickTimerMode
-import ca.saboor.larpdot.service.QuickTimerState
-import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.theme.LarpIcons
-import kotlin.math.roundToInt
 
 private val LEADING_BATTERY_PERCENT_REGEX = Regex("""^\d+%(?:\s+remaining|\s+reached)?\s*•\s*""", RegexOption.IGNORE_CASE)
 private val PURE_PERCENT_REGEX = Regex("""^\d+%$""")
@@ -152,10 +142,7 @@ private data class ExpandedActivityLayoutModel(
     val inlineAction: NotificationActivityAction?,
     val footerActions: List<NotificationActivityAction>,
     val hasNavRightContent: Boolean,
-    val isScreenshot: Boolean,
-    val isVolume: Boolean,
     val isSoundMode: Boolean,
-    val isQuickTimer: Boolean,
     val showProgressBar: Boolean,
     val hasFooter: Boolean,
 ) {
@@ -168,9 +155,7 @@ private fun buildExpandedActivityLayoutModel(
     primaryColor: Color,
 ): ExpandedActivityLayoutModel {
     val isNavigation = activity.kind == NotificationActivityKind.NAVIGATION
-    val isVolume = activity.kind == NotificationActivityKind.VOLUME
     val isSoundMode = activity.kind == NotificationActivityKind.SOUND_MODE
-    val isQuickTimer = activity.key == QuickTimerManager.ACTIVITY_KEY
     val radialProgress = activityRadialProgress(activity, progressOutlineEnabled, primaryColor)
     val hasRadialGauge = radialProgress != null
     val navigationEta = if (isNavigation) compactStatusFallback(activity).takeIf { it.isNotBlank() } else null
@@ -180,10 +165,8 @@ private fun buildExpandedActivityLayoutModel(
     } else {
         activity.actions.take(3)
     }
-    val isScreenshot = activity.kind == NotificationActivityKind.SCREENSHOT &&
-        (activity.mediaUri != null || !activity.heldText.isNullOrBlank())
-    val showProgressBar = !isNavigation && !isVolume && activity.progressFraction != null && !hasRadialGauge
-    val hasFooter = showProgressBar || isScreenshot || isVolume || isSoundMode || isQuickTimer || footerActions.isNotEmpty()
+    val showProgressBar = !isNavigation && activity.progressFraction != null && !hasRadialGauge
+    val hasFooter = showProgressBar || isSoundMode || footerActions.isNotEmpty()
     return ExpandedActivityLayoutModel(
         subtitle = activitySubtitle(activity),
         isNavigation = isNavigation,
@@ -193,10 +176,7 @@ private fun buildExpandedActivityLayoutModel(
         inlineAction = inlineAction,
         footerActions = footerActions,
         hasNavRightContent = navigationEta != null || inlineAction != null,
-        isScreenshot = isScreenshot,
-        isVolume = isVolume,
         isSoundMode = isSoundMode,
-        isQuickTimer = isQuickTimer,
         showProgressBar = showProgressBar,
         hasFooter = hasFooter,
     )
@@ -296,11 +276,7 @@ internal fun expandedActivitySize(
                 rowWidth = next
             }
         }
-        val previewHeight = if (model.isScreenshot && activity.appIcon != null) 118.dp else 0.dp
-        val pocketActionHeight = if (model.isScreenshot) 56.dp else 0.dp
-        val volumeSectionHeight = if (model.isVolume) 56.dp else 0.dp
         val soundModeSectionHeight = if (model.isSoundMode) 54.dp else 0.dp
-        val quickTimerSectionHeight = if (model.isQuickTimer) 56.dp else 0.dp
         val bottomPadding = model.bottomPadding
         val headerBlockHeight = if (spanIconLeftOfCutout) {
             if (model.hasFooter) {
@@ -317,9 +293,9 @@ internal fun expandedActivitySize(
         }
         val height = headerBlockHeight +
             (if (model.showProgressBar) 20.dp else 0.dp) +
-            previewHeight + pocketActionHeight + volumeSectionHeight + soundModeSectionHeight + quickTimerSectionHeight +
+            soundModeSectionHeight +
             (if (rows > 0) 14.dp + 48.dp * rows + 8.dp * (rows - 1) else 0.dp)
-        val effectiveWidth = if (model.isScreenshot || model.isVolume || model.isSoundMode || model.isQuickTimer) {
+        val effectiveWidth = if (model.isSoundMode) {
             maxOf(width, 280.dp).coerceAtMost(maxWidth)
         } else {
             width
@@ -345,22 +321,11 @@ internal fun ExpandedNotificationActivityContent(
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
     val openApp = {
         when {
-            activity.kind == NotificationActivityKind.SCREENSHOT && activity.mediaUri != null -> {
-                ScreenshotPocketManager.openItem(context, activity.mediaUri, activity.mediaMimeType)
-            }
-            activity.kind == NotificationActivityKind.SCREENSHOT && !activity.heldText.isNullOrBlank() -> {
-                val url = ScreenshotPocketManager.extractFirstHttpUrl(activity.heldText)
-                if (url != null) ScreenshotPocketManager.openUrl(context, url)
-                else ScreenshotPocketManager.copyText(context, activity.heldText)
-            }
             activity.kind == NotificationActivityKind.AUDIO_OUTPUT || activity.kind == NotificationActivityKind.BLUETOOTH -> {
                 AudioOutputTracker.openOutputSwitcher(context)
             }
             activity.kind == NotificationActivityKind.DND -> {
                 SystemEventManager.openDoNotDisturbSettings(context)
-            }
-            activity.kind == NotificationActivityKind.VOLUME -> {
-                SystemEventManager.openSoundSettings(context)
             }
             else -> NotificationActivityState.open(context, activity)
         }
@@ -421,24 +386,8 @@ internal fun ExpandedNotificationActivityContent(
             )
         }
 
-        if (model.isScreenshot) {
-            ExpandedScreenshotSection(
-                activity = activity,
-                onOpen = openApp,
-                onCollapse = onCollapse,
-            )
-        }
-
-        if (model.isVolume) {
-            ExpandedVolumeSection(activity = activity)
-        }
-
         if (model.isSoundMode) {
             ExpandedSoundModeSection(activity = activity)
-        }
-
-        if (model.isQuickTimer) {
-            ExpandedQuickTimerSection(onCollapse = onCollapse)
         }
 
         if (model.footerActions.isNotEmpty()) {
@@ -635,180 +584,6 @@ private fun ExpandedNavigationTrailingSlot(
 }
 
 @Composable
-private fun ExpandedScreenshotSection(
-    activity: NotificationActivityInfo,
-    onOpen: () -> Unit,
-    onCollapse: () -> Unit,
-) {
-    val context = LocalContext.current
-    val mediaUri = activity.mediaUri
-    val heldText = activity.heldText?.takeIf { it.isNotBlank() }
-    if (mediaUri == null && heldText != null) {
-        val url = remember(heldText) { ScreenshotPocketManager.extractFirstHttpUrl(heldText) }
-        Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(
-                onClick = {
-                    ScreenshotPocketManager.copyText(context, heldText)
-                    onCollapse()
-                },
-                modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-            ) {
-                Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (url != null) {
-                FilledTonalButton(
-                    onClick = {
-                        ScreenshotPocketManager.openUrl(context, url)
-                        onCollapse()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.OpenInFull, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Open", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                FilledTonalButton(
-                    onClick = {
-                        ScreenshotPocketManager.shareText(context, heldText)
-                        onCollapse()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Share, contentDescription = "Share", modifier = Modifier.size(18.dp))
-                }
-            } else {
-                FilledTonalButton(
-                    onClick = {
-                        ScreenshotPocketManager.shareText(context, heldText)
-                        onCollapse()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Share", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            FilledTonalButton(
-                onClick = {
-                    ScreenshotPocketManager.dismissHeldItem(activity.key)
-                    onCollapse()
-                },
-                modifier = Modifier.heightIn(min = 42.dp),
-            ) {
-                Icon(LarpIcons.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
-            }
-        }
-        return
-    }
-    if (mediaUri == null) return
-    val previewBitmap = remember(activity.appIcon) { activity.appIcon?.asImageBitmap() }
-    if (previewBitmap != null) {
-        Spacer(Modifier.height(12.dp))
-        Image(
-            bitmap = previewBitmap,
-            contentDescription = activity.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(106.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(onClick = onOpen),
-            contentScale = ContentScale.Crop,
-        )
-    }
-    Spacer(Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Button(
-            onClick = {
-                ScreenshotPocketManager.shareItem(context, mediaUri, activity.mediaMimeType)
-                onCollapse()
-            },
-            modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-        ) {
-            Icon(LarpIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Share", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        FilledTonalButton(
-            onClick = {
-                ScreenshotPocketManager.copyItem(context, mediaUri)
-                onCollapse()
-            },
-            modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-        ) {
-            Icon(LarpIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        FilledTonalButton(
-            onClick = {
-                ScreenshotPocketManager.deleteItem(context, activity.key, mediaUri)
-                onCollapse()
-            },
-            modifier = Modifier.heightIn(min = 42.dp),
-        ) {
-            Icon(LarpIcons.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ExpandedVolumeSection(activity: NotificationActivityInfo) {
-    val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-    val reportedPercent = (activity.progress ?: 0).coerceIn(0, 100)
-    val sliderState = remember { SliderState(value = reportedPercent.toFloat(), trackRange = 0f..100f) }
-    sliderState.value = reportedPercent.toFloat()
-    val isMuted = reportedPercent <= 0
-
-    Spacer(Modifier.height(10.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        FilledTonalButton(
-            onClick = {
-                haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                SystemEventManager.toggleMediaMute(context)
-            },
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            modifier = Modifier.heightIn(min = 40.dp),
-        ) {
-            Icon(
-                imageVector = if (isMuted) LarpIcons.VolumeOff else LarpIcons.VolumeUp,
-                contentDescription = if (isMuted) "Unmute media" else "Mute media",
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Slider(
-            state = sliderState,
-            onValueChange = { raw ->
-                val snapped = raw.roundToInt().coerceIn(0, 100)
-                sliderState.value = snapped.toFloat()
-                SystemEventManager.setMediaVolumePercent(context, snapped)
-            },
-            modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = Color.White.copy(alpha = 0.22f),
-            ),
-        )
-    }
-}
-
-@Composable
 private fun ExpandedSoundModeSection(activity: NotificationActivityInfo) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -860,122 +635,4 @@ internal fun parseSoundModeFromTitle(title: String): Int = when {
     title.contains("Silent", ignoreCase = true) -> android.media.AudioManager.RINGER_MODE_SILENT
     title.contains("Vibrate", ignoreCase = true) -> android.media.AudioManager.RINGER_MODE_VIBRATE
     else -> android.media.AudioManager.RINGER_MODE_NORMAL
-}
-
-@Composable
-private fun ExpandedQuickTimerSection(onCollapse: () -> Unit) {
-    val timerState by QuickTimerManager.state.collectAsState()
-    val haptic = LocalHapticFeedback.current
-    if (timerState is QuickTimerState.Idle) return
-
-    Spacer(Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when (val state = timerState) {
-            is QuickTimerState.Running -> {
-                Button(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                        QuickTimerManager.togglePause()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Pause", maxLines = 1)
-                }
-                if (state.mode == QuickTimerMode.COUNTDOWN) {
-                    FilledTonalButton(
-                        onClick = {
-                            haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                            QuickTimerManager.addOneMinute()
-                        },
-                        modifier = Modifier.heightIn(min = 42.dp),
-                    ) {
-                        Text("+1m", maxLines = 1)
-                    }
-                }
-                FilledTonalButton(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
-                        QuickTimerManager.stop()
-                        onCollapse()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Stop, contentDescription = "Stop timer", modifier = Modifier.size(18.dp))
-                }
-            }
-            is QuickTimerState.Paused -> {
-                Button(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                        QuickTimerManager.togglePause()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Resume", maxLines = 1)
-                }
-                if (state.mode == QuickTimerMode.COUNTDOWN) {
-                    FilledTonalButton(
-                        onClick = {
-                            haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                            QuickTimerManager.addOneMinute()
-                        },
-                        modifier = Modifier.heightIn(min = 42.dp),
-                    ) {
-                        Text("+1m", maxLines = 1)
-                    }
-                }
-                FilledTonalButton(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
-                        QuickTimerManager.stop()
-                        onCollapse()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Stop, contentDescription = "Stop timer", modifier = Modifier.size(18.dp))
-                }
-            }
-            is QuickTimerState.Finished -> {
-                Button(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                        QuickTimerManager.restart()
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Restart", maxLines = 1)
-                }
-                FilledTonalButton(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.TextHandleMove)
-                        QuickTimerManager.addOneMinute()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Text("+1m", maxLines = 1)
-                }
-                FilledTonalButton(
-                    onClick = {
-                        haptic.performIslandHaptic(HapticFeedbackType.LongPress)
-                        QuickTimerManager.stop()
-                        onCollapse()
-                    },
-                    modifier = Modifier.heightIn(min = 42.dp),
-                ) {
-                    Icon(LarpIcons.Close, contentDescription = "Dismiss timer", modifier = Modifier.size(18.dp))
-                }
-            }
-            QuickTimerState.Idle -> Unit
-        }
-    }
 }

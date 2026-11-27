@@ -82,18 +82,31 @@ class CustomIslandStoreTest {
     }
 
     @Test
-    fun swapCustomIslandWingsSwapsLeftAndRightAndSkipsSwipeDownOnly() {
-        val original = island("s1", leftIcon = CustomIslandIcon.TIMER, rightIcon = CustomIslandIcon.MUSIC)
-        val swapped = swapCustomIslandWings(original)
-        assertEquals(CustomIslandIcon.MUSIC, swapped.left.icon)
-        assertEquals(CustomIslandIcon.TIMER, swapped.right.icon)
+    fun expandedWingSlotsIntegrateWithSlotAccessorsAndExpandedContent() {
+        assertTrue(CustomIslandPosition.EXPANDED_LEFT.isExpandedWing)
+        assertTrue(CustomIslandPosition.EXPANDED_RIGHT.isExpandedWing)
+        assertFalse(CustomIslandPosition.LEFT.isExpandedWing)
+        assertFalse(CustomIslandPosition.RIGHT.isExpandedWing)
+        assertFalse(CustomIslandPosition.MAIN.isExpandedWing)
 
-        val swipeDown = island(
-            "s2",
-            visibility = CustomIslandVisibility.SWIPE_DOWN,
-            mainWidgetId = 5,
-            leftIcon = CustomIslandIcon.STAR,
+        val empty = CustomIsland(id = "wings")
+        assertFalse(empty.hasExpandedContent)
+        assertFalse(empty.hasContent)
+
+        val withLeftWing = empty.withSlot(
+            CustomIslandPosition.EXPANDED_LEFT,
+            CustomIslandSlot(icon = CustomIslandIcon.STAR, width = 48, height = 48),
         )
-        assertEquals(swipeDown, swapCustomIslandWings(swipeDown))
+        assertEquals(CustomIslandIcon.STAR, withLeftWing.slot(CustomIslandPosition.EXPANDED_LEFT).icon)
+        assertTrue(withLeftWing.hasExpandedContent)
+        assertTrue(withLeftWing.hasContent)
+
+        val withBothWings = withLeftWing.withSlot(
+            CustomIslandPosition.EXPANDED_RIGHT,
+            CustomIslandSlot(image = CustomIslandImage.ALBUM_ART, width = 48, height = 48),
+        )
+        assertEquals(CustomIslandImage.ALBUM_ART, withBothWings.slot(CustomIslandPosition.EXPANDED_RIGHT).image)
+        assertTrue(withBothWings.hasExpandedContent)
     }
+
 }

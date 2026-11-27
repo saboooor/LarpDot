@@ -86,7 +86,6 @@ object OverlayPreferences {
     const val DEFAULT_PULSE_AMOUNT = 1.0f
     private const val KEY_ISLAND_FONT_STYLE = "island_font_style"
     private const val KEY_ISLAND_FONT_WEIGHT = "island_font_weight"
-    private const val KEY_MINIMIZED_NESTED_BLURRED_BG = "minimized_nested_blurred_bg"
     private const val KEY_HIDE_IN_FULLSCREEN = "hide_in_fullscreen"
     private const val KEY_HIDE_IN_LANDSCAPE = "hide_in_landscape"
     private const val KEY_HIDE_IN_DND = "hide_in_dnd"
@@ -195,6 +194,8 @@ object OverlayPreferences {
         BLURRED_FULL_BACKGROUND("Blurred Full"),
     }
 
+    enum class AudioOutputStyle(val label: String) { CHIP("Chip"), BUTTON("Button") }
+
     enum class ExpandedPlayerLayout(val label: String) {
         ANDROID_MEDIA_CONTROLS("Android Media Controls"),
         MATERIAL_3_EXPRESSIVE("Material 3 Expressive"),
@@ -215,6 +216,20 @@ object OverlayPreferences {
     enum class FlashlightExpandedStyle(val label: String) {
         BEAM("Beam"),
         SLIDER("Slider"),
+    }
+
+    enum class MinimizedMusicSideContent(val label: String) {
+        ALBUM_ART("Album Art"),
+        VISUALIZER("Visualizer"),
+        SONG_TITLE("Song Title"),
+        TIME_LEFT("Time Left"),
+        TIME_ELAPSED("Time Elapsed"),
+    }
+
+    enum class MinimizedFlashlightSideContent(val label: String) {
+        ICON("Icon"),
+        RADIAL_PROGRESS("Radial Progress"),
+        PERCENTAGE("Percentage"),
     }
 
     enum class VisualizerMode(val key: String, val title: String, val description: String) {
@@ -254,6 +269,8 @@ object OverlayPreferences {
         val bottom: Boolean = true,
         val top: Boolean = false,
     )
+
+    enum class MinimizedMusicTimestamp { NONE, REMAINING, ELAPSED }
 
     data class PlaybackControlsStyle(
         val playPauseBackground: Boolean = true,
@@ -386,6 +403,20 @@ object OverlayPreferences {
     )
     private val smallerBubblesPref = BooleanPref(KEY_SMALLER_BUBBLES, false)
     private val showMinimizedTitlePref = BooleanPref(KEY_SHOW_MINIMIZED_TITLE, false)
+    private val minimizedMusicTimestampPref = EnumPref(
+        "minimized_music_timestamp", MinimizedMusicTimestamp.NONE,
+        parse = { saved -> MinimizedMusicTimestamp.entries.firstOrNull { it.name == saved } ?: MinimizedMusicTimestamp.NONE },
+    )
+    private val minimizedMusicLeftSidePref = EnumPref(
+        "minimized_music_left_side",
+        MinimizedMusicSideContent.ALBUM_ART,
+        parse = { saved -> MinimizedMusicSideContent.entries.firstOrNull { it.name == saved } ?: MinimizedMusicSideContent.ALBUM_ART },
+    )
+    private val minimizedMusicRightSidePref = EnumPref(
+        "minimized_music_right_side",
+        MinimizedMusicSideContent.VISUALIZER,
+        parse = { saved -> MinimizedMusicSideContent.entries.firstOrNull { it.name == saved } ?: MinimizedMusicSideContent.VISUALIZER },
+    )
     private val showSongAnnouncementPref = BooleanPref(KEY_SHOW_SONG_ANNOUNCEMENT, true)
     private val minimizedAlbumArtStylePref = EnumPref(
         KEY_MINIMIZED_ALBUM_ART_STYLE,
@@ -401,6 +432,10 @@ object OverlayPreferences {
     )
     private val showExpandedAlbumArtPref = BooleanPref(KEY_SHOW_EXPANDED_ALBUM_ART, true)
     private val albumArtGlowPref = BooleanPref(KEY_ALBUM_ART_GLOW, false)
+    private val audioOutputStylePref = EnumPref(
+        "music_audio_output_style", AudioOutputStyle.CHIP,
+        parse = { saved -> AudioOutputStyle.entries.firstOrNull { it.name == saved } ?: AudioOutputStyle.CHIP },
+    )
     private val expandedPlayerLayoutPref = EnumPref(
         KEY_EXPANDED_PLAYER_LAYOUT,
         ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
@@ -467,7 +502,6 @@ object OverlayPreferences {
         parse = { saved -> IslandFontStyle.entries.firstOrNull { it.name == saved } ?: IslandFontStyle.DEFAULT },
     )
     private val islandFontWeightPref = IntPref(KEY_ISLAND_FONT_WEIGHT, 400, 100, 900)
-    private val minimizedNestedBlurredBgPref = BooleanPref(KEY_MINIMIZED_NESTED_BLURRED_BG, false)
     private val isDebugModePref = BooleanPref(KEY_DEBUG_MODE, false, fallbackKey = KEY_SHOW_DEBUG_DOT)
     private val hideWhenScreenOffPref = BooleanPref(KEY_HIDE_WHEN_SCREEN_OFF, true)
     private val hideOnLockScreenPref = BooleanPref(KEY_HIDE_ON_LOCK_SCREEN, false)
@@ -515,11 +549,15 @@ object OverlayPreferences {
     val bubbleStyleFlow: StateFlow<BubbleStyle> = bubbleStylePref.flow
     val smallerBubblesFlow: StateFlow<Boolean> = smallerBubblesPref.flow
     val showMinimizedTitleFlow: StateFlow<Boolean> = showMinimizedTitlePref.flow
+    val minimizedMusicTimestampFlow: StateFlow<MinimizedMusicTimestamp> = minimizedMusicTimestampPref.flow
+    val minimizedMusicLeftSideFlow: StateFlow<MinimizedMusicSideContent> = minimizedMusicLeftSidePref.flow
+    val minimizedMusicRightSideFlow: StateFlow<MinimizedMusicSideContent> = minimizedMusicRightSidePref.flow
     val showSongAnnouncementFlow: StateFlow<Boolean> = showSongAnnouncementPref.flow
     val minimizedAlbumArtStyleFlow: StateFlow<AlbumArtStyle> = minimizedAlbumArtStylePref.flow
     val expandedAlbumArtStyleFlow: StateFlow<ExpandedBackgroundStyle> = expandedAlbumArtStylePref.flow
     val showExpandedAlbumArtFlow: StateFlow<Boolean> = showExpandedAlbumArtPref.flow
     val albumArtGlowFlow: StateFlow<Boolean> = albumArtGlowPref.flow
+    val audioOutputStyleFlow: StateFlow<AudioOutputStyle> = audioOutputStylePref.flow
     val expandedPlayerLayoutFlow: StateFlow<ExpandedPlayerLayout> = expandedPlayerLayoutPref.flow
     val showProgressSquigglesFlow: StateFlow<Boolean> = showProgressSquigglesPref.flow
     val progressBarAccentColorFlow: StateFlow<Boolean> = progressBarAccentColorPref.flow
@@ -540,7 +578,6 @@ object OverlayPreferences {
     val pulseAmountFlow: StateFlow<Float> = pulseAmountPref.flow
     val islandFontStyleFlow: StateFlow<IslandFontStyle> = islandFontStylePref.flow
     val islandFontWeightFlow: StateFlow<Int> = islandFontWeightPref.flow
-    val minimizedNestedBlurredBgFlow: StateFlow<Boolean> = minimizedNestedBlurredBgPref.flow
     val isDebugModeFlow: StateFlow<Boolean> = isDebugModePref.flow
     val hideWhenScreenOffFlow: StateFlow<Boolean> = hideWhenScreenOffPref.flow
     val hideOnLockScreenFlow: StateFlow<Boolean> = hideOnLockScreenPref.flow
@@ -592,15 +629,13 @@ object OverlayPreferences {
 
     val showFlashlightIslandFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showFlashlightIslandFlow
     val showMinimizedFlashlightOutlineFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showMinimizedFlashlightOutlineFlow
+    val minimizedFlashlightLeftSideFlow: StateFlow<MinimizedFlashlightSideContent> get() = FlashlightPrefsStore.minimizedLeftSideFlow
+    val minimizedFlashlightRightSideFlow: StateFlow<MinimizedFlashlightSideContent> get() = FlashlightPrefsStore.minimizedRightSideFlow
     val showExpandedFlashlightOutlineFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.showExpandedFlashlightOutlineFlow
-    val flashlightTapToToggleFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightTapToToggleFlow
     val flashlightBoostFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBoostFlow
     val flashlightExpandedStyleFlow: StateFlow<FlashlightExpandedStyle> get() = FlashlightPrefsStore.flashlightExpandedStyleFlow
     val flashlightBeamBlurFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamBlurFlow
     val flashlightBeamAccentColorFlow: StateFlow<Boolean> get() = FlashlightPrefsStore.flashlightBeamAccentColorFlow
-    val flashlightAutoOffMinutesFlow: StateFlow<Int> get() = FlashlightPrefsStore.flashlightAutoOffMinutesFlow
-    val flashlightStrobeSpeedFlow: StateFlow<ca.saboor.larpdot.flashlight.StrobeSpeed>
-        get() = FlashlightPrefsStore.flashlightStrobeSpeedFlow
 
     val appBlacklistEnabledFlow: StateFlow<Boolean> get() = ActivityAndBlacklistPrefsStore.appBlacklistEnabledFlow
     val blacklistedPackagesFlow: StateFlow<Set<String>> get() = ActivityAndBlacklistPrefsStore.blacklistedPackagesFlow
@@ -632,6 +667,11 @@ object OverlayPreferences {
         isShowMinimizedProgressOutlineEnabled(context)
         isShowExpandedProgressOutlineEnabled(context)
         isShowMinimizedTitleEnabled(context)
+        getMinimizedMusicTimestamp(context)
+        getMinimizedMusicLeftSide(context)
+        getMinimizedMusicRightSide(context)
+        getMinimizedFlashlightLeftSide(context)
+        getMinimizedFlashlightRightSide(context)
         isShowSongAnnouncementEnabled(context)
         getMusicPauseTimeoutSeconds(context)
         getMusicQuickSeekSeconds(context)
@@ -641,12 +681,12 @@ object OverlayPreferences {
         isFlashlightBeamAccentColorEnabled(context)
         getIslandFontStyle(context)
         getPulseAmount(context)
-        isMinimizedNestedBlurredBgEnabled(context)
         getMinimizedAlbumArtStyle(context)
         getExpandedAlbumArtStyle(context)
         isShowExpandedAlbumArtEnabled(context)
         albumArtGlowPref.reload(prefs)
         getExpandedPlayerLayout(context)
+        getAudioOutputStyle(context)
         isShowProgressSquigglesEnabled(context)
         isProgressBarAccentColorEnabled(context)
         getProgressTimestampPlacement(context)
@@ -703,6 +743,59 @@ object OverlayPreferences {
     fun areSmallerBubblesEnabled(context: Context): Boolean = smallerBubblesPref.get(getPrefs(context))
     fun setSmallerBubblesEnabled(context: Context, enabled: Boolean) = smallerBubblesPref.set(getPrefs(context), enabled)
 
+    fun getMinimizedMusicTimestamp(context: Context): MinimizedMusicTimestamp = minimizedMusicTimestampPref.get(getPrefs(context))
+    fun setMinimizedMusicTimestamp(context: Context, value: MinimizedMusicTimestamp) =
+        minimizedMusicTimestampPref.set(getPrefs(context), value)
+
+    private fun syncLegacyMinimizedMusicPrefs(
+        prefs: SharedPreferences,
+        left: MinimizedMusicSideContent,
+        right: MinimizedMusicSideContent,
+    ) {
+        val hasTitle = left == MinimizedMusicSideContent.SONG_TITLE || right == MinimizedMusicSideContent.SONG_TITLE
+        val hasVisualizer = left == MinimizedMusicSideContent.VISUALIZER || right == MinimizedMusicSideContent.VISUALIZER
+        val timestamp = when {
+            right == MinimizedMusicSideContent.TIME_LEFT || left == MinimizedMusicSideContent.TIME_LEFT -> MinimizedMusicTimestamp.REMAINING
+            right == MinimizedMusicSideContent.TIME_ELAPSED || left == MinimizedMusicSideContent.TIME_ELAPSED -> MinimizedMusicTimestamp.ELAPSED
+            else -> MinimizedMusicTimestamp.NONE
+        }
+        showMinimizedTitlePref.set(prefs, hasTitle)
+        showMinimizedVisualizerPref.set(prefs, hasVisualizer)
+        minimizedMusicTimestampPref.set(prefs, timestamp)
+    }
+
+    fun getMinimizedMusicLeftSide(context: Context): MinimizedMusicSideContent =
+        minimizedMusicLeftSidePref.get(getPrefs(context))
+
+    fun setMinimizedMusicLeftSide(context: Context, value: MinimizedMusicSideContent) {
+        val prefs = getPrefs(context)
+        minimizedMusicLeftSidePref.set(prefs, value)
+        syncLegacyMinimizedMusicPrefs(prefs, value, getMinimizedMusicRightSide(context))
+    }
+
+    fun getMinimizedMusicRightSide(context: Context): MinimizedMusicSideContent {
+        val prefs = getPrefs(context)
+        if (!prefs.contains("minimized_music_right_side")) {
+            val migrated = when (minimizedMusicTimestampPref.get(prefs)) {
+                MinimizedMusicTimestamp.REMAINING -> MinimizedMusicSideContent.TIME_LEFT
+                MinimizedMusicTimestamp.ELAPSED -> MinimizedMusicSideContent.TIME_ELAPSED
+                MinimizedMusicTimestamp.NONE -> when {
+                    showMinimizedTitlePref.get(prefs) -> MinimizedMusicSideContent.SONG_TITLE
+                    else -> MinimizedMusicSideContent.VISUALIZER
+                }
+            }
+            minimizedMusicRightSidePref.set(prefs, migrated)
+            return migrated
+        }
+        return minimizedMusicRightSidePref.get(prefs)
+    }
+
+    fun setMinimizedMusicRightSide(context: Context, value: MinimizedMusicSideContent) {
+        val prefs = getPrefs(context)
+        minimizedMusicRightSidePref.set(prefs, value)
+        syncLegacyMinimizedMusicPrefs(prefs, getMinimizedMusicLeftSide(context), value)
+    }
+
     fun isShowMinimizedTitleEnabled(context: Context): Boolean = showMinimizedTitlePref.get(getPrefs(context))
     fun setShowMinimizedTitleEnabled(context: Context, enabled: Boolean) = showMinimizedTitlePref.set(getPrefs(context), enabled)
 
@@ -719,6 +812,9 @@ object OverlayPreferences {
     fun setShowExpandedAlbumArtEnabled(context: Context, enabled: Boolean) = showExpandedAlbumArtPref.set(getPrefs(context), enabled)
 
     fun setAlbumArtGlowEnabled(context: Context, enabled: Boolean) = albumArtGlowPref.set(getPrefs(context), enabled)
+
+    fun getAudioOutputStyle(context: Context): AudioOutputStyle = audioOutputStylePref.get(getPrefs(context))
+    fun setAudioOutputStyle(context: Context, style: AudioOutputStyle) = audioOutputStylePref.set(getPrefs(context), style)
 
     fun getExpandedPlayerLayout(context: Context): ExpandedPlayerLayout = expandedPlayerLayoutPref.get(getPrefs(context))
     fun setExpandedPlayerLayout(context: Context, layout: ExpandedPlayerLayout) = expandedPlayerLayoutPref.set(getPrefs(context), layout)
@@ -787,9 +883,6 @@ object OverlayPreferences {
     fun setIslandFontStyle(context: Context, style: IslandFontStyle) = islandFontStylePref.set(getPrefs(context), style)
 
     fun setIslandFontWeight(context: Context, weight: Int) = islandFontWeightPref.set(getPrefs(context), weight)
-
-    fun isMinimizedNestedBlurredBgEnabled(context: Context): Boolean = minimizedNestedBlurredBgPref.get(getPrefs(context))
-    fun setMinimizedNestedBlurredBgEnabled(context: Context, enabled: Boolean) = minimizedNestedBlurredBgPref.set(getPrefs(context), enabled)
 
     fun isDebugModeEnabled(context: Context): Boolean = isDebugModePref.get(getPrefs(context))
     fun setDebugModeEnabled(context: Context, enabled: Boolean) {
@@ -1035,6 +1128,14 @@ object OverlayPreferences {
         FlashlightPrefsStore.getFlashlightExpandedStyle(getPrefs(context))
     fun setFlashlightExpandedStyle(context: Context, style: FlashlightExpandedStyle) =
         FlashlightPrefsStore.setFlashlightExpandedStyle(getPrefs(context), style)
+    fun getMinimizedFlashlightLeftSide(context: Context): MinimizedFlashlightSideContent =
+        FlashlightPrefsStore.getMinimizedLeftSide(getPrefs(context))
+    fun setMinimizedFlashlightLeftSide(context: Context, value: MinimizedFlashlightSideContent) =
+        FlashlightPrefsStore.setMinimizedLeftSide(getPrefs(context), value)
+    fun getMinimizedFlashlightRightSide(context: Context): MinimizedFlashlightSideContent =
+        FlashlightPrefsStore.getMinimizedRightSide(getPrefs(context))
+    fun setMinimizedFlashlightRightSide(context: Context, value: MinimizedFlashlightSideContent) =
+        FlashlightPrefsStore.setMinimizedRightSide(getPrefs(context), value)
     fun isFlashlightBeamBlurEnabled(context: Context): Boolean =
         FlashlightPrefsStore.isFlashlightBeamBlurEnabled(getPrefs(context))
     fun setFlashlightBeamBlurEnabled(context: Context, enabled: Boolean) =
@@ -1055,10 +1156,6 @@ object OverlayPreferences {
         FlashlightPrefsStore.isShowExpandedFlashlightOutlineEnabled(getPrefs(context))
     fun setShowExpandedFlashlightOutlineEnabled(context: Context, enabled: Boolean) =
         FlashlightPrefsStore.setShowExpandedFlashlightOutlineEnabled(getPrefs(context), enabled)
-    fun isFlashlightTapToToggleEnabled(context: Context): Boolean =
-        FlashlightPrefsStore.isFlashlightTapToToggleEnabled(getPrefs(context))
-    fun setFlashlightTapToToggleEnabled(context: Context, enabled: Boolean) =
-        FlashlightPrefsStore.setFlashlightTapToToggleEnabled(getPrefs(context), enabled)
     fun isFlashlightBoostEnabled(context: Context): Boolean =
         FlashlightPrefsStore.isFlashlightBoostEnabled(getPrefs(context))
     fun setFlashlightBoostEnabled(context: Context, enabled: Boolean) =
@@ -1066,14 +1163,6 @@ object OverlayPreferences {
     fun getBoostStrength(context: Context): Int = FlashlightPrefsStore.getBoostStrength(getPrefs(context))
     fun setBoostStrength(context: Context, strength: Int) =
         FlashlightPrefsStore.setBoostStrength(getPrefs(context), strength)
-    fun getFlashlightAutoOffMinutes(context: Context): Int =
-        FlashlightPrefsStore.getAutoOffMinutes(getPrefs(context))
-    fun setFlashlightAutoOffMinutes(context: Context, minutes: Int) =
-        FlashlightPrefsStore.setAutoOffMinutes(getPrefs(context), minutes)
-    fun getFlashlightStrobeSpeed(context: Context): ca.saboor.larpdot.flashlight.StrobeSpeed =
-        FlashlightPrefsStore.getStrobeSpeed(getPrefs(context))
-    fun setFlashlightStrobeSpeed(context: Context, speed: ca.saboor.larpdot.flashlight.StrobeSpeed) =
-        FlashlightPrefsStore.setStrobeSpeed(getPrefs(context), speed)
 
     fun getNotificationActivitySettings(context: Context): NotificationActivitySettings =
         ActivityAndBlacklistPrefsStore.getNotificationActivitySettings(getPrefs(context))

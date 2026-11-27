@@ -8,9 +8,11 @@ import ca.saboor.larpdot.notification.EarbudBatteryLevels
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.notification.NotificationActivitySettings
+import ca.saboor.larpdot.service.AutoExpandAlertQueue
 import ca.saboor.larpdot.service.isPermanentShortTermAlert
 import ca.saboor.larpdot.service.resolveFriendlyBluetoothName
 import ca.saboor.larpdot.service.selectAutoExpandShortTermAlert
+import ca.saboor.larpdot.service.selectAutoExpandShortTermAlerts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -397,7 +399,6 @@ class NotificationActivityContentTest {
         assertEquals(materialYou, activityIconTint(NotificationActivityKind.TIMER, materialYou))
         assertEquals(materialYou, activityIconTint(NotificationActivityKind.NAVIGATION, materialYou))
         assertEquals(materialYou, activityIconTint(NotificationActivityKind.PROGRESS, materialYou))
-        assertEquals(materialYou, activityIconTint(NotificationActivityKind.SCREENSHOT, materialYou))
 
         // Semantic status colors stay distinct
         assertEquals(androidx.compose.ui.graphics.Color(0xFF4CAF50), activityIconTint(NotificationActivityKind.CALL, materialYou))
@@ -518,6 +519,27 @@ class NotificationActivityContentTest {
         val pinnedSettings = NotificationActivitySettings(permanentCharging = true, permanentBluetooth = false)
         assertTrue(isPermanentShortTermAlert(charging, pinnedSettings))
         assertFalse(isPermanentShortTermAlert(bt, pinnedSettings))
+
+        // Simultaneous alerts are returned in chronological order so later ones can queue cleanly
+        val ordered = selectAutoExpandShortTermAlerts(
+            shortTerms = listOf(charging, bt, soundRing),
+            seenSignatures = emptyMap(),
+            expandEnabled = true,
+        ) { false }
+        assertEquals(listOf(bt, soundRing, charging), ordered)
+
+        // Queue preserves FIFO order, coalesces updates for the same key in place, and skips dismissed alerts
+        val queue = AutoExpandAlertQueue()
+        queue.enqueue(bt)
+        queue.enqueue(soundRing)
+        queue.enqueue(charging)
+        queue.enqueue(soundSilent)
+        val btUpdated = bt.copy(text = "90% battery")
+        queue.updateLive(listOf(btUpdated))
+        assertEquals(btUpdated, queue.pollNext { false })
+        assertEquals(soundSilent, queue.pollNext { it == "system_battery_charging" })
+        assertEquals(null, queue.pollNext { it == "system_battery_charging" })
+        assertFalse(queue.isNotEmpty())
     }
 
     @Test
@@ -608,20 +630,5 @@ class NotificationActivityContentTest {
                 expandEnabled = true,
             ) { false },
         )
-
-        val volMid = createActivity(
-            kind = NotificationActivityKind.VOLUME,
-            title = "Media Volume",
-            text = "60% • Slide to adjust",
-            progress = 60,
-            progressMax = 100,
-        ).copy(key = "system_volume")
-        val volMuted = volMid.copy(title = "Media Muted", text = "Muted • Slide to unmute", progress = 0)
-
-        assertEquals(LarpIcons.VolumeUp, activityIcon(volMid))
-        assertEquals(LarpIcons.VolumeOff, activityIcon(volMuted))
-        assertEquals("60%", compactStatusFallback(volMid))
-        assertEquals(60 to Color.Cyan, activityRadialProgress(volMid, progressRingEnabled = false, primaryColor = Color.Cyan))
-        assertEquals(0 to Color(0xFFFF5252), activityRadialProgress(volMuted, progressRingEnabled = false, primaryColor = Color.Cyan))
     }
 }

@@ -100,4 +100,50 @@ class AlbumArtGlowTest {
         assertEquals(red(near), green(near))
         assertEquals(green(near), blue(near))
     }
+
+    @Test
+    fun shapedMaskRadiatesAlongShapeSilhouetteInsteadOfSquareCorners() {
+        val pixels = IntArray(BLUR_BUFFER_SIZE * BLUR_BUFFER_SIZE)
+        val center = BLUR_PADDING + BLUR_CORE_SIZE / 2f
+        val half = BLUR_CORE_SIZE / 2f
+        // Fill a diamond silhouette inside the core region
+        for (y in BLUR_PADDING until BLUR_PADDING + BLUR_CORE_SIZE) {
+            for (x in BLUR_PADDING until BLUR_PADDING + BLUR_CORE_SIZE) {
+                val dx = kotlin.math.abs(x + 0.5f - center)
+                val dy = kotlin.math.abs(y + 0.5f - center)
+                if (dx + dy <= half) {
+                    pixels[y * BLUR_BUFFER_SIZE + x] = packArgb(255, 255, 100, 50)
+                }
+            }
+        }
+
+        blurArtworkPixels(
+            pixels = pixels,
+            width = BLUR_BUFFER_SIZE,
+            height = BLUR_BUFFER_SIZE,
+            radius = BLUR_RADIUS,
+            passes = BLUR_PASSES,
+        )
+
+        val midY = BLUR_BUFFER_SIZE / 2
+        val vertexHalo = pixels[midY * BLUR_BUFFER_SIZE + (BLUR_PADDING - 2)]
+        val cutCorner = pixels[BLUR_PADDING * BLUR_BUFFER_SIZE + BLUR_PADDING]
+        assertTrue("Glow near diamond tip should be clearly visible", alpha(vertexHalo) > 25)
+        assertTrue(
+            "Empty square corner outside diamond should stay dimmer than diamond edge",
+            alpha(cutCorner) < alpha(vertexHalo),
+        )
+    }
+
+    @Test
+    fun glowShapeKeyNormalizesRotationEquivalently() {
+        assertEquals(
+            AlbumArtGlowShapeKey.of(ca.saboor.larpdot.service.OverlayPreferences.NestedAlbumArtShape.HEART, 0f),
+            AlbumArtGlowShapeKey.of(ca.saboor.larpdot.service.OverlayPreferences.NestedAlbumArtShape.HEART, 360f),
+        )
+        assertEquals(
+            AlbumArtGlowShapeKey.of(ca.saboor.larpdot.service.OverlayPreferences.NestedAlbumArtShape.DIAMOND, -45f),
+            AlbumArtGlowShapeKey.of(ca.saboor.larpdot.service.OverlayPreferences.NestedAlbumArtShape.DIAMOND, 315f),
+        )
+    }
 }

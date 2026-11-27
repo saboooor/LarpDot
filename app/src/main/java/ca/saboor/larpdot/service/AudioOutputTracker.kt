@@ -1,7 +1,11 @@
 package ca.saboor.larpdot.service
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -59,6 +63,11 @@ private fun outputPriority(kind: AudioOutputKind): Int = when (kind) {
  * LE Audio earbuds, USB-C DACs/headsets, wired headphones, and speaker fallback.
  */
 object AudioOutputTracker {
+    private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+    private const val MEDIA_OUTPUT_DIALOG = "com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG"
+    private const val SYSTEM_OUTPUT_DIALOG = "com.android.systemui.action.LAUNCH_SYSTEM_MEDIA_OUTPUT_DIALOG"
+    private const val LEGACY_MEDIA_OUTPUT_PANEL = "com.android.settings.panel.action.MEDIA_OUTPUT"
+
     private val defaultSpeaker = AudioOutputDevice(
         id = "builtin_speaker",
         name = "This phone",
@@ -118,23 +127,45 @@ object AudioOutputTracker {
         }
     }
 
-    /** Opens Android's native output/volume sheet or falls back to Bluetooth settings. */
-    fun openOutputSwitcher(context: Context) {
-        val intents = buildList {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                add(Intent(Settings.Panel.ACTION_VOLUME))
+    /** Opens the playback app's native route picker, with Bluetooth settings as a fallback. */
+    fun openOutputSwitcher(context: Context, playerPackage: String? = null) {
+        val packageName = playerPackage?.takeIf(String::isNotBlank)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // The public MediaRouter2 entry point targets the foreground caller, while the island
+            // runs in an overlay and needs the media app's routes.
+            if (packageName == null && showSystemUiOutputDialog(context, Intent(SYSTEM_OUTPUT_DIALOG))) return
+            val playerDialog = Intent(MEDIA_OUTPUT_DIALOG).putExtra("package_name", packageName ?: context.packageName)
+            if (showSystemUiOutputDialog(context, playerDialog)) return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val panel = Intent(LEGACY_MEDIA_OUTPUT_PANEL)
+                .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", packageName ?: context.packageName)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val activity = context.packageManager.queryIntentActivities(panel, PackageManager.MATCH_DEFAULT_ONLY)
+                .firstOrNull { it.activityInfo.canLaunchSystemComponent(context) }
+                ?.activityInfo
+            if (activity != null && runCatching {
+                    context.startActivity(panel.setComponent(ComponentName(activity.packageName, activity.name)))
+                }.isSuccess
+            ) return
+        }
+        runCatching { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    private fun showSystemUiOutputDialog(context: Context, intent: Intent): Boolean {
+        intent.setPackage(SYSTEM_UI_PACKAGE)
+        if (context.packageManager.queryBroadcastReceivers(intent, 0).none {
+                it.activityInfo.canLaunchSystemComponent(context)
             }
-            add(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
-            add(Intent(Settings.ACTION_SOUND_SETTINGS))
-        }
-        for (intent in intents) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launched = runCatching {
-                context.startActivity(intent)
-                true
-            }.getOrDefault(false)
-            if (launched) return
-        }
+        ) return false
+        return runCatching { context.sendBroadcast(intent) }.isSuccess
+    }
+
+    private fun ActivityInfo?.canLaunchSystemComponent(context: Context): Boolean {
+        val info = this ?: return false
+        val systemFlags = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
+        return info.exported && info.applicationInfo.flags and systemFlags != 0 &&
+            (info.permission == null || context.checkSelfPermission(info.permission) == PackageManager.PERMISSION_GRANTED)
     }
 
     private fun toAudioOutputDevice(info: AudioDeviceInfo): AudioOutputDevice? {

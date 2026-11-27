@@ -5,7 +5,6 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -27,9 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
@@ -37,7 +34,6 @@ import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.theme.LarpIcons
 import ca.saboor.larpdot.ui.theme.LarpMotion
-import ca.saboor.larpdot.visualizer.AudioPreviewExtractor
 import ca.saboor.larpdot.visualizer.ExtractionState
 import ca.saboor.larpdot.visualizer.LiveAudioVisualizer
 import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
@@ -64,7 +60,6 @@ internal fun VisualizerSettingsContent(
     isLiveCapturing: Boolean,
     liveAmplitudes: FloatArray?,
     liveErrorMessage: String?,
-    nowPlaying: MediaTrackInfo,
     mediaProjectionManager: MediaProjectionManager?,
     screenCaptureLauncher: ActivityResultLauncher<Intent>,
     onRequestAudioPreviewWarning: () -> Unit,
@@ -79,12 +74,7 @@ internal fun VisualizerSettingsContent(
     ) {
         LarpSliderRow(
             title = "Waveform Bands",
-            subtitle = "Number of animated equalizer frequency bars (default: 5)",
-            valueLabel = when (waveformBandCount) {
-                0 -> "Off"
-                OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT -> "5 (Default)"
-                else -> "$waveformBandCount Bands"
-            },
+            valueLabel = if (waveformBandCount == 0) "Off" else "$waveformBandCount",
             value = waveformBandCount.toFloat(),
             valueRange = 0f..30f,
             steps = 29,
@@ -109,36 +99,7 @@ internal fun VisualizerSettingsContent(
 
         LarpDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = when (visualizerMode) {
-                    OverlayPreferences.VisualizerMode.SIMULATED -> LarpIcons.GraphicEq
-                    OverlayPreferences.VisualizerMode.BPM -> LarpIcons.Speed
-                    OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> LarpIcons.GraphicEq
-                    OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> LarpIcons.Audiotrack
-                },
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
-            )
-            Column {
-                Text(text = "Visualizer Mode", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = when (visualizerMode) {
-                        OverlayPreferences.VisualizerMode.SIMULATED -> "Sinusoidal wave oscillation"
-                        OverlayPreferences.VisualizerMode.BPM -> "BPM tempo-locked rhythm section (0% CPU)"
-                        OverlayPreferences.VisualizerMode.DEVICE_AUDIO -> "Real-time internal playback stream directly from phone (0ms latency)"
-                        OverlayPreferences.VisualizerMode.AUDIO_PREVIEW -> "30s preview dynamic frequency bands"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Text(text = "Visualizer Mode", style = MaterialTheme.typography.titleMedium)
 
         LarpConnectedButtons(
             options = OverlayPreferences.VisualizerMode.entries.map { mode ->
@@ -216,8 +177,6 @@ internal fun VisualizerSettingsContent(
                 previewPositionMs = previewPositionMs,
                 previewDurationMs = previewDurationMs,
                 isLiveCapturing = isLiveCapturing,
-                nowPlaying = nowPlaying,
-                waveformBandCount = waveformBandCount,
                 onRequestLiveCapture = requestLiveAudioCapture,
             )
         }
@@ -233,9 +192,8 @@ private fun VisualizerModeInfoCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -251,7 +209,7 @@ private fun BpmVisualizerStatusCard(
     isBpmResolved: Boolean,
     isBpmDetecting: Boolean,
     detectedBpmTrack: String?,
-    detectedSource: String?,
+    @Suppress("UNUSED_PARAMETER") detectedSource: String?,
 ) {
     VisualizerModeInfoCard(verticalSpacing = 8.dp) {
         Row(
@@ -267,18 +225,17 @@ private fun BpmVisualizerStatusCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (isBpmResolved && currentBpm != null) {
-                        "Tempo Beat Sync (${currentBpm.toInt()} BPM)"
+                        "${currentBpm.toInt()} BPM"
                     } else {
-                        "Tempo Beat Sync (No BPM)"
+                        "No BPM detected"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
                     text = when {
-                        isBpmDetecting -> "Detecting track tempo..."
-                        isBpmResolved && detectedSource != null -> "${detectedBpmTrack ?: "Track"} • Verified via $detectedSource"
-                        isBpmResolved && currentBpm != null -> "${detectedBpmTrack ?: "Track"} • ${currentBpm.toInt()} BPM"
-                        else -> "BPM could not be resolved (pulsing inactive)"
+                        isBpmDetecting -> "Detecting tempo…"
+                        isBpmResolved && currentBpm != null -> detectedBpmTrack ?: "Current track"
+                        else -> "Play a song to detect tempo"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -288,11 +245,6 @@ private fun BpmVisualizerStatusCard(
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             }
         }
-        Text(
-            text = "Synthesizes kick drums on bass bars, snares on center bars, and hi-hats on treble bars in lockstep with the song tempo. Smooth, lightweight, and zero battery drain.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -318,12 +270,12 @@ private fun DeviceAudioCaptureCard(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Internal Playback Capture (Digital Loopback)",
+                    text = "Device Audio Capture",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    text = if (isLiveCapturing) "Direct internal audio stream active • 0ms latency"
-                    else (liveErrorMessage ?: "Screen/Audio recording permission required"),
+                    text = if (isLiveCapturing) "Active"
+                    else (liveErrorMessage ?: "Requires screen capture permission"),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (liveErrorMessage != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -342,7 +294,7 @@ private fun DeviceAudioCaptureCard(
         if (!isLiveCapturing) {
             Button(onClick = onStartCapture, modifier = Modifier.fillMaxWidth()) {
                 Icon(LarpIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Grant Permission & Start Live Capture", modifier = Modifier.padding(start = 8.dp))
+                Text("Start Capture", modifier = Modifier.padding(start = 8.dp))
             }
         } else {
             Button(
@@ -357,15 +309,9 @@ private fun DeviceAudioCaptureCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(LarpIcons.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Stop Live Capture", modifier = Modifier.padding(start = 8.dp))
+                Text("Stop Capture", modifier = Modifier.padding(start = 8.dp))
             }
         }
-
-        Text(
-            text = "Captures internal digital audio playback (Android 10+) using the system screen/audio recording method. Directly streams from Spotify, YouTube Music, Apple Music, or any app with zero mic noise, zero 30s limit, and 0ms latency.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -378,14 +324,12 @@ private fun AudioPreviewStatusCard(
     previewPositionMs: Long,
     previewDurationMs: Long,
     isLiveCapturing: Boolean,
-    nowPlaying: MediaTrackInfo,
-    waveformBandCount: Int,
     onRequestLiveCapture: () -> Unit,
 ) {
     VisualizerModeInfoCard(verticalSpacing = 12.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "Preview Audio Source",
+                text = "Preview Source",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -405,18 +349,10 @@ private fun AudioPreviewStatusCard(
                             } else {
                                 OverlayPreferences.setPreviewAudioSource(context, source)
                                 PreviewAudioPlayer.stop()
-                                val curTitle = if (nowPlaying.hasMedia) nowPlaying.title else "Starboy"
-                                val curArtist = if (nowPlaying.hasMedia) nowPlaying.artist else "The Weeknd"
-                                AudioPreviewExtractor.syncTrack(context, curTitle, curArtist, true, waveformBandCount, source)
                             }
                         },
                     )
                 },
-            )
-            Text(
-                text = previewSource.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -435,7 +371,7 @@ private fun AudioPreviewStatusCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "Waiting for song playback to analyze audio...",
+                        text = "Play a song to analyze",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -453,11 +389,11 @@ private fun AudioPreviewStatusCard(
                     )
                     Column {
                         Text(
-                            text = "Processing: ${extractionState.trackTitle}",
+                            text = extractionState.trackTitle,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            text = "Downloading 30s preview & decomposing ${extractionState.bandCount} frequency bands offline",
+                            text = "Analyzing audio…",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -472,16 +408,16 @@ private fun AudioPreviewStatusCard(
                     Icon(
                         imageVector = LarpIcons.CheckCircle,
                         contentDescription = null,
-                        tint = Color(0xFF4CAF50),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
                     )
                     Column {
                         Text(
-                            text = "Successfully Processed: ${extractionState.trackTitle}",
+                            text = extractionState.trackTitle,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            text = "Synced from ${extractionState.sourceName} • ${extractionState.frameCount} frames • ${extractionState.bandCount} acoustic bands",
+                            text = extractionState.sourceName,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -513,7 +449,7 @@ private fun AudioPreviewStatusCard(
                             }
                             Column {
                                 Text(
-                                    text = if (isPreviewPlaying) "Playing 30s Audio Preview" else "Play 30s iTunes Preview",
+                                    text = "Audio Preview",
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                                 Text(
@@ -556,11 +492,11 @@ private fun AudioPreviewStatusCard(
                     )
                     Column {
                         Text(
-                            text = "Could not process: ${extractionState.trackTitle}",
+                            text = extractionState.trackTitle,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            text = "${extractionState.reason} • Falling back to simulated waveform",
+                            text = extractionState.reason,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

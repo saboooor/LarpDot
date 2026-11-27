@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,9 +66,11 @@ enum class IslandPreviewMode {
 enum class MusicPreviewElement {
     MINIMIZED_ALBUM_ART,
     MINIMIZED_BACKGROUND,
+    MINIMIZED_RIGHT_SIDE,
     EXPANDED_ALBUM_ART,
     EXPANDED_BACKGROUND,
     TRACK_INFO,
+    AUDIO_OUTPUT,
     VISUALIZER,
     PROGRESS_BAR,
     PLAYBACK_CONTROLS,
@@ -102,12 +105,16 @@ fun ExpandedIslandPreview(
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
-    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val leftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val rightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    val hasMinimizedTitle = leftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
+        rightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
+    val hasMinimizedVisualizer = leftSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER ||
+        rightSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
     val isSongAnnouncement by MediaPlaybackState.isSongAnnouncementActive.collectAsState()
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val isAnnouncing = isSongAnnouncement && showSongAnnouncement
@@ -163,7 +170,7 @@ fun ExpandedIslandPreview(
         showOutline = showMinimizedProgressOutline,
     )
     val visualizerWidthDp = compactVisualizerWidthDp(
-        showVisualizer = showMinimizedVisualizer,
+        showVisualizer = hasMinimizedVisualizer,
         bandCount = waveformBandCount,
         barWidth = waveformBarWidth,
         barSpacing = waveformBarSpacing,
@@ -171,7 +178,7 @@ fun ExpandedIslandPreview(
     val mediaWings = configuredCompactMediaWings(
         mediaInfo = previewTrack,
         extraWidthDp = compactExtraDp.value,
-        showTitle = showMinimizedTitle,
+        showTitle = hasMinimizedTitle,
         announcing = isAnnouncing,
         visualizerWidthDp = visualizerWidthDp,
         cameraDiameterDp = cutoutDiameterDp.value,
@@ -289,7 +296,7 @@ fun ExpandedIslandPreview(
                             mediaInfo = previewTrack,
                             cutoutDiameterDp = cutoutDiameterDp,
                             albumArtStyle = minimizedStyle,
-                            showVisualizer = showMinimizedVisualizer,
+                            showVisualizer = hasMinimizedVisualizer,
                             waveformBandCount = waveformBandCount,
                             isSongAnnouncement = isAnnouncing,
                             trailingWingFraction = mediaWings.trailingFraction,
@@ -299,14 +306,14 @@ fun ExpandedIslandPreview(
                             onAlbumArtClick = onElementClick?.let { callback ->
                                 { callback(MusicPreviewElement.MINIMIZED_ALBUM_ART) }
                             },
-                            onVisualizerClick = onElementClick?.let { callback ->
-                                { callback(MusicPreviewElement.VISUALIZER) }
+                            onRightWingClick = onElementClick?.let { callback ->
+                                { callback(MusicPreviewElement.MINIMIZED_RIGHT_SIDE) }
                             },
                             onBackgroundClick = onElementClick?.let { callback ->
                                 { callback(MusicPreviewElement.MINIMIZED_BACKGROUND) }
                             },
                             highlightAlbumArt = selectedElement == MusicPreviewElement.MINIMIZED_ALBUM_ART,
-                            highlightVisualizer = selectedElement == MusicPreviewElement.VISUALIZER,
+                            highlightRightWing = selectedElement == MusicPreviewElement.MINIMIZED_RIGHT_SIDE,
                         )
                         // Hardware camera cutout visualizer centered between wings
                         PreviewCameraCutoutDot(diameter = cutoutDiameterDp)
@@ -348,13 +355,18 @@ fun ExpandedIslandPreview(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.TopStart,
                 ) {
+                    val punchHoleCenterXDp = (with(density) { cutoutInfo.centerX.toDp() } - previewHorizontalMarginDp)
+                        .coerceIn(cutoutDiameterDp / 2f, previewCardWidth - (cutoutDiameterDp / 2f))
+                    val punchHoleCenterYDp = 18.dp
                     ExpandedIslandContent(
                         mediaInfo = previewTrack,
                         cutoutDiameterDp = cutoutDiameterDp,
                         isExpanded = true,
                         onCollapse = { onElementClick?.invoke(MusicPreviewElement.EXPANDED_BACKGROUND) },
-                        cutoutInfo = cutoutInfo,
-                        cardHorizontalMarginDp = previewHorizontalMarginDp,
+                        cardWidth = previewCardWidth,
+                        cutoutCenterX = punchHoleCenterXDp,
+                        cutoutCenterY = punchHoleCenterYDp,
+                        topContentInset = punchHoleCenterYDp + cutoutDiameterDp / 2f,
                         waveformBandCount = waveformBandCount,
                         pulseAmount = pulseAmount,
                         fontStyle = islandFontStyle,
@@ -365,6 +377,9 @@ fun ExpandedIslandPreview(
                         },
                         onTrackInfoClick = onElementClick?.let { callback ->
                             { callback(MusicPreviewElement.TRACK_INFO) }
+                        },
+                        onAudioOutputClick = onElementClick?.let { callback ->
+                            { callback(MusicPreviewElement.AUDIO_OUTPUT) }
                         },
                         onVisualizerClick = onElementClick?.let { callback ->
                             { callback(MusicPreviewElement.VISUALIZER) }
@@ -377,24 +392,16 @@ fun ExpandedIslandPreview(
                         },
                         highlightAlbumArt = selectedElement == MusicPreviewElement.EXPANDED_ALBUM_ART,
                         highlightTrackInfo = selectedElement == MusicPreviewElement.TRACK_INFO,
+                        highlightAudioOutput = selectedElement == MusicPreviewElement.AUDIO_OUTPUT,
                         highlightVisualizer = selectedElement == MusicPreviewElement.VISUALIZER,
                         highlightProgressBar = selectedElement == MusicPreviewElement.PROGRESS_BAR,
                         highlightPlaybackControls = selectedElement == MusicPreviewElement.PLAYBACK_CONTROLS,
                     )
 
-                    // Hardware camera cutout punch hole positioned accurately over the organic scoop shader
-                    val previewCardWidthDp = previewCardWidth
-                    val orientedCenterXDp = with(density) { cutoutInfo.centerX.toDp() } - previewHorizontalMarginDp
-                    val punchHoleCenterXDp = orientedCenterXDp.coerceIn(
-                        cutoutDiameterDp / 2f,
-                        previewCardWidthDp - (cutoutDiameterDp / 2f),
-                    )
-                    val punchHoleCenterYDp = 18.dp
-
                     Box(Modifier.matchParentSize()) {
                         PreviewCameraCutoutDot(
                             diameter = cutoutDiameterDp,
-                            modifier = Modifier.offset(
+                            modifier = Modifier.align(AbsoluteAlignment.TopLeft).absoluteOffset(
                                 x = punchHoleCenterXDp - (cutoutDiameterDp / 2f),
                                 y = punchHoleCenterYDp - (cutoutDiameterDp / 2f),
                             ),

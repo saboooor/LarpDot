@@ -5,9 +5,12 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
+import android.media.session.MediaController
+import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.core.os.BundleCompat
@@ -43,61 +46,56 @@ class NotificationAccessService : NotificationListenerService() {
     }
 
     private val sessionsChangedListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-        MediaPlaybackState.updateFromControllers(controllers)
+        if (_isListenerConnected.value) MediaPlaybackState.updateFromControllers(controllers)
+    }
+
+    private val listenerComponent by lazy { ComponentName(this, NotificationAccessService::class.java) }
+
+    private fun refreshMediaSessions() {
+        val manager = mediaSessionManager ?: return
+        MediaPlaybackState.updateFromControllers(manager.getActiveSessions(listenerComponent))
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        MediaPlaybackState.initialize(this)
+        NotificationActivityState.initialize(this)
         _isListenerConnected.value = true
-        try {
-            MediaPlaybackState.initialize(this)
-            NotificationActivityState.initialize(this)
-            mediaSessionManager = getSystemService(MediaSessionManager::class.java)
-            val component = ComponentName(this, NotificationAccessService::class.java)
-            mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, component)
-            val activeControllers = mediaSessionManager?.getActiveSessions(component)
-            MediaPlaybackState.updateFromControllers(activeControllers)
+        mediaSessionManager = getSystemService(MediaSessionManager::class.java)
+        runCatching {
+            mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, listenerComponent)
+            refreshMediaSessions()
+        }.onFailure { Log.w(TAG, "Could not connect to media sessions", it) }
 
-            activeNotifications?.forEach { NotificationActivityState.update(this, it) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        runCatching { activeNotifications }.onSuccess { notifications ->
+            notifications?.forEach(::updateNotificationActivities)
+        }.onFailure { Log.w(TAG, "Could not read active notifications", it) }
+    }
+
+    private fun updateNotificationActivities(sbn: StatusBarNotification) {
+        runCatching { NotificationActivityState.update(this, sbn) }
+            .onFailure { NotificationActivityState.remove(sbn.key) }
+        runCatching { CustomIslandNotifications.post(sbn, this) }
+            .onFailure { CustomIslandNotifications.remove(sbn.key) }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        if (sbn == null) return
-
-        NotificationActivityState.update(this, sbn)
-
+        if (sbn == null || !_isListenerConnected.value) return
+        updateNotificationActivities(sbn)
 
         try {
-            // Extract artwork from media notification extras if available (hilight-studio pattern)
             val notif = sbn.notification ?: return
             val extras = notif.extras ?: return
-            if (isMediaNotification(notif)) {
-                if (MediaPlaybackState.isPackageBlacklisted(sbn.packageName)) {
-                    return
-                }
+            if (isMediaNotification(notif) && !MediaPlaybackState.isPackageBlacklisted(sbn.packageName)) {
                 val sessionToken = BundleCompat.getParcelable(
-                    extras,
-                    Notification.EXTRA_MEDIA_SESSION,
-                    android.media.session.MediaSession.Token::class.java,
+                    extras, Notification.EXTRA_MEDIA_SESSION, MediaSession.Token::class.java,
                 )
-
-                if (sessionToken != null) {
-                    try {
-                        val directController = android.media.session.MediaController(this, sessionToken)
-                        MediaPlaybackState.attachDirectController(directController)
-                    } catch (_: Exception) {
-                        val component = ComponentName(this, NotificationAccessService::class.java)
-                        val activeControllers = mediaSessionManager?.getActiveSessions(component)
-                        MediaPlaybackState.updateFromControllers(activeControllers)
-                    }
-                } else {
-                    val component = ComponentName(this, NotificationAccessService::class.java)
-                    val activeControllers = mediaSessionManager?.getActiveSessions(component)
-                    MediaPlaybackState.updateFromControllers(activeControllers)
+                val controller = sessionToken?.let { runCatching { MediaController(this, it) }.getOrNull() }
+                if (controller == null) {
+                    refreshMediaSessions()
+                } else if (!MediaPlaybackState.attachDirectController(controller)) {
+                    return
                 }
 
                 val extraMediaActions = notif.actions.orEmpty().mapNotNull { action ->
@@ -106,14 +104,12 @@ class NotificationAccessService : NotificationListenerService() {
                     val isExtraControl = listOf(
                         "favorite", "favourite", "like", "thumb", "shuffle", "repeat", "heart",
                     ).any { label.contains(it, ignoreCase = true) }
-                    if (isExtraControl && action.actionIntent != null) {
+                    if (isExtraControl && action.actionIntent != null && action.remoteInputs.isNullOrEmpty()) {
                         label to action.actionIntent
                     } else {
                         null
                     }
                 }
-                MediaPlaybackState.updateNotificationActions(sbn.packageName, extraMediaActions)
-
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
                 val artist = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
 
@@ -164,6 +160,7 @@ class NotificationAccessService : NotificationListenerService() {
                         appName = resolvedAppName,
                     )
                 }
+                MediaPlaybackState.updateNotificationActions(sbn.packageName, extraMediaActions)
             }
         } catch (_: Exception) {}
     }
@@ -178,37 +175,38 @@ class NotificationAccessService : NotificationListenerService() {
     }
 
     private fun handleNotificationRemoved(sbn: StatusBarNotification?) {
-        sbn?.key?.let(NotificationActivityState::remove)
+        sbn?.key?.let {
+            NotificationActivityState.remove(it)
+            CustomIslandNotifications.remove(it)
+        }
 
-
-        if (sbn?.notification?.let(::isMediaNotification) != true) return
-        try {
-            val component = ComponentName(this, NotificationAccessService::class.java)
-            val activeControllers = mediaSessionManager?.getActiveSessions(component)
-            MediaPlaybackState.updateFromControllers(activeControllers)
-        } catch (_: Exception) {}
+        if (sbn?.notification?.let(::isMediaNotification) == true) {
+            runCatching { refreshMediaSessions() }
+        }
     }
 
-
-
     override fun onListenerDisconnected() {
+        stopListening()
         super.onListenerDisconnected()
-        _isListenerConnected.value = false
-        NotificationActivityState.clear()
-        try {
-            mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
-        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
-        _isListenerConnected.value = false
-        try {
-            mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
-        } catch (_: Exception) {}
+        stopListening()
         super.onDestroy()
     }
 
+    private fun stopListening() {
+        if (!_isListenerConnected.value) return
+        _isListenerConnected.value = false
+        runCatching { mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener) }
+        mediaSessionManager = null
+        CustomIslandNotifications.clear()
+        NotificationActivityState.clearNotificationActivities()
+        MediaPlaybackState.updateFromControllers(emptyList())
+    }
+
     companion object {
+        private const val TAG = "NotificationAccess"
         private val _isListenerConnected = MutableStateFlow(false)
         val isListenerConnected: StateFlow<Boolean> = _isListenerConnected.asStateFlow()
     }

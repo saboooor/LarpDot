@@ -100,7 +100,8 @@ private val FADE_MASK_COLORS = listOf(Color.White, Color.Transparent)
 internal fun TravelingArtwork(
     bitmap: ImageBitmap,
     motion: IslandArtworkMotion,
-    glow: AlbumArtGlowState,
+    compactGlow: AlbumArtGlowState,
+    expandedGlow: AlbumArtGlowState,
     path: IslandElementPath,
     modifier: Modifier,
 ) {
@@ -117,7 +118,12 @@ internal fun TravelingArtwork(
         val styleMix = frame.morphFraction
         val opacity = lerp(motion.compact.opacity(), motion.expanded.opacity(), styleMix)
         translate(tile.left, tile.top) {
-            drawMovingAlbumArtGlow(glow, tileSize, opacity)
+            if (compactGlow.blurredArtwork == expandedGlow.blurredArtwork) {
+                drawMovingAlbumArtGlow(compactGlow, tileSize, opacity)
+            } else {
+                drawMovingAlbumArtGlow(compactGlow, tileSize, opacity * (1f - styleMix))
+                drawMovingAlbumArtGlow(expandedGlow, tileSize, opacity * styleMix)
+            }
             if (start.style == end.style) {
                 drawArtwork(bitmap, tileSize, start.style, opacity, layerPaint, reusablePath)
             } else {

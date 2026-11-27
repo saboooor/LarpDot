@@ -24,8 +24,12 @@ import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.notification.NotificationActivityInfo
+import ca.saboor.larpdot.service.CustomColorMode
 import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.CustomIslandImage
+import ca.saboor.larpdot.service.CustomIslandTapAction
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.resolveCustomIslandColor
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
 @Composable
@@ -49,14 +53,55 @@ internal fun SecondaryDotContent(
     customIsland: CustomIsland? = null,
 ) {
     if (type == IslandType.CUSTOM) {
-        val icon = customIsland?.left?.icon ?: customIsland?.right?.icon
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(
-                icon?.image ?: LarpIcons.Apps,
-                contentDescription = customIsland?.name,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(secondaryBubbleIconSize(bubbleThickness)),
+        val isLeftSource = customIsland != null &&
+            (customIsland.left.icon != null || customIsland.left.image != null || !customIsland.left.text.isNullOrBlank())
+        val slot = customIsland?.let { island ->
+            if (isLeftSource) island.left
+            else island.right.takeIf { it.icon != null || it.image != null || !it.text.isNullOrBlank() }
+        }
+        val wingAnchor = if (isLeftSource) iconAnchor else progressAnchor
+        val size = Modifier.size(secondaryBubbleIconSize(bubbleThickness)).morphingElement(wingAnchor)
+        val needsDominant = slot != null && (
+            slot.iconColor.mode == CustomColorMode.DOMINANT || slot.textStyle.colorMode == CustomColorMode.DOMINANT
             )
+        val sources = if (customIsland != null && (needsDominant || slot?.image != null || !slot?.text.isNullOrBlank())) {
+            customIslandSources(customIsland)
+        } else null
+        val dominantColor = if (customIsland != null && needsDominant) {
+            rememberCustomIslandDominantColor(customIsland, sources).first
+        } else null
+        val iconTint = if (slot != null) {
+            resolveCustomIslandColor(slot.iconColor, MaterialTheme.colorScheme.primary, dominantColor)
+        } else MaterialTheme.colorScheme.primary
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (customIsland != null && !slot?.text.isNullOrBlank() && sources != null) {
+                val placeholderValues = rememberCustomIslandPlaceholderValues(customIsland, sources, preview = false)
+                CustomWingText(
+                    slot = slot,
+                    placeholderValues = placeholderValues,
+                    preview = false,
+                    maxLines = 1,
+                    dominantColor = dominantColor,
+                    modifier = Modifier.padding(horizontal = 4.dp).morphingElement(wingAnchor),
+                )
+            } else if (customIsland != null && slot?.image != null && sources != null) {
+                CustomIslandImageContent(
+                    slot.image,
+                    sources,
+                    size,
+                    compact = true,
+                    preview = false,
+                    appOverride = customIsland.tapAppPackage.takeIf { customIsland.tapAction == CustomIslandTapAction.OPEN_APP },
+                    tint = if (slot.image == CustomIslandImage.NOTIFICATION_ICON) iconTint else null,
+                )
+            } else {
+                Icon(
+                    slot?.icon?.image ?: LarpIcons.Apps,
+                    contentDescription = customIsland?.name,
+                    tint = iconTint,
+                    modifier = size,
+                )
+            }
         }
         return
     }

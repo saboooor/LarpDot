@@ -65,6 +65,7 @@ import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
 import ca.saboor.larpdot.ui.components.LarpCard
+import ca.saboor.larpdot.ui.components.LarpListItem
 import ca.saboor.larpdot.ui.components.LarpSubPageTopBar
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import kotlinx.coroutines.Dispatchers
@@ -191,11 +192,10 @@ fun AppBlacklistScreen(
             } else null,
         )
 
-        // Master Switch Card
         LarpCard {
             LarpSwitchRow(
                 title = "Enable App Blacklist",
-                subtitle = "Ignore media playback and notifications from selected apps so they never appear on the dynamic island",
+                subtitle = "Hide media and notifications from selected apps",
                 icon = LarpIcons.Block,
                 checked = appBlacklistEnabled,
                 onCheckedChange = { OverlayPreferences.setAppBlacklistEnabled(context, it) },
@@ -210,7 +210,7 @@ fun AppBlacklistScreen(
             onValueChange = { searchQuery = it },
             placeholder = {
                 Text(
-                    text = "Search installed apps...",
+                    text = "Search apps",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -245,18 +245,11 @@ fun AppBlacklistScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Filter Tabs
-        val userAppCount = remember(appList) { appList.count { !it.isSystemApp } }
         LarpConnectedButtons(
             options = BlacklistFilter.entries.mapIndexed { index, filter ->
-                val filterLabel = when (filter) {
-                    BlacklistFilter.ALL -> "All (${appList.size})"
-                    BlacklistFilter.USER -> "User ($userAppCount)"
-                    BlacklistFilter.BLACKLISTED -> "Blocked (${blacklistedPackages.size})"
-                }
                 LarpButtonOption(
                     checked = selectedFilterIndex == index,
-                    label = filterLabel,
+                    label = filter.label,
                     icon = filter.icon,
                     onCheckedChange = { selectedFilterIndex = index },
                 )
@@ -273,20 +266,10 @@ fun AppBlacklistScreen(
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(36.dp),
-                        strokeWidth = 3.dp,
-                    )
-                    Text(
-                        text = "Loading installed apps...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp),
+                    strokeWidth = 3.dp,
+                )
             }
         } else if (filteredApps.isEmpty()) {
             Box(
@@ -296,40 +279,18 @@ fun AppBlacklistScreen(
                     .padding(24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(
-                        imageVector = if (searchQuery.isNotEmpty()) LarpIcons.SearchOff else LarpIcons.Block,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.outline,
-                    )
-                    Text(
-                        text = if (searchQuery.isNotEmpty()) {
-                            "No apps match \"$searchQuery\""
-                        } else if (currentFilter == BlacklistFilter.BLACKLISTED) {
-                            "No apps blacklisted yet"
-                        } else {
-                            "No apps found"
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (searchQuery.isNotEmpty()) {
-                            "Try searching by app name or package name"
-                        } else if (currentFilter == BlacklistFilter.BLACKLISTED) {
-                            "Select apps from the \"All Apps\" tab to ignore their media playback and notifications on the dynamic island"
-                        } else {
-                            ""
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                Text(
+                    text = if (searchQuery.isNotEmpty()) {
+                        "No matching apps"
+                    } else if (currentFilter == BlacklistFilter.BLACKLISTED) {
+                        "No blocked apps"
+                    } else {
+                        "No apps found"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
             }
         } else {
             LazyColumn(
@@ -340,71 +301,34 @@ fun AppBlacklistScreen(
                 items(filteredApps, key = { it.packageName }) { app ->
                     val isBlacklisted = blacklistedPackages.contains(app.packageName)
 
-                    ElevatedCard(
-                        onClick = {
-                            OverlayPreferences.toggleBlacklistedPackage(context, app.packageName)
-                        },
-                        modifier = Modifier.fillMaxWidth().animateItem(placementSpec = null),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = if (isBlacklisted) {
-                                MaterialTheme.colorScheme.surfaceContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerLow
-                            },
-                        ),
-                        elevation = CardDefaults.elevatedCardElevation(
-                            defaultElevation = 1.dp,
-                            pressedElevation = 0.dp,
-                        ),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                    LarpListItem(
+                        title = app.label,
+                        subtitle = app.packageName,
+                        highlighted = isBlacklisted,
+                        modifier = Modifier.animateItem(placementSpec = null),
+                        leading = {
                             AppIcon(
                                 packageName = app.packageName,
                                 drawable = app.icon,
                                 iconCache = iconCache,
                                 label = app.label,
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(38.dp)
                                     .clip(RoundedCornerShape(10.dp)),
                             )
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Text(
-                                    text = app.label,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = app.packageName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
+                        },
+                        onClick = {
+                            OverlayPreferences.toggleBlacklistedPackage(context, app.packageName)
+                        },
+                        trailing = {
                             Switch(
                                 checked = isBlacklisted,
                                 onCheckedChange = {
                                     OverlayPreferences.toggleBlacklistedPackage(context, app.packageName)
                                 },
                             )
-                        }
-                    }
+                        },
+                    )
                 }
             }
         }

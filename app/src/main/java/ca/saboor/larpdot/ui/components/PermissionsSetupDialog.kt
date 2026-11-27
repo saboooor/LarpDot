@@ -13,25 +13,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.service.DotAccessibilityService
-import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.ForegroundAppTracker
-import ca.saboor.larpdot.service.NotificationAccessService
-import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.service.ScreenshotPocketManager
 import ca.saboor.larpdot.service.ShizukuBatteryStatus
 import ca.saboor.larpdot.service.ShizukuEarbudBattery
 import ca.saboor.larpdot.service.SystemEventManager
-import kotlin.math.roundToInt
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,11 +42,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
@@ -129,15 +118,11 @@ internal fun buildSystemHealthSummary(
 @Composable
 fun PermissionsSetupDialog(
     onDismiss: () -> Unit,
-    cutoutInfo: CutoutInfo? = null,
+    @Suppress("UNUSED_PARAMETER") cutoutInfo: CutoutInfo? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val shizukuStatus by ShizukuEarbudBattery.status.collectAsState()
-    val overlayEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
-    val accessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
-    val overlayServiceRunning by DotOverlayService.isRunning.collectAsState()
-    val listenerConnected by NotificationAccessService.isListenerConnected.collectAsState()
 
     var notificationAccessGranted by remember {
         mutableStateOf(hasNotificationAccess(context))
@@ -151,7 +136,6 @@ fun PermissionsSetupDialog(
 
     var usageAccessGranted by remember { mutableStateOf(ForegroundAppTracker.refreshUsageAccess(context)) }
     var bluetoothGranted by remember { mutableStateOf(SystemEventManager.hasBluetoothPermission(context)) }
-    var photosGranted by remember { mutableStateOf(ScreenshotPocketManager.hasPermission(context)) }
     var batteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
 
     val bluetoothLauncher = rememberLauncherForActivityResult(
@@ -159,13 +143,6 @@ fun PermissionsSetupDialog(
     ) { granted ->
         bluetoothGranted = granted || SystemEventManager.hasBluetoothPermission(context)
         if (bluetoothGranted) SystemEventManager.syncConnectedBluetoothDevices(context)
-    }
-
-    val photosLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        photosGranted = granted || ScreenshotPocketManager.hasPermission(context)
-        if (photosGranted) ScreenshotPocketManager.syncObserver(context)
     }
 
     // Automatically refresh permission status when user returns from settings
@@ -177,7 +154,6 @@ fun PermissionsSetupDialog(
                 overlayGranted = hasOverlayPermission(context)
                 accessibilityGranted = DotAccessibilityService.isAccessibilityEnabled(context)
                 bluetoothGranted = SystemEventManager.hasBluetoothPermission(context)
-                photosGranted = ScreenshotPocketManager.hasPermission(context)
                 batteryUnrestricted = isIgnoringBatteryOptimizations(context)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ShizukuEarbudBattery.refreshStatus()
             }
@@ -188,73 +164,24 @@ fun PermissionsSetupDialog(
         }
     }
 
-    val optionalGrants = buildList {
-        add(usageAccessGranted)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(bluetoothGranted)
-        add(photosGranted)
-        add(batteryUnrestricted)
-    }
-    val health = buildSystemHealthSummary(
-        overlayEnabled = overlayEnabled,
-        accessibilityConnected = accessibilityConnected,
-        overlayServiceRunning = overlayServiceRunning,
-        accessibilityGranted = accessibilityGranted,
-        overlayGranted = overlayGranted,
-        notificationAccessGranted = notificationAccessGranted,
-        listenerConnected = listenerConnected,
-        optionalGrants = optionalGrants,
-    )
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = LarpIcons.Security,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Text(
-                    text = "App Setup",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
+            Text(
+                text = "Permissions",
+                style = MaterialTheme.typography.titleLarge,
+            )
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                SystemHealthSummaryCard(
-                    health = health,
-                    cutoutInfo = cutoutInfo,
-                )
-
-                Text(
-                    text = "Grant notification access and overlay permissions to enable background tracking and on-screen controls.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                // 1. Notification Access (NotificationListenerService)
                 PermissionSetupCard(
-                    title = "Access to Notifications",
-                    description = "Enables notification listener access to read and react to incoming system notifications.",
+                    title = "Notification Access",
+                    description = "Read media playback and live notifications.",
                     icon = LarpIcons.NotificationsActive,
                     isGranted = notificationAccessGranted,
                     onGrantClick = {
@@ -263,10 +190,9 @@ fun PermissionsSetupDialog(
                     },
                 )
 
-                // 2. Overlay Over Apps (SYSTEM_ALERT_WINDOW)
                 PermissionSetupCard(
                     title = "Display Over Other Apps",
-                    description = "Allows the app to display floating overlays and on-screen controls on top of other applications.",
+                    description = "Show the island on top of other apps.",
                     icon = LarpIcons.Layers,
                     isGranted = overlayGranted,
                     onGrantClick = {
@@ -279,17 +205,8 @@ fun PermissionsSetupDialog(
                 )
 
                 PermissionSetupCard(
-                    title = "Usage Access (Optional)",
-                    description = "Hide the music island while the app providing the current media session is open.",
-                    icon = LarpIcons.Layers,
-                    isGranted = usageAccessGranted,
-                    onGrantClick = { ForegroundAppTracker.openUsageAccessSettings(context) },
-                )
-
-                // 3. Accessibility Service (Draw over Notification Panel & Lock Screen)
-                PermissionSetupCard(
-                    title = "Accessibility Service (Lock Screen & Shade)",
-                    description = "Allows the Dynamic Island to stay visible when swiping down the notification panel, on the lock screen, and auto-hide in fullscreen apps.",
+                    title = "Accessibility Service",
+                    description = "Show on the lock screen and notification shade, and hide in fullscreen.",
                     icon = LarpIcons.Security,
                     isGranted = accessibilityGranted,
                     onGrantClick = {
@@ -297,13 +214,22 @@ fun PermissionsSetupDialog(
                     },
                 )
 
-                // 4. Nearby Devices (Bluetooth alerts & battery level)
+                PermissionSetupCard(
+                    title = "Usage Access",
+                    description = "Hide the music island while its player app is open.",
+                    icon = LarpIcons.Apps,
+                    isGranted = usageAccessGranted,
+                    pendingStatus = "Optional",
+                    onGrantClick = { ForegroundAppTracker.openUsageAccessSettings(context) },
+                )
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     PermissionSetupCard(
-                        title = "Nearby Devices (Bluetooth Alerts)",
-                        description = "Required on Android 12+ to detect Bluetooth earbuds, watches, and battery levels.",
+                        title = "Nearby Devices",
+                        description = "Show Bluetooth connections and battery levels.",
                         icon = LarpIcons.Bluetooth,
                         isGranted = bluetoothGranted,
+                        pendingStatus = "Optional",
                         onGrantClick = {
                             bluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
                         },
@@ -311,26 +237,13 @@ fun PermissionsSetupDialog(
                     ShizukuPermissionSetupCard(shizukuStatus)
                 }
 
-                // 5. Photos Access (Zero-step Screenshot Pocket)
-                PermissionSetupCard(
-                    title = "Photos Access (Screenshot Pocket)",
-                    description = "Automatically catch new screenshots in the island for 1-tap share, copy, or delete.",
-                    icon = LarpIcons.PhotoLibrary,
-                    isGranted = photosGranted,
-                    pendingStatus = "Optional",
-                    onGrantClick = {
-                        photosLauncher.launch(ScreenshotPocketManager.requiredPermission())
-                    },
-                )
-
-                // 6. Battery Optimization (Prevent OEM background termination)
                 PermissionSetupCard(
                     title = "Unrestricted Battery",
-                    description = "Prevents Android from putting the Dynamic Island overlay or notification listener to sleep.",
+                    description = "Prevent Android from stopping the overlay in the background.",
                     icon = LarpIcons.BatterySaver,
                     isGranted = batteryUnrestricted,
-                    pendingStatus = "Recommended",
-                    grantLabel = "Open Battery Settings",
+                    pendingStatus = "Optional",
+                    grantLabel = "Open Settings",
                     onGrantClick = {
                         val batteryIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                         val fallbackIntent = Intent(
@@ -357,67 +270,6 @@ fun PermissionsSetupDialog(
 }
 
 @Composable
-private fun SystemHealthSummaryCard(
-    health: SystemHealthSummary,
-    cutoutInfo: CutoutInfo?,
-) {
-    val density = androidx.compose.ui.platform.LocalDensity.current.density
-    val statusColor = if (health.isCoreReady) Color(0xFF00C853) else MaterialTheme.colorScheme.error
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = if (health.isCoreReady) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-            } else {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-            },
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (health.isCoreReady) "System Ready" else "Core Setup Needed",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = statusColor,
-                )
-                Text(
-                    text = "${health.grantedCount}/${health.totalCount} active",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                text = "Overlay: ${health.overlayEngineLabel}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "Notifications: ${health.listenerLabel}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (cutoutInfo != null) {
-                val diameterDp = ((cutoutInfo.radiusPx * 2f) / density.coerceAtLeast(1f)).roundToInt()
-                Text(
-                    text = "Cutout: ${diameterDp}dp @ (${cutoutInfo.centerX.roundToInt()}, ${cutoutInfo.centerY.roundToInt()} px)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ShizukuPermissionSetupCard(status: ShizukuBatteryStatus) {
     val context = LocalContext.current
     val launchIntent = if (
@@ -427,16 +279,16 @@ private fun ShizukuPermissionSetupCard(status: ShizukuBatteryStatus) {
     PermissionSetupCard(
         title = "Shizuku",
         description = when (status) {
-            ShizukuBatteryStatus.NOT_RUNNING -> "Start Shizuku to use Android’s separate earbud battery readings when available."
-            ShizukuBatteryStatus.NEEDS_PERMISSION -> "Allow LarpDot to read separate earbud battery levels when available."
-            ShizukuBatteryStatus.PERMISSION_DENIED -> "Allow LarpDot in Shizuku’s authorized apps."
-            ShizukuBatteryStatus.UNSUPPORTED -> "This Shizuku session does not have access to Bluetooth battery data."
-            ShizukuBatteryStatus.READY -> "Separate earbud levels appear when Android has them."
+            ShizukuBatteryStatus.NOT_RUNNING -> "Start Shizuku for separate left and right earbud battery levels."
+            ShizukuBatteryStatus.NEEDS_PERMISSION -> "Allow access for separate earbud battery levels."
+            ShizukuBatteryStatus.PERMISSION_DENIED -> "Allow LarpDot in Shizuku."
+            ShizukuBatteryStatus.UNSUPPORTED -> "Bluetooth battery data unavailable in this Shizuku session."
+            ShizukuBatteryStatus.READY -> "Separate earbud battery levels enabled."
         },
         icon = LarpIcons.Earbuds,
         isGranted = status == ShizukuBatteryStatus.READY,
         pendingStatus = "Optional",
-        grantLabel = if (requestPermission) "Allow Shizuku" else "Open Shizuku",
+        grantLabel = if (requestPermission) "Allow" else "Open Shizuku",
         onGrantClick = if (requestPermission) ShizukuEarbudBattery::requestPermission else {
             launchIntent?.let { intent -> { context.startActivity(intent) } }
         },
@@ -450,7 +302,7 @@ private fun PermissionSetupCard(
     icon: ImageVector,
     isGranted: Boolean,
     pendingStatus: String = "Required",
-    grantLabel: String = "Grant Permission",
+    grantLabel: String = "Allow",
     onGrantClick: (() -> Unit)?,
 ) {
     Card(
@@ -462,7 +314,7 @@ private fun PermissionSetupCard(
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -477,37 +329,31 @@ private fun PermissionSetupCard(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
                     )
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                     )
                 }
 
-                // Status Pill
-                Row(
-                    modifier = Modifier
-                        .background(
-                            color = if (isGranted) Color(0xFF4CAF50).copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                            shape = CircleShape,
-                        )
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                if (isGranted) {
                     Icon(
-                        imageVector = if (isGranted) LarpIcons.Check else LarpIcons.Close,
-                        contentDescription = null,
-                        tint = if (isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(12.dp),
+                        imageVector = LarpIcons.Check,
+                        contentDescription = "Granted",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
                     )
+                } else {
                     Text(
-                        text = if (isGranted) "Granted" else pendingStatus,
+                        text = pendingStatus,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                        color = if (pendingStatus == "Required") {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }

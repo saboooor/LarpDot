@@ -114,19 +114,21 @@ fun secondaryItemWidthDp(
     type: IslandType,
     thicknessDp: Float,
     isMiniPill: Boolean,
-    hasMedia: Boolean,
     flashlightStatus: String,
     activityStatus: String?,
     smaller: Boolean = false,
     hasEarbudBatteryLevels: Boolean = false,
+    musicRightInfoExtentDp: Float = 0f,
 ): Float {
     if (!isMiniPill) return thicknessDp
     if (type == IslandType.NOTIFICATION_ACTIVITY && hasEarbudBatteryLevels) {
         return (compactRadialGaugeExtraDp(thicknessDp.dp) + secondaryEarbudRingGap).value
     }
+    if (type == IslandType.MEDIA) {
+        return if (musicRightInfoExtentDp > 0f) thicknessDp + musicRightInfoExtentDp + 12f else thicknessDp
+    }
     val extra = when (type) {
-        IslandType.CUSTOM -> 0f
-        IslandType.MEDIA -> if (hasMedia) 28f else 0f
+        IslandType.CUSTOM, IslandType.MEDIA -> 0f
         IslandType.FLASHLIGHT -> if (flashlightStatus.isNotBlank()) 24f else 0f
         IslandType.NOTIFICATION_ACTIVITY -> when {
             activityStatus.isNullOrBlank() -> 0f
@@ -138,11 +140,6 @@ fun secondaryItemWidthDp(
     if (!smaller || extra == 0f) return width
 
     val tighterWidth = width - 4f
-    if (type == IslandType.MEDIA) {
-        // Fit the 14dp artwork, 10.5dp equalizer, and up to 8dp padding on each side.
-        return tighterWidth.coerceAtLeast(41f).coerceAtMost(width)
-    }
-
     // Leave room for the icon and gauge when the gauge reaches its minimum diameter.
     val thickness = thicknessDp.dp
     val icon = secondaryBubbleIconSize(thickness)
@@ -446,7 +443,7 @@ internal const val PROGRESSIVE_BLUR_SHADER = """
             // Vertical: bottom (0) -> top (1) with startFraction leak
             float t = 1.0 - (coord.y / size.y);
             progress = clamp((t - startFraction) / max(1.0 - startFraction, 0.001), 0.0, 1.0);
-        } else {
+        } else if (direction < 3.5) {
             // Direction 3: 2D leak for expanded island
             float leakTop = 20.0;
             float topBound = uTopSeam + leakTop;
@@ -456,6 +453,40 @@ internal const val PROGRESSIVE_BLUR_SHADER = """
             float rightBound = uRightSeam - leakRight;
             float progRight = clamp((coord.x - rightBound) / max(size.x - rightBound, 1.0), 0.0, 1.0);
             progress = max(progTop, progRight);
+        } else if (direction < 4.5) {
+            // Direction 4: Mirrored portrait right wing (blur & fade on LEFT side towards the dot)
+            float yc = size.y * 0.5;
+            float dy = coord.y - yc;
+            float rCurve = size.y * 0.85;
+            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dy * dy, 0.0));
+            float xEff = (size.x - coord.x) + curveOffset;
+
+            float blurStart = size.x * 0.40;
+            float blurEnd = size.x * 0.90;
+            float blurT = clamp((xEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
+            progress = smoothstep(0.0, 1.0, blurT);
+
+            float fadeStart = size.x * 0.50;
+            float fadeEnd = size.x * 0.96;
+            float fadeT = clamp((xEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
+            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
+        } else {
+            // Direction 5: Mirrored landscape bottom wing (blur & fade on TOP side towards the dot)
+            float xc = size.x * 0.5;
+            float dx = coord.x - xc;
+            float rCurve = size.x * 0.85;
+            float curveOffset = rCurve - sqrt(max(rCurve * rCurve - dx * dx, 0.0));
+            float yEff = (size.y - coord.y) + curveOffset;
+
+            float blurStart = size.y * 0.40;
+            float blurEnd = size.y * 0.90;
+            float blurT = clamp((yEff - blurStart) / max(blurEnd - blurStart, 1.0), 0.0, 1.0);
+            progress = smoothstep(0.0, 1.0, blurT);
+
+            float fadeStart = size.y * 0.50;
+            float fadeEnd = size.y * 0.96;
+            float fadeT = clamp((yEff - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
+            fadeFactor = 1.0 - smoothstep(0.0, 1.0, fadeT);
         }
 
         // If completely faded out past the fade edge, return transparent black immediately

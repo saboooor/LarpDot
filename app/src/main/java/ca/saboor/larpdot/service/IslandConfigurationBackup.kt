@@ -1,18 +1,15 @@
 package ca.saboor.larpdot.service
 
 import android.content.Context
-import androidx.core.content.edit
-import ca.saboor.larpdot.flashlight.StrobeSpeed
+import com.google.gson.Strictness
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
+import java.io.StringReader
 import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.ui.overlay.DEFAULT_ISLAND_PRIORITY_ORDER
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
 import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder
-import java.util.UUID
-import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 data class IslandBackupConfig(
     val bubbleStyle: OverlayPreferences.BubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
@@ -29,11 +26,11 @@ data class IslandBackupConfig(
     val minimizedAlbumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.AlbumArtStyle.NESTED,
     val minimizedAlbumArtShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.CIRCLE,
     val minimizedAlbumArtRotation: Float = 0f,
-    val minimizedNestedBlurredBg: Boolean = false,
     val expandedAlbumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
     val showExpandedAlbumArt: Boolean = true,
     val expandedAlbumArtShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
     val expandedAlbumArtRotation: Float = 0f,
+    val audioOutputStyle: OverlayPreferences.AudioOutputStyle = OverlayPreferences.AudioOutputStyle.CHIP,
     val expandedPlayerLayout: OverlayPreferences.ExpandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
     val showProgressSquiggles: Boolean = true,
     val progressBarAccentColor: Boolean = false,
@@ -50,7 +47,10 @@ data class IslandBackupConfig(
     val trackInfoAlbumBesideArtist: Boolean = false,
     val trackInfoTitleAccent: Boolean = false,
     val showMinimizedTitle: Boolean = false,
+    val minimizedMusicTimestamp: OverlayPreferences.MinimizedMusicTimestamp = OverlayPreferences.MinimizedMusicTimestamp.NONE,
     val showMinimizedVisualizer: Boolean = true,
+    val minimizedMusicLeftSide: OverlayPreferences.MinimizedMusicSideContent = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
+    val minimizedMusicRightSide: OverlayPreferences.MinimizedMusicSideContent = OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
     val showMinimizedProgressOutline: Boolean = true,
     val showExpandedProgressOutline: Boolean = true,
     val albumArtGlowEnabled: Boolean = true,
@@ -69,13 +69,12 @@ data class IslandBackupConfig(
     val waveformBarWidth: Float = 2.5f,
     val waveformBarSpacing: Float = 1.5f,
     val showMinimizedFlashlightOutline: Boolean = true,
+    val minimizedFlashlightLeftSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.MinimizedFlashlightSideContent.ICON,
+    val minimizedFlashlightRightSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS,
     val showExpandedFlashlightOutline: Boolean = true,
     val flashlightExpandedStyle: OverlayPreferences.FlashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
     val flashlightBeamBlur: Boolean = false,
     val flashlightBeamAccentColor: Boolean = true,
-    val flashlightTapToToggle: Boolean = true,
-    val flashlightAutoOffMinutes: Int = 0,
-    val flashlightStrobeSpeed: StrobeSpeed = StrobeSpeed.NORMAL,
     val musicPauseTimeoutSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_PAUSE_TIMEOUT_SECONDS,
     val musicQuickSeekSeconds: Int = OverlayPreferences.DEFAULT_MUSIC_QUICK_SEEK_SECONDS,
     val tapToExpand: Boolean = false,
@@ -108,10 +107,8 @@ data class IslandBackupConfig(
     val activityBatteryLow: Boolean = true,
     val activitySoundMode: Boolean = true,
     val activityDnd: Boolean = true,
-    val activityVolumeHud: Boolean = false,
     val activityBluetooth: Boolean = true,
     val activityAudioOutput: Boolean = true,
-    val activityScreenshotPocket: Boolean = true,
     val activityChargeLimitAlert: Boolean = false,
     val activityChargeLimitPercent: Int = 80,
     val activityLowBatteryThresholdPercent: Int = 15,
@@ -121,7 +118,6 @@ data class IslandBackupConfig(
     val activityPermanentDnd: Boolean = false,
     val activityPermanentBluetooth: Boolean = false,
     val activityPermanentAudioOutput: Boolean = false,
-    val activityPermanentScreenshotPocket: Boolean = false,
     val activityExpandShortTerm: Boolean = false,
     val activityProgressOutline: Boolean = true,
     val islandPriorityOrder: List<IslandPriorityItem> = DEFAULT_ISLAND_PRIORITY_ORDER,
@@ -131,278 +127,8 @@ data class IslandBackupConfig(
     val cutoutDiameterDp: Float? = null,
 )
 
-data class IslandThemePreset(
-    val id: String,
-    val name: String,
-    val tagline: String,
-    val style: IslandBackupConfig,
-)
-
-object IslandThemePresets {
+object IslandConfigurationBackup {
     private const val BACKUP_VERSION = 4
-    private const val USER_PRESETS_PREFS = "larpdot_user_theme_presets"
-    private const val KEY_USER_PRESETS = "saved_presets_v1"
-    const val MAX_USER_PRESETS = 12
-
-    private val _userPresets = MutableStateFlow<List<IslandThemePreset>>(emptyList())
-    val userPresets: StateFlow<List<IslandThemePreset>> = _userPresets.asStateFlow()
-    private var userPresetsLoaded = false
-
-    fun loadUserPresets(context: Context): List<IslandThemePreset> {
-        if (!userPresetsLoaded) {
-            val raw = context.applicationContext
-                .getSharedPreferences(USER_PRESETS_PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_USER_PRESETS, null)
-            _userPresets.value = decodeUserPresets(raw)
-            userPresetsLoaded = true
-        }
-        return _userPresets.value
-    }
-
-    fun saveCurrentAsUserPreset(context: Context, rawName: String): IslandThemePreset? {
-        val name = rawName.trim().replace('\t', ' ').replace('\n', ' ').take(32)
-        if (name.isEmpty()) return null
-        val current = fromJson(exportFromPreferences(context)) ?: IslandBackupConfig()
-        val preset = IslandThemePreset(
-            id = "user_${UUID.randomUUID().toString().take(8)}",
-            name = name,
-            tagline = summarizePresetStyle(current),
-            style = current,
-        )
-        val existing = loadUserPresets(context)
-        val updated = (listOf(preset) + existing.filterNot { it.name.equals(name, ignoreCase = true) })
-            .take(MAX_USER_PRESETS)
-        persistUserPresets(context, updated)
-        return preset
-    }
-
-    fun deleteUserPreset(context: Context, id: String) {
-        val updated = loadUserPresets(context).filterNot { it.id == id }
-        persistUserPresets(context, updated)
-    }
-
-    private fun persistUserPresets(context: Context, presets: List<IslandThemePreset>) {
-        _userPresets.value = presets
-        userPresetsLoaded = true
-        context.applicationContext
-            .getSharedPreferences(USER_PRESETS_PREFS, Context.MODE_PRIVATE)
-            .edit { putString(KEY_USER_PRESETS, encodeUserPresets(presets)) }
-    }
-
-    internal fun summarizePresetStyle(config: IslandBackupConfig): String {
-        val surface = if (config.backdropBlurEnabled) {
-            "Blur"
-        } else {
-            val alphaPct = (config.expandedBackgroundOpacity.coerceIn(0f, 1f) * 100f).roundToInt()
-            if (alphaPct >= 100) "Solid" else "$alphaPct% alpha"
-        }
-        return "${config.bubbleStyle.label} • $surface • ${config.islandFontStyle.label}"
-    }
-
-    internal fun encodeUserPresets(presets: List<IslandThemePreset>): String =
-        presets.take(MAX_USER_PRESETS).joinToString(separator = "\n") { preset ->
-            val cleanId = preset.id.replace('\t', '_').replace('\n', '_')
-            val cleanName = preset.name.trim().replace('\t', ' ').replace('\n', ' ')
-            val cleanTagline = preset.tagline.trim().replace('\t', ' ').replace('\n', ' ')
-            val compactJson = toJson(preset.style).replace("\n", " ").replace('\t', ' ')
-            "$cleanId\t$cleanName\t$cleanTagline\t$compactJson"
-        }
-
-    internal fun decodeUserPresets(raw: String?): List<IslandThemePreset> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return raw.lineSequence()
-            .filter { it.isNotBlank() }
-            .mapNotNull { line ->
-                val parts = line.split('\t', limit = 4)
-                if (parts.size < 4) return@mapNotNull null
-                val id = parts[0].trim()
-                val name = parts[1].trim()
-                val tagline = parts[2].trim()
-                val style = fromJson(parts[3]) ?: return@mapNotNull null
-                if (id.isEmpty() || name.isEmpty()) return@mapNotNull null
-                IslandThemePreset(
-                    id = id,
-                    name = name,
-                    tagline = tagline.ifEmpty { summarizePresetStyle(style) },
-                    style = style,
-                )
-            }
-            .take(MAX_USER_PRESETS)
-            .toList()
-    }
-
-    val builtInPresets: List<IslandThemePreset> = listOf(
-        IslandThemePreset(
-            id = "m3_expressive",
-            name = "Material 3",
-            tagline = "Squircle bubbles, rounded font & M3 controls",
-            style = IslandBackupConfig(
-                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-                smallerBubbles = false,
-                islandCornerRadius = 36f,
-                islandSquircleEnabled = true,
-                expandedBackgroundOpacity = 1f,
-                backdropBlurEnabled = false,
-                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.GRADIENT,
-                islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
-                islandFontWeight = 500,
-                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.NESTED,
-                minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.COOKIE,
-                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
-                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
-                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
-                showProgressSquiggles = true,
-                progressBarAccentColor = true,
-                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BELOW,
-                playbackPlayPauseBg = true,
-                playbackM3ButtonGroup = true,
-                playbackPlayPauseAccent = true,
-                showMinimizedDominantGlow = true,
-                showExpandedDominantGlow = true,
-                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
-            ),
-        ),
-        IslandThemePreset(
-            id = "classic_ios",
-            name = "Classic Pill",
-            tagline = "Clean black capsule, straight bar & side times",
-            style = IslandBackupConfig(
-                bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
-                smallerBubbles = false,
-                islandCornerRadius = 44f,
-                islandSquircleEnabled = true,
-                expandedBackgroundOpacity = 1f,
-                backdropBlurEnabled = false,
-                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.NONE,
-                islandFontStyle = OverlayPreferences.IslandFontStyle.DEFAULT,
-                islandFontWeight = 500,
-                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.NESTED,
-                minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
-                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
-                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
-                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.IPHONE,
-                showProgressSquiggles = false,
-                progressBarAccentColor = false,
-                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BESIDE,
-                playbackPlayPauseBg = false,
-                playbackSkipBg = false,
-                playbackM3ButtonGroup = false,
-                showMinimizedDominantGlow = false,
-                showExpandedDominantGlow = false,
-                minimizedBpmPulseEnabled = false,
-                expandedBpmPulseEnabled = false,
-                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
-            ),
-        ),
-        IslandThemePreset(
-            id = "frosted_glass",
-            name = "Frosted Glass",
-            tagline = "Translucent blurred card with soft rounded corners",
-            style = IslandBackupConfig(
-                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-                smallerBubbles = false,
-                islandCornerRadius = 34f,
-                islandSquircleEnabled = false,
-                expandedBackgroundOpacity = 0.58f,
-                backdropBlurEnabled = true,
-                backdropBlurRadius = 34f,
-                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.GRADIENT,
-                islandFontStyle = OverlayPreferences.IslandFontStyle.DEFAULT,
-                islandFontWeight = 500,
-                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.BLENDED,
-                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
-                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
-                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
-                showProgressSquiggles = true,
-                progressBarAccentColor = true,
-                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.HIDDEN,
-                playbackPlayPauseBg = true,
-                playbackPlayPauseAccent = true,
-                showMinimizedDominantGlow = true,
-                showExpandedDominantGlow = true,
-                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
-            ),
-        ),
-        IslandThemePreset(
-            id = "vibrant_pulse",
-            name = "Vibrant Pulse",
-            tagline = "Full-bleed art, 4-side glow & beat-synced pulse",
-            style = IslandBackupConfig(
-                bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-                smallerBubbles = false,
-                islandCornerRadius = 40f,
-                islandSquircleEnabled = true,
-                expandedBackgroundOpacity = 1f,
-                backdropBlurEnabled = false,
-                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.CANOPY,
-                islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
-                islandFontWeight = 600,
-                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND,
-                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND,
-                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.CLOVER,
-                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
-                showProgressSquiggles = true,
-                progressBarAccentColor = true,
-                playbackPlayPauseBg = true,
-                playbackPlayPauseAccent = true,
-                playbackM3ButtonGroup = true,
-                trackInfoTitleAccent = true,
-                albumArtGlowEnabled = true,
-                showMinimizedDominantGlow = true,
-                showExpandedDominantGlow = true,
-                expandedGlowLeft = true,
-                expandedGlowRight = true,
-                expandedGlowTop = true,
-                expandedGlowBottom = true,
-                bpmPulseEnabled = true,
-                minimizedBpmPulseEnabled = true,
-                expandedBpmPulseEnabled = true,
-                pulseAmount = 1.35f,
-                pulseEntireIslandEnabled = true,
-                waveformBandCount = 8,
-                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.BEAM,
-                flashlightBeamBlur = true,
-            ),
-        ),
-        IslandThemePreset(
-            id = "minimal_matte",
-            name = "Minimal Matte",
-            tagline = "Compact bubbles, condensed type & zero glow",
-            style = IslandBackupConfig(
-                bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
-                smallerBubbles = true,
-                islandCornerRadius = 28f,
-                islandSquircleEnabled = true,
-                expandedBackgroundOpacity = 1f,
-                backdropBlurEnabled = false,
-                cameraCoverStyle = OverlayPreferences.CameraCoverStyle.SWOOP,
-                islandFontStyle = OverlayPreferences.IslandFontStyle.CONDENSED,
-                islandFontWeight = 500,
-                minimizedAlbumArtStyle = OverlayPreferences.AlbumArtStyle.BASIC_FADED,
-                expandedAlbumArtStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
-                expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.ROUNDED_SQUARE,
-                expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.ANDROID_MEDIA_CONTROLS,
-                showProgressSquiggles = false,
-                progressBarAccentColor = false,
-                progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.HIDDEN,
-                playbackPlayPauseBg = true,
-                playbackPlayPauseAccent = false,
-                albumArtGlowEnabled = false,
-                showMinimizedDominantGlow = false,
-                showExpandedDominantGlow = false,
-                bpmPulseEnabled = false,
-                minimizedBpmPulseEnabled = false,
-                expandedBpmPulseEnabled = false,
-                pulseEntireIslandEnabled = false,
-                flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
-            ),
-        ),
-    )
-
-    /** Applies only visual theme fields, preserving cutout calibration, notification toggles, and priority order. */
-    fun applyThemePreset(context: Context, preset: IslandThemePreset) {
-        applyVisualAppearance(context, preset.style)
-    }
 
     private fun applyVisualAppearance(context: Context, config: IslandBackupConfig) {
         OverlayPreferences.setBubbleStyle(context, config.bubbleStyle)
@@ -418,12 +144,12 @@ object IslandThemePresets {
         OverlayPreferences.setMinimizedAlbumArtStyle(context, config.minimizedAlbumArtStyle)
         OverlayPreferences.setMinimizedAlbumArtShape(context, config.minimizedAlbumArtShape)
         OverlayPreferences.setMinimizedAlbumArtRotation(context, config.minimizedAlbumArtRotation)
-        OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, config.minimizedNestedBlurredBg)
         OverlayPreferences.setExpandedAlbumArtStyle(context, config.expandedAlbumArtStyle)
         OverlayPreferences.setShowExpandedAlbumArtEnabled(context, config.showExpandedAlbumArt)
         OverlayPreferences.setExpandedAlbumArtShape(context, config.expandedAlbumArtShape)
         OverlayPreferences.setExpandedAlbumArtRotation(context, config.expandedAlbumArtRotation)
         OverlayPreferences.setExpandedPlayerLayout(context, config.expandedPlayerLayout)
+        OverlayPreferences.setAudioOutputStyle(context, config.audioOutputStyle)
         OverlayPreferences.setShowProgressSquigglesEnabled(context, config.showProgressSquiggles)
         OverlayPreferences.setProgressBarAccentColorEnabled(context, config.progressBarAccentColor)
         OverlayPreferences.setProgressTimestampPlacement(context, config.progressTimestampPlacement)
@@ -447,7 +173,8 @@ object IslandThemePresets {
                 titleAccentColor = config.trackInfoTitleAccent,
             ),
         )
-        OverlayPreferences.setShowMinimizedTitleEnabled(context, config.showMinimizedTitle)
+        OverlayPreferences.setMinimizedMusicLeftSide(context, config.minimizedMusicLeftSide)
+        OverlayPreferences.setMinimizedMusicRightSide(context, config.minimizedMusicRightSide)
         OverlayPreferences.setShowMinimizedVisualizerEnabled(context, config.showMinimizedVisualizer)
         OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, config.showMinimizedProgressOutline)
         OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, config.showExpandedProgressOutline)
@@ -470,7 +197,8 @@ object IslandThemePresets {
         OverlayPreferences.setWaveformBandCount(context, config.waveformBandCount)
         OverlayPreferences.setWaveformBarWidth(context, config.waveformBarWidth)
         OverlayPreferences.setWaveformBarSpacing(context, config.waveformBarSpacing)
-        OverlayPreferences.setShowMinimizedFlashlightOutlineEnabled(context, config.showMinimizedFlashlightOutline)
+        OverlayPreferences.setMinimizedFlashlightLeftSide(context, config.minimizedFlashlightLeftSide)
+        OverlayPreferences.setMinimizedFlashlightRightSide(context, config.minimizedFlashlightRightSide)
         OverlayPreferences.setShowExpandedFlashlightOutlineEnabled(context, config.showExpandedFlashlightOutline)
         OverlayPreferences.setFlashlightExpandedStyle(context, config.flashlightExpandedStyle)
         OverlayPreferences.setFlashlightBeamBlurEnabled(context, config.flashlightBeamBlur)
@@ -478,7 +206,7 @@ object IslandThemePresets {
     }
 
     private val KNOWN_BACKUP_KEYS: Set<String> by lazy {
-        parseFlatJsonObject(toJson(IslandBackupConfig()))?.keys.orEmpty() + setOf(
+        parseBackupFields(toJson(IslandBackupConfig()))?.keys.orEmpty() + setOf(
             "cutoutManualEnabled",
             "cutoutOffsetX",
             "cutoutOffsetY",
@@ -503,12 +231,12 @@ object IslandThemePresets {
             add("minimizedAlbumArtStyle" to quote(config.minimizedAlbumArtStyle.name))
             add("minimizedAlbumArtShape" to quote(config.minimizedAlbumArtShape.name))
             add("minimizedAlbumArtRotation" to config.minimizedAlbumArtRotation.toString())
-            add("minimizedNestedBlurredBg" to config.minimizedNestedBlurredBg.toString())
             add("expandedAlbumArtStyle" to quote(config.expandedAlbumArtStyle.name))
             add("showExpandedAlbumArt" to config.showExpandedAlbumArt.toString())
             add("expandedAlbumArtShape" to quote(config.expandedAlbumArtShape.name))
             add("expandedAlbumArtRotation" to config.expandedAlbumArtRotation.toString())
             add("expandedPlayerLayout" to quote(config.expandedPlayerLayout.name))
+            add("audioOutputStyle" to quote(config.audioOutputStyle.name))
             add("showProgressSquiggles" to config.showProgressSquiggles.toString())
             add("progressBarAccentColor" to config.progressBarAccentColor.toString())
             add("progressTimestampPlacement" to quote(config.progressTimestampPlacement.name))
@@ -523,7 +251,10 @@ object IslandThemePresets {
             add("trackInfoAlbumBesideArtist" to config.trackInfoAlbumBesideArtist.toString())
             add("trackInfoTitleAccent" to config.trackInfoTitleAccent.toString())
             add("showMinimizedTitle" to config.showMinimizedTitle.toString())
+            add("minimizedMusicTimestamp" to quote(config.minimizedMusicTimestamp.name))
             add("showMinimizedVisualizer" to config.showMinimizedVisualizer.toString())
+            add("minimizedMusicLeftSide" to quote(config.minimizedMusicLeftSide.name))
+            add("minimizedMusicRightSide" to quote(config.minimizedMusicRightSide.name))
             add("showMinimizedProgressOutline" to config.showMinimizedProgressOutline.toString())
             add("showExpandedProgressOutline" to config.showExpandedProgressOutline.toString())
             add("albumArtGlowEnabled" to config.albumArtGlowEnabled.toString())
@@ -542,13 +273,12 @@ object IslandThemePresets {
             add("waveformBarWidth" to config.waveformBarWidth.toString())
             add("waveformBarSpacing" to config.waveformBarSpacing.toString())
             add("showMinimizedFlashlightOutline" to config.showMinimizedFlashlightOutline.toString())
+            add("minimizedFlashlightLeftSide" to quote(config.minimizedFlashlightLeftSide.name))
+            add("minimizedFlashlightRightSide" to quote(config.minimizedFlashlightRightSide.name))
             add("showExpandedFlashlightOutline" to config.showExpandedFlashlightOutline.toString())
             add("flashlightExpandedStyle" to quote(config.flashlightExpandedStyle.name))
             add("flashlightBeamBlur" to config.flashlightBeamBlur.toString())
             add("flashlightBeamAccentColor" to config.flashlightBeamAccentColor.toString())
-            add("flashlightTapToToggle" to config.flashlightTapToToggle.toString())
-            add("flashlightAutoOffMinutes" to config.flashlightAutoOffMinutes.toString())
-            add("flashlightStrobeSpeed" to quote(config.flashlightStrobeSpeed.name))
             add("musicPauseTimeoutSeconds" to config.musicPauseTimeoutSeconds.toString())
             add("musicQuickSeekSeconds" to config.musicQuickSeekSeconds.toString())
             add("tapToExpand" to config.tapToExpand.toString())
@@ -581,10 +311,8 @@ object IslandThemePresets {
             add("activityBatteryLow" to config.activityBatteryLow.toString())
             add("activitySoundMode" to config.activitySoundMode.toString())
             add("activityDnd" to config.activityDnd.toString())
-            add("activityVolumeHud" to config.activityVolumeHud.toString())
             add("activityBluetooth" to config.activityBluetooth.toString())
             add("activityAudioOutput" to config.activityAudioOutput.toString())
-            add("activityScreenshotPocket" to config.activityScreenshotPocket.toString())
             add("activityChargeLimitAlert" to config.activityChargeLimitAlert.toString())
             add("activityChargeLimitPercent" to config.activityChargeLimitPercent.toString())
             add("activityLowBatteryThresholdPercent" to config.activityLowBatteryThresholdPercent.toString())
@@ -594,7 +322,6 @@ object IslandThemePresets {
             add("activityPermanentDnd" to config.activityPermanentDnd.toString())
             add("activityPermanentBluetooth" to config.activityPermanentBluetooth.toString())
             add("activityPermanentAudioOutput" to config.activityPermanentAudioOutput.toString())
-            add("activityPermanentScreenshotPocket" to config.activityPermanentScreenshotPocket.toString())
             add("activityExpandShortTerm" to config.activityExpandShortTerm.toString())
             add("activityProgressOutline" to config.activityProgressOutline.toString())
             add("islandPriorityOrder" to quote(normalizeIslandPriorityOrder(config.islandPriorityOrder).joinToString(",") { it.name }))
@@ -611,13 +338,30 @@ object IslandThemePresets {
     }
 
     fun fromJson(raw: String): IslandBackupConfig? {
-        val trimmed = raw.trim()
-        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
-        val fields = parseFlatJsonObject(trimmed) ?: return null
+        val fields = parseBackupFields(raw) ?: return null
+        fun finiteFloat(key: String): Float? = fields[key]?.toFloatOrNull()?.takeIf(Float::isFinite)
         if (fields.keys.none { it in KNOWN_BACKUP_KEYS }) return null
         val defaults = IslandBackupConfig()
         val expandedPlayerLayout = enumOrDefault(fields["expandedPlayerLayout"], defaults.expandedPlayerLayout)
         val legacyBpmPulse = fields["bpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.bpmPulseEnabled
+        val parsedMinimizedTitle = fields["showMinimizedTitle"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedTitle
+        val parsedMinimizedTimestamp = enumOrDefault(fields["minimizedMusicTimestamp"], defaults.minimizedMusicTimestamp)
+        val legacyMusicRightSide = when (parsedMinimizedTimestamp) {
+            OverlayPreferences.MinimizedMusicTimestamp.REMAINING -> OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT
+            OverlayPreferences.MinimizedMusicTimestamp.ELAPSED -> OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED
+            OverlayPreferences.MinimizedMusicTimestamp.NONE -> if (parsedMinimizedTitle) {
+                OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
+            } else {
+                OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
+            }
+        }
+        val parsedMinimizedFlashlightOutline =
+            fields["showMinimizedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedFlashlightOutline
+        val legacyFlashlightRightSide = if (parsedMinimizedFlashlightOutline) {
+            OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
+        } else {
+            OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE
+        }
         val rawPriority = fields["islandPriorityOrder"]
         val parsedPriority = if (!rawPriority.isNullOrBlank()) {
             normalizeIslandPriorityOrder(
@@ -629,24 +373,24 @@ object IslandThemePresets {
         return IslandBackupConfig(
             bubbleStyle = enumOrDefault(fields["bubbleStyle"], defaults.bubbleStyle),
             smallerBubbles = fields["smallerBubbles"]?.toBooleanStrictOrNull() ?: defaults.smallerBubbles,
-            minimizedMaxWidthPercent = (fields["minimizedMaxWidthPercent"]?.toFloatOrNull() ?: defaults.minimizedMaxWidthPercent).coerceIn(40f, 100f),
-            islandCornerRadius = (fields["islandCornerRadius"]?.toFloatOrNull() ?: defaults.islandCornerRadius).coerceIn(0f, 100f),
+            minimizedMaxWidthPercent = (finiteFloat("minimizedMaxWidthPercent") ?: defaults.minimizedMaxWidthPercent).coerceIn(40f, 100f),
+            islandCornerRadius = (finiteFloat("islandCornerRadius") ?: defaults.islandCornerRadius).coerceIn(0f, 100f),
             islandSquircleEnabled = fields["islandSquircleEnabled"]?.toBooleanStrictOrNull() ?: defaults.islandSquircleEnabled,
-            expandedBackgroundOpacity = (fields["expandedBackgroundOpacity"]?.toFloatOrNull() ?: defaults.expandedBackgroundOpacity).coerceIn(0f, 1f),
+            expandedBackgroundOpacity = (finiteFloat("expandedBackgroundOpacity") ?: defaults.expandedBackgroundOpacity).coerceIn(0f, 1f),
             backdropBlurEnabled = fields["backdropBlurEnabled"]?.toBooleanStrictOrNull() ?: defaults.backdropBlurEnabled,
-            backdropBlurRadius = (fields["backdropBlurRadius"]?.toFloatOrNull() ?: defaults.backdropBlurRadius).coerceIn(5f, 120f),
+            backdropBlurRadius = (finiteFloat("backdropBlurRadius") ?: defaults.backdropBlurRadius).coerceIn(5f, 120f),
             cameraCoverStyle = enumOrDefault(fields["cameraCoverStyle"], defaults.cameraCoverStyle),
             islandFontStyle = enumOrDefault(fields["islandFontStyle"], defaults.islandFontStyle),
             islandFontWeight = (fields["islandFontWeight"]?.toIntOrNull() ?: defaults.islandFontWeight).coerceIn(100, 900),
             minimizedAlbumArtStyle = enumOrDefault(fields["minimizedAlbumArtStyle"], defaults.minimizedAlbumArtStyle),
             minimizedAlbumArtShape = enumOrDefault(fields["minimizedAlbumArtShape"], defaults.minimizedAlbumArtShape),
-            minimizedAlbumArtRotation = (fields["minimizedAlbumArtRotation"]?.toFloatOrNull() ?: defaults.minimizedAlbumArtRotation).coerceIn(0f, 360f),
-            minimizedNestedBlurredBg = fields["minimizedNestedBlurredBg"]?.toBooleanStrictOrNull() ?: defaults.minimizedNestedBlurredBg,
+            minimizedAlbumArtRotation = (finiteFloat("minimizedAlbumArtRotation") ?: defaults.minimizedAlbumArtRotation).coerceIn(0f, 360f),
             expandedAlbumArtStyle = enumOrDefault(fields["expandedAlbumArtStyle"], defaults.expandedAlbumArtStyle),
             showExpandedAlbumArt = fields["showExpandedAlbumArt"]?.toBooleanStrictOrNull() ?: defaults.showExpandedAlbumArt,
             expandedAlbumArtShape = enumOrDefault(fields["expandedAlbumArtShape"], defaults.expandedAlbumArtShape),
-            expandedAlbumArtRotation = (fields["expandedAlbumArtRotation"]?.toFloatOrNull() ?: defaults.expandedAlbumArtRotation).coerceIn(0f, 360f),
+            expandedAlbumArtRotation = (finiteFloat("expandedAlbumArtRotation") ?: defaults.expandedAlbumArtRotation).coerceIn(0f, 360f),
             expandedPlayerLayout = expandedPlayerLayout,
+            audioOutputStyle = enumOrDefault(fields["audioOutputStyle"], defaults.audioOutputStyle),
             showProgressSquiggles = fields["showProgressSquiggles"]?.toBooleanStrictOrNull() ?: defaults.showProgressSquiggles,
             progressBarAccentColor = fields["progressBarAccentColor"]?.toBooleanStrictOrNull() ?: defaults.progressBarAccentColor,
             progressTimestampPlacement = enumOrDefault(
@@ -655,7 +399,7 @@ object IslandThemePresets {
             ),
             playbackPlayPauseBg = fields["playbackPlayPauseBg"]?.toBooleanStrictOrNull() ?: defaults.playbackPlayPauseBg,
             playbackSkipBg = fields["playbackSkipBg"]?.toBooleanStrictOrNull() ?: defaults.playbackSkipBg,
-            playbackCornerRadiusDp = (fields["playbackCornerRadiusDp"]?.toFloatOrNull() ?: defaults.playbackCornerRadiusDp).coerceIn(0f, 32f),
+            playbackCornerRadiusDp = (finiteFloat("playbackCornerRadiusDp") ?: defaults.playbackCornerRadiusDp).coerceIn(0f, 32f),
             playbackM3ButtonGroup = fields["playbackM3ButtonGroup"]?.toBooleanStrictOrNull() ?: defaults.playbackM3ButtonGroup,
             playbackPlayPauseAccent = fields["playbackPlayPauseAccent"]?.toBooleanStrictOrNull() ?: defaults.playbackPlayPauseAccent,
             trackInfoShowTitle = fields["trackInfoShowTitle"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowTitle,
@@ -663,8 +407,11 @@ object IslandThemePresets {
             trackInfoShowAlbum = fields["trackInfoShowAlbum"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowAlbum,
             trackInfoAlbumBesideArtist = fields["trackInfoAlbumBesideArtist"]?.toBooleanStrictOrNull() ?: defaults.trackInfoAlbumBesideArtist,
             trackInfoTitleAccent = fields["trackInfoTitleAccent"]?.toBooleanStrictOrNull() ?: defaults.trackInfoTitleAccent,
-            showMinimizedTitle = fields["showMinimizedTitle"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedTitle,
+            minimizedMusicTimestamp = parsedMinimizedTimestamp,
+            showMinimizedTitle = parsedMinimizedTitle,
             showMinimizedVisualizer = fields["showMinimizedVisualizer"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedVisualizer,
+            minimizedMusicLeftSide = enumOrDefault(fields["minimizedMusicLeftSide"], defaults.minimizedMusicLeftSide),
+            minimizedMusicRightSide = enumOrDefault(fields["minimizedMusicRightSide"], legacyMusicRightSide),
             showMinimizedProgressOutline = fields["showMinimizedProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedProgressOutline,
             showExpandedProgressOutline = fields["showExpandedProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.showExpandedProgressOutline,
             albumArtGlowEnabled = fields["albumArtGlowEnabled"]?.toBooleanStrictOrNull() ?: defaults.albumArtGlowEnabled,
@@ -677,19 +424,18 @@ object IslandThemePresets {
             bpmPulseEnabled = legacyBpmPulse,
             minimizedBpmPulseEnabled = fields["minimizedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: legacyBpmPulse,
             expandedBpmPulseEnabled = fields["expandedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: legacyBpmPulse,
-            pulseAmount = (fields["pulseAmount"]?.toFloatOrNull() ?: defaults.pulseAmount).coerceIn(0.25f, 3.0f),
+            pulseAmount = (finiteFloat("pulseAmount") ?: defaults.pulseAmount).coerceIn(0.25f, 3.0f),
             pulseEntireIslandEnabled = fields["pulseEntireIslandEnabled"]?.toBooleanStrictOrNull() ?: defaults.pulseEntireIslandEnabled,
             waveformBandCount = (fields["waveformBandCount"]?.toIntOrNull() ?: defaults.waveformBandCount).coerceIn(0, 30),
-            waveformBarWidth = (fields["waveformBarWidth"]?.toFloatOrNull() ?: defaults.waveformBarWidth).coerceIn(0.5f, 6f),
-            waveformBarSpacing = (fields["waveformBarSpacing"]?.toFloatOrNull() ?: defaults.waveformBarSpacing).coerceIn(0f, 8f),
-            showMinimizedFlashlightOutline = fields["showMinimizedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedFlashlightOutline,
+            waveformBarWidth = (finiteFloat("waveformBarWidth") ?: defaults.waveformBarWidth).coerceIn(0.5f, 6f),
+            waveformBarSpacing = (finiteFloat("waveformBarSpacing") ?: defaults.waveformBarSpacing).coerceIn(0f, 8f),
+            showMinimizedFlashlightOutline = parsedMinimizedFlashlightOutline,
+            minimizedFlashlightLeftSide = enumOrDefault(fields["minimizedFlashlightLeftSide"], defaults.minimizedFlashlightLeftSide),
+            minimizedFlashlightRightSide = enumOrDefault(fields["minimizedFlashlightRightSide"], legacyFlashlightRightSide),
             showExpandedFlashlightOutline = fields["showExpandedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showExpandedFlashlightOutline,
             flashlightExpandedStyle = enumOrDefault(fields["flashlightExpandedStyle"], defaults.flashlightExpandedStyle),
             flashlightBeamBlur = fields["flashlightBeamBlur"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamBlur,
             flashlightBeamAccentColor = fields["flashlightBeamAccentColor"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamAccentColor,
-            flashlightTapToToggle = fields["flashlightTapToToggle"]?.toBooleanStrictOrNull() ?: defaults.flashlightTapToToggle,
-            flashlightAutoOffMinutes = (fields["flashlightAutoOffMinutes"]?.toIntOrNull() ?: defaults.flashlightAutoOffMinutes).coerceIn(0, 60),
-            flashlightStrobeSpeed = enumOrDefault(fields["flashlightStrobeSpeed"], defaults.flashlightStrobeSpeed),
             musicPauseTimeoutSeconds = (fields["musicPauseTimeoutSeconds"]?.toIntOrNull() ?: defaults.musicPauseTimeoutSeconds).coerceIn(0, 300),
             musicQuickSeekSeconds = (fields["musicQuickSeekSeconds"]?.toIntOrNull() ?: defaults.musicQuickSeekSeconds).coerceIn(5, 60),
             tapToExpand = fields["tapToExpand"]?.toBooleanStrictOrNull() ?: defaults.tapToExpand,
@@ -724,10 +470,8 @@ object IslandThemePresets {
             activityBatteryLow = fields["activityBatteryLow"]?.toBooleanStrictOrNull() ?: defaults.activityBatteryLow,
             activitySoundMode = fields["activitySoundMode"]?.toBooleanStrictOrNull() ?: defaults.activitySoundMode,
             activityDnd = fields["activityDnd"]?.toBooleanStrictOrNull() ?: defaults.activityDnd,
-            activityVolumeHud = fields["activityVolumeHud"]?.toBooleanStrictOrNull() ?: defaults.activityVolumeHud,
             activityBluetooth = fields["activityBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityBluetooth,
             activityAudioOutput = fields["activityAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityAudioOutput,
-            activityScreenshotPocket = fields["activityScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityScreenshotPocket,
             activityChargeLimitAlert = fields["activityChargeLimitAlert"]?.toBooleanStrictOrNull() ?: defaults.activityChargeLimitAlert,
             activityChargeLimitPercent = (fields["activityChargeLimitPercent"]?.toIntOrNull() ?: defaults.activityChargeLimitPercent).coerceIn(70, 100),
             activityLowBatteryThresholdPercent = (fields["activityLowBatteryThresholdPercent"]?.toIntOrNull()
@@ -738,34 +482,41 @@ object IslandThemePresets {
             activityPermanentDnd = fields["activityPermanentDnd"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentDnd,
             activityPermanentBluetooth = fields["activityPermanentBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentBluetooth,
             activityPermanentAudioOutput = fields["activityPermanentAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentAudioOutput,
-            activityPermanentScreenshotPocket = fields["activityPermanentScreenshotPocket"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentScreenshotPocket,
             activityExpandShortTerm = fields["activityExpandShortTerm"]?.toBooleanStrictOrNull() ?: defaults.activityExpandShortTerm,
             activityProgressOutline = fields["activityProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.activityProgressOutline,
             islandPriorityOrder = parsedPriority,
             cutoutManualEnabled = fields["cutoutManualEnabled"]?.toBooleanStrictOrNull(),
-            cutoutOffsetX = fields["cutoutOffsetX"]?.toFloatOrNull(),
-            cutoutOffsetY = fields["cutoutOffsetY"]?.toFloatOrNull(),
-            cutoutDiameterDp = fields["cutoutDiameterDp"]?.toFloatOrNull(),
+            cutoutOffsetX = finiteFloat("cutoutOffsetX"),
+            cutoutOffsetY = finiteFloat("cutoutOffsetY"),
+            cutoutDiameterDp = finiteFloat("cutoutDiameterDp"),
         )
     }
 
     private fun quote(value: String): String =
         "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
-    private val flatPairRegex = Regex(""""([^"]+)"\s*:\s*("([^"]*)"|true|false|-?\d+(?:\.\d+)?)""")
-
-    private fun parseFlatJsonObject(raw: String): Map<String, String>? {
-        val matches = flatPairRegex.findAll(raw).toList()
-        if (matches.isEmpty()) return null
-        return buildMap {
-            for (match in matches) {
-                val key = match.groupValues[1]
-                val stringValue = match.groups[3]?.value
-                val literalValue = match.groupValues[2]
-                put(key, stringValue ?: literalValue)
+    private fun parseBackupFields(raw: String): Map<String, String>? = runCatching {
+        JsonReader(StringReader(raw)).use { reader ->
+            reader.strictness = Strictness.STRICT
+            reader.beginObject()
+            val fields = buildMap {
+                while (reader.hasNext()) {
+                    val key = reader.nextName()
+                    when (reader.peek()) {
+                        JsonToken.STRING, JsonToken.NUMBER -> put(key, reader.nextString())
+                        JsonToken.BOOLEAN -> put(key, reader.nextBoolean().toString())
+                        else -> {
+                            reader.skipValue()
+                            remove(key)
+                        }
+                    }
+                }
             }
+            reader.endObject()
+            check(reader.peek() == JsonToken.END_DOCUMENT)
+            fields
         }
-    }
+    }.getOrNull()
 
     fun exportFromPreferences(context: Context): String {
         OverlayPreferences.loadIslandAppearance(context)
@@ -791,12 +542,12 @@ object IslandThemePresets {
             minimizedAlbumArtStyle = OverlayPreferences.getMinimizedAlbumArtStyle(context),
             minimizedAlbumArtShape = OverlayPreferences.getMinimizedAlbumArtShape(context),
             minimizedAlbumArtRotation = OverlayPreferences.getMinimizedAlbumArtRotation(context),
-            minimizedNestedBlurredBg = OverlayPreferences.isMinimizedNestedBlurredBgEnabled(context),
             expandedAlbumArtStyle = OverlayPreferences.getExpandedAlbumArtStyle(context),
             showExpandedAlbumArt = OverlayPreferences.isShowExpandedAlbumArtEnabled(context),
             expandedAlbumArtShape = OverlayPreferences.getExpandedAlbumArtShape(context),
             expandedAlbumArtRotation = OverlayPreferences.getExpandedAlbumArtRotation(context),
             expandedPlayerLayout = OverlayPreferences.getExpandedPlayerLayout(context),
+            audioOutputStyle = OverlayPreferences.getAudioOutputStyle(context),
             showProgressSquiggles = OverlayPreferences.isShowProgressSquigglesEnabled(context),
             progressBarAccentColor = OverlayPreferences.isProgressBarAccentColorEnabled(context),
             progressTimestampPlacement = OverlayPreferences.getProgressTimestampPlacement(context),
@@ -811,7 +562,10 @@ object IslandThemePresets {
             trackInfoAlbumBesideArtist = trackInfo.albumBesideArtist,
             trackInfoTitleAccent = trackInfo.titleAccentColor,
             showMinimizedTitle = OverlayPreferences.isShowMinimizedTitleEnabled(context),
+            minimizedMusicTimestamp = OverlayPreferences.getMinimizedMusicTimestamp(context),
             showMinimizedVisualizer = OverlayPreferences.isShowMinimizedVisualizerEnabled(context),
+            minimizedMusicLeftSide = OverlayPreferences.getMinimizedMusicLeftSide(context),
+            minimizedMusicRightSide = OverlayPreferences.getMinimizedMusicRightSide(context),
             showMinimizedProgressOutline = OverlayPreferences.isShowMinimizedProgressOutlineEnabled(context),
             showExpandedProgressOutline = OverlayPreferences.isShowExpandedProgressOutlineEnabled(context),
             albumArtGlowEnabled = OverlayPreferences.albumArtGlowFlow.value,
@@ -830,13 +584,12 @@ object IslandThemePresets {
             waveformBarWidth = OverlayPreferences.waveformBarWidthFlow.value,
             waveformBarSpacing = OverlayPreferences.waveformBarSpacingFlow.value,
             showMinimizedFlashlightOutline = OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context),
+            minimizedFlashlightLeftSide = OverlayPreferences.getMinimizedFlashlightLeftSide(context),
+            minimizedFlashlightRightSide = OverlayPreferences.getMinimizedFlashlightRightSide(context),
             showExpandedFlashlightOutline = OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context),
             flashlightExpandedStyle = OverlayPreferences.getFlashlightExpandedStyle(context),
             flashlightBeamBlur = OverlayPreferences.isFlashlightBeamBlurEnabled(context),
             flashlightBeamAccentColor = OverlayPreferences.isFlashlightBeamAccentColorEnabled(context),
-            flashlightTapToToggle = OverlayPreferences.isFlashlightTapToToggleEnabled(context),
-            flashlightAutoOffMinutes = OverlayPreferences.getFlashlightAutoOffMinutes(context),
-            flashlightStrobeSpeed = OverlayPreferences.getFlashlightStrobeSpeed(context),
             musicPauseTimeoutSeconds = OverlayPreferences.getMusicPauseTimeoutSeconds(context),
             musicQuickSeekSeconds = OverlayPreferences.getMusicQuickSeekSeconds(context),
             tapToExpand = OverlayPreferences.isTapToExpandEnabled(context),
@@ -869,10 +622,8 @@ object IslandThemePresets {
             activityBatteryLow = activities.batteryLow,
             activitySoundMode = activities.soundMode,
             activityDnd = activities.dnd,
-            activityVolumeHud = activities.volumeHud,
             activityBluetooth = activities.bluetooth,
             activityAudioOutput = activities.audioOutput,
-            activityScreenshotPocket = activities.screenshotPocket,
             activityChargeLimitAlert = activities.chargeLimitAlert,
             activityChargeLimitPercent = activities.chargeLimitPercent,
             activityLowBatteryThresholdPercent = activities.lowBatteryThresholdPercent,
@@ -882,7 +633,6 @@ object IslandThemePresets {
             activityPermanentDnd = activities.permanentDnd,
             activityPermanentBluetooth = activities.permanentBluetooth,
             activityPermanentAudioOutput = activities.permanentAudioOutput,
-            activityPermanentScreenshotPocket = activities.permanentScreenshotPocket,
             activityExpandShortTerm = activities.expandShortTermAlerts,
             activityProgressOutline = activities.progressOutline,
             islandPriorityOrder = OverlayPreferences.getIslandPriorityOrder(context),
@@ -897,9 +647,6 @@ object IslandThemePresets {
     fun applyToPreferences(context: Context, config: IslandBackupConfig, includeCutout: Boolean = true) {
         applyVisualAppearance(context, config)
         OverlayPreferences.setMinimizedMaxWidthPercent(context, config.minimizedMaxWidthPercent)
-        OverlayPreferences.setFlashlightTapToToggleEnabled(context, config.flashlightTapToToggle)
-        OverlayPreferences.setFlashlightAutoOffMinutes(context, config.flashlightAutoOffMinutes)
-        OverlayPreferences.setFlashlightStrobeSpeed(context, config.flashlightStrobeSpeed)
         OverlayPreferences.setMusicPauseTimeoutSeconds(context, config.musicPauseTimeoutSeconds)
         OverlayPreferences.setMusicQuickSeekSeconds(context, config.musicQuickSeekSeconds)
         OverlayPreferences.setTapToExpandEnabled(context, config.tapToExpand)
@@ -940,10 +687,8 @@ object IslandThemePresets {
                 batteryLow = config.activityBatteryLow,
                 soundMode = config.activitySoundMode,
                 dnd = config.activityDnd,
-                volumeHud = config.activityVolumeHud,
                 bluetooth = config.activityBluetooth,
                 audioOutput = config.activityAudioOutput,
-                screenshotPocket = config.activityScreenshotPocket,
                 chargeLimitAlert = config.activityChargeLimitAlert,
                 chargeLimitPercent = config.activityChargeLimitPercent,
                 lowBatteryThresholdPercent = config.activityLowBatteryThresholdPercent,
@@ -953,7 +698,6 @@ object IslandThemePresets {
                 permanentDnd = config.activityPermanentDnd,
                 permanentBluetooth = config.activityPermanentBluetooth,
                 permanentAudioOutput = config.activityPermanentAudioOutput,
-                permanentScreenshotPocket = config.activityPermanentScreenshotPocket,
                 expandShortTermAlerts = config.activityExpandShortTerm,
                 progressOutline = config.activityProgressOutline,
             ),

@@ -60,6 +60,8 @@ import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityState
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.runTapAction
+import ca.saboor.larpdot.service.matchingNotification
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import ca.saboor.larpdot.visualizer.BpmDetector
 import ca.saboor.larpdot.visualizer.rememberBpmPulse
@@ -90,14 +92,13 @@ internal fun CompactIslandOverlay(
     isMusicAllowed: Boolean = true,
     notificationActivity: NotificationActivityInfo? = null,
     shortTermActivities: List<NotificationActivityInfo> = emptyList(),
-    customIsland: CustomIsland? = null,
+    customIslands: List<CustomIsland> = emptyList(),
     hasSwipeDownCustomIsland: Boolean = false,
     isFlashlightOn: Boolean = false,
     isExpanded: Boolean = false,
     isExiting: Boolean = false,
     hideCompactPill: Boolean = false,
     hiddenSecondarySlot: IslandSlot? = null,
-    onSwipeDownCustomExpand: () -> Unit = {},
     onDismiss: (IslandType, IslandSlot?) -> Unit = { _, _ -> },
     onCompactFrameChanged: (CompactIslandFrame) -> Unit = {},
     onCompactScaleChanged: (Float) -> Unit = {},
@@ -124,13 +125,21 @@ internal fun CompactIslandOverlay(
     val isFlashlightActive = !isExiting && isFlashlightOn
 
     val priorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
+    val eligibleActivities by NotificationActivityState.eligibleActivities.collectAsState()
+    val customNotifications by ca.saboor.larpdot.service.CustomIslandNotifications.active.collectAsState()
+    val deviceLocked by ca.saboor.larpdot.service.ScreenStateTracker.isDeviceLocked.collectAsState()
+    val matchingCustomNotificationIds = if (!deviceLocked && !isExiting) {
+        customIslands.filter { it.matchingNotification(customNotifications.values) != null }.map { it.id }.toSet()
+    } else emptySet()
     val stack = builtInIslandSlots(
         isMusicActive,
         isFlashlightActive,
         notificationActivity.takeUnless { isExiting },
         if (isExiting) emptyList() else shortTermActivities,
         priorityOrder = priorityOrder,
-        custom = customIsland.takeUnless { isExiting },
+        eligibleActivities = eligibleActivities,
+        customIslands = if (isExiting) emptyList() else customIslands,
+        matchingNotificationIds = matchingCustomNotificationIds,
     )
     val isPillActive = stack.primary != null
     val primarySlot = stack.primary?.content
@@ -176,11 +185,14 @@ internal fun CompactIslandOverlay(
     }
 
     val activeDisplayType = primaryType ?: lastDisplayType
-    var lastCustomIsland by remember { mutableStateOf(customIsland) }
-    LaunchedEffect(customIsland) {
-        if (customIsland != null) lastCustomIsland = customIsland
+    val resolvedPrimaryCustom = if (primaryType == IslandType.CUSTOM) {
+        customIslands.firstOrNull { it.id == primarySlot.customIslandId }
+    } else null
+    var lastCustomIsland by remember { mutableStateOf<CustomIsland?>(null) }
+    LaunchedEffect(resolvedPrimaryCustom) {
+        if (resolvedPrimaryCustom != null) lastCustomIsland = resolvedPrimaryCustom
     }
-    val displayCustomIsland = customIsland ?: lastCustomIsland
+    val displayCustomIsland = resolvedPrimaryCustom ?: lastCustomIsland ?: customIslands.firstOrNull()
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -192,8 +204,12 @@ internal fun CompactIslandOverlay(
     val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
     val secondaryDotSize = secondaryBubbleThicknessDp(compactPillThickness.value, smallerBubbles).dp
 
-    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
-    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val musicLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    val showMinimizedTitle = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
+        musicRightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
+    val showMinimizedVisualizer = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER ||
+        musicRightSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
     val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val waveformBarWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val waveformBarSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
@@ -229,6 +245,19 @@ internal fun CompactIslandOverlay(
         barWidth = waveformBarWidth,
         barSpacing = waveformBarSpacing,
     )
+    val secondaryTrailingSide = secondaryMusicTrailingSide(musicLeftSide, musicRightSide)
+    val musicRightInfoExtentDp = if (isMusicActive) {
+        val trailingVisWidth = if (secondaryTrailingSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER) {
+            compactVisualizerWidthDp(true, waveformBandCount, waveformBarWidth, waveformBarSpacing).dp
+        } else 0.dp
+        secondaryMusicRightInfoExtent(
+            mediaInfo = mediaInfo,
+            timestamp = timestampForMusicSide(secondaryTrailingSide),
+            showTitle = secondaryTrailingSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE,
+            visualizerWidth = trailingVisWidth,
+            isLandscape = isLandscape,
+        ).value
+    } else 0f
     val hasLeftBubble = leftSlots.isNotEmpty()
     val hasRightBubble = rightSlots.isNotEmpty()
     val gapDp = bubbleGap(bubbleStyle)
@@ -242,11 +271,11 @@ internal fun CompactIslandOverlay(
             type = slot.type,
             thicknessDp = secondaryDotSize.value,
             isMiniPill = isMiniPill,
-            hasMedia = isMusicActive,
             flashlightStatus = flashlightStatus,
             activityStatus = status,
             smaller = smallerBubbles,
             hasEarbudBatteryLevels = activity?.pairedEarbudBatteryLevels != null,
+            musicRightInfoExtentDp = musicRightInfoExtentDp,
         ).dp
     }
 
@@ -312,7 +341,7 @@ internal fun CompactIslandOverlay(
 
     fun islandModel(type: IslandType): IslandModel {
         val activate: () -> Unit = when (type) {
-            IslandType.CUSTOM -> { { requestExpand(type) } }
+            IslandType.CUSTOM -> { { displayCustomIsland?.runTapAction(context) { requestExpand(type) } } }
             IslandType.MEDIA -> { { openPlayerApp(context, mediaInfo) } }
             IslandType.FLASHLIGHT -> onFlashlightToggle
             IslandType.NOTIFICATION_ACTIVITY -> {
@@ -363,13 +392,8 @@ internal fun CompactIslandOverlay(
             base.copy(onUp = dismissAction)
         } else {
             base.copy(
-                onDown = {
-                    if (hasSwipeDownCustomIsland) {
-                        hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
-                        onSwipeDownCustomExpand()
-                    } else {
-                        ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context)
-                    }
+                onDown = if (hasSwipeDownCustomIsland) null else {
+                    { ca.saboor.larpdot.service.DotAccessibilityService.openNotificationShade(context) }
                 },
                 onUp = dismissAction,
             )
@@ -385,7 +409,7 @@ internal fun CompactIslandOverlay(
         .islandTapGestures(
             identity = activeDisplayType,
             enabled = true,
-            tapToExpand = tapToExpand || activeDisplayType == IslandType.CUSTOM,
+            tapToExpand = tapToExpand && activeDisplayType != IslandType.CUSTOM,
             holdDurationMs = holdToExpandDurationMs,
             model = islandModel(activeDisplayType),
             onExpand = { requestExpand(activeDisplayType) },
@@ -445,21 +469,26 @@ internal fun CompactIslandOverlay(
                             .graphicsLayer { alpha = contentAlpha },
                     ) {
                         Crossfade(
-                            targetState = activeDisplayType to (
-                                if (activeDisplayType == IslandType.NOTIFICATION_ACTIVITY) displayPrimaryActivity?.key else null
-                            ),
+                            targetState = activeDisplayType to when (activeDisplayType) {
+                                IslandType.NOTIFICATION_ACTIVITY -> displayPrimaryActivity?.key
+                                IslandType.CUSTOM -> displayCustomIsland?.id
+                                else -> null
+                            },
                             animationSpec = LarpMotion.fade(200),
                             label = "compact_content_type",
-                        ) { (displayType, displayActivityKey) ->
+                        ) { (displayType, displayIdentity) ->
                             val resolvedActivity = if (displayType == IslandType.NOTIFICATION_ACTIVITY) {
-                                displayActivityKey?.let { key ->
+                                displayIdentity?.let { key ->
                                     shortTermActivities.firstOrNull { it.key == key }
                                         ?: notificationActivity?.takeIf { it.key == key }
                                         ?: displayPrimaryActivity?.takeIf { it.key == key }
                                 } ?: displayPrimaryActivity
                             } else displayPrimaryActivity
                             if (displayType == IslandType.CUSTOM) {
-                                displayCustomIsland?.let {
+                                val resolvedCustom = displayIdentity?.let { id ->
+                                    customIslands.firstOrNull { it.id == id }
+                                } ?: displayCustomIsland
+                                resolvedCustom?.let {
                                     CustomIslandCompactContent(it, cutoutDiameterDp, isLandscape, trailingWingFraction)
                                 }
                             } else IslandCompactContent(
@@ -543,6 +572,14 @@ internal fun CompactIslandOverlay(
             if (liveSlotActivity != null) lastSlotActivity = liveSlotActivity
         }
         val slotActivity = liveSlotActivity ?: lastSlotActivity
+        val liveSlotCustom = if (type.type == IslandType.CUSTOM) {
+            customIslands.firstOrNull { it.id == type.customIslandId }
+        } else null
+        var lastSlotCustom by remember(type) { mutableStateOf(liveSlotCustom) }
+        LaunchedEffect(liveSlotCustom) {
+            if (liveSlotCustom != null) lastSlotCustom = liveSlotCustom
+        }
+        val slotCustom = liveSlotCustom ?: lastSlotCustom
         val slotActivityStatus = slotActivity?.let { rememberCompactActivityStatus(it) }
         val statusArrivalOffset = rememberStatusArrivalOffset(slotActivity, !isExpanded)
         val secondaryPress = rememberIslandPressFeedback(
@@ -568,11 +605,11 @@ internal fun CompactIslandOverlay(
             type = type.type,
             thicknessDp = secondaryDotSize.value,
             isMiniPill = true,
-            hasMedia = isMusicActive,
             flashlightStatus = flashlightStatus,
             activityStatus = slotActivityStatus,
             smaller = smallerBubbles,
             hasEarbudBatteryLevels = slotActivity?.pairedEarbudBatteryLevels != null,
+            musicRightInfoExtentDp = musicRightInfoExtentDp,
         ) > secondaryDotSize.value + 0.5f
 
         val gestures = if (isExpanded || !isActive) Modifier else Modifier
@@ -588,7 +625,9 @@ internal fun CompactIslandOverlay(
                     holdDurationMs = holdToExpandDurationMs,
                     model = islandModel(type.type).copy(
                         onActivate = {
-                            if (canShowMiniPill || isMiniPill) {
+                            if (type.type == IslandType.CUSTOM) {
+                                slotCustom?.runTapAction(context) { requestExpand(type.type, type) }
+                            } else if (canShowMiniPill || isMiniPill) {
                                 onToggleMiniPill()
                             }
                         },
@@ -650,7 +689,7 @@ internal fun CompactIslandOverlay(
                 mediaInfo = mediaInfo,
                 notificationActivityStatus = slotActivityStatus,
                 flashlightStatus = flashlightStatus,
-                customIsland = displayCustomIsland,
+                customIsland = slotCustom,
             )
         }
     }

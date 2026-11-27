@@ -107,10 +107,8 @@ fun builtInIslandStack(
                 activityKind == NotificationActivityKind.BATTERY_LOW ||
                 activityKind == NotificationActivityKind.SOUND_MODE ||
                 activityKind == NotificationActivityKind.DND ||
-                activityKind == NotificationActivityKind.VOLUME ||
                 activityKind == NotificationActivityKind.BLUETOOTH ||
-                activityKind == NotificationActivityKind.AUDIO_OUTPUT ||
-                activityKind == NotificationActivityKind.SCREENSHOT
+                activityKind == NotificationActivityKind.AUDIO_OUTPUT
             val priority = when {
                 isShortTermKind && activityIsPinnedShortTerm -> pinnedShortTermScore
                 isShortTermKind -> shortTermScore
@@ -166,7 +164,11 @@ fun stackedPillWidthWithExtents(
 }
 
 /** Identity stays stable when an individual notification's content changes. */
-data class IslandSlot(val type: IslandType, val activityKey: String? = null) {
+data class IslandSlot(
+    val type: IslandType,
+    val activityKey: String? = null,
+    val customIslandId: String? = null,
+) {
     val activity get() = resolveIslandSlotActivity(
         slot = this,
         primaryActivity = ca.saboor.larpdot.notification.NotificationActivityState.current.value,
@@ -190,8 +192,12 @@ internal fun builtInIslandSlots(
     shortTerms: List<ca.saboor.larpdot.notification.NotificationActivityInfo>,
     priorityOrder: List<IslandPriorityItem> = DEFAULT_ISLAND_PRIORITY_ORDER,
     custom: CustomIsland? = null,
+    matchingNotification: Boolean = false,
+    eligibleActivities: List<ca.saboor.larpdot.notification.NotificationActivityInfo> = listOfNotNull(activity) + shortTerms,
+    customIslands: List<CustomIsland> = listOfNotNull(custom),
+    matchingNotificationIds: Set<String> = if (matchingNotification && custom != null) setOf(custom.id) else emptySet(),
 ): IslandStack<IslandSlot> {
-    val normalized = islandPriorityOrderWithCustom(priorityOrder, listOfNotNull(custom))
+    val normalized = islandPriorityOrderWithCustom(priorityOrder, customIslands)
     val base = builtInIslandStack(
         music = music,
         flashlight = flashlight,
@@ -210,19 +216,24 @@ internal fun builtInIslandSlots(
         val score = if (item.isPinnedShortTerm) pinnedSecondaryPriority else autoDismissSecondaryPriority
         IslandCandidate(item.key, score, IslandSlot(IslandType.NOTIFICATION_ACTIVITY, item.key))
     }
-    val showCustom = when (custom?.visibility) {
-        null, CustomIslandVisibility.SWIPE_DOWN -> false
-        CustomIslandVisibility.IDLE -> candidates.isEmpty()
-        CustomIslandVisibility.ALWAYS -> true
-        CustomIslandVisibility.CONDITIONAL -> when (custom.condition) {
-            CustomIslandCondition.MUSIC -> music
-            CustomIslandCondition.FLASHLIGHT -> flashlight
-            CustomIslandCondition.LIVE_ACTIVITY -> activity != null || shortTerms.isNotEmpty()
+    val customCandidates = customIslands.mapNotNull { island ->
+        val showCustom = when (island.visibility) {
+            CustomIslandVisibility.SWIPE_DOWN -> false
+            CustomIslandVisibility.IDLE -> candidates.isEmpty()
+            CustomIslandVisibility.ALWAYS -> true
+            CustomIslandVisibility.CONDITIONAL -> when (island.condition) {
+                CustomIslandCondition.MUSIC -> music
+                CustomIslandCondition.FLASHLIGHT -> flashlight
+                CustomIslandCondition.LIVE_ACTIVITY -> if (island.activityKind == null) {
+                    activity != null || shortTerms.isNotEmpty()
+                } else eligibleActivities.any { it.kind == island.activityKind }
+                CustomIslandCondition.NOTIFICATION -> island.id in matchingNotificationIds
+            }
+        }
+        if (!showCustom) null else {
+            val priority = islandPriorityScore(IslandPriorityItem.Custom(island.id), normalized)
+            IslandCandidate("custom|${island.id}", priority, IslandSlot(IslandType.CUSTOM, customIslandId = island.id))
         }
     }
-    val customCandidate = custom?.takeIf { showCustom }?.let {
-        val priority = islandPriorityScore(IslandPriorityItem.Custom(it.id), normalized)
-        IslandCandidate("custom|${it.id}", priority, IslandSlot(IslandType.CUSTOM))
-    }
-    return resolveIslandStack(candidates + listOfNotNull(customCandidate))
+    return resolveIslandStack(candidates + customCandidates)
 }

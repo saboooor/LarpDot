@@ -1,7 +1,6 @@
 package ca.saboor.larpdot.ui.overlay
 
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -21,17 +20,21 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -72,24 +75,28 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.HorizontalAlignmentLine
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.media.MediaSessionAction
 import ca.saboor.larpdot.media.MediaTrackInfo
-import ca.saboor.larpdot.media.MusicSleepTimer
-import ca.saboor.larpdot.media.formatSleepTimerBadge
 import ca.saboor.larpdot.service.AudioOutputTracker
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.ui.components.AudioOutputButton
 import ca.saboor.larpdot.ui.components.AudioOutputChip
 import ca.saboor.larpdot.ui.components.MarqueeText
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -114,9 +121,10 @@ internal fun ExpandedIslandContent(
     cutoutDiameterDp: Dp,
     isExpanded: Boolean,
     onCollapse: () -> Unit,
+    cardWidth: Dp,
+    cutoutCenterX: Dp,
+    cutoutCenterY: Dp,
     modifier: Modifier = Modifier,
-    cutoutInfo: CutoutInfo? = null,
-    cardHorizontalMarginDp: Dp = 14.dp,
     topContentInset: Dp = 0.dp,
     albumArtStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.expandedAlbumArtStyleFlow.collectAsState().value,
     showAlbumArt: Boolean = OverlayPreferences.showExpandedAlbumArtFlow.collectAsState().value,
@@ -146,23 +154,27 @@ internal fun ExpandedIslandContent(
     onProgressBarClick: (() -> Unit)? = null,
     onPlaybackControlsClick: (() -> Unit)? = null,
     onTrackInfoClick: (() -> Unit)? = null,
+    onAudioOutputClick: (() -> Unit)? = null,
     highlightAlbumArt: Boolean = false,
     highlightVisualizer: Boolean = false,
     highlightProgressBar: Boolean = false,
     highlightPlaybackControls: Boolean = false,
     highlightTrackInfo: Boolean = false,
+    highlightAudioOutput: Boolean = false,
 ) {
     val context = LocalContext.current
-    val artworkGlow = rememberAlbumArtGlow(mediaInfo)
     val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
+    val artworkGlow = rememberAlbumArtGlow(
+        media = mediaInfo,
+        shape = artworkShape,
+        shapeKey = AlbumArtGlowShapeKey.of(nestedShape, nestedRotation),
+    )
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
     val accentColor = if (mediaInfo.albumArt == null) MaterialTheme.colorScheme.primary else mediaInfo.dominantColor
 
     val currentBpm by BpmDetector.currentBpm.collectAsState()
-    val sleepTimerState by MusicSleepTimer.state.collectAsState()
-    val sleepTimerBadge = formatSleepTimerBadge(sleepTimerState)
-    val activeAudioOutput by AudioOutputTracker.activeOutput.collectAsState()
+    val audioOutputStyle by OverlayPreferences.audioOutputStyleFlow.collectAsState()
     val quickSeekSeconds by OverlayPreferences.musicQuickSeekSecondsFlow.collectAsState()
     LaunchedEffect(mediaInfo.title, mediaInfo.artist) {
         if (mediaInfo.title.isNotBlank()) {
@@ -211,20 +223,6 @@ internal fun ExpandedIslandContent(
     val coroutineScope = rememberCoroutineScope()
     val maxCardDragOffsetPx = with(density) { 8.dp.toPx() }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val dotCenterXDp = if (cutoutInfo != null) {
-        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-        val orientedCenterX = if (isLandscape) {
-            minOf(cutoutInfo.centerX, screenWidthPx - cutoutInfo.centerX)
-        } else {
-            cutoutInfo.centerX
-        }
-        with(density) { orientedCenterX.toDp() } - cardHorizontalMarginDp
-    } else {
-        (configuration.screenWidthDp.dp - (cardHorizontalMarginDp * 2)) / 2f
-    }
-    val dotCenterYDp = 18.dp
     val scrubCallbacks = remember(mediaInfo.durationMs) {
         ScrubCallbacks(
             onDragStart = { fraction ->
@@ -315,8 +313,8 @@ internal fun ExpandedIslandContent(
 
         CameraCover(
             style = cameraCoverStyle,
-            centerX = dotCenterXDp,
-            centerY = dotCenterYDp,
+            centerX = cutoutCenterX,
+            centerY = cutoutCenterY,
             diameter = cutoutDiameterDp,
             modifier = Modifier.matchParentSize(),
         )
@@ -339,12 +337,15 @@ internal fun ExpandedIslandContent(
         val bpmPulseScale: () -> Float = {
             if (bpmPulseEnabled && mediaInfo.isPlaying) 1f + (0.08f * bpmPulseState.value * pulseAmount) else 1f
         }
+        val cutoutFromStart = if (LocalLayoutDirection.current == LayoutDirection.Ltr) cutoutCenterX else cardWidth - cutoutCenterX
         val layoutParams = ExpandedLayoutParams(
             context = context,
             hapticFeedback = hapticFeedback,
             mediaInfo = mediaInfo,
             livePositionMs = livePositionMs,
             topContentInset = topContentInset,
+            cardWidth = cardWidth,
+            cutoutStart = cutoutFromStart - cutoutDiameterDp / 2f,
             showAlbumArt = showAlbumArt,
             artworkAnchor = artworkAnchor,
             visualizerAnchor = visualizerAnchor,
@@ -355,8 +356,7 @@ internal fun ExpandedIslandContent(
             expandedArtProgressProvider = expandedArtProgressProvider,
             accentColor = accentColor,
             currentBpm = currentBpm,
-            sleepTimerBadge = sleepTimerBadge,
-            hasExternalAudioOutput = activeAudioOutput.isExternal,
+            audioOutputStyle = audioOutputStyle,
             quickSeekStepMs = quickSeekSeconds.coerceIn(5, 60) * 1000L,
             trackInfoStyle = trackInfoStyle,
             fontStyle = fontStyle,
@@ -372,11 +372,13 @@ internal fun ExpandedIslandContent(
             onCollapse = onCollapse,
             onAlbumArtClick = onAlbumArtClick,
             onTrackInfoClick = onTrackInfoClick,
+            onAudioOutputClick = onAudioOutputClick,
             onVisualizerClick = onVisualizerClick,
             onProgressBarClick = onProgressBarClick,
             onPlaybackControlsClick = onPlaybackControlsClick,
             highlightAlbumArt = highlightAlbumArt,
             highlightTrackInfo = highlightTrackInfo,
+            highlightAudioOutput = highlightAudioOutput,
             highlightVisualizer = highlightVisualizer,
             highlightProgressBar = highlightProgressBar,
             highlightPlaybackControls = highlightPlaybackControls,
@@ -390,44 +392,14 @@ internal fun ExpandedIslandContent(
     }
 }
 
-@Composable
-private fun SleepTimerChip(
-    label: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(50),
-        color = Color.White.copy(alpha = 0.14f),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Icon(
-                imageVector = LarpIcons.Timer,
-                contentDescription = "Cancel sleep timer",
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(11.dp),
-            )
-            Text(
-                text = label,
-                color = Color.White.copy(alpha = 0.9f),
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                softWrap = false,
-            )
-        }
-    }
-}
-
 private class ExpandedLayoutParams(
     val context: Context,
     val hapticFeedback: HapticFeedback,
     val mediaInfo: MediaTrackInfo,
     val livePositionMs: State<Long>,
     val topContentInset: Dp,
+    val cardWidth: Dp,
+    val cutoutStart: Dp,
     val showAlbumArt: Boolean,
     val artworkAnchor: ArtworkAnchor?,
     val visualizerAnchor: IslandElementAnchor?,
@@ -438,8 +410,7 @@ private class ExpandedLayoutParams(
     val expandedArtProgressProvider: (() -> Float)?,
     val accentColor: Color,
     val currentBpm: Float?,
-    val sleepTimerBadge: String?,
-    val hasExternalAudioOutput: Boolean,
+    val audioOutputStyle: OverlayPreferences.AudioOutputStyle,
     val quickSeekStepMs: Long,
     val trackInfoStyle: OverlayPreferences.TrackInfoStyle,
     val fontStyle: OverlayPreferences.IslandFontStyle,
@@ -455,11 +426,13 @@ private class ExpandedLayoutParams(
     val onCollapse: () -> Unit,
     val onAlbumArtClick: (() -> Unit)?,
     val onTrackInfoClick: (() -> Unit)?,
+    val onAudioOutputClick: (() -> Unit)?,
     val onVisualizerClick: (() -> Unit)?,
     val onProgressBarClick: (() -> Unit)?,
     val onPlaybackControlsClick: (() -> Unit)?,
     val highlightAlbumArt: Boolean,
     val highlightTrackInfo: Boolean,
+    val highlightAudioOutput: Boolean,
     val highlightVisualizer: Boolean,
     val highlightProgressBar: Boolean,
     val highlightPlaybackControls: Boolean,
@@ -468,11 +441,12 @@ private class ExpandedLayoutParams(
     val showsTrackText get() = elementVisibility.trackInfo &&
         (trackInfoStyle.showTitle || (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) ||
             (trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()))
-    val hasTrackBadges get() = (elementVisibility.bpm && currentBpm != null) ||
-        sleepTimerBadge != null ||
-        hasExternalAudioOutput
-    val showsTrackInfoWithBpm get() = showsTrackText ||
-        (elementVisibility.trackInfo && hasTrackBadges)
+    val showsAudioOutputChip get() = audioOutputStyle == OverlayPreferences.AudioOutputStyle.CHIP
+    val showsAudioOutputButton get() = audioOutputStyle == OverlayPreferences.AudioOutputStyle.BUTTON
+    val showsTrackInfoWithBpm get() = showsTrackText || showsAudioOutputChip ||
+        (elementVisibility.trackInfo && elementVisibility.bpm && currentBpm != null)
+    val visibleTrackInfoStyle get() = if (elementVisibility.trackInfo) trackInfoStyle
+        else trackInfoStyle.copy(showTitle = false, showArtist = false, showAlbum = false)
     val sessionActions get() = if (elementVisibility.appActions) {
         mediaInfo.sessionActions.filter { it.iconResourceId != 0 && it.iconPackageName != null }
     } else emptyList()
@@ -774,6 +748,49 @@ private fun ExpandedDominantGlowLayer(
 }
 
 @Composable
+private fun ExpandedMusicHeader(
+    p: ExpandedLayoutParams,
+    titleStyle: TextStyle,
+    artistStyle: TextStyle,
+    fixedWidth: Dp,
+    showsInlineBpm: Boolean = p.elementVisibility.trackInfo && p.elementVisibility.bpm && p.currentBpm != null,
+    verticalAlignment: Alignment.Vertical = Alignment.CenterVertically,
+    overlay: (@Composable BoxScope.() -> Unit)? = null,
+    content: @Composable RowScope.(visualizerMaxWidth: Dp) -> Unit,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val trackStyle = p.visibleTrackInfoStyle
+    val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
+    fun textWidth(text: String, style: TextStyle): Dp = with(density) {
+        textMeasurer.measure(
+            text,
+            style.copy(fontFamily = p.fontStyle.fontFamily, fontWeight = fontWeight),
+            maxLines = 1,
+            softWrap = false,
+        ).size.width.toDp()
+    }
+    val artist = p.mediaInfo.artist.takeIf { trackStyle.showArtist && it.isNotBlank() }
+    val album = p.mediaInfo.album.takeIf { trackStyle.showAlbum && it.isNotBlank() }
+    val inlineAlbum = trackStyle.albumBesideArtist && artist != null && album != null
+    val bpmWidth = if (showsInlineBpm) 64.dp else 0.dp
+    val desiredTrackWidth = if (p.elementVisibility.visualizer) maxOf(
+        if (trackStyle.showTitle) textWidth(p.mediaInfo.title.ifEmpty { "No Media Playing" }, titleStyle) else 0.dp,
+        (if (artist != null) textWidth(if (inlineAlbum) "$artist • $album" else artist, artistStyle) else 0.dp) + bpmWidth,
+        if (album != null && !inlineAlbum) textWidth(album, MaterialTheme.typography.bodySmall) else 0.dp,
+        if (p.showsAudioOutputChip) 84.dp else 0.dp,
+    ) else 0.dp
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val availableWidth = (maxWidth - fixedWidth).coerceAtLeast(0.dp)
+        val visualizerMaxWidth = (availableWidth - desiredTrackWidth).coerceIn(minOf(22.dp, availableWidth), availableWidth)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = verticalAlignment) {
+            content(visualizerMaxWidth)
+        }
+        overlay?.invoke(this)
+    }
+}
+
+@Composable
 private fun ExpandedVisualizerSlot(
     mediaInfo: MediaTrackInfo,
     waveformBandCount: Int,
@@ -787,7 +804,13 @@ private fun ExpandedVisualizerSlot(
 ) {
     val barWidth by OverlayPreferences.waveformBarWidthFlow.collectAsState()
     val barSpacing by OverlayPreferences.waveformBarSpacingFlow.collectAsState()
-    BoxWithConstraints(
+    FittedEqualizerWaveform(
+        mediaInfo = mediaInfo,
+        maxHeightDp = 20f,
+        barCount = waveformBandCount,
+        barWidth = barWidth,
+        barSpacing = barSpacing,
+        visualizerAnchor = visualizerAnchor,
         modifier = modifier
             .then(
                 if (highlight) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
@@ -798,23 +821,9 @@ private fun ExpandedVisualizerSlot(
                 else Modifier
             ),
         contentAlignment = contentAlignment,
-    ) {
-        if (waveformBandCount <= 0 || maxWidth <= 0.dp) return@BoxWithConstraints
-        val naturalWidth = compactVisualizerWidthDp(true, waveformBandCount, barWidth, barSpacing)
-        // Preserve the width-to-spacing ratio when all the configured bands exceed the header slot.
-        val fit = (maxWidth.value / naturalWidth).coerceAtMost(1f)
-        val renderedBarWidth = (barWidth * fit).dp
-        EqualizerWaveform(
-            mediaInfo = mediaInfo,
-            maxHeightDp = 20f,
-            barCount = waveformBandCount,
-            barWidth = renderedBarWidth,
-            barSpacing = (barSpacing * fit).dp,
-            minHeight = minHeight,
-            barCornerRadius = minOf(barCornerRadius, renderedBarWidth / 2f),
-            visualizerAnchor = visualizerAnchor,
-        )
-    }
+        minHeight = minHeight,
+        barCornerRadius = barCornerRadius,
+    )
 }
 
 @Composable
@@ -865,7 +874,12 @@ private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = 
             onDragCancel = p.scrubCallbacks.onDragCancel,
             onProgressBarClick = p.onProgressBarClick,
             highlight = p.highlightProgressBar,
-            modifier = barModifier,
+            modifier = barModifier.layout { measurable, constraints ->
+                val bar = measurable.measure(constraints)
+                layout(bar.width, bar.height, mapOf(ScrubberCenter to bar.height / 2)) {
+                    bar.placeRelative(0, 0)
+                }
+            },
         )
     }
     if (p.timestampPlacement == OverlayPreferences.ProgressTimestampPlacement.HIDDEN) {
@@ -920,34 +934,7 @@ private fun ExpandedTrackProgress(p: ExpandedLayoutParams, modifier: Modifier = 
     }
 }
 
-@Composable
-private fun ExpandedTrackBadgesRow(p: ExpandedLayoutParams) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (p.elementVisibility.bpm && p.currentBpm != null) {
-            BpmChip(bpm = p.currentBpm)
-        }
-        if (p.sleepTimerBadge != null) {
-            SleepTimerChip(
-                label = p.sleepTimerBadge,
-                onClick = {
-                    p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
-                    MusicSleepTimer.cancel()
-                },
-            )
-        }
-        if (p.hasExternalAudioOutput) {
-            AudioOutputChip(
-                onClick = {
-                    AudioOutputTracker.openOutputSwitcher(p.context)
-                    p.onCollapse()
-                },
-            )
-        }
-    }
-}
+private val ScrubberCenter = HorizontalAlignmentLine(::minOf)
 
 private fun quickSeekHandler(p: ExpandedLayoutParams, deltaMs: Long): (() -> Unit)? =
     if (p.onPlaybackControlsClick == null && p.mediaInfo.durationMs > 0L) {
@@ -959,112 +946,273 @@ private fun quickSeekHandler(p: ExpandedLayoutParams, deltaMs: Long): (() -> Uni
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+private fun ExpandedAudioOutputControl(p: ExpandedLayoutParams) {
+    val onClick = p.onAudioOutputClick ?: {
+        AudioOutputTracker.openOutputSwitcher(p.context, p.mediaInfo.playerPackageName)
+        p.onCollapse()
+    }
+    if (p.showsAudioOutputChip) {
+        AudioOutputChip(onClick = onClick, highlighted = p.highlightAudioOutput)
+    } else {
+        AudioOutputButton(onClick = onClick, highlighted = p.highlightAudioOutput)
+    }
+}
+
+@Composable
+private fun rememberEstimatedTrackInfoHeightDp(
+    p: ExpandedLayoutParams,
+    titleTextStyle: TextStyle,
+    artistTextStyle: TextStyle,
+    titleArtistSpacing: Dp,
+    showInlineBpm: Boolean,
+    showFooterChip: Boolean,
+): Dp {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
+    val trackStyle = p.visibleTrackInfoStyle
+    val albumTextStyle = MaterialTheme.typography.bodySmall
+    val chipTextStyle = MaterialTheme.typography.labelSmall
+    val showTitle = trackStyle.showTitle
+    val showArtist = trackStyle.showArtist && p.mediaInfo.artist.isNotBlank()
+    val showAlbum = trackStyle.showAlbum && p.mediaInfo.album.isNotBlank()
+    val inlineAlbum = trackStyle.albumBesideArtist && showArtist && showAlbum
+    val showArtistRow = showArtist || showInlineBpm
+    fun lineHeightDp(style: TextStyle): Dp = with(density) {
+        textMeasurer.measure(
+            "Ag",
+            style.copy(fontFamily = p.fontStyle.fontFamily, fontWeight = fontWeight),
+            maxLines = 1,
+            softWrap = false,
+        ).size.height.toDp()
+    }
+    var total = 0.dp
+    if (showTitle) {
+        total += lineHeightDp(titleTextStyle)
+    }
+    if (showArtistRow) {
+        if (showTitle) total += titleArtistSpacing
+        val artistH = if (showArtist) lineHeightDp(artistTextStyle) else 0.dp
+        val bpmH = if (showInlineBpm) maxOf(12.dp, lineHeightDp(chipTextStyle)) + 6.dp else 0.dp
+        total += maxOf(artistH, bpmH)
+    }
+    if (showFooterChip) {
+        if (showTitle || showArtistRow) total += 6.dp
+        total += maxOf(13.dp, lineHeightDp(chipTextStyle)) + 4.dp
+    }
+    if (showAlbum && !inlineAlbum) {
+        if (showTitle || showArtistRow || showFooterChip) total += 2.dp
+        total += lineHeightDp(albumTextStyle)
+    }
+    if (p.highlightTrackInfo && total > 0.dp) total += 8.dp
+    return total
+}
+
+@Composable
+private fun RowScope.ExpandedHeaderArtwork(
+    p: ExpandedLayoutParams,
+    shape: Shape,
+    artworkSize: Dp,
+    artworkTop: Dp,
+) {
+    val artwork = p.mediaInfo.albumArt ?: return
+    ExpandedArtwork(
+        artwork = artwork,
+        anchor = p.artworkAnchor,
+        glow = p.artworkGlow,
+        shape = shape,
+        opacity = { p.albumArtPlaybackAlpha },
+        progressProvider = p.expandedArtProgressProvider,
+        progressColor = p.accentColor,
+        progressStrokeWidth = 2.5.dp,
+        modifier = Modifier
+            .align(Alignment.Top)
+            .padding(top = artworkTop)
+            .size(artworkSize)
+            .then(if (p.highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
+            .then(if (p.onAlbumArtClick != null) Modifier.clickable(onClick = p.onAlbumArtClick) else Modifier)
+            .graphicsLayer {
+                scaleX = p.albumArtPlaybackScale
+                scaleY = p.albumArtPlaybackScale
+                alpha = p.albumArtPlaybackAlpha
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            },
+    )
+}
+
+@Composable
 private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
-    val showTimestampedProgress = p.elementVisibility.progress &&
-        p.timestampPlacement != OverlayPreferences.ProgressTimestampPlacement.HIDDEN
-    val showInlineProgress = p.elementVisibility.progress && !showTimestampedProgress
+    val density = LocalDensity.current
+    val showProgress = p.elementVisibility.progress
     val sessionActions = p.sessionActions.take(3)
+    val skipButtonsWidth = if (p.elementVisibility.mainControls) 72.dp else 0.dp
+    val minimumProgressWidth = if (p.timestampPlacement == OverlayPreferences.ProgressTimestampPlacement.BESIDE) 124.dp else 48.dp
+    val separateSessionActions = showProgress && sessionActions.isNotEmpty() &&
+        p.cardWidth - 48.dp - skipButtonsWidth - 30.dp * sessionActions.size < minimumProgressWidth
+    val actionButtons: @Composable (Modifier) -> Unit = { buttonModifier ->
+        sessionActions.forEach { action ->
+            ExpandedSessionActionButton(
+                context = p.context,
+                action = action,
+                accentColor = p.accentColor,
+                buttonSize = 30.dp,
+                iconSize = 18.dp,
+                modifier = buttonModifier,
+                hapticFeedback = p.hapticFeedback,
+            )
+        }
+    }
+    val startPadding = 24.dp
+    val showsBpm = p.elementVisibility.bpm && p.currentBpm != null
+    val hasTrackInfo = p.showsTrackText || p.showsAudioOutputChip
+    val hasRightColumn = p.elementVisibility.visualizer || p.showsAudioOutputButton || p.elementVisibility.mainControls
+    val hasHeader = p.showsArtwork || hasTrackInfo || hasRightColumn
+    val bpmRowHeight = maxOf(32.dp, p.topContentInset)
+    val estimatedInfoHeight = if (hasTrackInfo) {
+        rememberEstimatedTrackInfoHeightDp(
+            p = p,
+            titleTextStyle = MaterialTheme.typography.headlineSmall,
+            artistTextStyle = MaterialTheme.typography.titleMedium,
+            titleArtistSpacing = 4.dp,
+            showInlineBpm = false,
+            showFooterChip = p.showsAudioOutputChip,
+        )
+    } else 0.dp
+    val fontWeightKey = OverlayPreferences.islandFontWeightFlow.collectAsState().value
+    var measuredInfoHeight by remember(
+        p.visibleTrackInfoStyle,
+        p.mediaInfo.artist.isNotBlank(),
+        p.mediaInfo.album.isNotBlank(),
+        p.showsAudioOutputChip,
+        p.fontStyle,
+        fontWeightKey,
+        p.highlightTrackInfo,
+    ) { mutableStateOf<Dp?>(null) }
+    val infoHeight = if (hasTrackInfo) (measuredInfoHeight ?: estimatedInfoHeight) else 0.dp
+    val topRightRowMinWidth = (if (p.elementVisibility.visualizer) 22.dp else 0.dp) +
+        (if (p.elementVisibility.visualizer && p.showsAudioOutputButton) 6.dp else 0.dp) +
+        (if (p.showsAudioOutputButton) 36.dp else 0.dp)
+    val rightMinWidth = maxOf(
+        if (p.elementVisibility.mainControls) 64.dp else 0.dp,
+        topRightRowMinWidth,
+    )
+    val artInfoGap = if (p.showsArtwork && hasTrackInfo) 14.dp else 0.dp
+    val infoRightGap = if (hasTrackInfo && hasRightColumn) 16.dp else 0.dp
+    val minTrackInfoWidth = if (hasTrackInfo) 96.dp else 0.dp
+    val maxWidthForArtwork = (p.cardWidth - startPadding * 2 - rightMinWidth - artInfoGap - infoRightGap - minTrackInfoWidth)
+        .coerceAtLeast(56.dp)
+    val headerLayout = expandedHeaderArtworkLayout(
+        startPaddingDp = startPadding.value,
+        topContentInsetDp = p.topContentInset.value,
+        cutoutStartDp = p.cutoutStart.value,
+        baseArtworkSizeDp = 56f,
+        infoHeightDp = infoHeight.value,
+        maxWidthForArtworkDp = maxWidthForArtwork.value,
+        minInfoTopOverrideDp = if (showsBpm && !hasRightColumn) (bpmRowHeight + 6.dp).value else 0f,
+    )
+    val artworkTop = headerLayout.artworkTopDp.dp
+    val artworkSize = headerLayout.artworkSizeDp.dp
+    val infoTop = if (p.showsArtwork) {
+        headerLayout.infoTopDp.dp
+    } else {
+        maxOf(startPadding, p.topContentInset, if (showsBpm && !hasRightColumn) bpmRowHeight + 6.dp else 0.dp)
+    }
+    val rightTop = when {
+        showsBpm -> maxOf(artworkTop, bpmRowHeight + 6.dp)
+        p.showsArtwork -> artworkTop
+        else -> infoTop
+    }
+    val rightMinHeight = if (p.showsArtwork) {
+        (artworkTop + artworkSize - rightTop).coerceAtLeast(0.dp)
+    } else infoHeight
+    val bpmRow: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(bpmRowHeight),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            BpmChip(bpm = p.currentBpm)
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = 24.dp,
-                end = 24.dp,
-                top = if (p.topContentInset > 0.dp) 0.dp else 14.dp,
+                start = startPadding,
+                end = startPadding,
+                top = if (hasHeader || showsBpm) 0.dp else maxOf(startPadding, p.topContentInset),
                 bottom = 20.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(maxOf(32.dp, p.topContentInset)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
-        ) {
-            if (p.sleepTimerBadge != null) {
-                SleepTimerChip(
-                    label = p.sleepTimerBadge,
-                    onClick = {
-                        p.hapticFeedback.performIslandHaptic(HapticFeedbackType.LongPress)
-                        MusicSleepTimer.cancel()
-                    },
-                )
-            }
-            if (p.elementVisibility.bpm && p.currentBpm != null) {
-                BpmChip(bpm = p.currentBpm)
-            }
-            AudioOutputChip(
-                onClick = {
-                    AudioOutputTracker.openOutputSwitcher(p.context)
-                    p.onCollapse()
-                },
-            )
+        if (!hasHeader && showsBpm) {
+            bpmRow()
         }
 
-        if (p.showsArtwork || p.showsTrackText || p.elementVisibility.visualizer || p.elementVisibility.mainControls) Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            if (p.showAlbumArt && p.mediaInfo.albumArt != null) {
-                ExpandedArtwork(
-                    artwork = p.mediaInfo.albumArt,
-                    anchor = p.artworkAnchor,
-                    glow = p.artworkGlow,
-                    shape = p.artworkShape,
-                    opacity = { p.albumArtPlaybackAlpha },
-                    progressProvider = p.expandedArtProgressProvider,
-                    progressColor = p.accentColor,
-                    progressStrokeWidth = 2.5.dp,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .then(
-                            if (p.highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, p.artworkShape)
-                            else Modifier
-                        )
-                        .then(if (p.onAlbumArtClick != null) Modifier.clickable(onClick = p.onAlbumArtClick) else Modifier)
-                        .graphicsLayer {
-                            scaleX = p.albumArtPlaybackScale
-                            scaleY = p.albumArtPlaybackScale
-                            alpha = p.albumArtPlaybackAlpha
-                            compositingStrategy = CompositingStrategy.ModulateAlpha
-                        },
-                )
-                Spacer(Modifier.width(14.dp))
+        if (hasHeader) ExpandedMusicHeader(
+            p, MaterialTheme.typography.headlineSmall, MaterialTheme.typography.titleMedium,
+            fixedWidth = (if (p.showsArtwork) artworkSize + artInfoGap else 0.dp) +
+                infoRightGap +
+                (if (p.showsAudioOutputButton) 42.dp else 0.dp),
+            showsInlineBpm = false,
+            verticalAlignment = Alignment.Top,
+            overlay = if (showsBpm) { { bpmRow() } } else null,
+        ) { visualizerMaxWidth ->
+            if (p.showsArtwork) {
+                ExpandedHeaderArtwork(p, p.artworkShape, artworkSize, artworkTop)
+                if (hasTrackInfo) Spacer(Modifier.width(14.dp))
             }
 
-            if (p.showsTrackText) ExpandedTrackInfoColumn(
+            if (hasTrackInfo) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
-                trackInfoStyle = p.trackInfoStyle,
+                trackInfoStyle = p.visibleTrackInfoStyle,
                 accentColor = p.accentColor,
                 fontStyle = p.fontStyle,
                 titleTextStyle = MaterialTheme.typography.headlineSmall,
                 artistTextStyle = MaterialTheme.typography.titleMedium,
                 artistAlpha = 0.80f,
                 titleArtistSpacing = 4.dp,
+                footerContent = if (p.showsAudioOutputChip) { { ExpandedAudioOutputControl(p) } } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 16.dp),
-            )
+                    .padding(top = infoTop, end = if (hasRightColumn) 16.dp else 0.dp)
+                    .onSizeChanged { size ->
+                        val h = with(density) { size.height.toDp() }
+                        if (h > 0.dp && measuredInfoHeight != h) measuredInfoHeight = h
+                    },
+            ) else if (p.showsArtwork && hasRightColumn) {
+                Spacer(Modifier.weight(1f))
+            }
 
-            if (p.elementVisibility.visualizer || p.elementVisibility.mainControls) Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            if (hasRightColumn) Column(
+                modifier = Modifier
+                    .padding(top = rightTop)
+                    .heightIn(min = rightMinHeight),
+                horizontalAlignment = if (p.showsAudioOutputButton) Alignment.End else Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
-                    mediaInfo = p.mediaInfo,
-                    waveformBandCount = p.waveformBandCount,
-                    minHeight = 4.dp,
-                    barCornerRadius = 2.dp,
-                    highlight = p.highlightVisualizer,
-                    onClick = p.onVisualizerClick,
-                    visualizerAnchor = p.visualizerAnchor,
-                    modifier = Modifier.height(20.dp),
-                )
-                if (p.elementVisibility.visualizer && p.elementVisibility.mainControls) Spacer(Modifier.height(24.dp))
+                if (p.elementVisibility.visualizer || p.showsAudioOutputButton) Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
+                        mediaInfo = p.mediaInfo,
+                        waveformBandCount = p.waveformBandCount,
+                        minHeight = 4.dp,
+                        barCornerRadius = 2.dp,
+                        highlight = p.highlightVisualizer,
+                        onClick = p.onVisualizerClick,
+                        visualizerAnchor = p.visualizerAnchor,
+                        contentAlignment = if (p.showsAudioOutputButton) Alignment.CenterEnd else Alignment.Center,
+                        modifier = Modifier.widthIn(max = visualizerMaxWidth).height(20.dp),
+                    )
+                    if (p.showsAudioOutputButton) ExpandedAudioOutputControl(p)
+                }
+                if ((p.elementVisibility.visualizer || p.showsAudioOutputButton) && p.elementVisibility.mainControls) {
+                    Spacer(Modifier.height(if (p.showsAudioOutputButton) 8.dp else 14.dp))
+                }
                 if (p.elementVisibility.mainControls) {
                     val style = p.playbackControlsStyle
                     val visuals = resolvePlaybackButtonVisuals(style, p.accentColor)
@@ -1098,21 +1246,17 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
             }
         }
 
-        if (showTimestampedProgress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
-
-        if (showInlineProgress || p.elementVisibility.mainControls || sessionActions.isNotEmpty()) Row(
+        if (showProgress || p.elementVisibility.mainControls || sessionActions.isNotEmpty()) Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (showTimestampedProgress) {
-                Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            } else Arrangement.Start,
         ) {
             val visuals = resolvePlaybackButtonVisuals(p.playbackControlsStyle, p.accentColor)
+            val inlineControl = Modifier.alignBy { it.measuredHeight / 2 }
 
             if (p.elementVisibility.mainControls) Surface(
                 shape = visuals.prevShape,
                 color = visuals.skipBgColor,
-                modifier = Modifier
+                modifier = inlineControl
                     .size(36.dp)
                     .clip(visuals.prevShape)
                     .combinedClickable(
@@ -1134,12 +1278,14 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 }
             }
 
-            if (showInlineProgress) ExpandedTrackProgress(p, Modifier.weight(1f).padding(horizontal = 4.dp))
+            if (showProgress) ExpandedTrackProgress(
+                p, Modifier.weight(1f).alignBy(ScrubberCenter).padding(horizontal = 4.dp),
+            )
 
             if (p.elementVisibility.mainControls) Surface(
                 shape = visuals.nextShape,
                 color = visuals.skipBgColor,
-                modifier = Modifier
+                modifier = inlineControl
                     .size(36.dp)
                     .clip(visuals.nextShape)
                     .combinedClickable(
@@ -1161,16 +1307,13 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
                 }
             }
 
-            sessionActions.forEach { action ->
-                ExpandedSessionActionButton(
-                    context = p.context,
-                    action = action,
-                    accentColor = p.accentColor,
-                    buttonSize = 30.dp,
-                    iconSize = 18.dp,
-                    hapticFeedback = p.hapticFeedback,
-                )
-            }
+            if (!separateSessionActions) actionButtons(inlineControl)
+        }
+        if (separateSessionActions) Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            actionButtons(Modifier)
         }
     }
 }
@@ -1217,13 +1360,14 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
             )
         }
 
-        if (p.showsTrackInfoWithBpm || p.elementVisibility.visualizer) Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        if (p.showsTrackInfoWithBpm || p.elementVisibility.visualizer || p.showsAudioOutputButton) ExpandedMusicHeader(
+            p, MaterialTheme.typography.titleMedium, MaterialTheme.typography.bodyMedium,
+            fixedWidth = (if (p.showsTrackInfoWithBpm) 14.dp else 0.dp) +
+                (if (p.showsAudioOutputButton) 42.dp else 0.dp),
+        ) { visualizerMaxWidth ->
             if (p.showsTrackInfoWithBpm) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
-                trackInfoStyle = p.trackInfoStyle,
+                trackInfoStyle = p.visibleTrackInfoStyle,
                 accentColor = p.accentColor,
                 fontStyle = p.fontStyle,
                 titleTextStyle = MaterialTheme.typography.titleMedium,
@@ -1231,24 +1375,30 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
                 artistAlpha = 0.72f,
                 titleArtistSpacing = 2.dp,
                 textAlign = TextAlign.Start,
-                bpmChip = if (p.hasTrackBadges) {
-                    { ExpandedTrackBadgesRow(p) }
+                bpmChip = if (p.elementVisibility.trackInfo && p.elementVisibility.bpm && p.currentBpm != null) {
+                    { BpmChip(bpm = p.currentBpm) }
                 } else null,
+                footerContent = if (p.showsAudioOutputChip) { { ExpandedAudioOutputControl(p) } } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
                 modifier = Modifier.weight(1f),
             )
-            if (p.showsTrackInfoWithBpm && p.elementVisibility.visualizer) Spacer(Modifier.width(14.dp))
-            if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
-                mediaInfo = p.mediaInfo,
-                waveformBandCount = p.waveformBandCount,
-                minHeight = 3.dp,
-                highlight = p.highlightVisualizer,
-                onClick = p.onVisualizerClick,
-                visualizerAnchor = p.visualizerAnchor,
-                contentAlignment = Alignment.CenterEnd,
-                modifier = Modifier.size(width = 72.dp, height = 20.dp).padding(end = 14.dp),
-            )
+            if (p.showsTrackInfoWithBpm && (p.elementVisibility.visualizer || p.showsAudioOutputButton)) {
+                Spacer(Modifier.width(14.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
+                    mediaInfo = p.mediaInfo,
+                    waveformBandCount = p.waveformBandCount,
+                    minHeight = 3.dp,
+                    highlight = p.highlightVisualizer,
+                    onClick = p.onVisualizerClick,
+                    visualizerAnchor = p.visualizerAnchor,
+                    contentAlignment = Alignment.CenterEnd,
+                    modifier = Modifier.widthIn(max = visualizerMaxWidth).height(20.dp),
+                )
+                if (p.showsAudioOutputButton) ExpandedAudioOutputControl(p)
+            }
         }
 
         if (p.elementVisibility.progress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
@@ -1295,75 +1445,125 @@ private fun ExpandedMaterialExpressiveLayout(p: ExpandedLayoutParams) {
 
 @Composable
 private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
+    val density = LocalDensity.current
     val sessionActions = p.sessionActions.take(2)
+    val startPadding = 22.dp
+    val showInlineBpm = p.elementVisibility.trackInfo && p.elementVisibility.bpm && p.currentBpm != null
+    val hasTrackInfo = p.showsTrackInfoWithBpm
+    val hasRightColumn = p.elementVisibility.visualizer || p.showsAudioOutputButton
+    val hasHeader = p.showsArtwork || hasTrackInfo || hasRightColumn
+    val estimatedInfoHeight = if (hasTrackInfo) {
+        rememberEstimatedTrackInfoHeightDp(
+            p = p,
+            titleTextStyle = MaterialTheme.typography.titleLarge,
+            artistTextStyle = MaterialTheme.typography.bodyMedium,
+            titleArtistSpacing = 3.dp,
+            showInlineBpm = showInlineBpm,
+            showFooterChip = p.showsAudioOutputChip,
+        )
+    } else 0.dp
+    val fontWeightKey = OverlayPreferences.islandFontWeightFlow.collectAsState().value
+    var measuredInfoHeight by remember(
+        p.visibleTrackInfoStyle,
+        p.mediaInfo.artist.isNotBlank(),
+        p.mediaInfo.album.isNotBlank(),
+        p.showsAudioOutputChip,
+        showInlineBpm,
+        p.fontStyle,
+        fontWeightKey,
+        p.highlightTrackInfo,
+    ) { mutableStateOf<Dp?>(null) }
+    val infoHeight = if (hasTrackInfo) (measuredInfoHeight ?: estimatedInfoHeight) else 0.dp
+    val rightMinWidth = (if (p.elementVisibility.visualizer) 22.dp else 0.dp) +
+        (if (p.elementVisibility.visualizer && p.showsAudioOutputButton) 6.dp else 0.dp) +
+        (if (p.showsAudioOutputButton) 36.dp else 0.dp)
+    val artInfoGap = if (p.showsArtwork && hasTrackInfo) 14.dp else 0.dp
+    val infoRightGap = if (hasTrackInfo && hasRightColumn) 12.dp else 0.dp
+    val minTrackInfoWidth = if (hasTrackInfo) 96.dp else 0.dp
+    val maxWidthForArtwork = (p.cardWidth - startPadding * 2 - rightMinWidth - artInfoGap - infoRightGap - minTrackInfoWidth)
+        .coerceAtLeast(64.dp)
+    val headerLayout = expandedHeaderArtworkLayout(
+        startPaddingDp = startPadding.value,
+        topContentInsetDp = p.topContentInset.value,
+        cutoutStartDp = p.cutoutStart.value,
+        baseArtworkSizeDp = 64f,
+        infoHeightDp = infoHeight.value,
+        maxWidthForArtworkDp = maxWidthForArtwork.value,
+    )
+    val artworkTop = headerLayout.artworkTopDp.dp
+    val artworkSize = headerLayout.artworkSizeDp.dp
+    val infoTop = if (p.showsArtwork) headerLayout.infoTopDp.dp else maxOf(startPadding, p.topContentInset)
+    val rightTop = if (p.showsArtwork) artworkTop else infoTop
+    val rightMinHeight = if (p.showsArtwork) artworkSize else infoHeight
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = 22.dp,
-                end = 22.dp,
-                top = if (p.topContentInset > 0.dp) p.topContentInset else 16.dp,
+                start = startPadding,
+                end = startPadding,
+                top = if (hasHeader) 0.dp else maxOf(startPadding, p.topContentInset),
                 bottom = 18.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (p.showsArtwork || p.showsTrackInfoWithBpm || p.elementVisibility.visualizer) Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (p.showAlbumArt && p.mediaInfo.albumArt != null) {
-                ExpandedArtwork(
-                    artwork = p.mediaInfo.albumArt,
-                    anchor = p.artworkAnchor,
-                    glow = p.artworkGlow,
-                    shape = RoundedCornerShape(12.dp),
-                    opacity = { p.albumArtPlaybackAlpha },
-                    progressProvider = p.expandedArtProgressProvider,
-                    progressColor = p.accentColor,
-                    progressStrokeWidth = 2.5.dp,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .then(
-                            if (p.highlightAlbumArt) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                            else Modifier
-                        )
-                        .then(if (p.onAlbumArtClick != null) Modifier.clickable(onClick = p.onAlbumArtClick) else Modifier)
-                        .graphicsLayer {
-                            scaleX = p.albumArtPlaybackScale
-                            scaleY = p.albumArtPlaybackScale
-                            alpha = p.albumArtPlaybackAlpha
-                            compositingStrategy = CompositingStrategy.ModulateAlpha
-                        },
-                )
-                Spacer(Modifier.width(14.dp))
+        if (hasHeader) ExpandedMusicHeader(
+            p, MaterialTheme.typography.titleLarge, MaterialTheme.typography.bodyMedium,
+            fixedWidth = (if (p.showsArtwork) artworkSize + artInfoGap else 0.dp) +
+                infoRightGap +
+                (if (p.showsAudioOutputButton) 42.dp else 0.dp),
+            verticalAlignment = Alignment.Top,
+        ) { visualizerMaxWidth ->
+            if (p.showsArtwork) {
+                ExpandedHeaderArtwork(p, p.artworkShape, artworkSize, artworkTop)
+                if (hasTrackInfo) Spacer(Modifier.width(14.dp))
             }
-            if (p.showsTrackInfoWithBpm) ExpandedTrackInfoColumn(
+            if (hasTrackInfo) ExpandedTrackInfoColumn(
                 mediaInfo = p.mediaInfo,
-                trackInfoStyle = p.trackInfoStyle,
+                trackInfoStyle = p.visibleTrackInfoStyle,
                 accentColor = p.accentColor,
                 fontStyle = p.fontStyle,
                 titleTextStyle = MaterialTheme.typography.titleLarge,
                 artistTextStyle = MaterialTheme.typography.bodyMedium,
                 artistAlpha = 0.62f,
                 titleArtistSpacing = 3.dp,
-                bpmChip = if (p.hasTrackBadges) {
-                    { ExpandedTrackBadgesRow(p) }
+                bpmChip = if (showInlineBpm) {
+                    { BpmChip(bpm = p.currentBpm) }
                 } else null,
+                footerContent = if (p.showsAudioOutputChip) { { ExpandedAudioOutputControl(p) } } else null,
                 onClick = { p.onTrackInfoClick?.invoke() ?: openPlayerApp(p.context, p.mediaInfo) },
                 highlight = p.highlightTrackInfo,
-                modifier = Modifier.weight(1f),
-            )
-            if (p.showsTrackInfoWithBpm && p.elementVisibility.visualizer) Spacer(Modifier.width(12.dp))
-            if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
-                mediaInfo = p.mediaInfo,
-                waveformBandCount = p.waveformBandCount,
-                minHeight = 3.dp,
-                highlight = p.highlightVisualizer,
-                onClick = p.onVisualizerClick,
-                visualizerAnchor = p.visualizerAnchor,
-                contentAlignment = Alignment.CenterEnd,
-                modifier = Modifier.size(width = 72.dp, height = 20.dp).padding(end = 14.dp),
-            )
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = infoTop)
+                    .onSizeChanged { size ->
+                        val h = with(density) { size.height.toDp() }
+                        if (h > 0.dp && measuredInfoHeight != h) measuredInfoHeight = h
+                    },
+            ) else if (p.showsArtwork && hasRightColumn) {
+                Spacer(Modifier.weight(1f))
+            }
+            if (hasTrackInfo && hasRightColumn) {
+                Spacer(Modifier.width(12.dp))
+            }
+            if (hasRightColumn) Row(
+                modifier = Modifier
+                    .padding(top = rightTop)
+                    .heightIn(min = rightMinHeight),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (p.elementVisibility.visualizer) ExpandedVisualizerSlot(
+                    mediaInfo = p.mediaInfo,
+                    waveformBandCount = p.waveformBandCount,
+                    minHeight = 3.dp,
+                    highlight = p.highlightVisualizer,
+                    onClick = p.onVisualizerClick,
+                    visualizerAnchor = p.visualizerAnchor,
+                    contentAlignment = Alignment.CenterEnd,
+                    modifier = Modifier.widthIn(max = visualizerMaxWidth).height(20.dp),
+                )
+                if (p.showsAudioOutputButton) ExpandedAudioOutputControl(p)
+            }
         }
 
         if (p.elementVisibility.progress) ExpandedTrackProgress(p, Modifier.fillMaxWidth())
@@ -1426,6 +1626,7 @@ private fun ExpandedTrackInfoColumn(
     highlight: Boolean = false,
     textAlign: TextAlign? = null,
     bpmChip: (@Composable () -> Unit)? = null,
+    footerContent: (@Composable () -> Unit)? = null,
 ) {
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
     val showArtist = trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()
@@ -1477,8 +1678,14 @@ private fun ExpandedTrackInfoColumn(
                 }
             }
         }
+        if (footerContent != null) {
+            if (trackInfoStyle.showTitle || showArtistRow) {
+                Spacer(Modifier.height(6.dp))
+            }
+            footerContent()
+        }
         if (showAlbum && !inlineAlbum) {
-            if (trackInfoStyle.showTitle || showArtistRow) Spacer(Modifier.height(2.dp))
+            if (trackInfoStyle.showTitle || showArtistRow || footerContent != null) Spacer(Modifier.height(2.dp))
             MarqueeText(
                 text = mediaInfo.album,
                 style = MaterialTheme.typography.bodySmall.copy(

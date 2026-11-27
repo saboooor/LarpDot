@@ -1,7 +1,8 @@
 package ca.saboor.larpdot.ui.screens
 
+import android.graphics.Bitmap
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -20,11 +21,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,15 +43,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.service.CustomColorMode
+import ca.saboor.larpdot.service.CustomIslandColor
+import ca.saboor.larpdot.service.CustomIslandWidgets
 import ca.saboor.larpdot.service.WidgetColorKey
-import ca.saboor.larpdot.ui.components.ColorPicker
+import ca.saboor.larpdot.ui.components.ExternalScreenColorSession
 import ca.saboor.larpdot.ui.components.HsvColor
-import ca.saboor.larpdot.ui.components.LarpButtonOption
-import ca.saboor.larpdot.ui.components.LarpConnectedButtons
+import ca.saboor.larpdot.ui.components.LarpColorPickerContent
 import ca.saboor.larpdot.ui.components.LarpSliderRow
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
+import ca.saboor.larpdot.ui.components.ScreenColorPickerOverlay
 import ca.saboor.larpdot.ui.components.WidgetPreviewSampler
+import ca.saboor.larpdot.ui.components.canPickFromOtherApps
+import ca.saboor.larpdot.ui.components.captureScreenBitmap
+import ca.saboor.larpdot.ui.components.parseRgbHex
+import ca.saboor.larpdot.ui.components.toRgbHex
 import ca.saboor.larpdot.ui.overlay.CustomIslandWidget
+import ca.saboor.larpdot.ui.overlay.rememberAppDominantColor
 import ca.saboor.larpdot.ui.theme.LarpIcons
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -59,13 +69,6 @@ private val colorPickerSaver = listSaver<HsvColor, Float>(
     restore = { HsvColor(it[0], it[1], it[2]) },
 )
 
-private fun Int.rgbHex() = toString(16).uppercase().padStart(6, '0')
-
-private fun String.parseRgb(): Int? {
-    val digits = trim().removePrefix("#")
-    return digits.takeIf { it.length == 6 && it.all { char -> char.digitToIntOrNull(16) != null } }?.toIntOrNull(16)
-}
-
 @Composable
 internal fun WidgetColorKeyDialog(
     widgetId: Int,
@@ -73,29 +76,69 @@ internal fun WidgetColorKeyDialog(
     onDismiss: () -> Unit,
     onApply: (WidgetColorKey?) -> Unit,
 ) {
+    val activity = LocalActivity.current
     val initial = current ?: WidgetColorKey()
     var enabled by rememberSaveable { mutableStateOf(true) }
-    var hex by rememberSaveable { mutableStateOf(initial.rgb.rgbHex()) }
+    var hex by rememberSaveable { mutableStateOf(initial.rgb.toRgbHex()) }
     var pickerColor by rememberSaveable(stateSaver = colorPickerSaver) { mutableStateOf(HsvColor.fromRgb(initial.rgb)) }
     var tolerance by rememberSaveable { mutableIntStateOf(initial.tolerancePercent) }
     var eyedropperMode by rememberSaveable { mutableStateOf(false) }
     var dragSample by remember { mutableStateOf<Pair<Offset, Int>?>(null) }
+    var screenCaptureRequested by remember { mutableStateOf(false) }
+    var screenCaptureBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val sampler = remember(widgetId) { WidgetPreviewSampler() }
+    val widgetPackage = remember(widgetId) { CustomIslandWidgets.info(widgetId)?.provider?.packageName }
+    val widgetAppColor = rememberAppDominantColor(widgetPackage)
+
     DisposableEffect(sampler) {
         onDispose { sampler.releaseSnapshot() }
     }
-    val rgb = hex.parseRgb()
+
+    LaunchedEffect(screenCaptureRequested) {
+        if (!screenCaptureRequested) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        captureScreenBitmap(activity) { bitmap ->
+            screenCaptureRequested = false
+            if (bitmap != null) {
+                screenCaptureBitmap = bitmap
+            }
+        }
+    }
+
+    val rgb = hex.parseRgbHex()
     val filter = if (enabled) rgb?.let { WidgetColorKey(it, tolerance) } else null
 
-    fun updateHex(value: String) {
-        hex = value.take(7)
-        hex.parseRgb()?.let { pickerColor = HsvColor.fromRgb(it, fallbackHue = pickerColor.hue) }
-    }
-
     fun applySampledRgb(sampledRgb: Int) {
-        hex = sampledRgb.rgbHex()
+        hex = sampledRgb.toRgbHex()
         pickerColor = HsvColor.fromRgb(sampledRgb, fallbackHue = pickerColor.hue)
     }
+
+    val activeScreenBitmap = screenCaptureBitmap
+    if (activeScreenBitmap != null) {
+        ScreenColorPickerOverlay(
+            bitmap = activeScreenBitmap,
+            initialRgb = rgb ?: pickerColor.toRgb(),
+            onPickFromOtherApp = if (canPickFromOtherApps()) {
+                {
+                    screenCaptureBitmap = null
+                    ExternalScreenColorSession.start(activity) { externalBitmap ->
+                        if (externalBitmap != null) {
+                            screenCaptureBitmap = externalBitmap
+                        }
+                    }
+                }
+            } else null,
+            onConfirm = { pickedRgb ->
+                applySampledRgb(pickedRgb)
+                screenCaptureBitmap = null
+            },
+            onDismiss = { screenCaptureBitmap = null },
+        )
+        return
+    }
+
+    if (screenCaptureRequested) return
 
     val previewShape = RoundedCornerShape(12.dp)
     val previewModifier = Modifier
@@ -210,30 +253,30 @@ internal fun WidgetColorKeyDialog(
                     if (!it) eyedropperMode = false
                 })
                 if (enabled) {
-                    LarpConnectedButtons(
-                        listOf(
-                            LarpButtonOption("Black", rgb == 0) { updateHex("000000") },
-                            LarpButtonOption("White", rgb == 0xFFFFFF) { updateHex("FFFFFF") },
+                    LarpColorPickerContent(
+                        selection = CustomIslandColor(
+                            mode = CustomColorMode.CUSTOM,
+                            rgb = rgb ?: pickerColor.toRgb(),
                         ),
-                    )
-                    ColorPicker(pickerColor) { color ->
-                        pickerColor = color
-                        hex = color.toRgb().rgbHex()
-                    }
-                    OutlinedTextField(
-                        value = hex,
-                        onValueChange = ::updateHex,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Background color (hex)") },
-                        placeholder = { Text("000000") },
-                        singleLine = true,
-                        leadingIcon = {
-                            val shape = RoundedCornerShape(4.dp)
-                            Box(
-                                Modifier.size(20.dp)
-                                    .background(rgb?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Transparent, shape)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, shape),
-                            )
+                        onSelectionChange = { choice ->
+                            pickerColor = HsvColor.fromRgb(choice.rgb, fallbackHue = pickerColor.hue)
+                            hex = choice.rgb.toRgbHex()
+                        },
+                        supportsDynamicModes = false,
+                        dominantColor = widgetAppColor,
+                        dominantLabel = "App Color",
+                        onPickFromScreen = { screenCaptureRequested = true },
+                        hexText = hex,
+                        onHexTextChange = { value ->
+                            hex = value.take(7)
+                            hex.parseRgbHex()?.let { parsed ->
+                                pickerColor = HsvColor.fromRgb(parsed, fallbackHue = pickerColor.hue)
+                            }
+                        },
+                        hsvOverride = pickerColor,
+                        onHsvChange = { next ->
+                            pickerColor = next
+                            hex = next.toRgb().toRgbHex()
                         },
                     )
                     LarpSliderRow(
@@ -243,7 +286,6 @@ internal fun WidgetColorKeyDialog(
                         valueRange = 0f..100f,
                         onValueChange = { tolerance = it.roundToInt() },
                     )
-                    Text("Matching colors become transparent anywhere in the widget.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         },

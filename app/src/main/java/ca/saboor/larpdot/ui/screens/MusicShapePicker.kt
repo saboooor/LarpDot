@@ -43,7 +43,7 @@ import ca.saboor.larpdot.ui.overlay.nestedAlbumArtShape
 import kotlin.math.roundToInt
 
 private enum class ShapeCategory(val label: String) {
-    ALL("All (35)"),
+    ALL("All"),
     GEOMETRIC("Geometric"),
     COOKIES("Cookies"),
     STARS("Stars"),
@@ -53,7 +53,6 @@ private enum class ShapeCategory(val label: String) {
 @Composable
 internal fun ShapePickerSection(
     title: String,
-    subtitle: String,
     selectedShape: OverlayPreferences.NestedAlbumArtShape,
     rotationDegrees: Float,
     onShapeSelected: (OverlayPreferences.NestedAlbumArtShape) -> Unit,
@@ -152,7 +151,7 @@ internal fun ShapePickerSection(
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = "Active: ${selectedShape.label} ($subtitle)",
+                        text = selectedShape.label,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -213,7 +212,7 @@ internal fun ShapePickerSection(
                     border = if (isSelected)
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     else
-                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        null,
                     modifier = Modifier
                         .size(54.dp)
                         .semantics { contentDescription = shapeOption.label },
@@ -240,27 +239,15 @@ internal fun ShapePickerSection(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // Rotation Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = LarpIcons.RotateRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    text = "Shape Rotation",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-            }
+            Text(
+                text = "Rotation",
+                style = MaterialTheme.typography.titleSmall,
+            )
             Text(
                 text = "${rotationDegrees.roundToInt()}°",
                 style = MaterialTheme.typography.labelLarge,

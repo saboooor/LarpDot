@@ -8,12 +8,14 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -33,6 +35,37 @@ import ca.saboor.larpdot.visualizer.LiveTrackVisualizer
 import ca.saboor.larpdot.visualizer.PreviewAudioPlayer
 import ca.saboor.larpdot.visualizer.TrackVisualizer
 import ca.saboor.larpdot.visualizer.WaveformCanvas
+
+@Composable
+internal fun FittedEqualizerWaveform(
+    mediaInfo: MediaTrackInfo,
+    maxHeightDp: Float,
+    barCount: Int,
+    barWidth: Float,
+    barSpacing: Float,
+    visualizerAnchor: IslandElementAnchor?,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = 2.8.dp,
+    barCornerRadius: Dp = Dp.Infinity,
+    contentAlignment: Alignment = Alignment.Center,
+) {
+    val naturalWidth = compactVisualizerWidthDp(true, barCount, barWidth, barSpacing)
+    BoxWithConstraints(modifier, contentAlignment = contentAlignment) {
+        if (naturalWidth <= 0f || maxWidth <= 0.dp) return@BoxWithConstraints
+        val fit = (maxWidth.value / naturalWidth).coerceAtMost(1f)
+        val renderedBarWidth = (barWidth * fit).dp
+        EqualizerWaveform(
+            mediaInfo = mediaInfo,
+            maxHeightDp = maxHeightDp,
+            barCount = barCount,
+            barWidth = renderedBarWidth,
+            barSpacing = (barSpacing * fit).dp,
+            minHeight = minHeight,
+            barCornerRadius = minOf(barCornerRadius, renderedBarWidth / 2f),
+            visualizerAnchor = visualizerAnchor,
+        )
+    }
+}
 
 /**
  * Animated 5-bar equalizer visualizer component modeled after com.pryshedko.mtisland.

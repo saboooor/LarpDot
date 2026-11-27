@@ -141,6 +141,7 @@ object MediaPlaybackState {
     private var activeController: MediaController? = null
     private var controllerCallback: MediaController.Callback? = null
     private var sessionMetadata: MediaMetadata? = null
+    private var sessionPlaybackState: PlaybackState? = null
     private var sessionArtwork: Bitmap? = null
 
     private val playbackScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -184,11 +185,15 @@ object MediaPlaybackState {
         }
     }
 
-    fun attachDirectController(controller: MediaController) {
-        if (isPackageBlacklisted(controller.packageName)) {
-            return
-        }
+    fun attachDirectController(controller: MediaController): Boolean {
+        if (isPackageBlacklisted(controller.packageName)) return false
+        val active = activeController
+        if (active != null && active.sessionToken != controller.sessionToken &&
+            (sessionPlaybackState?.state == PlaybackState.STATE_PLAYING ||
+                controller.playbackState?.state != PlaybackState.STATE_PLAYING)
+        ) return false
         attachController(controller)
+        return true
     }
 
     private fun attachController(controller: MediaController) {
@@ -211,7 +216,7 @@ object MediaPlaybackState {
 
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
                     if (controllerCallback !== this) return
-                    refreshFromController()
+                    refreshFromController(state)
                 }
 
                 override fun onSessionDestroyed() {
@@ -226,14 +231,14 @@ object MediaPlaybackState {
         refreshFromController()
     }
 
-    private fun refreshFromController() {
+    private fun refreshFromController(state: PlaybackState? = activeController?.playbackState) {
         val controller = activeController ?: return
         if (isPackageBlacklisted(controller.packageName)) {
             clear()
             return
         }
         val metadata = sessionMetadata
-        val state = controller.playbackState
+        sessionPlaybackState = state
 
         val current = _currentTrack.value
 
@@ -246,32 +251,33 @@ object MediaPlaybackState {
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: metadata?.description?.iconBitmap
         val samePlayer = controller.packageName == current.playerPackageName
+        val canReuseMetadata = samePlayer && (current.controller == null || current.controller === controller)
 
         val title = when {
             !rawTitle.isNullOrBlank() -> rawTitle
-            current.title.isNotBlank() && current.title != "Playing Track" -> current.title
+            canReuseMetadata && current.title.isNotBlank() -> current.title
             else -> "Playing Track"
         }
         val artist = when {
             !rawArtist.isNullOrBlank() -> rawArtist
-            current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
+            canReuseMetadata && current.artist.isNotBlank() -> current.artist
             else -> "Media Player"
         }
         val album = when {
             !rawAlbum.isNullOrBlank() -> rawAlbum
-            samePlayer && title == current.title -> current.album
+            canReuseMetadata && title == current.title -> current.album
             else -> ""
         }
-        if (rawArtwork != null || !samePlayer || title != current.title) {
-            sessionArtwork = rawArtwork
-        }
+        val sameTrack = canReuseMetadata && title == current.title && artist == current.artist
+        if (!sameTrack) resetArtworkUpdate()
+        if (rawArtwork != null || !sameTrack) sessionArtwork = rawArtwork
         val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L)
-            ?: current.durationMs.coerceAtLeast(0L)
+            ?: current.durationMs.takeIf { sameTrack } ?: 0L
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
         val playerResources = runCatching {
             applicationContext?.packageManager?.getResourcesForApplication(controller.packageName)
         }.getOrNull()
-        val notificationActions = if (controller.packageName == current.playerPackageName) {
+        val notificationActions = if (canReuseMetadata) {
             current.sessionActions.filter { it.pendingIntent != null }
         } else {
             emptyList()
@@ -311,15 +317,7 @@ object MediaPlaybackState {
             }
         }.sortedByDescending { it.pendingIntent != null }
 
-        val rawPosition = state?.position ?: 0L
-        val lastUpdate = state?.lastPositionUpdateTime ?: 0L
-        val speed = if ((state?.playbackSpeed ?: 1f) > 0f) state?.playbackSpeed ?: 1f else 1f
-        val calculatedPosition = if (isPlaying && lastUpdate > 0L) {
-            val elapsed = (SystemClock.elapsedRealtime() - lastUpdate).coerceAtLeast(0L)
-            (rawPosition + (elapsed * speed).toLong()).coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
-        } else {
-            rawPosition.coerceIn(0L, duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
-        }
+        val calculatedPosition = state?.positionAt(SystemClock.elapsedRealtime(), duration) ?: 0L
 
         val resolvedAppName = if (samePlayer && !current.appName.isNullOrBlank()) {
             current.appName
@@ -329,9 +327,14 @@ object MediaPlaybackState {
 
         val trackKey = "${title}_${artist}".trim()
         val wasMusicActive = _isMusicActive.value
-        val isNewTrack = trackKey.isNotBlank() && (trackKey != lastAnnouncedTrackKey || !wasMusicActive)
+        val isNewTrack = trackKey != lastAnnouncedTrackKey || !wasMusicActive || !canReuseMetadata
 
-        val wasPlaying = current.isPlaying
+        val wasPlaying = canReuseMetadata && current.isPlaying
+        if (!canReuseMetadata) {
+            musicGraceJob?.cancel()
+            musicGraceJob = null
+            lastPauseTime = 0L
+        }
         val graceDelayMs = resolvePauseGraceDelayMs(OverlayPreferences.musicPauseTimeoutSecondsFlow.value)
         if (isPlaying) {
             musicGraceJob?.cancel()
@@ -341,14 +344,6 @@ object MediaPlaybackState {
             _isMusicActive.value = true
             if (isNewTrack) {
                 lastAnnouncedTrackKey = trackKey
-                MusicSleepTimer.onTrackChanged(trackKey)
-                MediaPlaybackHistory.record(
-                    title = title,
-                    artist = artist,
-                    album = album,
-                    appName = resolvedAppName,
-                    packageName = controller.packageName,
-                )
                 triggerSongAnnouncement()
             }
         } else if (wasPlaying) {
@@ -369,7 +364,7 @@ object MediaPlaybackState {
             album == current.album &&
             isPlaying == current.isPlaying &&
             duration == current.durationMs &&
-            samePlayer &&
+            current.controller === controller &&
             sessionActions == current.sessionActions
 
         if (isIdenticalTrack && kotlin.math.abs(calculatedPosition - _positionMs.value) < 1000L) {
@@ -384,11 +379,11 @@ object MediaPlaybackState {
             title = title,
             artist = artist,
             album = album,
-            albumArt = current.albumArt.takeIf { samePlayer },
+            albumArt = current.albumArt.takeIf { sameTrack },
             isPlaying = isPlaying,
             positionMs = calculatedPosition,
             durationMs = duration,
-            artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
+            artworkColors = if (sameTrack) current.artworkColors else DominantColorExtractor.defaultColors,
             controller = controller,
             playerPackageName = controller.packageName,
             appName = resolvedAppName,
@@ -424,24 +419,14 @@ object MediaPlaybackState {
 
         val controllerAlbum = sessionMetadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }
 
-        // Canonical MediaController metadata is preferred over notification composite text
-        val newTitle = when {
-            controllerTitle != null -> controllerTitle
-            current.title.isNotBlank() && current.title != "Playing Track" -> current.title
-            !title.isNullOrBlank() -> title
-            else -> current.title
-        }
-
-        val newArtist = when {
-            controllerArtist != null -> controllerArtist
-            current.artist.isNotBlank() && current.artist != "Media Player" -> current.artist
-            !artist.isNullOrBlank() -> artist
-            else -> current.artist
-        }
-
-        val resolvedAppName = appName ?: current.appName
+        // Prefer controller metadata, then the latest notification for this player.
         val samePlayer = newPackage == current.playerPackageName
-        val newAlbum = controllerAlbum ?: if (samePlayer && newTitle == current.title) current.album else ""
+        val previous = current.takeIf { samePlayer } ?: MediaTrackInfo()
+        val newTitle = controllerTitle ?: title?.takeIf { it.isNotBlank() } ?: previous.title
+        val newArtist = controllerArtist ?: artist?.takeIf { it.isNotBlank() } ?: previous.artist
+        val resolvedAppName = appName ?: previous.appName
+        val sameTrack = samePlayer && newTitle == current.title && newArtist == current.artist
+        val newAlbum = controllerAlbum ?: previous.album.takeIf { sameTrack }.orEmpty()
         val candidate = sessionArtwork ?: artwork
         if (newTitle == current.title &&
             newArtist == current.artist &&
@@ -453,29 +438,22 @@ object MediaPlaybackState {
             return
         }
 
-        if (!samePlayer) resetArtworkUpdate()
-        _currentTrack.value = current.copy(
+        if (!sameTrack) resetArtworkUpdate()
+        if (!samePlayer) _positionMs.value = 0L
+        _currentTrack.value = previous.copy(
             title = newTitle,
             artist = newArtist,
             album = newAlbum,
-            albumArt = current.albumArt.takeIf { samePlayer },
-            artworkColors = if (samePlayer) current.artworkColors else DominantColorExtractor.defaultColors,
+            albumArt = previous.albumArt.takeIf { sameTrack },
+            artworkColors = if (sameTrack) previous.artworkColors else DominantColorExtractor.defaultColors,
             playerPackageName = newPackage,
             appName = resolvedAppName,
         )
         updateArtwork(candidate)
 
         val notifTrackKey = "${newTitle}_${newArtist}".trim()
-        if (current.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {
+        if (previous.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {
             lastAnnouncedTrackKey = notifTrackKey
-            MusicSleepTimer.onTrackChanged(notifTrackKey)
-            MediaPlaybackHistory.record(
-                title = newTitle,
-                artist = newArtist,
-                album = newAlbum,
-                appName = resolvedAppName,
-                packageName = newPackage,
-            )
             triggerSongAnnouncement()
         }
     }
@@ -623,10 +601,12 @@ object MediaPlaybackState {
         runCatching { activeController?.transportControls?.seekTo(clamped) }
     }
 
-    fun performSessionAction(action: MediaSessionAction) {
+    fun performSessionAction(requestedAction: MediaSessionAction) {
+        val current = _currentTrack.value
+        val action = current.sessionActions.firstOrNull { it.copy(active = requestedAction.active) == requestedAction }
+            ?: return
         // Give immediate visual feedback. The next notification/session update replaces this
         // optimistic value with the player's authoritative state.
-        val current = _currentTrack.value
         _currentTrack.value = current.copy(
             sessionActions = current.sessionActions.map {
                 if (it.id == action.id) it.copy(active = !it.active) else it
@@ -649,7 +629,10 @@ object MediaPlaybackState {
             ?: return
         // Use the object overload so Media3/compat sessions receive the complete platform action,
         // including the metadata used to reconstruct a session command.
-        controller.transportControls.sendCustomAction(publishedAction, publishedAction.extras)
+        val sent = runCatching {
+            controller.transportControls.sendCustomAction(publishedAction, publishedAction.extras)
+        }
+        if (sent.isFailure) return
 
         // Most sessions emit a playback-state callback after handling the command. Refresh as a
         // fallback as well so toggled labels/icons (Favorite -> Remove favorite, etc.) update.
@@ -684,7 +667,7 @@ object MediaPlaybackState {
                 it.label.equals(sessionAction.label, ignoreCase = true) ||
                         sessionAction.id.contains(it.label, ignoreCase = true)
             }
-            if (match != null) sessionAction.copy(pendingIntent = match.pendingIntent) else sessionAction
+            sessionAction.copy(pendingIntent = match?.pendingIntent)
         }.toMutableList()
         notificationActions.forEach { action ->
             if (merged.none { it.label.equals(action.label, ignoreCase = true) }) merged += action
@@ -726,21 +709,28 @@ object MediaPlaybackState {
                     }
                     _positionMs.value = nextPos
                 } else {
-                    val controller = activeController ?: continue
-                    val pbState = controller.playbackState ?: continue
-                    if (pbState.state == PlaybackState.STATE_PLAYING) {
-                        val lastUpdateTime = pbState.lastPositionUpdateTime
-                        val speed = if (pbState.playbackSpeed > 0f) pbState.playbackSpeed else 1f
-                        val elapsed = if (lastUpdateTime > 0L) {
-                            SystemClock.elapsedRealtime() - lastUpdateTime
-                        } else 0L
-                        val actualPos = (pbState.position + (elapsed * speed).toLong())
-                            .coerceIn(0L, current.durationMs)
-                        _positionMs.value = actualPos
+                    val state = sessionPlaybackState ?: continue
+                    if (state.state == PlaybackState.STATE_PLAYING) {
+                        _positionMs.value = state.positionAt(now, current.durationMs)
                     }
                 }
             }
         }
+    }
+
+    private fun PlaybackState.positionAt(now: Long, durationMs: Long): Long {
+        val elapsedMs = if (state == PlaybackState.STATE_PLAYING && lastPositionUpdateTime in 1..now) {
+            now - lastPositionUpdateTime
+        } else 0L
+        return computePlaybackPosition(position, elapsedMs, playbackSpeed, durationMs)
+    }
+
+    internal fun computePlaybackPosition(positionMs: Long, elapsedMs: Long, speed: Float, durationMs: Long): Long {
+        val end = durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE
+        val position = positionMs.coerceIn(0L, end)
+        val rate = speed.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val advance = (elapsedMs.coerceAtLeast(0L) * rate.toDouble()).toLong()
+        return position + minOf(advance, end - position)
     }
 
     fun clear() {
@@ -758,6 +748,7 @@ object MediaPlaybackState {
         controllerCallback = null
         activeController = null
         sessionMetadata = null
+        sessionPlaybackState = null
         sessionArtwork = null
         _positionMs.value = 0L
         _currentTrack.value = MediaTrackInfo()

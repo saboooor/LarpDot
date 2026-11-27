@@ -33,7 +33,7 @@ internal fun compactVisualizerWidthDp(
     bandCount: Int,
     barWidth: Float,
     barSpacing: Float,
-): Float = if (showVisualizer) {
+): Float = if (showVisualizer && bandCount > 0) {
     bandCount * barWidth + (bandCount - 1).coerceAtLeast(0) * barSpacing
 } else 0f
 
@@ -85,10 +85,16 @@ internal fun rememberIslandPresentations(
     customIsland: CustomIsland? = null,
 ): Map<IslandType, IslandPresentation> {
     val artStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-    val showTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val musicLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    val showTitle = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
+        musicRightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
     val compactMediaOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
     val expandedMediaOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
-    val compactFlashOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
+    val flashlightLeftSide by OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState()
+    val flashlightRightSide by OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState()
+    val compactFlashOutline = flashlightLeftSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS ||
+        flashlightRightSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
     val expandedFlashOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
     val radialGaugeExtra = compactRadialGaugeExtraDp(thickness)

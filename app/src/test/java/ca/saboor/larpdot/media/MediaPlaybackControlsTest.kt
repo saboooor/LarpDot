@@ -27,6 +27,15 @@ class MediaPlaybackControlsTest {
     }
 
     @Test
+    fun playbackPositionHandlesInvalidSessionValuesAndOverflow() {
+        assertEquals(2_500L, MediaPlaybackState.computePlaybackPosition(1_000L, 1_000L, 1.5f, 10_000L))
+        assertEquals(2_000L, MediaPlaybackState.computePlaybackPosition(1_000L, 1_000L, Float.NaN, 10_000L))
+        assertEquals(0L, MediaPlaybackState.computePlaybackPosition(-1L, -1L, 1f, 10_000L))
+        assertEquals(10_000L, MediaPlaybackState.computePlaybackPosition(9_500L, 1_000L, 2f, 10_000L))
+        assertEquals(Long.MAX_VALUE, MediaPlaybackState.computePlaybackPosition(Long.MAX_VALUE - 1, 1_000L, 1f, 0L))
+    }
+
+    @Test
     fun timeFormattersHandleElapsedRemainingAndTotalDuration() {
         assertEquals("0:00", formatTime(0L))
         assertEquals("0:00", formatTime(-4_000L))

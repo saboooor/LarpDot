@@ -14,7 +14,7 @@ class IslandStackTest {
 
     @Test fun customIslandTakesThePrimarySlotWhenBuiltInIslandsAreIdle() {
         val idle = builtInIslandSlots(false, false, null, emptyList(), custom = customIsland)
-        assertEquals(listOf(IslandSlot(IslandType.CUSTOM)), idle.ordered.map { it.content })
+        assertEquals(listOf(IslandSlot(IslandType.CUSTOM, customIslandId = customIsland.id)), idle.ordered.map { it.content })
 
         val busy = builtInIslandSlots(true, true, null, emptyList(), custom = customIsland)
         assertEquals(
@@ -27,7 +27,7 @@ class IslandStackTest {
         val always = customIsland.copy(visibility = CustomIslandVisibility.ALWAYS)
         val stack = builtInIslandSlots(true, true, null, emptyList(), custom = always)
         assertEquals(
-            listOf(IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.FLASHLIGHT)),
+            listOf(IslandSlot(IslandType.CUSTOM, customIslandId = always.id), IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.FLASHLIGHT)),
             stack.ordered.map { it.content },
         )
     }
@@ -44,7 +44,7 @@ class IslandStackTest {
             custom = always,
         )
         assertEquals(
-            listOf(IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.FLASHLIGHT)),
+            listOf(IslandSlot(IslandType.MEDIA), IslandSlot(IslandType.CUSTOM, customIslandId = always.id), IslandSlot(IslandType.FLASHLIGHT)),
             stack.ordered.map { it.content },
         )
     }
@@ -70,7 +70,7 @@ class IslandStackTest {
         assertEquals(listOf(IslandSlot(IslandType.MEDIA)), noMatch.ordered.map { it.content })
         val match = builtInIslandSlots(false, true, null, emptyList(), custom = conditional)
         assertEquals(
-            listOf(IslandSlot(IslandType.CUSTOM), IslandSlot(IslandType.FLASHLIGHT)),
+            listOf(IslandSlot(IslandType.CUSTOM, customIslandId = conditional.id), IslandSlot(IslandType.FLASHLIGHT)),
             match.ordered.map { it.content },
         )
     }
@@ -226,49 +226,49 @@ class IslandStackTest {
 
     @Test fun secondaryItemWidthReturnsThicknessWhenMiniPillDisabled() {
         val thickness = 28f
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.MEDIA, thickness, false, true, "100%", "5m"), 0.001f)
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, false, true, "100%", "5m"), 0.001f)
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, false, true, "100%", "5m"), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.MEDIA, thickness, false, "100%", "5m", musicRightInfoExtentDp = 16f), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, false, "100%", "5m"), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, false, "100%", "5m"), 0.001f)
     }
 
     @Test fun secondaryItemWidthExpandsToMiniPillWhenEnabledAndContentPresent() {
         val thickness = 28f
-        // Media with music active expands by 28dp
-        assertEquals(thickness + 28f, secondaryItemWidthDp(IslandType.MEDIA, thickness, true, true, "", null), 0.001f)
-        // Media without active music stays a dot
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.MEDIA, thickness, true, false, "", null), 0.001f)
+        // The music mini pill adds its trailing content width and inset
+        assertEquals(thickness + 28f, secondaryItemWidthDp(IslandType.MEDIA, thickness, true, "", null, musicRightInfoExtentDp = 16f), 0.001f)
+        // Media without right-side info stays a dot
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.MEDIA, thickness, true, "", null), 0.001f)
 
         // Flashlight with status expands by 24dp
-        assertEquals(thickness + 24f, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, true, false, "100%", null), 0.001f)
+        assertEquals(thickness + 24f, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, true, "100%", null), 0.001f)
         // Flashlight without status stays a dot
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, true, false, "", null), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.FLASHLIGHT, thickness, true, "", null), 0.001f)
 
         // Notification activity with short status (e.g. "5m") expands by 24dp
-        assertEquals(thickness + 24f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, false, "", "5m"), 0.001f)
+        assertEquals(thickness + 24f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, "", "5m"), 0.001f)
         // Notification activity with longer status (e.g. "12:30") expands by 34dp
-        assertEquals(thickness + 34f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, false, "", "12:30"), 0.001f)
+        assertEquals(thickness + 34f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, "", "12:30"), 0.001f)
         // Notification activity with empty/null status stays a dot
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, false, "", null), 0.001f)
-        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, false, "", ""), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, "", null), 0.001f)
+        assertEquals(thickness, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, thickness, true, "", ""), 0.001f)
     }
 
     @Test fun earbudMiniPillFitsBothRingsAndTheGap() {
         assertEquals(44f, secondaryItemWidthDp(
-            IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", null,
+            IslandType.NOTIFICATION_ACTIVITY, 24f, true, "", null,
             smaller = true, hasEarbudBatteryLevels = true,
         ), 0.001f)
         assertEquals(24f, secondaryItemWidthDp(
-            IslandType.NOTIFICATION_ACTIVITY, 24f, false, false, "", null,
+            IslandType.NOTIFICATION_ACTIVITY, 24f, false, "", null,
             hasEarbudBatteryLevels = true,
         ), 0.001f)
     }
 
     @Test fun smallerSecondaryMiniPillsReduceExtraSpaceWhileFittingTheirContents() {
-        assertEquals(48f, secondaryItemWidthDp(IslandType.MEDIA, 24f, true, true, "", null, smaller = true), 0.001f)
-        assertEquals(44f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 24f, true, false, "100%", null, smaller = true), 0.001f)
-        assertEquals(51f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 28f, true, false, "100%", null, smaller = true), 0.001f)
-        assertEquals(54f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", "12:30", smaller = true), 0.001f)
-        assertEquals(24f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, false, "", null, smaller = true), 0.001f)
+        assertEquals(48f, secondaryItemWidthDp(IslandType.MEDIA, 24f, true, "", null, smaller = true, musicRightInfoExtentDp = 12f), 0.001f)
+        assertEquals(44f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 24f, true, "100%", null, smaller = true), 0.001f)
+        assertEquals(51f, secondaryItemWidthDp(IslandType.FLASHLIGHT, 28f, true, "100%", null, smaller = true), 0.001f)
+        assertEquals(54f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, "", "12:30", smaller = true), 0.001f)
+        assertEquals(24f, secondaryItemWidthDp(IslandType.NOTIFICATION_ACTIVITY, 24f, true, "", null, smaller = true), 0.001f)
     }
 
     @Test fun stackedPillWidthWithExtentsConstrainsCorrectlyForAsymmetricExtents() {
@@ -459,17 +459,50 @@ class IslandStackTest {
         assertTrue(priority.contains(IslandPriorityItem.Custom(customIsland.id)))
         assertFalse(priority.contains(IslandPriorityItem.Custom(swipeDownWithWidget.id)))
 
-        // Can stay active alongside a regular custom island
+        // Can stay active alongside multiple regular custom islands
         val regular = customIsland.copy(left = customIsland.left.copy(icon = CustomIslandIcon.HOME))
+        val second = customIsland.copy(
+            id = "transit",
+            visibility = CustomIslandVisibility.CONDITIONAL,
+            condition = CustomIslandCondition.NOTIFICATION,
+            left = customIsland.left.copy(icon = CustomIslandIcon.NAVIGATION),
+        )
         val settings = CustomIslandSettings(
-            islands = listOf(regular, swipeDownWithWidget),
-            activeId = regular.id,
+            islands = listOf(regular, second, swipeDownWithWidget),
+            activeIds = setOf(regular.id, second.id),
             swipeDownId = swipeDownWithWidget.id,
         )
+        assertEquals(listOf(regular, second), settings.activeIslands)
+        assertTrue(settings.isActive(regular.id))
+        assertTrue(settings.isActive(second.id))
         assertEquals(regular, settings.activeIsland)
         assertEquals(swipeDownWithWidget, settings.swipeDownIsland)
         assertTrue(settings.canUseSwipeDownVisibility(swipeDownWithWidget.id))
         assertFalse(settings.canUseSwipeDownVisibility(regular.id))
+
+        // Multiple active custom islands stack by priority with distinct IslandSlot IDs
+        val alwaysOne = regular.copy(visibility = CustomIslandVisibility.ALWAYS)
+        val multiStack = builtInIslandSlots(
+            music = true,
+            flashlight = false,
+            activity = null,
+            shortTerms = emptyList(),
+            priorityOrder = listOf(
+                IslandPriorityItem.Custom(second.id),
+                IslandPriorityItem.MEDIA,
+                IslandPriorityItem.Custom(alwaysOne.id),
+            ),
+            customIslands = listOf(alwaysOne, second),
+            matchingNotificationIds = setOf(second.id),
+        )
+        assertEquals(
+            listOf(
+                IslandSlot(IslandType.CUSTOM, customIslandId = second.id),
+                IslandSlot(IslandType.MEDIA),
+                IslandSlot(IslandType.CUSTOM, customIslandId = alwaysOne.id),
+            ),
+            multiStack.ordered.map { it.content },
+        )
 
         val duplicateSwipeDown = customIsland.copy(id = "swipe2", visibility = CustomIslandVisibility.SWIPE_DOWN)
         val normalized = enforceSingleSwipeDownIsland(

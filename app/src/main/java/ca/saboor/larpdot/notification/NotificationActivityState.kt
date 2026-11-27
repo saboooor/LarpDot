@@ -36,10 +36,8 @@ enum class NotificationActivityKind {
     BATTERY_LOW,
     SOUND_MODE,
     DND,
-    VOLUME,
     BLUETOOTH,
     AUDIO_OUTPUT,
-    SCREENSHOT,
 }
 
 data class NotificationActivitySettings(
@@ -52,10 +50,8 @@ data class NotificationActivitySettings(
     val batteryLow: Boolean = true,
     val soundMode: Boolean = true,
     val dnd: Boolean = true,
-    val volumeHud: Boolean = false,
     val bluetooth: Boolean = true,
     val audioOutput: Boolean = true,
-    val screenshotPocket: Boolean = true,
     val chargeLimitAlert: Boolean = false,
     val chargeLimitPercent: Int = 80,
     val lowBatteryThresholdPercent: Int = 15,
@@ -66,7 +62,6 @@ data class NotificationActivitySettings(
     val permanentDnd: Boolean = false,
     val permanentBluetooth: Boolean = permanentShortTerm,
     val permanentAudioOutput: Boolean = false,
-    val permanentScreenshotPocket: Boolean = false,
     val expandShortTermAlerts: Boolean = false,
     val progressOutline: Boolean = true,
 ) {
@@ -79,10 +74,8 @@ data class NotificationActivitySettings(
         NotificationActivityKind.BATTERY_LOW -> batteryLow
         NotificationActivityKind.SOUND_MODE -> soundMode
         NotificationActivityKind.DND -> dnd
-        NotificationActivityKind.VOLUME -> volumeHud
         NotificationActivityKind.BLUETOOTH -> bluetooth
         NotificationActivityKind.AUDIO_OUTPUT -> audioOutput
-        NotificationActivityKind.SCREENSHOT -> screenshotPocket
     }
 }
 
@@ -110,9 +103,6 @@ data class NotificationActivityInfo(
     val concurrentStatuses: List<String> = emptyList(),
     val bluetoothDeviceType: String? = null,
     val bluetoothBatteryPercent: Int? = null,
-    val mediaUri: String? = null,
-    val mediaMimeType: String? = null,
-    val heldText: String? = null,
     val isPinnedShortTerm: Boolean = false,
     val maneuverIcon: Bitmap? = null,
     val earbudBatteryLevels: EarbudBatteryLevels? = null,
@@ -141,6 +131,9 @@ object NotificationActivityState {
     private val activities = linkedMapOf<String, NotificationActivityInfo>()
     private val appIconCache = LruCache<String, Bitmap>(MAX_CACHED_APP_ICONS)
     private var appContext: Context? = null
+
+    private val _eligibleActivities = MutableStateFlow<List<NotificationActivityInfo>>(emptyList())
+    internal val eligibleActivities = _eligibleActivities.asStateFlow()
 
     private val _current = MutableStateFlow<NotificationActivityInfo?>(null)
     val current: StateFlow<NotificationActivityInfo?> = _current.asStateFlow()
@@ -209,8 +202,6 @@ object NotificationActivityState {
         }
     }
 
-    fun onNotificationPosted(context: Context, sbn: StatusBarNotification) = update(context, sbn)
-
     fun remove(key: String) {
         synchronized(lock) {
             if (activities.remove(key) != null) {
@@ -219,13 +210,10 @@ object NotificationActivityState {
         }
     }
 
-    fun onNotificationRemoved(sbn: StatusBarNotification) = remove(sbn.key)
-
-    fun clear() {
+    internal fun clearNotificationActivities() {
         synchronized(lock) {
-            activities.clear()
-            _current.value = null
-            _shortTermActivities.value = emptyList()
+            activities.values.removeAll { !it.isSystemActivity }
+            publishBestLocked()
         }
     }
 
@@ -238,10 +226,13 @@ object NotificationActivityState {
         }
     }
 
-    fun open(context: Context, activity: NotificationActivityInfo) {
+    fun open(context: Context, activity: NotificationActivityInfo) =
+        open(context, activity.packageName, activity.contentIntent)
+
+    internal fun open(context: Context, packageName: String, contentIntent: PendingIntent?) {
         var launched = false
 
-        if (activity.contentIntent != null) {
+        if (contentIntent != null) {
             launched = runCatching {
                 val bundle = if (Build.VERSION.SDK_INT >= 36) {
                     ActivityOptions.makeBasic()
@@ -259,21 +250,20 @@ object NotificationActivityState {
                 } else {
                     ActivityOptions.makeBasic().toBundle()
                 }
-                activity.contentIntent.send(context, 0, null, null, null, null, bundle)
+                contentIntent.send(context, 0, null, null, null, null, bundle)
                 true
             }.getOrDefault(false)
         }
 
-        // If sending the pendingIntent failed or contentIntent was null,
-        // fall back to launching the target package's main launcher activity.
-        if (!launched && activity.packageName.isNotBlank()) {
-            runCatching {
-                val intent = context.packageManager.getLaunchIntentForPackage(activity.packageName)
-                if (intent != null) {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                    context.startActivity(intent)
-                }
-            }
+        if (!launched) openApp(context, packageName)
+    }
+
+    internal fun openApp(context: Context, packageName: String) {
+        if (packageName.isBlank()) return
+        runCatching {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            context.startActivity(intent)
         }
     }
 
@@ -323,10 +313,13 @@ object NotificationActivityState {
 
     fun removeSystemActivity(key: String) = remove(key)
 
+    private val NotificationActivityInfo.isSystemActivity: Boolean
+        get() = packageName == "android" && key.startsWith("system_")
+
     private fun publishBestLocked() {
         val eligible = activities.values.filter { settings.allows(it.kind) && !isPackageBlacklisted(it.packageName) }
-        val shortTerm = eligible.filter { it.packageName == "android" && it.key.startsWith("system_") }
-        val nonShortTerm = eligible.filterNot { it.packageName == "android" && it.key.startsWith("system_") }
+        _eligibleActivities.value = eligible
+        val (shortTerm, nonShortTerm) = eligible.partition { it.isSystemActivity }
         val best = (nonShortTerm.ifEmpty { eligible })
             .maxWithOrNull(
                 compareBy<NotificationActivityInfo> { if (it.isPinnedShortTerm) 0 else priority(it.kind) }
@@ -340,8 +333,6 @@ object NotificationActivityState {
         NotificationActivityKind.CALL -> 6
         NotificationActivityKind.BATTERY_LOW -> 5
         NotificationActivityKind.BATTERY_CHARGING -> 5
-        NotificationActivityKind.SCREENSHOT -> 5
-        NotificationActivityKind.VOLUME -> 5
         NotificationActivityKind.SOUND_MODE -> 4
         NotificationActivityKind.DND -> 4
         NotificationActivityKind.BLUETOOTH -> 4

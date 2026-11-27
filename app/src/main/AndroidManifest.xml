@@ -29,11 +29,6 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- Optional photo access for zero-step Screenshot Pocket -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -44,6 +39,10 @@
 
     <!-- Package visibility for app and widget listings -->
     <queries>
+        <package android:name="com.android.systemui" />
+        <intent>
+            <action android:name="com.android.settings.panel.action.MEDIA_OUTPUT" />
+        </intent>
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="af.shizuku.plus.api" />
         <intent>
@@ -141,7 +140,7 @@
             </intent-filter>
         </service>
 
-        <!-- Quick Settings Tile to toggle LarpDot Flashlight with live strength/mode status -->
+        <!-- Quick Settings Tile to toggle LarpDot Flashlight with live strength status -->
         <service
             android:name=".service.FlashlightTileService"
             android:exported="true"
@@ -152,36 +151,6 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
-
-        <!-- Share target ("Hold in Island") for tucking photos/files into the island pocket -->
-        <activity
-            android:name=".service.ShareToIslandActivity"
-            android:exported="true"
-            android:label="@string/hold_in_island_label"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:excludeFromRecents="true"
-            android:noHistory="true">
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/pdf" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-        </activity>
 
     </application>
 

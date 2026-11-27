@@ -117,14 +117,6 @@ fun ActivityIcon(
                 contentScale = ContentScale.Fit,
             )
         }
-        activity.kind == NotificationActivityKind.SCREENSHOT && appIcon != null -> {
-            Image(
-                bitmap = remember(appIcon) { appIcon.asImageBitmap() },
-                contentDescription = activity.title,
-                modifier = modifier.clip(RoundedCornerShape(4.dp)),
-                contentScale = ContentScale.Crop,
-            )
-        }
         activity.kind == NotificationActivityKind.PROGRESS && !isCertainDownload(activity) && appIcon != null -> {
             Image(
                 bitmap = remember(appIcon) { appIcon.asImageBitmap() },
@@ -144,9 +136,6 @@ fun ActivityIcon(
                     if (activity.title.contains("Off", ignoreCase = true)) Color(0xFF9E9E9E)
                     else Color(0xFF9C7CF8)
                 }
-                NotificationActivityKind.VOLUME -> {
-                    if ((activity.progress ?: 1) <= 0) Color(0xFFFF5252) else primaryColor
-                }
                 NotificationActivityKind.BLUETOOTH -> {
                     val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
                     if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor
@@ -156,9 +145,7 @@ fun ActivityIcon(
             val description = when (activity.kind) {
                 NotificationActivityKind.BLUETOOTH,
                 NotificationActivityKind.AUDIO_OUTPUT,
-                NotificationActivityKind.SCREENSHOT,
                 NotificationActivityKind.DND,
-                NotificationActivityKind.VOLUME,
                 -> activity.title
                 else -> activity.appName
             }
@@ -439,10 +426,8 @@ internal fun activityIcon(kind: NotificationActivityKind): ImageVector = when (k
     NotificationActivityKind.BATTERY_LOW -> LarpIcons.BatteryAlert
     NotificationActivityKind.SOUND_MODE -> LarpIcons.VolumeUp
     NotificationActivityKind.DND -> LarpIcons.DoNotDisturbOn
-    NotificationActivityKind.VOLUME -> LarpIcons.VolumeUp
     NotificationActivityKind.BLUETOOTH -> LarpIcons.BluetoothConnected
     NotificationActivityKind.AUDIO_OUTPUT -> LarpIcons.Headphones
-    NotificationActivityKind.SCREENSHOT -> LarpIcons.Screenshot
 }
 
 internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = when (activity.kind) {
@@ -458,10 +443,8 @@ internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = whe
         else -> LarpIcons.VolumeUp
     }
     NotificationActivityKind.DND -> LarpIcons.DoNotDisturbOn
-    NotificationActivityKind.VOLUME -> if ((activity.progress ?: 1) <= 0) LarpIcons.VolumeOff else LarpIcons.VolumeUp
     NotificationActivityKind.BLUETOOTH -> bluetoothDeviceIcon(activity)
     NotificationActivityKind.AUDIO_OUTPUT -> audioOutputActivityIcon(activity)
-    NotificationActivityKind.SCREENSHOT -> LarpIcons.Screenshot
 }
 
 internal fun bluetoothDeviceIcon(activity: NotificationActivityInfo): ImageVector {
@@ -518,12 +501,10 @@ internal fun activityIconTint(kind: NotificationActivityKind, fallback: Color): 
     NotificationActivityKind.BATTERY_LOW -> Color(0xFFFF5252)
     NotificationActivityKind.SOUND_MODE -> Color(0xFFFFA000)
     NotificationActivityKind.DND -> Color(0xFF9C7CF8)
-    NotificationActivityKind.VOLUME,
     NotificationActivityKind.TIMER,
     NotificationActivityKind.NAVIGATION,
     NotificationActivityKind.BLUETOOTH,
     NotificationActivityKind.AUDIO_OUTPUT,
-    NotificationActivityKind.SCREENSHOT,
     NotificationActivityKind.PROGRESS,
     -> fallback
 }
@@ -628,10 +609,8 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
             else -> "Ring"
         }
         NotificationActivityKind.DND -> ""
-        NotificationActivityKind.VOLUME -> ""
         NotificationActivityKind.BLUETOOTH -> ""
         NotificationActivityKind.AUDIO_OUTPUT -> activity.title
-        NotificationActivityKind.SCREENSHOT -> "Share"
     }
 }
 

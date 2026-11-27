@@ -29,13 +29,14 @@ internal object CustomIslandWidgets {
     private var activeViews = 0
     private val mountedViews = mutableMapOf<Int, MutableList<CustomIslandWidgetView>>()
 
-    fun initialize(context: Context) {
+    fun initialize(context: Context, settingsLoaded: Boolean) {
         manager = AppWidgetManager.getInstance(context.applicationContext)
         host = IslandWidgetHost(context.applicationContext)
+        if (!settingsLoaded) return
         val settings = CustomIslandStore.settings.value
         val referenced = buildSet {
             settings.islands.forEach { island ->
-                CustomIslandPosition.entries.forEach { position -> island.slot(position).widgetId?.let(::add) }
+                addAll(island.widgetIds)
             }
             settings.pending?.widgetId?.let(::add)
         }
@@ -162,7 +163,7 @@ internal object CustomIslandWidgets {
     }
 
     private fun cancel(pending: PendingIslandWidget) {
-        if (CustomIslandStore.settings.value.pending == pending) CustomIslandStore.setPending(null)
+        if (CustomIslandStore.settings.value.pending == pending && !CustomIslandStore.setPending(null)) return
         delete(pending.widgetId)
     }
 

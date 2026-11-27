@@ -7,6 +7,7 @@ import android.media.MediaFormat
 import android.os.PowerManager
 import android.util.Log
 import android.util.LruCache
+import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.service.OverlayPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -18,6 +19,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -115,6 +119,7 @@ object AudioPreviewExtractor {
 
     private val extractorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var activeJob: Job? = null
+    private val demoPreviewVisible = MutableStateFlow(false)
     private var lastKey: String? = null
     private var lastBandCount: Int = -1
     private var lastSource: OverlayPreferences.PreviewAudioSource? = null
@@ -122,13 +127,61 @@ object AudioPreviewExtractor {
     val targetFps: Int
         get() = if (Runtime.getRuntime().availableProcessors() <= 4) 30 else 60
 
-    fun syncTrack(
+    fun initialize(context: Context) {
+        val appContext = context.applicationContext
+        OverlayPreferences.getVisualizerMode(appContext)
+        OverlayPreferences.getWaveformBandCount(appContext)
+        OverlayPreferences.getPreviewAudioSource(appContext)
+
+        val currentSong = MediaPlaybackState.currentTrack.map { track ->
+            if (track.hasMedia) track.title to track.artist else null
+        }.distinctUntilChanged()
+        val previewSong = combine(currentSong, OverlayPreferences.isEnabledFlow, demoPreviewVisible) { song, overlayEnabled, showDemo ->
+            when {
+                showDemo -> song ?: ("Starboy" to "The Weeknd")
+                overlayEnabled -> song
+                else -> null
+            }
+        }
+        extractorScope.launch {
+            combine(
+                previewSong,
+                OverlayPreferences.visualizerModeFlow,
+                OverlayPreferences.waveformBandCountFlow,
+                OverlayPreferences.previewAudioSourceFlow,
+            ) { song, mode, bands, source ->
+                PreviewRequest(
+                    song?.first,
+                    song?.second,
+                    mode == OverlayPreferences.VisualizerMode.AUDIO_PREVIEW,
+                    bands,
+                    source,
+                )
+            }.distinctUntilChanged().collect { request ->
+                syncTrack(appContext, request.title, request.artist, request.enabled, request.bandCount, request.source)
+            }
+        }
+    }
+
+    fun setDemoPreviewVisible(visible: Boolean) {
+        demoPreviewVisible.value = visible
+    }
+
+    private data class PreviewRequest(
+        val title: String?,
+        val artist: String?,
+        val enabled: Boolean,
+        val bandCount: Int,
+        val source: OverlayPreferences.PreviewAudioSource,
+    )
+
+    private fun syncTrack(
         context: Context,
         title: String?,
         artist: String?,
         isHqEnabled: Boolean,
-        bandCount: Int = OverlayPreferences.getWaveformBandCount(context),
-        previewSource: OverlayPreferences.PreviewAudioSource = OverlayPreferences.getPreviewAudioSource(context),
+        bandCount: Int,
+        previewSource: OverlayPreferences.PreviewAudioSource,
     ) {
         val safeBands = bandCount.coerceIn(1, 32)
 
@@ -171,6 +224,8 @@ object AudioPreviewExtractor {
             }
         }
 
+        activeJob?.cancel()
+        activeJob = null
         val cacheFolder = File(context.cacheDir, "visualizer_cache")
         val audioFile = File(cacheFolder, "audio_${trackKey}_${previewSource.key}.m4a")
         val audioPath = if (audioFile.exists() && audioFile.length() > 0) audioFile.absolutePath else null
@@ -206,7 +261,7 @@ object AudioPreviewExtractor {
             return
         }
 
-        activeJob?.cancel()
+        _currentAmplitudes.value = null
         lastKey = trackKey
         lastBandCount = safeBands
         lastSource = previewSource
@@ -268,6 +323,7 @@ object AudioPreviewExtractor {
                 if (audioFile.exists()) audioFile.setLastModified(now)
                 memoryCache.put(cacheKey, cachedData)
                 val audioPath = if (audioFile.exists() && audioFile.length() > 0) audioFile.absolutePath else null
+                currentCoroutineContext().ensureActive()
                 _extractionState.value = ExtractionState.Success(
                     trackTitle = title,
                     artist = artist,
@@ -334,6 +390,7 @@ object AudioPreviewExtractor {
             memoryCache.put(cacheKey, extracted)
             trimDiskCache(cacheFolder, setOf(audioFile, cacheFile))
             failedCache.remove(cacheKey)
+            currentCoroutineContext().ensureActive()
             _extractionState.value = ExtractionState.Success(
                 trackTitle = title,
                 artist = artist,

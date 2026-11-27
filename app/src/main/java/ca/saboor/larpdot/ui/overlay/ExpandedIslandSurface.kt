@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
@@ -50,7 +53,9 @@ import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.service.CustomIsland
+import ca.saboor.larpdot.service.CustomIslandTapAction
 import ca.saboor.larpdot.service.OverlayPreferences
+import ca.saboor.larpdot.service.runTapAction
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import ca.saboor.larpdot.ui.theme.motionBlur
 import ca.saboor.larpdot.ui.theme.motionFraction
@@ -107,17 +112,24 @@ internal fun IslandSurfaceOverlay(
 ) {
     val statusArrivalOffset = rememberStatusArrivalOffset(notificationActivity, !isExpanded && expandedType == IslandType.NOTIFICATION_ACTIVITY)
     val morphProgress = remember { Animatable(0f) }
-    val expansion by remember {
-        derivedStateOf {
-            val progress = morphProgress.value.coerceIn(0f, 1f)
-            if (progress <= 0.5f) easeMorphDistance(progress, 0.1f)
-            else 1f - easeMorphDistance(1f - progress, 0.1f)
-        }
-    }
     val contentProgress = remember { Animatable(0f) }
     val minimizeStretch = remember { Animatable(0f) }
     var collapseFrom by remember { mutableStateOf<Float?>(null) }
     val isInteractive = interactiveProgress != null
+    val currentInteractiveProgressState = rememberUpdatedState(interactiveProgress)
+    val rawMorphProgress by remember {
+        derivedStateOf { currentInteractiveProgressState.value ?: morphProgress.value }
+    }
+    val expansion by remember {
+        derivedStateOf {
+            val progress = rawMorphProgress.coerceIn(0f, 1f)
+            if (progress <= 0.5f) easeMorphDistance(progress, 0.1f)
+            else 1f - easeMorphDistance(1f - progress, 0.1f)
+        }
+    }
+    val contentExpansion by remember {
+        derivedStateOf { (currentInteractiveProgressState.value ?: contentProgress.value).coerceIn(0f, 1f) }
+    }
 
     LaunchedEffect(isInteractive) {
         if (isInteractive) {
@@ -185,7 +197,8 @@ internal fun IslandSurfaceOverlay(
     val screenHeightDp = configuration.screenHeightDp.dp
     val density = LocalDensity.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val drawWindowWidthPx = LocalView.current.width.takeIf { it > 0 }?.toFloat()
+    val drawView = LocalView.current
+    val drawWindowWidthPx = drawView.width.takeIf { it > 0 }?.toFloat()
         ?: with(density) { screenWidthDp.toPx() }
 
     val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
@@ -246,10 +259,9 @@ internal fun IslandSurfaceOverlay(
         drawWindowWidthDp = drawWindowWidthDp,
         isLandscape = isLandscape,
     )
-    val customSpanFull = customIsland?.main?.spanFullIsland == true
     val cardWidth = when (expandedType) {
         IslandType.CUSTOM -> minOf(
-            (customIsland?.main?.width ?: 300).dp + if (customSpanFull) 0.dp else customIslandCardPadding * 2,
+            (customIsland?.main?.width ?: 300).dp + (customIsland?.main?.paddingX ?: 8).dp * 2,
             (if (isLandscape) drawWindowWidthDp - horizontalMarginDp - 14.dp else screenWidthDp - 28.dp)
                 .coerceAtLeast(1.dp),
         )
@@ -262,34 +274,41 @@ internal fun IslandSurfaceOverlay(
     }
     var measuredMediaHeight by remember { mutableStateOf<Dp?>(null) }
     val maxMediaHeight = expandedMediaCardMaxHeight(screenHeightDp, isLandscape)
-    val customPadding = customIslandExpandedPadding(expandedCutoutClearanceDp, customSpanFull)
+    var measuredCustomHeight by remember(customIsland?.id) { mutableStateOf<Dp?>(null) }
+    val maxCustomHeight = (minOf(screenHeightDp, with(density) { drawView.height.toDp() }
+        .takeIf { it > 0.dp } ?: 460.dp) - 28.dp).coerceAtLeast(1.dp)
     val cardHeight = when (expandedType) {
-        IslandType.CUSTOM -> minOf(
-            (customIsland?.main?.height ?: 150).dp +
-                customPadding.calculateTopPadding() + customPadding.calculateBottomPadding(),
-            (screenHeightDp - 28.dp).coerceAtLeast(1.dp),
-        )
+        IslandType.CUSTOM -> measuredCustomHeight ?: with(density) { sourceFrame.bounds.height.toDp() }
         IslandType.FLASHLIGHT -> if (wideFlashlight) {
             (if (expandedCutoutClearanceDp > 0.dp) expandedCutoutClearanceDp else 8.dp) + 56.dp
         } else if (isLandscape) minOf(screenHeightDp - 36.dp, 290.dp) else 290.dp
         IslandType.NOTIFICATION_ACTIVITY -> activitySize.height
         IslandType.MEDIA -> measuredMediaHeight ?: with(density) { sourceFrame.bounds.height.toDp() }
     }
-    val mediaCardHorizontalMarginDp = (screenWidthDp - cardWidth) / 2f
 
     val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(cardWidth, cardHeight) / 2f)
 
-    val showMinimizedVisualizer by OverlayPreferences.showMinimizedVisualizerFlow.collectAsState()
+    val musicLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    val showMinimizedVisualizer = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER ||
+        musicRightSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
     val visualizerMotion = if (expandedType == IslandType.MEDIA && expandedElementVisibility.visualizer &&
         (if (fromTinyDot) compactFrame.isMiniPill else showMinimizedVisualizer)
     ) {
         rememberIslandElementMotion { expansion }
     } else null
+    val customWingLinks = if (expandedType == IslandType.CUSTOM) {
+        resolveCustomWingMorphLinks(customIsland, fromSecondaryBubble = fromTinyDot)
+    } else CustomWingMorphLinks()
     val hasActivityMotion = expandedType == IslandType.FLASHLIGHT || expandedType == IslandType.NOTIFICATION_ACTIVITY
-    val iconMotion = if (hasActivityMotion) rememberIslandElementMotion { expansion } else null
-    val progressMotion = if (hasActivityMotion) rememberIslandElementMotion { expansion } else null
+    val iconMotion = if (hasActivityMotion || customWingLinks.leftCompactTarget != null) {
+        rememberIslandElementMotion { expansion }
+    } else null
+    val progressMotion = if (hasActivityMotion || customWingLinks.rightCompactTarget != null) {
+        rememberIslandElementMotion { expansion }
+    } else null
     val elementMotions = listOfNotNull(progressMotion, iconMotion, visualizerMotion)
     val startWidth = with(density) { startBounds.width.toDp() }
     val startHeight = with(density) { startBounds.height.toDp() }
@@ -302,7 +321,9 @@ internal fun IslandSurfaceOverlay(
         if (artwork != null) IslandArtworkMotion { expansion } else null
     }
     val expandedWidth by animateDpAsState(cardWidth, LarpMotion.resize(), label = "expanded_width")
-    val expandedHeight = if (expandedType == IslandType.MEDIA && measuredMediaHeight == null) {
+    val awaitingHeightMeasurement = (expandedType == IslandType.MEDIA && measuredMediaHeight == null) ||
+        (expandedType == IslandType.CUSTOM && measuredCustomHeight == null)
+    val expandedHeight = if (awaitingHeightMeasurement) {
         cardHeight
     } else {
         animateDpAsState(cardHeight, LarpMotion.resize(), label = "expanded_height").value
@@ -360,7 +381,6 @@ internal fun IslandSurfaceOverlay(
         bottomLeftRadiusPx = with(density) { (if (isLandscape) afterCorner else beforeCorner).toPx() },
     )
 
-    val contentExpansion = contentProgress.value.coerceIn(0f, 1f)
     val compactAlpha = 1f - motionFraction(contentExpansion, 0.04f, 0.54f)
     val expandedAlpha = motionFraction(contentExpansion, 0.23f, 0.85f)
     val expandedContentScale = 0.96f + (0.04f * contentExpansion)
@@ -395,6 +415,12 @@ internal fun IslandSurfaceOverlay(
     }
 
     val allowVerticalSwipeCollapse = isExpanded && !(expandedType == IslandType.FLASHLIGHT && !wideFlashlight)
+    val context = LocalContext.current
+    val expandedTapIsland = customIsland?.takeIf {
+        isExpanded && expandedType == IslandType.CUSTOM &&
+            it.tapAction != CustomIslandTapAction.EXPAND && it.tapAction != CustomIslandTapAction.NONE &&
+            (!it.isSwipeDownOnly || it.tapAction == CustomIslandTapAction.OPEN_APP)
+    }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -418,21 +444,23 @@ internal fun IslandSurfaceOverlay(
                     } ?: (1f - expansion)
                     val pressScale = maxOf(surfacePress.scale, 1f + (compactPressScale - 1f) * pressCarry)
                     val stretch = compactStretch * pressCarry
-                    val rawProgress = morphProgress.value
-                    val overshoot = (rawProgress - rawProgress.coerceIn(0f, 1f)).coerceIn(-0.035f, 0.035f)
-                    val shellScale = pressScale * (1f + easeMorphDistance(overshoot.coerceAtLeast(0f), 0.01f))
+                    val rawProgress = rawMorphProgress
+                    val overshoot = (rawProgress - rawProgress.coerceIn(0f, 1f)).coerceIn(-0.035f, 0.14f)
+                    val positiveOvershoot = overshoot.coerceAtLeast(0f)
+                    val shellScaleX = pressScale * (1f + easeMorphDistance(positiveOvershoot.coerceAtMost(0.035f), 0.01f) * 0.6f)
+                    val shellScaleY = pressScale * (1f + easeMorphDistance(positiveOvershoot, 0.02f) * 0.55f)
                     val upwardStretch = minimizeStretch.value
                     val horizontalSqueeze = upwardStretch * 0.5f
                     val swipeScaleX = 1f + kotlin.math.abs(stretch) * if (fromTinyDot) 0.22f else 0.18f
-                    scaleX = shellScale * swipeScaleX * (1f - horizontalSqueeze)
+                    scaleX = shellScaleX * swipeScaleX * (1f - horizontalSqueeze)
                     val upwardTravel = startHeight.toPx() * upwardStretch
-                    scaleY = shellScale + upwardTravel / size.height.coerceAtLeast(1f)
+                    scaleY = shellScaleY + upwardTravel / size.height.coerceAtLeast(1f)
                     translationY = -upwardTravel / 2f
                     transformOrigin = when {
                         stretch > 0.01f -> TransformOrigin(0f, 0.5f)
                         stretch < -0.01f -> TransformOrigin(1f, 0.5f)
-                        overshoot > 0f && !isLandscape -> TransformOrigin(0.5f, 0f)
-                        overshoot > 0f -> TransformOrigin(if (cutoutInfo.centerX < drawWindowWidthPx / 2f) 0f else 1f, 0.5f)
+                        positiveOvershoot > 0f && !isLandscape -> TransformOrigin(0.5f, 0f)
+                        positiveOvershoot > 0f -> TransformOrigin(if (cutoutInfo.centerX < drawWindowWidthPx / 2f) 0f else 1f, 0.5f)
                         else -> TransformOrigin.Center
                     }
                     alpha = when {
@@ -445,7 +473,11 @@ internal fun IslandSurfaceOverlay(
                 .shadow(currentElevation, containerShape, clip = false),
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().clip(containerShape),
+                modifier = Modifier.fillMaxSize().clip(containerShape).then(
+                    if (expandedTapIsland != null) Modifier.clickable(onClickLabel = expandedTapIsland.tapAction.label) {
+                        expandedTapIsland.runTapAction(context) {}
+                    } else Modifier,
+                ),
                 contentAlignment = Alignment.Center,
             ) {
                 if (useBackdropBlur) {
@@ -501,17 +533,21 @@ internal fun IslandSurfaceOverlay(
                                 visualizerAnchor = visualizerMotion?.compact,
                                 iconAnchor = iconMotion?.compact,
                                 progressAnchor = progressMotion?.compact,
+                                customIsland = customIsland,
                                 onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                             )
                         }
                     }
                 }
 
-                if (expandedAlpha > 0.01f || (expandedType == IslandType.MEDIA && isExpanded) || (expandedType == IslandType.CUSTOM && isInteractive) || keepExpandedElements) {
-                    val expandedContentSize = if (expandedType == IslandType.MEDIA) {
+                val hasContentDrivenHeight = expandedType == IslandType.MEDIA || expandedType == IslandType.CUSTOM
+                if (expandedAlpha > 0.01f || (hasContentDrivenHeight && isExpanded) ||
+                    (expandedType == IslandType.CUSTOM && isInteractive) || keepExpandedElements
+                ) {
+                    val expandedContentSize = if (hasContentDrivenHeight) {
                         Modifier.requiredWidth(expandedWidth)
                             .wrapContentHeight(unbounded = true)
-                            .heightIn(max = maxMediaHeight)
+                            .heightIn(max = if (expandedType == IslandType.CUSTOM) maxCustomHeight else maxMediaHeight)
                     } else Modifier.requiredSize(expandedWidth, expandedHeight)
                     Box(
                         modifier = expandedContentSize
@@ -530,10 +566,30 @@ internal fun IslandSurfaceOverlay(
                             centerX = cutoutCenterXDp - ((drawWindowWidthDp - expandedWidth) / 2f + expandedOffsetX),
                             centerY = cutoutCenterYDp - panelPlacement.top.dp,
                             diameter = cutoutDiameterDp,
+                            modifier = if (expandedType == IslandType.CUSTOM) Modifier.matchParentSize() else Modifier,
                         )
                         when (expandedType) {
                             IslandType.CUSTOM -> customIsland?.let {
-                                ExpandedCustomIslandContent(it, expandedCutoutClearanceDp, interactive = isExpanded)
+                                val expandedLeftAnchor = when {
+                                    customWingLinks.leftCompactTarget == CustomWingSide.LEFT -> iconMotion?.expanded
+                                    customWingLinks.rightCompactTarget == CustomWingSide.LEFT -> progressMotion?.expanded
+                                    else -> null
+                                }
+                                val expandedRightAnchor = when {
+                                    customWingLinks.rightCompactTarget == CustomWingSide.RIGHT -> progressMotion?.expanded
+                                    customWingLinks.leftCompactTarget == CustomWingSide.RIGHT -> iconMotion?.expanded
+                                    else -> null
+                                }
+                                ExpandedCustomIslandContent(
+                                    it,
+                                    expandedCutoutClearanceDp,
+                                    interactive = isExpanded,
+                                    modifier = Modifier.onSizeChanged { size ->
+                                        measuredCustomHeight = with(density) { size.height.toDp() }
+                                    },
+                                    leftWingAnchor = expandedLeftAnchor,
+                                    rightWingAnchor = expandedRightAnchor,
+                                )
                             }
                             IslandType.NOTIFICATION_ACTIVITY -> {
                                 if (notificationActivity != null) {
@@ -564,12 +620,9 @@ internal fun IslandSurfaceOverlay(
                                     modifier = Modifier.onSizeChanged { size ->
                                         measuredMediaHeight = with(density) { size.height.toDp() }
                                     },
-                                    cutoutInfo = cutoutInfo,
-                                    cardHorizontalMarginDp = if (expandedPlayerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE) {
-                                        mediaCardHorizontalMarginDp
-                                    } else {
-                                        horizontalMarginDp
-                                    },
+                                    cardWidth = expandedWidth,
+                                    cutoutCenterX = cutoutCenterXDp - ((drawWindowWidthDp - expandedWidth) / 2f + expandedOffsetX),
+                                    cutoutCenterY = cutoutCenterYDp - panelPlacement.top.dp,
                                     topContentInset = expandedCutoutClearanceDp,
                                     artworkAnchor = artworkMotion?.expanded,
                                     visualizerAnchor = visualizerMotion?.expanded,
@@ -581,10 +634,26 @@ internal fun IslandSurfaceOverlay(
                     }
                 }
                 if (artworkMotion != null && artwork != null) {
+                    val minimizedAlbumArtStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
+                    val minimizedShape by OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState()
+                    val minimizedRotation by OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState()
+                    val expandedShape by OverlayPreferences.expandedAlbumArtShapeFlow.collectAsState()
+                    val expandedRotation by OverlayPreferences.expandedAlbumArtRotationFlow.collectAsState()
+                    val compactUsesShape = minimizedAlbumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED ||
+                        (fromTinyDot && !compactFrame.isMiniPill)
+                    val compactGlowShape = if (compactUsesShape) {
+                        nestedAlbumArtShape(minimizedShape, minimizedRotation)
+                    } else null
+                    val compactGlowKey = if (compactUsesShape) {
+                        AlbumArtGlowShapeKey.of(minimizedShape, minimizedRotation)
+                    } else null
+                    val expandedGlowShape = nestedAlbumArtShape(expandedShape, expandedRotation)
+                    val expandedGlowKey = AlbumArtGlowShapeKey.of(expandedShape, expandedRotation)
                     TravelingArtwork(
                         bitmap = remember(artwork) { artwork.asImageBitmap() },
                         motion = artworkMotion,
-                        glow = rememberAlbumArtGlow(mediaInfo),
+                        compactGlow = rememberAlbumArtGlow(mediaInfo, compactGlowShape, compactGlowKey),
+                        expandedGlow = rememberAlbumArtGlow(mediaInfo, expandedGlowShape, expandedGlowKey),
                         path = elementPath,
                         modifier = Modifier.matchParentSize(),
                     )

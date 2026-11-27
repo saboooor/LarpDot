@@ -4,13 +4,11 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import ca.saboor.larpdot.flashlight.FlashlightController
-import ca.saboor.larpdot.flashlight.FlashlightMode
 import kotlin.math.roundToInt
 
 internal fun formatFlashlightTileSubtitle(
     isAvailable: Boolean,
     isOn: Boolean,
-    mode: FlashlightMode,
     isBoostActive: Boolean,
     isStrengthSupported: Boolean,
     strength: Int,
@@ -18,7 +16,6 @@ internal fun formatFlashlightTileSubtitle(
 ): String {
     if (!isAvailable) return "Unavailable"
     if (!isOn) return "Off"
-    if (mode != FlashlightMode.STEADY) return mode.label
     if (isStrengthSupported && maxStrength > 1) {
         val percent = ((strength.coerceIn(1, maxStrength).toFloat() / maxStrength.toFloat()) * 100f)
             .roundToInt()
@@ -28,7 +25,7 @@ internal fun formatFlashlightTileSubtitle(
     return if (isBoostActive) "Boost" else "On"
 }
 
-/** Quick Settings tile for toggling LarpDot's flashlight with live strength, boost, and mode status. */
+/** Quick Settings tile for toggling LarpDot's flashlight with live strength and boost status. */
 class FlashlightTileService : TileService() {
 
     override fun onTileAdded() {
@@ -67,7 +64,6 @@ class FlashlightTileService : TileService() {
             tile.subtitle = formatFlashlightTileSubtitle(
                 isAvailable = available,
                 isOn = isOn,
-                mode = FlashlightController.flashlightMode.value,
                 isBoostActive = FlashlightController.isBoostActive.value,
                 isStrengthSupported = FlashlightController.isStrengthSupported.value,
                 strength = FlashlightController.torchStrength.value,

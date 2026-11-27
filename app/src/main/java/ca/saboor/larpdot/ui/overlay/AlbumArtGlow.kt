@@ -2,9 +2,12 @@ package ca.saboor.larpdot.ui.overlay
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.Path as AndroidPath
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
-import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -20,10 +23,17 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path as ComposePath
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.theme.LarpMotion
@@ -41,7 +51,20 @@ private const val GLOW_SATURATION_BOOST = 1.15f
 private const val GLOW_CORE_OVERSCAN = 1.08f
 private const val GLOW_INTENSITY_ALPHA = 0.90f
 private const val GLOW_ALPHA_EPSILON = 0.004f
-private const val BLUR_CACHE_MAX_ENTRIES = 8
+private const val BLUR_CACHE_MAX_ENTRIES = 16
+
+@Immutable
+internal data class AlbumArtGlowShapeKey(
+    val shape: OverlayPreferences.NestedAlbumArtShape,
+    val normalizedRotationDegrees: Float,
+) {
+    companion object {
+        fun of(shape: OverlayPreferences.NestedAlbumArtShape, rotationDegrees: Float = 0f): AlbumArtGlowShapeKey {
+            val normalized = ((rotationDegrees % 360f) + 360f) % 360f
+            return AlbumArtGlowShapeKey(shape, if (normalized == 0f) 0f else normalized)
+        }
+    }
+}
 
 @Immutable
 internal data class AlbumArtGlowState(
@@ -58,6 +81,7 @@ internal data class AlbumArtGlowState(
 private class CachedBlurredArt(
     val sourceRef: WeakReference<Bitmap>,
     val generationId: Int,
+    val shapeKey: AlbumArtGlowShapeKey?,
     val blurred: ImageBitmap,
 )
 
@@ -65,7 +89,11 @@ private val blurredArtworkCacheLock = Any()
 private val blurredArtworkCache = ArrayDeque<CachedBlurredArt>(BLUR_CACHE_MAX_ENTRIES)
 
 @Composable
-internal fun rememberAlbumArtGlow(media: MediaTrackInfo): AlbumArtGlowState {
+internal fun rememberAlbumArtGlow(
+    media: MediaTrackInfo,
+    shape: Shape? = null,
+    shapeKey: AlbumArtGlowShapeKey? = null,
+): AlbumArtGlowState {
     val enabled by OverlayPreferences.albumArtGlowFlow.collectAsState()
     val albumArt = media.albumArt
     val targetAlpha = if (enabled && albumArt != null) 1f else 0f
@@ -75,14 +103,14 @@ internal fun rememberAlbumArtGlow(media: MediaTrackInfo): AlbumArtGlowState {
         label = "album_art_glow_alpha",
     )
     val shouldRender = enabled || alpha > GLOW_ALPHA_EPSILON
-    val cachedHit = remember(albumArt, shouldRender) {
-        if (albumArt != null && shouldRender) getCachedBlurredArtwork(albumArt) else null
+    val cachedHit = remember(albumArt, shouldRender, shapeKey) {
+        if (albumArt != null && shouldRender) getCachedBlurredArtwork(albumArt, shapeKey) else null
     }
-    var asyncBlurred by remember(albumArt, shouldRender) { mutableStateOf(cachedHit) }
-    LaunchedEffect(albumArt, shouldRender) {
+    var asyncBlurred by remember(albumArt, shouldRender, shapeKey) { mutableStateOf(cachedHit) }
+    LaunchedEffect(albumArt, shouldRender, shapeKey) {
         if (albumArt != null && shouldRender && asyncBlurred == null) {
             asyncBlurred = withContext(Dispatchers.Default) {
-                getOrCreateBlurredArtwork(albumArt)
+                getOrCreateBlurredArtwork(albumArt, shape, shapeKey)
             }
         }
     }
@@ -147,18 +175,21 @@ private fun DrawScope.drawBlurredArtworkHalo(
     val dstWidth = (tileSize.width * scaleFactor).roundToInt().coerceAtLeast(1)
     val dstHeight = (tileSize.height * scaleFactor).roundToInt().coerceAtLeast(1)
     val dstLeft = ((tileSize.width - dstWidth) / 2f).roundToInt()
-    val dstTop = ((tileSize.height - dstHeight) / 2f).roundToInt()
+    val dstTop = ((tileSize.height - dstHeight) / 2f + tileSize.height * 0.30f).roundToInt()
 
-    drawImage(
-        image = blurred,
-        dstOffset = IntOffset(dstLeft, dstTop),
-        dstSize = IntSize(dstWidth, dstHeight),
-        alpha = effectiveAlpha,
-        filterQuality = FilterQuality.High,
-    )
+    clipRect(left = dstLeft.toFloat(), top = 0f, right = (dstLeft + dstWidth).toFloat(),
+        bottom = (dstTop + dstHeight).toFloat()) {
+        drawImage(
+            image = blurred,
+            dstOffset = IntOffset(dstLeft, dstTop),
+            dstSize = IntSize(dstWidth, dstHeight),
+            alpha = effectiveAlpha,
+            filterQuality = FilterQuality.High,
+        )
+    }
 }
 
-private fun getCachedBlurredArtwork(source: Bitmap): ImageBitmap? {
+private fun getCachedBlurredArtwork(source: Bitmap, shapeKey: AlbumArtGlowShapeKey?): ImageBitmap? {
     if (source.isRecycled || source.width <= 0 || source.height <= 0) return null
     val generationId = source.generationId
     synchronized(blurredArtworkCacheLock) {
@@ -168,7 +199,7 @@ private fun getCachedBlurredArtwork(source: Bitmap): ImageBitmap? {
             val cachedSource = entry.sourceRef.get()
             if (cachedSource == null || cachedSource.isRecycled) {
                 iterator.remove()
-            } else if (cachedSource === source && entry.generationId == generationId) {
+            } else if (cachedSource === source && entry.generationId == generationId && entry.shapeKey == shapeKey) {
                 return entry.blurred
             }
         }
@@ -176,22 +207,41 @@ private fun getCachedBlurredArtwork(source: Bitmap): ImageBitmap? {
     return null
 }
 
-private fun getOrCreateBlurredArtwork(source: Bitmap): ImageBitmap? {
-    getCachedBlurredArtwork(source)?.let { return it }
+private fun getOrCreateBlurredArtwork(
+    source: Bitmap,
+    shape: Shape?,
+    shapeKey: AlbumArtGlowShapeKey?,
+): ImageBitmap? {
+    getCachedBlurredArtwork(source, shapeKey)?.let { return it }
     if (source.isRecycled || source.width <= 0 || source.height <= 0) return null
     val generationId = source.generationId
 
-    val created = createBlurredArtworkBitmap(source)?.asImageBitmap() ?: return null
+    val created = createBlurredArtworkBitmap(source, shape)?.asImageBitmap() ?: return null
     synchronized(blurredArtworkCacheLock) {
         if (blurredArtworkCache.size >= BLUR_CACHE_MAX_ENTRIES) {
             blurredArtworkCache.removeFirst()
         }
-        blurredArtworkCache.addLast(CachedBlurredArt(WeakReference(source), generationId, created))
+        blurredArtworkCache.addLast(CachedBlurredArt(WeakReference(source), generationId, shapeKey, created))
     }
     return created
 }
 
-private fun createBlurredArtworkBitmap(source: Bitmap): Bitmap? {
+private fun createShapeMaskPath(shape: Shape?): AndroidPath? {
+    shape ?: return null
+    val coreSize = BLUR_CORE_SIZE.toFloat()
+    val outline = shape.createOutline(
+        size = Size(coreSize, coreSize),
+        layoutDirection = LayoutDirection.Ltr,
+        density = Density(1f),
+    )
+    return when (outline) {
+        is Outline.Generic -> outline.path.asAndroidPath()
+        is Outline.Rounded -> ComposePath().apply { addRoundRect(outline.roundRect) }.asAndroidPath()
+        is Outline.Rectangle -> ComposePath().apply { addRect(outline.rect) }.asAndroidPath()
+    }
+}
+
+private fun createBlurredArtworkBitmap(source: Bitmap, shape: Shape? = null): Bitmap? {
     val softwareCopy = if (source.config == Bitmap.Config.HARDWARE) {
         source.copy(Bitmap.Config.ARGB_8888, false) ?: return null
     } else {
@@ -207,17 +257,24 @@ private fun createBlurredArtworkBitmap(source: Bitmap): Bitmap? {
         val buffer = createBitmap(BLUR_BUFFER_SIZE, BLUR_BUFFER_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(buffer)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val shapePath = createShapeMaskPath(shape)
+        canvas.save()
+        canvas.translate(BLUR_PADDING.toFloat(), BLUR_PADDING.toFloat())
+        if (shapePath != null) {
+            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.WHITE
+                style = Paint.Style.FILL
+            }
+            canvas.drawPath(shapePath, maskPaint)
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        }
         canvas.drawBitmap(
             readableSource,
             Rect(cropLeft, cropTop, cropLeft + cropSide, cropTop + cropSide),
-            Rect(
-                BLUR_PADDING,
-                BLUR_PADDING,
-                BLUR_PADDING + BLUR_CORE_SIZE,
-                BLUR_PADDING + BLUR_CORE_SIZE,
-            ),
+            Rect(0, 0, BLUR_CORE_SIZE, BLUR_CORE_SIZE),
             paint,
         )
+        canvas.restore()
 
         val pixels = IntArray(BLUR_BUFFER_SIZE * BLUR_BUFFER_SIZE)
         buffer.getPixels(pixels, 0, BLUR_BUFFER_SIZE, 0, 0, BLUR_BUFFER_SIZE, BLUR_BUFFER_SIZE)

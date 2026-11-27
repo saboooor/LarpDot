@@ -73,30 +73,38 @@ class FeatureServicesTest {
         assertTrue(FullscreenStateTracker.isFullscreenState(appCoversFullScreen = false, statusBarVisible = true, isGame = true))
     }
 
-    @Test fun screenshotCandidateMatchesPathsAndNames() {
-        assertTrue(ScreenshotPocketManager.isScreenshotCandidate("Pictures/Screenshots/", "IMG_001.png"))
-        assertTrue(ScreenshotPocketManager.isScreenshotCandidate("DCIM/", "Screenshot_20261123.png"))
-        assertFalse(ScreenshotPocketManager.isScreenshotCandidate("DCIM/Camera/", "PXL_20261123.jpg"))
-
+    @Test fun flashlightTileSubtitleReflectsAvailabilityBoostAndStrength() {
         assertEquals(
-            "https://github.com/saboooor/LarpDot",
-            ScreenshotPocketManager.extractFirstHttpUrl("Check this out: https://github.com/saboooor/LarpDot."),
+            "Unavailable",
+            formatFlashlightTileSubtitle(false, false, false, true, 5, 10),
         )
-        assertNull(ScreenshotPocketManager.extractFirstHttpUrl("OTP code: 482910"))
-        assertEquals("github.com", ScreenshotPocketManager.formatHeldTextTitle("https://www.github.com/saboooor/LarpDot"))
-        assertEquals("Tracking Link", ScreenshotPocketManager.formatHeldTextTitle("https://example.com", "Tracking Link"))
-        assertEquals("Held Note", ScreenshotPocketManager.formatHeldTextTitle("Gate code #4421"))
+        assertEquals(
+            "Off",
+            formatFlashlightTileSubtitle(true, false, false, true, 5, 10),
+        )
+        assertEquals(
+            "50%",
+            formatFlashlightTileSubtitle(true, true, false, true, 5, 10),
+        )
+        assertEquals(
+            "Boost • 100%",
+            formatFlashlightTileSubtitle(true, true, true, true, 10, 10),
+        )
+        assertEquals(
+            "On",
+            formatFlashlightTileSubtitle(true, true, false, false, 1, 1),
+        )
     }
 
     @Test fun trackTimestampPlacementIsSavedIndependentlyOfPlayerLayout() {
-        val legacy = IslandThemePresets.fromJson("""{"expandedPlayerLayout":"IPHONE"}""")!!
+        val legacy = IslandConfigurationBackup.fromJson("""{"expandedPlayerLayout":"IPHONE"}""")!!
         assertEquals(OverlayPreferences.ProgressTimestampPlacement.BESIDE, legacy.progressTimestampPlacement)
 
         val configured = legacy.copy(
             expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
             progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BELOW,
         )
-        assertEquals(configured, IslandThemePresets.fromJson(IslandThemePresets.toJson(configured)))
+        assertEquals(configured, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(configured)))
     }
 
     @Test fun themePresetsRoundTripThroughJson() {
@@ -114,7 +122,6 @@ class FeatureServicesTest {
             islandFontWeight = 700,
             minimizedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.PENTAGON,
             minimizedAlbumArtRotation = 45f,
-            minimizedNestedBlurredBg = true,
             showExpandedAlbumArt = false,
             expandedAlbumArtShape = OverlayPreferences.NestedAlbumArtShape.DIAMOND,
             expandedAlbumArtRotation = 15f,
@@ -124,6 +131,7 @@ class FeatureServicesTest {
             playbackSkipBg = true,
             playbackCornerRadiusDp = 14f,
             playbackM3ButtonGroup = true,
+            audioOutputStyle = OverlayPreferences.AudioOutputStyle.BUTTON,
             playbackPlayPauseAccent = true,
             trackInfoShowTitle = true,
             trackInfoShowArtist = false,
@@ -131,6 +139,7 @@ class FeatureServicesTest {
             trackInfoAlbumBesideArtist = true,
             trackInfoTitleAccent = true,
             showMinimizedTitle = true,
+            minimizedMusicTimestamp = OverlayPreferences.MinimizedMusicTimestamp.REMAINING,
             expandedGlowLeft = false,
             expandedGlowRight = true,
             expandedGlowTop = true,
@@ -144,9 +153,6 @@ class FeatureServicesTest {
             flashlightExpandedStyle = OverlayPreferences.FlashlightExpandedStyle.SLIDER,
             flashlightBeamBlur = true,
             flashlightBeamAccentColor = false,
-            flashlightTapToToggle = false,
-            flashlightAutoOffMinutes = 10,
-            flashlightStrobeSpeed = ca.saboor.larpdot.flashlight.StrobeSpeed.FAST,
             musicPauseTimeoutSeconds = 30,
             musicQuickSeekSeconds = 15,
             tapToExpand = true,
@@ -179,10 +185,8 @@ class FeatureServicesTest {
             activityBatteryLow = false,
             activitySoundMode = true,
             activityDnd = false,
-            activityVolumeHud = true,
             activityBluetooth = true,
             activityAudioOutput = false,
-            activityScreenshotPocket = true,
             activityChargeLimitAlert = true,
             activityChargeLimitPercent = 85,
             activityLowBatteryThresholdPercent = 25,
@@ -192,7 +196,6 @@ class FeatureServicesTest {
             activityPermanentDnd = true,
             activityPermanentBluetooth = true,
             activityPermanentAudioOutput = false,
-            activityPermanentScreenshotPocket = true,
             activityExpandShortTerm = true,
             activityProgressOutline = false,
             islandPriorityOrder = listOf(
@@ -208,78 +211,58 @@ class FeatureServicesTest {
             cutoutOffsetY = 6f,
             cutoutDiameterDp = 26f,
         )
-        val json = IslandThemePresets.toJson(original)
-        val decoded = IslandThemePresets.fromJson(json)
+        val json = IslandConfigurationBackup.toJson(original)
+        val decoded = IslandConfigurationBackup.fromJson(json)
         assertNotNull(decoded)
         assertEquals(original, decoded)
-        assertNull(IslandThemePresets.fromJson("not json"))
-        assertNull(IslandThemePresets.fromJson("""{"foo": "bar", "baz": 123}"""))
+        val legacy = json.trimEnd().dropLast(1) + ",\"flashlightTapToToggle\":false}"
+        assertEquals(original, IslandConfigurationBackup.fromJson(legacy))
+        assertNull(IslandConfigurationBackup.fromJson("not json"))
+        assertNull(IslandConfigurationBackup.fromJson("""{"foo": "bar", "baz": 123}"""))
 
         // Verify bar spacing full 0..8dp range and charge limit 70..100% round-trip cleanly.
         val edgeSpacing = IslandBackupConfig(waveformBarSpacing = 0f, activityChargeLimitPercent = 70)
-        assertEquals(edgeSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(edgeSpacing)))
+        assertEquals(edgeSpacing, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(edgeSpacing)))
         val wideSpacing = IslandBackupConfig(waveformBarSpacing = 7.5f, activityChargeLimitPercent = 100)
-        assertEquals(wideSpacing, IslandThemePresets.fromJson(IslandThemePresets.toJson(wideSpacing)))
+        assertEquals(wideSpacing, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(wideSpacing)))
 
-        // Built-in presets must have unique IDs and valid round-tripping configs.
-        val presets = IslandThemePresets.builtInPresets
-        assertTrue(presets.size >= 5)
-        assertEquals(presets.size, presets.map { it.id }.distinct().size)
-        for (preset in presets) {
-            assertTrue(preset.name.isNotBlank())
-            assertTrue(preset.tagline.isNotBlank())
-            assertEquals(preset.style, IslandThemePresets.fromJson(IslandThemePresets.toJson(preset.style)))
-        }
-
-        // User theme presets encode/decode round-trip and auto-summary
-        val customPresets = listOf(
-            IslandThemePreset(
-                id = "user_1",
-                name = "Midnight Glass",
-                tagline = IslandThemePresets.summarizePresetStyle(
-                    IslandBackupConfig(
-                        bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-                        backdropBlurEnabled = true,
-                        islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
-                    ),
-                ),
-                style = IslandBackupConfig(
-                    bubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-                    backdropBlurEnabled = true,
-                    islandFontStyle = OverlayPreferences.IslandFontStyle.ROUNDED,
-                    islandCornerRadius = 42f,
-                ),
-            ),
-            IslandThemePreset(
-                id = "user_2",
-                name = "Clean Pill",
-                tagline = IslandThemePresets.summarizePresetStyle(
-                    IslandBackupConfig(
-                        bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
-                        backdropBlurEnabled = false,
-                        expandedBackgroundOpacity = 0.75f,
-                        islandFontStyle = OverlayPreferences.IslandFontStyle.MONOSPACE,
-                    ),
-                ),
-                style = IslandBackupConfig(
-                    bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
-                    backdropBlurEnabled = false,
-                    expandedBackgroundOpacity = 0.75f,
-                    islandFontStyle = OverlayPreferences.IslandFontStyle.MONOSPACE,
-                ),
-            ),
+        // Symmetric minimized music and flashlight side configs round-trip and migrate legacy keys
+        val swappedSides = IslandBackupConfig(
+            minimizedMusicLeftSide = OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
+            minimizedMusicRightSide = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
+            minimizedFlashlightLeftSide = OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE,
+            minimizedFlashlightRightSide = OverlayPreferences.MinimizedFlashlightSideContent.ICON,
         )
-        assertEquals("Material 3 • Blur • Rounded", customPresets[0].tagline)
-        assertEquals("iPhone • 75% alpha • Mono", customPresets[1].tagline)
-        val encoded = IslandThemePresets.encodeUserPresets(customPresets)
-        assertEquals(customPresets, IslandThemePresets.decodeUserPresets(encoded))
-        assertTrue(IslandThemePresets.decodeUserPresets("malformed\tline\n").isEmpty())
+        assertEquals(swappedSides, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(swappedSides)))
+
+        val legacySides = IslandConfigurationBackup.fromJson(
+            """{"showMinimizedTitle":true,"showMinimizedFlashlightOutline":false}""",
+        )!!
+        assertEquals(OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART, legacySides.minimizedMusicLeftSide)
+        assertEquals(OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE, legacySides.minimizedMusicRightSide)
+        assertEquals(OverlayPreferences.MinimizedFlashlightSideContent.ICON, legacySides.minimizedFlashlightLeftSide)
+        assertEquals(OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE, legacySides.minimizedFlashlightRightSide)
 
         // Animation speed scaling clamps cleanly
         assertEquals(259, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.SNAPPY.durationMultiplier))
         assertEquals(360, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.DEFAULT.durationMultiplier))
         assertEquals(475, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.SMOOTH.durationMultiplier))
         assertEquals(60, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(50, 0.5f))
+    }
+
+    @Test
+    fun configurationBackupValidatesTheFullJsonDocument() {
+        assertNull(IslandConfigurationBackup.fromJson("""{"waveformBarSpacing": 3 bad}"""))
+        assertNull(IslandConfigurationBackup.fromJson("""{"waveformBarSpacing": 3} {}"""))
+        assertNull(IslandConfigurationBackup.fromJson("""{"unknown": {"waveformBarSpacing": 3}}"""))
+
+        val config = IslandConfigurationBackup.fromJson(
+            """{"waveformBarSpacing": 3e0, "cutoutOffsetX": 1e100, "cutoutOffsetY": "NaN", "unknown": [1, 2]}""",
+        )
+        assertNotNull(config)
+        assertEquals(3f, config?.waveformBarSpacing)
+        assertNull(config?.cutoutOffsetX)
+        assertNull(config?.cutoutOffsetY)
     }
 
     @Test fun fullscreenAccessibilityThrottleCoalescesRapidBursts() {
@@ -459,12 +442,6 @@ class FeatureServicesTest {
         assertEquals("Total Silence", silence.title)
 
         assertNull(classifyDndFilter(NotificationManager.INTERRUPTION_FILTER_UNKNOWN))
-
-        assertEquals(0, volumePercent(0, 15))
-        assertEquals(53, volumePercent(8, 15))
-        assertEquals(100, volumePercent(15, 15))
-        assertEquals(100, volumePercent(20, 15))
-        assertEquals(0, volumePercent(5, 0))
     }
 
     @Test fun lowBatteryThresholdTriggersAndResetsWithHysteresis() {

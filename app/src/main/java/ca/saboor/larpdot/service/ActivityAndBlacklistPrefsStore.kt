@@ -22,10 +22,8 @@ internal object ActivityAndBlacklistPrefsStore {
     private const val KEY_NOTIFICATION_BATTERY_LOW_ENABLED = "notification_battery_low_enabled"
     private const val KEY_NOTIFICATION_SOUND_MODE_ENABLED = "notification_sound_mode_enabled"
     private const val KEY_NOTIFICATION_DND_ENABLED = "notification_dnd_enabled"
-    private const val KEY_NOTIFICATION_VOLUME_HUD_ENABLED = "notification_volume_hud_enabled"
     private const val KEY_NOTIFICATION_BLUETOOTH_ENABLED = "notification_bluetooth_enabled"
     private const val KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED = "notification_audio_output_enabled"
-    private const val KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED = "notification_screenshot_pocket_enabled"
     private const val KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED = "notification_charge_limit_alert_enabled"
     private const val KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT = "notification_charge_limit_percent"
     private const val KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT = "notification_low_battery_threshold_percent"
@@ -66,10 +64,8 @@ internal object ActivityAndBlacklistPrefsStore {
                 batteryLow = prefs.getBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, true),
                 soundMode = prefs.getBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, true),
                 dnd = prefs.getBoolean(KEY_NOTIFICATION_DND_ENABLED, true),
-                volumeHud = prefs.getBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, false),
                 bluetooth = prefs.getBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, true),
                 audioOutput = prefs.getBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, true),
-                screenshotPocket = prefs.getBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, true),
                 chargeLimitAlert = prefs.getBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, false),
                 chargeLimitPercent = prefs.getInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, 80).coerceIn(50, 100),
                 lowBatteryThresholdPercent = prefs.getInt(KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT, 15).coerceIn(10, 30),
@@ -80,7 +76,6 @@ internal object ActivityAndBlacklistPrefsStore {
                 permanentDnd = prefs.getBoolean("permanent_dnd", false),
                 permanentBluetooth = prefs.getBoolean("permanent_bluetooth", defaultPermanent),
                 permanentAudioOutput = prefs.getBoolean("permanent_audio_output", false),
-                permanentScreenshotPocket = prefs.getBoolean("permanent_screenshot_pocket", false),
                 expandShortTermAlerts = prefs.getBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, false),
                 progressOutline = prefs.getBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, true),
             )
@@ -104,10 +99,8 @@ internal object ActivityAndBlacklistPrefsStore {
             putBoolean(KEY_NOTIFICATION_BATTERY_LOW_ENABLED, settings.batteryLow)
             putBoolean(KEY_NOTIFICATION_SOUND_MODE_ENABLED, settings.soundMode)
             putBoolean(KEY_NOTIFICATION_DND_ENABLED, settings.dnd)
-            putBoolean(KEY_NOTIFICATION_VOLUME_HUD_ENABLED, settings.volumeHud)
             putBoolean(KEY_NOTIFICATION_BLUETOOTH_ENABLED, settings.bluetooth)
             putBoolean(KEY_NOTIFICATION_AUDIO_OUTPUT_ENABLED, settings.audioOutput)
-            putBoolean(KEY_NOTIFICATION_SCREENSHOT_POCKET_ENABLED, settings.screenshotPocket)
             putBoolean(KEY_NOTIFICATION_CHARGE_LIMIT_ALERT_ENABLED, settings.chargeLimitAlert)
             putInt(KEY_NOTIFICATION_CHARGE_LIMIT_PERCENT, settings.chargeLimitPercent.coerceIn(50, 100))
             putInt(KEY_NOTIFICATION_LOW_BATTERY_THRESHOLD_PERCENT, settings.lowBatteryThresholdPercent.coerceIn(10, 30))
@@ -118,14 +111,12 @@ internal object ActivityAndBlacklistPrefsStore {
             putBoolean("permanent_dnd", settings.permanentDnd)
             putBoolean("permanent_bluetooth", settings.permanentBluetooth)
             putBoolean("permanent_audio_output", settings.permanentAudioOutput)
-            putBoolean("permanent_screenshot_pocket", settings.permanentScreenshotPocket)
             putBoolean(KEY_NOTIFICATION_EXPAND_SHORT_TERM, settings.expandShortTermAlerts)
             putBoolean(KEY_NOTIFICATION_PROGRESS_OUTLINE_ENABLED, settings.progressOutline)
         }
         _notificationActivitySettingsFlow.value = settings
         isNotificationActivitySettingsInitialized = true
         NotificationActivityState.configure(settings)
-        ScreenshotPocketManager.syncObserver(context)
         SystemEventManager.syncDoNotDisturbState(context)
         if (settings.permanentBluetooth) {
             SystemEventManager.syncConnectedBluetoothDevices(context)

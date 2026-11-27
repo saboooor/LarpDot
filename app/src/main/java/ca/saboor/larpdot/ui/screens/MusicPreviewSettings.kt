@@ -15,7 +15,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import ca.saboor.larpdot.media.MediaTrackInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
@@ -38,7 +37,6 @@ internal fun MusicPreviewInspectorCard(
     minimizedStyle: OverlayPreferences.AlbumArtStyle,
     minimizedShape: OverlayPreferences.NestedAlbumArtShape,
     minimizedRotation: Float,
-    minimizedNestedBlurredBg: Boolean,
     showMinimizedProgressOutline: Boolean,
     showExpandedAlbumArt: Boolean,
     expandedShape: OverlayPreferences.NestedAlbumArtShape,
@@ -73,19 +71,30 @@ internal fun MusicPreviewInspectorCard(
     isLiveCapturing: Boolean,
     liveAmplitudes: FloatArray?,
     liveErrorMessage: String?,
-    nowPlaying: MediaTrackInfo,
     mediaProjectionManager: MediaProjectionManager?,
     screenCaptureLauncher: ActivityResultLauncher<Intent>,
     onRequestAudioPreviewWarning: () -> Unit,
 ) {
+    val minimizedLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val minimizedRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    fun sideIcon(side: OverlayPreferences.MinimizedMusicSideContent) = when (side) {
+        OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART -> LarpIcons.PhotoSizeSelectSmall
+        OverlayPreferences.MinimizedMusicSideContent.VISUALIZER -> LarpIcons.GraphicEq
+        OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE -> LarpIcons.MusicNote
+        OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT,
+        OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED,
+        -> LarpIcons.Timer
+    }
     val (title, icon) = when (element) {
-        MusicPreviewElement.MINIMIZED_ALBUM_ART -> "Minimized Album Art" to LarpIcons.PhotoSizeSelectSmall
+        MusicPreviewElement.MINIMIZED_ALBUM_ART -> "Minimized Left Side" to sideIcon(minimizedLeftSide)
         MusicPreviewElement.MINIMIZED_BACKGROUND -> "Minimized Background" to LarpIcons.Palette
         MusicPreviewElement.EXPANDED_ALBUM_ART -> "Expanded Album Art" to LarpIcons.Palette
         MusicPreviewElement.EXPANDED_BACKGROUND -> "Expanded Background" to LarpIcons.Palette
+        MusicPreviewElement.MINIMIZED_RIGHT_SIDE -> "Minimized Right Side" to sideIcon(minimizedRightSide)
         MusicPreviewElement.VISUALIZER -> "Visualizer" to LarpIcons.GraphicEq
         MusicPreviewElement.PROGRESS_BAR -> "Progress Bar" to LarpIcons.Tune
         MusicPreviewElement.PLAYBACK_CONTROLS -> "Playback Controls" to LarpIcons.PlayArrow
+        MusicPreviewElement.AUDIO_OUTPUT -> "Playing On" to LarpIcons.Speaker
         MusicPreviewElement.TRACK_INFO -> "Track Info" to LarpIcons.MusicNote
     }
 
@@ -97,16 +106,56 @@ internal fun MusicPreviewInspectorCard(
             IslandPreviewInspectorHeader(title, icon, onDismiss)
 
             when (element) {
-                MusicPreviewElement.MINIMIZED_ALBUM_ART -> {
-                    MinimizedAlbumArtSettingsContent(
-                        context = context,
-                        minimizedStyle = minimizedStyle,
-                        minimizedShape = minimizedShape,
-                        minimizedRotation = minimizedRotation,
-                        minimizedNestedBlurredBg = minimizedNestedBlurredBg,
-                        showMinimizedProgressOutline = showMinimizedProgressOutline,
-                        albumArtGlow = albumArtGlow,
+                MusicPreviewElement.MINIMIZED_ALBUM_ART, MusicPreviewElement.MINIMIZED_RIGHT_SIDE -> {
+                    val isLeft = element == MusicPreviewElement.MINIMIZED_ALBUM_ART
+                    val selectedSide = if (isLeft) minimizedLeftSide else minimizedRightSide
+                    LarpConnectedButtons(
+                        options = OverlayPreferences.MinimizedMusicSideContent.entries.map { option ->
+                            LarpButtonOption(option.label, checked = selectedSide == option) {
+                                if (isLeft) OverlayPreferences.setMinimizedMusicLeftSide(context, option)
+                                else OverlayPreferences.setMinimizedMusicRightSide(context, option)
+                            }
+                        },
+                        maxButtonsPerRow = 3,
                     )
+                    when (selectedSide) {
+                        OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART -> {
+                            MinimizedAlbumArtSettingsContent(
+                                context = context,
+                                minimizedStyle = minimizedStyle,
+                                minimizedShape = minimizedShape,
+                                minimizedRotation = minimizedRotation,
+                                showMinimizedProgressOutline = showMinimizedProgressOutline,
+                                albumArtGlow = albumArtGlow,
+                            )
+                        }
+                        OverlayPreferences.MinimizedMusicSideContent.VISUALIZER -> {
+                            VisualizerSettingsContent(
+                                context = context,
+                                waveformBandCount = waveformBandCount,
+                                waveformBarWidth = waveformBarWidth,
+                                waveformBarSpacing = waveformBarSpacing,
+                                visualizerMode = visualizerMode,
+                                previewSource = previewSource,
+                                extractionState = extractionState,
+                                isPreviewPlaying = isPreviewPlaying,
+                                previewPositionMs = previewPositionMs,
+                                previewDurationMs = previewDurationMs,
+                                currentBpm = currentBpm,
+                                isBpmResolved = isBpmResolved,
+                                isBpmDetecting = isBpmDetecting,
+                                detectedBpmTrack = detectedBpmTrack,
+                                detectedSource = detectedSource,
+                                isLiveCapturing = isLiveCapturing,
+                                liveAmplitudes = liveAmplitudes,
+                                liveErrorMessage = liveErrorMessage,
+                                mediaProjectionManager = mediaProjectionManager,
+                                screenCaptureLauncher = screenCaptureLauncher,
+                                onRequestAudioPreviewWarning = onRequestAudioPreviewWarning,
+                            )
+                        }
+                        else -> Unit
+                    }
                 }
                 MusicPreviewElement.MINIMIZED_BACKGROUND -> {
                     MinimizedBackgroundSettingsContent(
@@ -154,7 +203,6 @@ internal fun MusicPreviewInspectorCard(
                         isLiveCapturing = isLiveCapturing,
                         liveAmplitudes = liveAmplitudes,
                         liveErrorMessage = liveErrorMessage,
-                        nowPlaying = nowPlaying,
                         mediaProjectionManager = mediaProjectionManager,
                         screenCaptureLauncher = screenCaptureLauncher,
                         onRequestAudioPreviewWarning = onRequestAudioPreviewWarning,
@@ -174,6 +222,14 @@ internal fun MusicPreviewInspectorCard(
                         expandedElementVisibility = expandedElementVisibility,
                         style = playbackControlsStyle,
                     )
+                }
+                MusicPreviewElement.AUDIO_OUTPUT -> {
+                    val style by OverlayPreferences.audioOutputStyleFlow.collectAsState()
+                    LarpConnectedButtons(OverlayPreferences.AudioOutputStyle.entries.map { option ->
+                        LarpButtonOption(option.label, checked = style == option) {
+                            OverlayPreferences.setAudioOutputStyle(context, option)
+                        }
+                    })
                 }
                 MusicPreviewElement.TRACK_INFO -> {
                     TrackInfoSettingsContent(
@@ -199,14 +255,12 @@ private fun MinimizedBackgroundSettingsContent(
     ) {
         LarpSwitchRow(
             title = "Dominant Color Glow",
-            subtitle = "Ambient artwork tint on the minimized pill",
             checked = showMinimizedDominantGlow,
             onCheckedChange = { OverlayPreferences.setShowMinimizedDominantColorGlowEnabled(context, it) },
         )
         LarpDivider()
         LarpSwitchRow(
             title = "Pulse with BPM",
-            subtitle = "Pulse the minimized dominant glow to the track tempo",
             checked = minimizedBpmPulseEnabled,
             onCheckedChange = { OverlayPreferences.setMinimizedBpmPulseEnabled(context, it) },
         )
@@ -235,23 +289,10 @@ private fun ExpandedBackgroundSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column {
-            Text(
-                text = "Background Style",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = when (expandedStyle) {
-                    OverlayPreferences.ExpandedBackgroundStyle.NONE -> "Plain black island background"
-                    OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED -> "Linear faded background card cover"
-                    OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> "Curved gradient blend with dominant backdrop"
-                    OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND -> "Artwork fills the entire island card"
-                    OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> "Blurred artwork fills the entire island card"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = "Background Style",
+            style = MaterialTheme.typography.titleMedium,
+        )
 
         LarpConnectedButtons(
             options = expandedStyleRow1.map { style ->
@@ -277,7 +318,6 @@ private fun ExpandedBackgroundSettingsContent(
 
         LarpSwitchRow(
             title = "Dominant Color Glow",
-            subtitle = "Ambient colored edge glow adapted from artwork",
             checked = showExpandedDominantGlow,
             onCheckedChange = { OverlayPreferences.setShowExpandedDominantColorGlowEnabled(context, it) },
         )
@@ -333,7 +373,6 @@ private fun ExpandedBackgroundSettingsContent(
 
         LarpSwitchRow(
             title = "Pulse with BPM",
-            subtitle = "Pulse the expanded glow and play button to the track tempo",
             checked = expandedBpmPulseEnabled,
             onCheckedChange = { OverlayPreferences.setExpandedBpmPulseEnabled(context, it) },
         )
@@ -352,7 +391,6 @@ private fun TrackInfoSettingsContent(
     ) {
         LarpSwitchRow(
             title = "Show Track Info",
-            subtitle = "Display track metadata on the expanded card",
             checked = expandedElementVisibility.trackInfo,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(trackInfo = enabled))
@@ -361,7 +399,6 @@ private fun TrackInfoSettingsContent(
         LarpDivider()
         LarpSwitchRow(
             title = "Show Title",
-            subtitle = "Display the song title",
             checked = style.showTitle,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setTrackInfoStyle(context, style.copy(showTitle = enabled))
@@ -370,7 +407,6 @@ private fun TrackInfoSettingsContent(
         LarpDivider()
         LarpSwitchRow(
             title = "Title Accent Color",
-            subtitle = "Tint the song title with album art accent color",
             checked = style.titleAccentColor,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setTrackInfoStyle(context, style.copy(titleAccentColor = enabled))
@@ -379,7 +415,6 @@ private fun TrackInfoSettingsContent(
         LarpDivider()
         LarpSwitchRow(
             title = "Show Artist",
-            subtitle = "Display the artist name",
             checked = style.showArtist,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setTrackInfoStyle(context, style.copy(showArtist = enabled))
@@ -419,64 +454,55 @@ private fun PlaybackControlsSettingsContent(
     ) {
         LarpSwitchRow(
             title = "Show Playback Controls",
-            subtitle = "Display previous, play/pause, and next controls",
             checked = expandedElementVisibility.mainControls,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(mainControls = enabled))
             },
         )
         LarpDivider()
+        PlaybackButtonStyleSettings(style) { OverlayPreferences.setPlaybackControlsStyle(context, it) }
+    }
+}
+
+@Composable
+internal fun PlaybackButtonStyleSettings(
+    style: OverlayPreferences.PlaybackControlsStyle,
+    forPlayback: Boolean = true,
+    onChange: (OverlayPreferences.PlaybackControlsStyle) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (forPlayback) {
+            LarpSwitchRow(
+                title = "Play/Pause Background",
+                checked = style.playPauseBackground,
+                onCheckedChange = { onChange(style.copy(playPauseBackground = it)) },
+            )
+            LarpSwitchRow(
+                title = "Play/Pause Accent Color",
+                checked = style.playPauseAccentColor,
+                onCheckedChange = { onChange(style.copy(playPauseAccentColor = it)) },
+            )
+        }
         LarpSwitchRow(
-            title = "Play/Pause Background",
-            subtitle = "Show a filled background behind the play/pause button",
-            checked = style.playPauseBackground,
-            onCheckedChange = { enabled ->
-                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(playPauseBackground = enabled))
-            },
-        )
-        LarpDivider()
-        LarpSwitchRow(
-            title = "Play/Pause Accent Color",
-            subtitle = "Tint the play/pause button with album art accent color",
-            checked = style.playPauseAccentColor,
-            onCheckedChange = { enabled ->
-                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(playPauseAccentColor = enabled))
-            },
-        )
-        LarpDivider()
-        LarpSwitchRow(
-            title = "Skip/Previous Background",
-            subtitle = "Show a tonal background behind skip and previous buttons",
+            title = if (forPlayback) "Skip/Previous Background" else "Button Background",
             checked = style.skipBackground,
-            onCheckedChange = { enabled ->
-                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(skipBackground = enabled))
-            },
+            onCheckedChange = { onChange(style.copy(skipBackground = it)) },
         )
-        LarpDivider()
         LarpSwitchRow(
             title = "Material 3 Button Group",
-            subtitle = "Connect buttons with tight spacing and inner seam corners",
             checked = style.material3ButtonGroup,
             onCheckedChange = { enabled ->
-                OverlayPreferences.setPlaybackControlsStyle(
-                    context,
-                    if (enabled) {
-                        style.copy(material3ButtonGroup = true, playPauseBackground = true, skipBackground = true)
-                    } else {
-                        style.copy(material3ButtonGroup = false)
-                    },
-                )
+                onChange(if (enabled) {
+                    style.copy(material3ButtonGroup = true, playPauseBackground = true, skipBackground = true)
+                } else style.copy(material3ButtonGroup = false))
             },
         )
-        LarpDivider()
         LarpSliderRow(
             title = "Corner Radius",
             valueLabel = "${style.cornerRadiusDp.roundToInt()} dp",
             value = style.cornerRadiusDp,
             valueRange = 0f..32f,
-            onValueChange = { value ->
-                OverlayPreferences.setPlaybackControlsStyle(context, style.copy(cornerRadiusDp = value.roundToInt().toFloat()))
-            },
+            onValueChange = { onChange(style.copy(cornerRadiusDp = it.roundToInt().toFloat())) },
         )
     }
 }
@@ -495,7 +521,6 @@ private fun ProgressBarSettingsContent(
     ) {
         LarpSwitchRow(
             title = "Show Progress Bar",
-            subtitle = "Display the seekable scrubber on the expanded card",
             checked = expandedElementVisibility.progress,
             onCheckedChange = { enabled ->
                 OverlayPreferences.setExpandedElementVisibility(context, expandedElementVisibility.copy(progress = enabled))
@@ -522,14 +547,12 @@ private fun ProgressBarSettingsContent(
         LarpDivider()
         LarpSwitchRow(
             title = "Progress Squiggles",
-            subtitle = "Animate the progress bar with a wavy line",
             checked = showProgressSquiggles,
             onCheckedChange = { OverlayPreferences.setShowProgressSquigglesEnabled(context, it) },
         )
         LarpDivider()
         LarpSwitchRow(
             title = "Accent Color",
-            subtitle = "Tint the progress bar with album art accent color",
             checked = progressBarAccentColor,
             onCheckedChange = { OverlayPreferences.setProgressBarAccentColorEnabled(context, it) },
         )
@@ -542,7 +565,6 @@ private fun MinimizedAlbumArtSettingsContent(
     minimizedStyle: OverlayPreferences.AlbumArtStyle,
     minimizedShape: OverlayPreferences.NestedAlbumArtShape,
     minimizedRotation: Float,
-    minimizedNestedBlurredBg: Boolean,
     showMinimizedProgressOutline: Boolean,
     albumArtGlow: Boolean,
 ) {
@@ -556,22 +578,10 @@ private fun MinimizedAlbumArtSettingsContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column {
-            Text(
-                text = "Minimized Style",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = when (minimizedStyle) {
-                    OverlayPreferences.AlbumArtStyle.BASIC_FADED -> "Linear edge fade into capsule pill"
-                    OverlayPreferences.AlbumArtStyle.BLENDED -> "Smooth gradient blend with ambient glow"
-                    OverlayPreferences.AlbumArtStyle.NESTED -> "Crisp nested album art thumbnail"
-                    OverlayPreferences.AlbumArtStyle.FULL_BACKGROUND -> "Artwork fills the pill wing"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = "Style",
+            style = MaterialTheme.typography.titleMedium,
+        )
 
         LarpConnectedButtons(
             options = minimizedStyles.map { style ->
@@ -588,23 +598,13 @@ private fun MinimizedAlbumArtSettingsContent(
             enter = LarpMotion.reveal,
             exit = LarpMotion.conceal,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ShapePickerSection(
-                    title = "Minimized Shape",
-                    subtitle = "minimized island",
-                    selectedShape = minimizedShape,
-                    rotationDegrees = minimizedRotation,
-                    onShapeSelected = { OverlayPreferences.setMinimizedAlbumArtShape(context, it) },
-                    onRotationChanged = { OverlayPreferences.setMinimizedAlbumArtRotation(context, it) },
-                )
-                LarpDivider()
-                LarpSwitchRow(
-                    title = "Blurred Artwork Background",
-                    subtitle = "Add blurred background behind nested art that fades into the dot",
-                    checked = minimizedNestedBlurredBg,
-                    onCheckedChange = { OverlayPreferences.setMinimizedNestedBlurredBgEnabled(context, it) },
-                )
-            }
+            ShapePickerSection(
+                title = "Shape",
+                selectedShape = minimizedShape,
+                rotationDegrees = minimizedRotation,
+                onShapeSelected = { OverlayPreferences.setMinimizedAlbumArtShape(context, it) },
+                onRotationChanged = { OverlayPreferences.setMinimizedAlbumArtRotation(context, it) },
+            )
         }
 
         LarpDivider()
@@ -637,7 +637,6 @@ private fun ExpandedAlbumArtSettingsContent(
     ) {
         LarpSwitchRow(
             title = "Show Album Art",
-            subtitle = "Show the cover beside the track title",
             checked = showExpandedAlbumArt,
             onCheckedChange = { OverlayPreferences.setShowExpandedAlbumArtEnabled(context, it) },
         )
@@ -648,8 +647,7 @@ private fun ExpandedAlbumArtSettingsContent(
             exit = LarpMotion.conceal,
         ) {
             ShapePickerSection(
-                title = "Album Art Shape",
-                subtitle = "expanded album art",
+                title = "Shape",
                 selectedShape = expandedShape,
                 rotationDegrees = expandedRotation,
                 onShapeSelected = { OverlayPreferences.setExpandedAlbumArtShape(context, it) },

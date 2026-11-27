@@ -53,7 +53,6 @@ private enum class LiveActivityPreviewSample(val label: String) {
     TIMER("Timer"),
     CALL("Call"),
     DND("DND"),
-    VOLUME("Volume"),
 }
 
 @Composable
@@ -185,22 +184,6 @@ fun LiveActivitiesPreview(
                 kind = NotificationActivityKind.DND,
                 progress = null,
                 progressMax = null,
-                progressIndeterminate = false,
-                chronometerBaseElapsedRealtime = null,
-                chronometerCountsDown = false,
-                postedAtMillis = 1L,
-                contentIntent = null,
-                actions = emptyList(),
-            )
-            LiveActivityPreviewSample.VOLUME -> NotificationActivityInfo(
-                key = "preview_volume",
-                packageName = "android",
-                appName = "System",
-                title = "Media Volume",
-                text = "68% • Slide to adjust",
-                kind = NotificationActivityKind.VOLUME,
-                progress = 68,
-                progressMax = 100,
                 progressIndeterminate = false,
                 chronometerBaseElapsedRealtime = null,
                 chronometerCountsDown = false,

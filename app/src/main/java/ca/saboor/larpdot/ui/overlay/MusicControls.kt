@@ -196,6 +196,7 @@ internal fun MediaTimeLabel(
     format: (Long) -> String,
     style: androidx.compose.ui.text.TextStyle,
     onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     Text(
         text = format(positionState.value),
@@ -203,13 +204,13 @@ internal fun MediaTimeLabel(
         color = Color.White.copy(alpha = 0.55f),
         maxLines = 1,
         softWrap = false,
-        modifier = if (onClick != null) {
+        modifier = modifier.then(if (onClick != null) {
             Modifier
                 .clip(RoundedCornerShape(4.dp))
                 .clickable(onClick = onClick)
         } else {
             Modifier
-        },
+        }),
     )
 }
 
@@ -399,6 +400,7 @@ internal fun ExpandedPlaybackControlsRow(
     onLongPressPrevious: (() -> Unit)? = null,
     onLongPressNext: (() -> Unit)? = null,
     highlight: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val visuals = resolvePlaybackButtonVisuals(style, accentColor)
     val isGroup = style.material3ButtonGroup
@@ -419,6 +421,7 @@ internal fun ExpandedPlaybackControlsRow(
                 .size(width = skipWidth, height = skipHeight)
                 .clip(visuals.prevShape)
                 .combinedClickable(
+                    enabled = enabled,
                     onClick = onPrevious,
                     onLongClick = onLongPressPrevious,
                 ),
@@ -436,6 +439,7 @@ internal fun ExpandedPlaybackControlsRow(
         }
         Surface(
             onClick = onPlayPause,
+            enabled = enabled,
             modifier = Modifier
                 .size(width = playWidth, height = playHeight)
                 .graphicsLayer {
@@ -460,6 +464,7 @@ internal fun ExpandedPlaybackControlsRow(
                 .size(width = skipWidth, height = skipHeight)
                 .clip(visuals.nextShape)
                 .combinedClickable(
+                    enabled = enabled,
                     onClick = onNext,
                     onLongClick = onLongPressNext,
                 ),

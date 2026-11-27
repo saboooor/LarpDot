@@ -5,9 +5,11 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
@@ -221,6 +223,42 @@ class DotAccessibilityService : AccessibilityService() {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 service.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
             } else false
+        }
+
+        fun takeScreenshotBitmap(onResult: (Bitmap?) -> Unit) {
+            val service = instance
+            if (service == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                onResult(null)
+                return
+            }
+            runCatching {
+                service.takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    service.mainExecutor,
+                    object : TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: ScreenshotResult) {
+                            val buffer = screenshot.hardwareBuffer
+                            val bitmap = try {
+                                val wrapped = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                                wrapped?.copy(Bitmap.Config.ARGB_8888, false).also {
+                                    wrapped?.recycle()
+                                }
+                            } catch (_: Throwable) {
+                                null
+                            } finally {
+                                buffer.close()
+                            }
+                            onResult(bitmap)
+                        }
+
+                        override fun onFailure(errorCode: Int) {
+                            onResult(null)
+                        }
+                    },
+                )
+            }.onFailure {
+                onResult(null)
+            }
         }
 
         fun openAccessibilitySettings(context: Context) {

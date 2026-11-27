@@ -4,10 +4,8 @@ import ca.saboor.larpdot.ui.theme.LarpIcons
 
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -60,7 +57,6 @@ import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.service.DotOverlayService
 import ca.saboor.larpdot.service.NotificationAccessService
 import ca.saboor.larpdot.service.OverlayPreferences
-import ca.saboor.larpdot.service.SystemEventManager
 import ca.saboor.larpdot.ui.components.PermissionsSetupDialog
 import ca.saboor.larpdot.ui.components.hasNotificationAccess
 import ca.saboor.larpdot.ui.screens.AppearanceScreen
@@ -84,8 +80,6 @@ fun LarpDotApp() {
     val isEnabled by OverlayPreferences.isEnabledFlow.collectAsState()
     val isAccessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
     val isListenerConnected by NotificationAccessService.isListenerConnected.collectAsState()
-    val hideInDnd by OverlayPreferences.hideInDndFlow.collectAsState()
-    val isDndActive by SystemEventManager.isDoNotDisturbActive.collectAsState()
     var showSetupDialog by remember { mutableStateOf(false) }
     var permissionCheckTick by remember { mutableStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -173,35 +167,11 @@ fun LarpDotApp() {
             topBar = {
                 TopAppBar(
                     title = {
-                        val hasAccessibility = isAccessibilityConnected ||
-                            DotAccessibilityService.isAccessibilityEnabled(context)
-                        val statusText = when {
-                            !isEnabled -> "STANDBY"
-                            hideInDnd && isDndActive -> "PAUSED • DND"
-                            hasAccessibility -> "SHADE & LOCK ON"
-                            else -> "OVERLAY ON"
-                        }
-                        val statusColor = when (statusText) {
-                            "STANDBY" -> MaterialTheme.colorScheme.outline
-                            "PAUSED • DND" -> Color(0xFF9C7CF8)
-                            else -> Color(0xFF00E676)
-                        }
-
-                        Column {
-                            Text(
-                                text = "LarpDot",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Crossfade(statusText, animationSpec = LarpMotion.fade(180), label = "overlay_status") { status ->
-                                Text(
-                                    text = status,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = statusColor,
-                                )
-                            }
-                        }
+                        Text(
+                            text = "LarpDot",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     },
                     actions = {
                         Row(

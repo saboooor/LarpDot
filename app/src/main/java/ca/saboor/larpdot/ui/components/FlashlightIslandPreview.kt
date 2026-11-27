@@ -64,7 +64,10 @@ fun FlashlightIslandPreview(
 
     val isFlashlightOn by FlashlightController.isFlashlightOn.collectAsState()
     val isSimulated by FlashlightController.isSimulated.collectAsState()
-    val showMinimizedOutline by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
+    val leftSide by OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState()
+    val rightSide by OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState()
+    val hasRadial = leftSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS ||
+        rightSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
     val expandedStyle by OverlayPreferences.flashlightExpandedStyleFlow.collectAsState()
     val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
@@ -75,7 +78,7 @@ fun FlashlightIslandPreview(
     val cutoutDiameterDp = cameraGeometry.diameter.dp
     val flashlightStatus = rememberCompactFlashlightStatus()
     val compactExtraDp = maxOf(
-        if (showMinimizedOutline) compactRadialGaugeExtraDp(cutoutDiameterDp) else 0.dp,
+        if (hasRadial) compactRadialGaugeExtraDp(cutoutDiameterDp) else 0.dp,
         rememberCompactStatusExtraDp(flashlightStatus).coerceAtLeast(56.dp),
     )
     val compactWidth = cutoutDiameterDp + compactExtraDp
@@ -130,7 +133,8 @@ fun FlashlightIslandPreview(
                             onExpand = {},
                             onFlashlightToggle = { FlashlightController.toggleFlashlight() },
                             status = flashlightStatus,
-                            showRadialProgress = showMinimizedOutline,
+                            leftSide = leftSide,
+                            rightSide = rightSide,
                             onIconClick = onElementClick?.let { callback ->
                                 { callback(FlashlightPreviewElement.MINIMIZED_PILL) }
                             },

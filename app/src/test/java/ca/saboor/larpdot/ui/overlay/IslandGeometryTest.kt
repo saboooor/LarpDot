@@ -7,6 +7,7 @@ import ca.saboor.larpdot.service.CustomIsland
 import ca.saboor.larpdot.service.CustomIslandIcon
 import ca.saboor.larpdot.service.CustomIslandVisibility
 import ca.saboor.larpdot.service.CustomIslandWidgetLabels
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.customIslandDisplayInfo
 import ca.saboor.larpdot.ui.components.sampleOpaqueRgb
 import org.junit.Assert.*
@@ -22,15 +23,17 @@ class IslandGeometryTest {
         assertEquals(152.dp, customIslandCompactExtra(widget, 32.dp))
     }
 
-    @Test fun expandedCustomPaddingLeavesSpaceBelowTheCamera() {
-        val beneathCamera = customIslandExpandedPadding(28.dp)
-        assertEquals(32.dp, beneathCamera.calculateTopPadding())
-        assertEquals(8.dp, beneathCamera.calculateBottomPadding())
+    @Test fun expandedCustomPaddingCountsCameraClearanceTowardYPadding() {
+        val beneathCamera = customIslandExpandedPadding(10.dp, y = 20.dp)
+        assertEquals(20.dp, beneathCamera.calculateTopPadding())
+        assertEquals(20.dp, beneathCamera.calculateBottomPadding())
+        assertEquals(28.dp, customIslandExpandedPadding(28.dp).calculateTopPadding())
         assertEquals(8.dp, customIslandExpandedPadding(0.dp).calculateTopPadding())
 
-        val fullSpan = customIslandExpandedPadding(28.dp, spanFullIsland = true)
-        assertEquals(0.dp, fullSpan.calculateTopPadding())
-        assertEquals(0.dp, fullSpan.calculateBottomPadding())
+        val fullSpan = customIslandExpandedPadding(28.dp, spanFullIsland = true, x = 5.dp, y = 12.dp)
+        assertEquals(12.dp, fullSpan.calculateTopPadding())
+        assertEquals(12.dp, fullSpan.calculateBottomPadding())
+        assertEquals(5.dp, fullSpan.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr))
     }
 
     @Test fun portraitElementMovesDownAtCompactSizeBeforeGrowing() {
@@ -326,11 +329,47 @@ class IslandGeometryTest {
             screenWidthPx = 2400f,
             density = 3f,
             isLandscape = true,
+            statusBarBottomPx = 132f,
         )
         assertEquals(0f, landscapeLeft.left, 0f)
         assertEquals(150f, landscapeLeft.right, 0f)
         assertEquals(372f, landscapeLeft.top, 0f)
         assertEquals(708f, landscapeLeft.bottom, 0f)
+
+        // With a 44dp (132px) portrait status bar, the swipe zone extends past it per sensitivity
+        val tightBelowStatus = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.TIGHT,
+            statusBarBottomPx = 132f,
+        )
+        val balancedBelowStatus = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.BALANCED,
+            statusBarBottomPx = 132f,
+        )
+        val easyBelowStatus = cameraDotSwipeBounds(
+            cameraCenterX = 540f,
+            cameraCenterY = 66f,
+            cameraRadiusPx = 36f,
+            screenWidthPx = 1080f,
+            density = 3f,
+            isLandscape = false,
+            sensitivity = SwipeDownSensitivity.EASY,
+            statusBarBottomPx = 132f,
+        )
+        assertEquals(132f + 12f * 3f, tightBelowStatus.bottom, 0f)
+        assertEquals(132f + 20f * 3f, balancedBelowStatus.bottom, 0f)
+        assertEquals(132f + 28f * 3f, easyBelowStatus.bottom, 0f)
     }
 
     @Test fun interactivePullTracksFingerLinearlyWithSoftOverscrollAndVelocityCommit() {
@@ -338,15 +377,17 @@ class IslandGeometryTest {
         assertEquals(0.5f, interactivePullProgress(150f, 300f), 0.0001f)
         assertEquals(1f, interactivePullProgress(300f, 300f), 0.0001f)
         val overscroll = interactivePullProgress(600f, 300f)
-        assertTrue(overscroll > 1f && overscroll < 1.08f)
+        assertTrue(overscroll > 1f && overscroll < 1.14f)
 
         // Commit on sufficient pull or fast downward flick; cancel on upward flick
         assertTrue(shouldCommitSwipeDownPull(progress = 0.25f, velocityYPxPerSec = 0f, density = 3f))
         assertFalse(shouldCommitSwipeDownPull(progress = 0.15f, velocityYPxPerSec = 0f, density = 3f))
         assertTrue(shouldCommitSwipeDownPull(progress = 0.08f, velocityYPxPerSec = 700f, density = 3f))
         assertFalse(shouldCommitSwipeDownPull(progress = 0.8f, velocityYPxPerSec = -1200f, density = 3f))
-        // If SystemUI pilfers the gesture mid-pull, commit active downward pulls but not upward/idle cancels
-        assertTrue(shouldCommitSwipeDownPull(progress = 0.12f, velocityYPxPerSec = 400f, density = 3f, cancelled = true))
+        // If cancelled mid-pull, only commit once past threshold or with a downward flick
+        assertTrue(shouldCommitSwipeDownPull(progress = 0.25f, velocityYPxPerSec = 0f, density = 3f, cancelled = true))
+        assertTrue(shouldCommitSwipeDownPull(progress = 0.12f, velocityYPxPerSec = 700f, density = 3f, cancelled = true))
+        assertFalse(shouldCommitSwipeDownPull(progress = 0.12f, velocityYPxPerSec = 400f, density = 3f, cancelled = true))
         assertFalse(shouldCommitSwipeDownPull(progress = 0.12f, velocityYPxPerSec = -100f, density = 3f, cancelled = true))
         assertFalse(shouldCommitSwipeDownPull(progress = 0.01f, velocityYPxPerSec = 0f, density = 3f, cancelled = true))
     }
@@ -428,5 +469,105 @@ class IslandGeometryTest {
         assertEquals(SwipeDownSensitivity.EASY, SwipeDownSensitivity.fromKey("easy"))
         assertEquals(SwipeDownSensitivity.TIGHT, SwipeDownSensitivity.fromKey("TIGHT"))
         assertEquals(SwipeDownSensitivity.BALANCED, SwipeDownSensitivity.fromKey("unknown"))
+    }
+
+    @Test fun expandedHeaderArtworkMatchesStartPaddingAndCentersSongInfo() {
+        // When camera cutout sits above startPadding (or landscape), top padding == left padding and size matches info height
+        val flush = expandedHeaderArtworkLayout(
+            startPaddingDp = 24f,
+            topContentInsetDp = 20f,
+            cutoutStartDp = 178f,
+            baseArtworkSizeDp = 56f,
+            infoHeightDp = 86f,
+            maxWidthForArtworkDp = 140f,
+        )
+        assertEquals(24f, flush.artworkTopDp, 0.001f)
+        assertEquals(86f, flush.artworkSizeDp, 0.001f)
+        assertEquals(24f, flush.infoTopDp, 0.001f)
+
+        // When camera cutout pushes song info down past startPadding (e.g. 30dp vs 22dp on iPhone),
+        // artwork expands by 2x the gap so song info remains centered vertically against the artwork
+        val iphoneWithCutout = expandedHeaderArtworkLayout(
+            startPaddingDp = 22f,
+            topContentInsetDp = 30f,
+            cutoutStartDp = 178f,
+            baseArtworkSizeDp = 64f,
+            infoHeightDp = 76f,
+            maxWidthForArtworkDp = 160f,
+        )
+        assertEquals(22f, iphoneWithCutout.artworkTopDp, 0.001f)
+        assertEquals(92f, iphoneWithCutout.artworkSizeDp, 0.001f)
+        assertEquals(30f, iphoneWithCutout.infoTopDp, 0.001f)
+        assertEquals(
+            iphoneWithCutout.artworkTopDp + iphoneWithCutout.artworkSizeDp / 2f,
+            iphoneWithCutout.infoTopDp + 76f / 2f,
+            0.001f,
+        )
+
+        // Short song info still stays centered within base artwork size (or grown size when camera clears)
+        val shortInfo = expandedHeaderArtworkLayout(
+            startPaddingDp = 24f,
+            topContentInsetDp = 0f,
+            cutoutStartDp = 178f,
+            baseArtworkSizeDp = 56f,
+            infoHeightDp = 32f,
+            maxWidthForArtworkDp = 140f,
+        )
+        assertEquals(24f, shortInfo.artworkTopDp, 0.001f)
+        assertEquals(56f, shortInfo.artworkSizeDp, 0.001f)
+        assertEquals(36f, shortInfo.infoTopDp, 0.001f)
+    }
+
+    @Test fun symmetricMinimizedMusicSideHelpersResolveSecondaryAndInfo() {
+        assertEquals(
+            OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
+            secondaryMusicTrailingSide(
+                leftSide = OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
+                rightSide = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
+            ),
+        )
+        assertEquals(
+            OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT,
+            secondaryMusicTrailingSide(
+                leftSide = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
+                rightSide = OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT,
+            ),
+        )
+        assertEquals(
+            OverlayPreferences.MinimizedMusicTimestamp.REMAINING,
+            timestampForMusicSide(OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT),
+        )
+        assertEquals(
+            OverlayPreferences.MinimizedMusicTimestamp.ELAPSED,
+            timestampForMusicSide(OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED),
+        )
+        assertEquals(
+            OverlayPreferences.MinimizedMusicTimestamp.NONE,
+            timestampForMusicSide(OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART),
+        )
+        assertEquals(
+            CompactMusicRightInfo.TITLE,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE, hasTitle = true),
+        )
+        assertEquals(
+            CompactMusicRightInfo.NONE,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE, hasTitle = false),
+        )
+        assertEquals(
+            CompactMusicRightInfo.TIMESTAMP,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT, hasTitle = true),
+        )
+        assertEquals(
+            CompactMusicRightInfo.TIMESTAMP,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED, hasTitle = true),
+        )
+        assertEquals(
+            CompactMusicRightInfo.VISUALIZER,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.VISUALIZER, hasTitle = true),
+        )
+        assertEquals(
+            CompactMusicRightInfo.NONE,
+            compactMusicRightInfoForSide(OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART, hasTitle = true),
+        )
     }
 }

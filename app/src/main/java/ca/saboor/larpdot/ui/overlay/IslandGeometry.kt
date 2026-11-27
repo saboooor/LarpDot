@@ -71,6 +71,7 @@ enum class SwipeDownSensitivity(
     val edgeHalfExtraDp: Float,
     val minEdgeHalfDp: Float,
     val inwardReachExtraDp: Float,
+    val belowStatusBarExtraDp: Float,
     val triggerDyDp: Float,
     val angleRatio: Float,
     val commitProgress: Float,
@@ -79,10 +80,11 @@ enum class SwipeDownSensitivity(
     TIGHT(
         key = "tight",
         label = "Tight",
-        description = "Smaller touch zone around the camera so status bar swipes are rarely intercepted",
+        description = "Smaller touch zone around the camera with a narrow lip below the status bar",
         edgeHalfExtraDp = 26f,
         minEdgeHalfDp = 42f,
         inwardReachExtraDp = 10f,
+        belowStatusBarExtraDp = 12f,
         triggerDyDp = 10f,
         angleRatio = 0.9f,
         commitProgress = 0.30f,
@@ -91,10 +93,11 @@ enum class SwipeDownSensitivity(
     BALANCED(
         key = "balanced",
         label = "Balanced",
-        description = "Balanced touch zone and downward pull threshold around the camera cutout",
+        description = "Balanced touch zone extending slightly below the status bar for finger-held pull-down",
         edgeHalfExtraDp = 40f,
         minEdgeHalfDp = 56f,
         inwardReachExtraDp = 16f,
+        belowStatusBarExtraDp = 20f,
         triggerDyDp = 6f,
         angleRatio = 0.7f,
         commitProgress = 0.22f,
@@ -103,10 +106,11 @@ enum class SwipeDownSensitivity(
     EASY(
         key = "easy",
         label = "Easy",
-        description = "Wider camera touch zone and lighter downward flick for effortless opening",
+        description = "Wider camera touch zone with extra reach below the status bar for effortless pull-down",
         edgeHalfExtraDp = 56f,
         minEdgeHalfDp = 72f,
         inwardReachExtraDp = 24f,
+        belowStatusBarExtraDp = 28f,
         triggerDyDp = 4f,
         angleRatio = 0.55f,
         commitProgress = 0.14f,
@@ -121,7 +125,8 @@ enum class SwipeDownSensitivity(
 
 /**
  * Generous touch zone anchored to the screen edge around the camera dot for the swipe-down
- * custom island, so swipes starting on or just above the camera intercept before the status bar.
+ * custom island. In portrait mode, extends past [statusBarBottomPx] so starting a drag just
+ * below the status bar avoids SystemUI's top-edge notification shade gesture monitor.
  */
 internal fun cameraDotSwipeBounds(
     cameraCenterX: Float,
@@ -131,6 +136,7 @@ internal fun cameraDotSwipeBounds(
     density: Float,
     isLandscape: Boolean,
     sensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
+    statusBarBottomPx: Float = 0f,
 ): Rect {
     val safeRadius = cameraRadiusPx.coerceAtLeast(12f * density)
     val alongEdgeHalf = maxOf(safeRadius + sensitivity.edgeHalfExtraDp * density, sensitivity.minEdgeHalfDp * density)
@@ -145,13 +151,64 @@ internal fun cameraDotSwipeBounds(
     } else {
         val left = (cameraCenterX - alongEdgeHalf).coerceAtLeast(0f)
         val right = (cameraCenterX + alongEdgeHalf).coerceAtMost(screenWidthPx)
-        val bottom = cameraCenterY + inwardReach
+        val cameraBottom = cameraCenterY + inwardReach
+        val belowStatusBarBottom = if (statusBarBottomPx > 0f) {
+            statusBarBottomPx + sensitivity.belowStatusBarExtraDp * density
+        } else 0f
+        val bottom = maxOf(cameraBottom, belowStatusBarBottom)
         Rect(left, 0f, right, bottom)
     }
 }
 
 /** Content-independent camera geometry, in dp. */
 data class IslandCameraGeometry(val diameter: Float, val thickness: Float, val cornerRadius: Float)
+
+/** Vertical placement and square size for album art beside track info in horizontal music layouts. */
+internal data class ExpandedHeaderArtworkLayout(
+    val artworkTopDp: Float,
+    val artworkSizeDp: Float,
+    val infoTopDp: Float,
+)
+
+/**
+ * Computes square artwork placement and size alongside track info for horizontal expanded music
+ * layouts (Android Media Controls and iPhone):
+ * - Top padding above artwork matches [startPaddingDp] (unless a top-left camera leaves no room).
+ * - Artwork matches [infoHeightDp], and expands by 2x the camera clearance offset whenever the
+ *   camera pushes track info below [artworkTopDp], keeping track info vertically centered.
+ */
+internal fun expandedHeaderArtworkLayout(
+    startPaddingDp: Float,
+    topContentInsetDp: Float,
+    cutoutStartDp: Float,
+    baseArtworkSizeDp: Float,
+    infoHeightDp: Float,
+    maxWidthForArtworkDp: Float,
+    minInfoTopOverrideDp: Float = 0f,
+): ExpandedHeaderArtworkLayout {
+    val overlapsCamera = topContentInsetDp > startPaddingDp
+    val widthBesideCamera = (cutoutStartDp - startPaddingDp - 8f).coerceAtLeast(0f)
+    val canSitBesideCamera = !overlapsCamera || widthBesideCamera >= 32f
+    val artworkTopDp = if (canSitBesideCamera) startPaddingDp else maxOf(startPaddingDp, topContentInsetDp)
+    val cameraWidthCap = if (overlapsCamera && canSitBesideCamera) widthBesideCamera else Float.POSITIVE_INFINITY
+    val maxArtworkSize = minOf(cameraWidthCap, maxWidthForArtworkDp).coerceAtLeast(32f)
+    val minArtworkSize = minOf(baseArtworkSizeDp, maxArtworkSize)
+    val minInfoTop = maxOf(artworkTopDp, topContentInsetDp, minInfoTopOverrideDp)
+    val topGap = (minInfoTop - artworkTopDp).coerceAtLeast(0f)
+    val desiredSize = if (infoHeightDp > 0f) {
+        maxOf(baseArtworkSizeDp, infoHeightDp + 2f * topGap)
+    } else {
+        baseArtworkSizeDp
+    }
+    val artworkSizeDp = desiredSize.coerceIn(minArtworkSize, maxArtworkSize)
+    val centeredInfoTop = artworkTopDp + (artworkSizeDp - infoHeightDp) / 2f
+    val infoTopDp = maxOf(minInfoTop, centeredInfoTop)
+    return ExpandedHeaderArtworkLayout(
+        artworkTopDp = artworkTopDp,
+        artworkSizeDp = artworkSizeDp,
+        infoTopDp = infoTopDp,
+    )
+}
 
 fun islandCameraGeometry(radiusPx: Float, density: Float): IslandCameraGeometry {
     val diameter = (if (radiusPx > 0f) radiusPx * 2f / density else 24f).coerceIn(16f, 36f)
@@ -215,17 +272,17 @@ internal fun isCameraDotSwipeDown(
 
 /**
  * Maps vertical finger drag distance to interactive expansion progress (0..1 linear tracking,
- * with gentle asymptotic rubber-band overscroll past 1f up to 1.08f).
+ * with smooth asymptotic rubber-band overscroll past 1f up to 1.14f).
  */
 internal fun interactivePullProgress(dragYPx: Float, pullRangePx: Float): Float {
     if (dragYPx <= 0f || pullRangePx <= 0f) return 0f
     val linear = dragYPx / pullRangePx
     if (linear <= 1f) return linear
     val excess = linear - 1f
-    return 1f + (excess / (1f + excess * 2f)) * 0.08f
+    return 1f + (excess / (1f + excess * 1.6f)) * 0.14f
 }
 
-/** Commits an interactive pull-down on release when dragged far enough or flicked downward. */
+/** Commits an interactive pull-down on release when dragged past the threshold or flicked downward. */
 internal fun shouldCommitSwipeDownPull(
     progress: Float,
     velocityYPxPerSec: Float,
@@ -234,8 +291,12 @@ internal fun shouldCommitSwipeDownPull(
     sensitivity: SwipeDownSensitivity = SwipeDownSensitivity.BALANCED,
 ): Boolean {
     if (cancelled) {
-        // SystemUI can pilfer top-edge touches mid-swipe; commit if the user was actively pulling down.
-        return progress >= 0.04f && velocityYPxPerSec >= 0f
+        // Never auto-expand on an OS cancel unless already dragged past the commit threshold
+        // (or actively flicked downward past a meaningful pull).
+        return velocityYPxPerSec >= 0f && (
+            progress >= sensitivity.commitProgress ||
+                (progress >= 0.08f && velocityYPxPerSec > sensitivity.commitVelocityDpPerSec * density)
+            )
     }
     if (velocityYPxPerSec > sensitivity.commitVelocityDpPerSec * density) return true
     if (velocityYPxPerSec < -300f * density) return false

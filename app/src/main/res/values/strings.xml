@@ -4,5 +4,4 @@
     <string name="accessibility_service_summary">Dynamic Island overlay</string>
     <string name="qs_tile_label">Dynamic Island</string>
     <string name="qs_flashlight_tile_label">Island Torch</string>
-    <string name="hold_in_island_label">Hold in Island</string>
 </resources>
