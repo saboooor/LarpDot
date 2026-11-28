@@ -36,26 +36,26 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
   );
 
   return (
-    <article class="lum-card lum-grad-bg-lum-card-bg/85 flex flex-col justify-between gap-4 border border-white/8 p-5 transition-colors hover:border-white/15">
+    <article class="lum-card justify-between gap-4 p-5 transition-colors">
       <div class="flex flex-col gap-4">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
             <Link
               href={`/presets/${preset.slug}`}
-              class="block truncate text-base font-bold text-white transition-colors hover:text-indigo-300"
+              class="block truncate text-base font-bold transition-colors hover:text-lum-accent"
             >
               {preset.name}
             </Link>
             <p class="text-lum-text-secondary mt-0.5 text-xs">
-              by <span class="text-white/80">{preset.author}</span>
+              by <span class="text-lum-text-secondary">{preset.author}</span>
             </p>
           </div>
           <span
             class={{
-              'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold': true,
-              'bg-indigo-500/18 text-indigo-200 ring-1 ring-indigo-400/30':
+              'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold': true,
+              'bg-lum-accent/15 text-lum-accent':
                 preset.isBundle,
-              'bg-white/[0.06] text-white/75 ring-1 ring-white/10':
+              'bg-lum-input-bg text-lum-text-secondary':
                 !preset.isBundle,
             }}
           >
@@ -74,7 +74,7 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
         </div>
 
         {primaryIsland && (
-          <div class="flex min-h-24 items-center justify-center rounded-2xl border border-white/6 bg-[#0a0d13]/85 px-3 py-4">
+          <div class="flex min-h-24 items-center justify-center rounded-2xl bg-lum-card-bg px-3 py-4">
             <IslandPreview island={primaryIsland} mode="compact" />
           </div>
         )}
@@ -85,12 +85,12 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
           </p>
         )}
 
-        <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span class="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 font-medium text-white/80">
-            <Layers size={11} class="text-indigo-300" />
+        <div class="flex flex-wrap items-center gap-1.5 text-xs">
+          <span class="inline-flex items-center gap-1 rounded-full bg-lum-input-bg px-2.5 py-1 font-medium text-lum-text-secondary">
+            <Layers size={11} class="text-lum-accent" />
             {appLabel}
           </span>
-          <span class="text-lum-text-secondary rounded-full bg-white/[0.04] px-2.5 py-1">
+          <span class="text-lum-text-secondary rounded-full bg-lum-input-bg px-2.5 py-1">
             {triggerLabel}
           </span>
           <span class="text-lum-text-secondary ml-auto font-mono">
@@ -99,10 +99,10 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
         </div>
       </div>
 
-      <div class="flex items-center gap-2 border-t border-white/6 pt-3">
+      <div class="flex items-center gap-2 pt-3">
         <button
           type="button"
-          class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 flex-1 justify-center py-2 text-xs font-semibold text-white"
+          class="lum-btn lum-bg-lum-accent flex-1 justify-center py-2 text-xs"
           onClick$={async () => {
             try {
               await navigator.clipboard.writeText(preset.shareCode);
@@ -134,7 +134,7 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
 
         <button
           type="button"
-          class="lum-btn rounded-lum-1 bg-white/[0.06] px-3 py-2 text-xs text-white/85 hover:bg-white/12"
+          class="lum-btn px-3 py-2 text-xs text-lum-text-secondary"
           title="Download JSON preset file"
           onClick$={async () => {
             const json = formatShareJson(preset.payload);
@@ -154,7 +154,7 @@ export const PresetCard = component$<PresetCardProps>(({ preset }) => {
 
         <Link
           href={`/presets/${preset.slug}`}
-          class="lum-btn rounded-lum-1 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/85 hover:bg-white/12"
+          class="lum-btn px-3 py-2 text-xs font-medium text-lum-text-secondary"
         >
           Details
         </Link>

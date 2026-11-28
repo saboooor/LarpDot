@@ -82,11 +82,11 @@ export default component$(() => {
       {/* Hero */}
       <section class="grid items-center gap-12 pt-14 pb-16 lg:grid-cols-12 lg:pt-20 lg:pb-24">
         <div class="flex flex-col gap-6 lg:col-span-7">
-          <div class="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1 text-xs font-medium text-indigo-200">
+          <div class="text-sm text-lum-text-secondary">
             Android 8.0+ (API 26) • Kotlin & Jetpack Compose
           </div>
 
-          <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.35rem] lg:leading-[1.08]">
+          <h1 class="text-4xl font-extrabold tracking-tight sm:text-5xl leading-tight">
             A customizable Dynamic Island overlay for Android.
           </h1>
 
@@ -99,7 +99,7 @@ export default component$(() => {
           <div class="flex flex-wrap items-center gap-3 pt-1">
             <Link
               href="/presets"
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 px-5 py-3 text-sm font-semibold text-white"
+              class="lum-btn lum-bg-lum-accent px-5 py-3 text-sm"
             >
               <Layers size={18} />
               Browse Preset Catalog
@@ -109,7 +109,7 @@ export default component$(() => {
               href={GITHUB_RELEASES_URL}
               target="_blank"
               rel="noopener noreferrer"
-              class="lum-btn rounded-lum-1 border border-white/12 bg-white/[0.05] px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+              class="lum-btn px-5 py-3 text-sm"
             >
               <Download size={18} />
               Download APK
@@ -118,7 +118,7 @@ export default component$(() => {
               href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              class="lum-btn lum-bg-transparent rounded-lum-1 text-lum-text-secondary px-4 py-3 text-sm hover:text-white"
+              class="lum-btn lum-bg-transparent text-lum-text-secondary px-4 py-3 text-sm hover:text-lum-text"
             >
               <span class="fill-current">
                 <SiGithub size={16} />
@@ -134,9 +134,9 @@ export default component$(() => {
       </section>
 
       {/* Features */}
-      <section class="border-t border-white/8 py-16">
+      <section class="py-16">
         <div class="mb-10 max-w-2xl">
-          <h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">
             Built around your cutout
           </h2>
           <p class="text-lum-text-secondary mt-2 text-sm sm:text-base">
@@ -151,12 +151,12 @@ export default component$(() => {
             return (
               <div
                 key={feature.title}
-                class="lum-card lum-grad-bg-lum-card-bg/80 border border-white/8 p-5"
+                class="lum-card p-5"
               >
-                <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
+                <div class="text-lum-accent">
                   <Icon size={20} />
                 </div>
-                <h3 class="text-base font-bold text-white">{feature.title}</h3>
+                <h3 class="text-base font-bold">{feature.title}</h3>
                 <p class="text-lum-text-secondary mt-1.5 text-sm leading-relaxed">
                   {feature.description}
                 </p>
@@ -167,28 +167,28 @@ export default component$(() => {
       </section>
 
       {/* Community Presets Preview */}
-      <section class="border-t border-white/8 py-16">
+      <section class="py-16">
         <div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">
               Custom Island Preset Catalog
             </h2>
             <p class="text-lum-text-secondary mt-2 text-sm sm:text-base">
-              Copy a <code class="text-indigo-300">LARPDOT1:</code> share code
+              Copy a <code class="text-lum-accent">LARPDOT1:</code> share code
               or download a JSON bundle and import it directly in LarpDot.
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
             <Link
               href="/presets/submit"
-              class="lum-btn rounded-lum-1 border border-white/12 bg-white/[0.05] text-sm text-white hover:bg-white/10"
+              class="lum-btn text-sm"
             >
               <Upload size={16} />
               Submit Preset
             </Link>
             <Link
               href="/presets"
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 text-sm font-semibold text-white"
+              class="lum-btn lum-bg-lum-accent text-sm"
             >
               View All
               <ArrowRight size={16} />
@@ -203,18 +203,18 @@ export default component$(() => {
             ))}
           </div>
         ) : (
-          <div class="lum-card lum-grad-bg-lum-card-bg/70 flex flex-col items-center justify-center gap-3 border border-white/8 px-6 py-12 text-center">
-            <p class="text-base font-semibold text-white">
+          <div class="lum-card items-center justify-center gap-3 px-6 py-12 text-center">
+            <p class="text-base font-semibold">
               No community presets published yet
             </p>
             <p class="text-lum-text-secondary max-w-md text-sm">
               Export any Custom Island or App Bundle from LarpDot as a{' '}
-              <code class="text-indigo-300">LARPDOT1:</code> share code or JSON
+              <code class="text-lum-accent">LARPDOT1:</code> share code or JSON
               file and be the first to share it here.
             </p>
             <Link
               href="/presets/submit"
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 mt-2 text-sm font-semibold text-white"
+              class="lum-btn lum-bg-lum-accent mt-2 text-sm"
             >
               <Upload size={16} />
               Publish the first preset

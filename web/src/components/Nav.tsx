@@ -24,13 +24,13 @@ export const Nav = component$(() => {
   const isSubmit = loc.url.pathname.startsWith('/presets/submit');
 
   return (
-    <header class="sticky top-0 z-50 border-b border-white/8 bg-[#0c0e14]/80 backdrop-blur-xl">
+    <header class="sticky top-0 z-50 bg-lum-card-bg">
       <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link
           href="/"
-          class="flex items-center gap-2.5 font-bold tracking-tight text-white transition-opacity hover:opacity-90"
+          class="flex items-center gap-2.5 font-bold tracking-tight transition-opacity hover:opacity-90"
         >
-          <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/8 text-white ring-1 ring-white/12">
+          <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-lum-input-bg">
             <LarpDotLogo size={20} />
           </span>
           <span class="text-lg">LarpDot</span>
@@ -40,9 +40,9 @@ export const Nav = component$(() => {
           <Link
             href="/"
             class={{
-              'lum-btn rounded-lum-1 text-sm': true,
-              'lum-grad-bg-lum-accent text-white': isHome,
-              'lum-bg-transparent text-lum-text-secondary hover:text-white':
+              'lum-btn text-sm': true,
+              'lum-bg-lum-accent text-white': isHome,
+              'lum-bg-transparent text-lum-text-secondary hover:text-lum-text':
                 !isHome,
             }}
           >
@@ -51,9 +51,9 @@ export const Nav = component$(() => {
           <Link
             href="/presets"
             class={{
-              'lum-btn rounded-lum-1 text-sm': true,
-              'lum-grad-bg-lum-accent text-white': isPresets,
-              'lum-bg-transparent text-lum-text-secondary hover:text-white':
+              'lum-btn text-sm': true,
+              'lum-bg-lum-accent text-white': isPresets,
+              'lum-bg-transparent text-lum-text-secondary hover:text-lum-text':
                 !isPresets,
             }}
           >
@@ -63,9 +63,9 @@ export const Nav = component$(() => {
           <Link
             href="/presets/submit"
             class={{
-              'lum-btn rounded-lum-1 text-sm': true,
-              'lum-grad-bg-lum-accent text-white': isSubmit,
-              'lum-bg-transparent text-lum-text-secondary hover:text-white':
+              'lum-btn text-sm': true,
+              'lum-bg-lum-accent text-white': isSubmit,
+              'lum-bg-transparent text-lum-text-secondary hover:text-lum-text':
                 !isSubmit,
             }}
           >
@@ -76,7 +76,7 @@ export const Nav = component$(() => {
             href={GITHUB_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            class="lum-btn lum-bg-transparent rounded-lum-1 text-lum-text-secondary hover:text-white text-sm"
+            class="lum-btn lum-bg-transparent text-lum-text-secondary hover:text-lum-text text-sm"
           >
             <span class="fill-current">
               <SiGithub size={16} />
@@ -98,11 +98,11 @@ export const Nav = component$(() => {
       </div>
 
       {mobileOpen.value && (
-        <nav class="border-t border-white/8 bg-[#0c0e14]/95 px-4 py-3 sm:hidden">
+        <nav class="bg-lum-card-bg px-4 py-3 sm:hidden">
           <div class="flex flex-col gap-1.5">
             <Link
               href="/"
-              class="lum-btn lum-bg-transparent rounded-lum-1 justify-start text-sm"
+              class="lum-btn lum-bg-transparent justify-start text-sm"
               onClick$={() => {
                 mobileOpen.value = false;
               }}
@@ -111,7 +111,7 @@ export const Nav = component$(() => {
             </Link>
             <Link
               href="/presets"
-              class="lum-btn lum-bg-transparent rounded-lum-1 justify-start text-sm"
+              class="lum-btn lum-bg-transparent justify-start text-sm"
               onClick$={() => {
                 mobileOpen.value = false;
               }}
@@ -121,7 +121,7 @@ export const Nav = component$(() => {
             </Link>
             <Link
               href="/presets/submit"
-              class="lum-btn lum-bg-transparent rounded-lum-1 justify-start text-sm"
+              class="lum-btn lum-bg-transparent justify-start text-sm"
               onClick$={() => {
                 mobileOpen.value = false;
               }}
@@ -133,7 +133,7 @@ export const Nav = component$(() => {
               href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              class="lum-btn lum-bg-transparent rounded-lum-1 justify-start text-sm"
+              class="lum-btn lum-bg-transparent justify-start text-sm"
             >
               <span class="fill-current">
                 <SiGithub size={16} />

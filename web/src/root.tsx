@@ -16,7 +16,7 @@ export default component$(() => {
         )}
         <RouterHead />
       </head>
-      <body class="bg-lum-bg text-lum-text min-h-svh antialiased">
+      <body class="bg-gray-950 text-lum-text min-h-svh antialiased">
         <RouterOutlet />
       </body>
     </QwikRouterProvider>

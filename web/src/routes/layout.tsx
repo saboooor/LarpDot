@@ -25,12 +25,12 @@ export default component$(() => {
             <div
               key={toast.id}
               class={{
-                'lum-card pointer-events-auto border px-4 py-3 shadow-xl backdrop-blur-xl': true,
-                'border-emerald-400/30 bg-emerald-950/85 text-emerald-100':
+                'lum-card pointer-events-auto px-4 py-3': true,
+                'bg-emerald-950/85 text-emerald-100':
                   toast.tone === 'success',
-                'border-rose-400/30 bg-rose-950/85 text-rose-100':
+                'bg-rose-950/85 text-rose-100':
                   toast.tone === 'error',
-                'border-white/12 bg-[#141822]/92 text-white':
+                'bg-lum-card-bg text-white':
                   !toast.tone || toast.tone === 'accent',
               }}
             >

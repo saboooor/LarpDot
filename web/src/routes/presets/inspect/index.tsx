@@ -60,29 +60,29 @@ export default component$(() => {
       <div class="mb-6">
         <Link
           href="/presets"
-          class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-3 text-xs hover:text-white"
+          class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-3 text-xs hover:text-lum-text"
         >
           <ChevronLeft size={16} />
           Back to Preset Catalog
         </Link>
 
-        <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-          <SearchCode size={26} class="text-indigo-300" />
+        <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          <SearchCode size={26} class="text-lum-accent" />
           Share Code Inspector
         </h1>
         <p class="text-lum-text-secondary mt-1.5 text-sm">
-          Decode and preview any <code class="text-indigo-300">LARPDOT1:</code>{' '}
-          share code or exported <code class="text-indigo-300">.json</code>{' '}
+          Decode and preview any <code class="text-lum-accent">LARPDOT1:</code>{' '}
+          share code or exported <code class="text-lum-accent">.json</code>{' '}
           locally in your browser before importing or publishing.
         </p>
       </div>
 
-      <div class="lum-card lum-grad-bg-lum-card-bg/85 mb-6 border border-white/8 p-5">
+      <div class="lum-card mb-6 p-5">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <label for="inspect-input" class="text-sm font-semibold text-white">
+          <label for="inspect-input" class="text-sm font-semibold">
             Paste share code or preset JSON
           </label>
-          <label class="lum-btn rounded-lum-1 cursor-pointer bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12">
+          <label class="lum-btn cursor-pointer px-3 py-1.5 text-xs font-medium text-lum-text-secondary">
             <FileUp size={14} />
             Open .json
             <input
@@ -102,7 +102,7 @@ export default component$(() => {
           id="inspect-input"
           rows={5}
           placeholder="LARPDOT1:H4sIAAAAAAAA..."
-          class="lum-input rounded-lum-1 w-full font-mono text-xs leading-relaxed"
+          class="lum-input w-full font-mono text-xs leading-relaxed"
           value={rawInput.value}
           onInput$={(_, el) => void inspect(el.value)}
         />
@@ -117,7 +117,7 @@ export default component$(() => {
 
       {decoded.value && (
         <div class="flex flex-col gap-6">
-          <div class="lum-card lum-grad-bg-lum-card-bg/85 flex flex-col justify-between gap-4 border border-emerald-400/20 p-5 sm:flex-row sm:items-center">
+          <div class="lum-card justify-between gap-4 p-5 sm:flex-row sm:items-center">
             <div>
               <div class="mb-1.5 flex flex-wrap items-center gap-2">
                 <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">
@@ -126,7 +126,7 @@ export default component$(() => {
                   {decoded.value.islands.length}{' '}
                   {decoded.value.islands.length === 1 ? 'island' : 'islands'})
                 </span>
-                <span class="inline-flex items-center gap-1 rounded-full bg-white/[0.08] px-2.5 py-0.5 text-[11px] text-white/80">
+                <span class="inline-flex items-center gap-1 rounded-full bg-lum-input-bg px-2.5 py-0.5 text-xs text-lum-text-secondary">
                   {decoded.value.isBundle ? (
                     <Package size={12} />
                   ) : (
@@ -137,7 +137,7 @@ export default component$(() => {
                     'General'}
                 </span>
               </div>
-              <h2 class="text-xl font-bold text-white">{decoded.value.name}</h2>
+              <h2 class="text-xl font-bold">{decoded.value.name}</h2>
               {decoded.value.description && (
                 <p class="text-lum-text-secondary mt-1 text-sm">
                   {decoded.value.description}
@@ -149,7 +149,7 @@ export default component$(() => {
               {canonicalCode.value && (
                 <button
                   type="button"
-                  class="lum-btn rounded-lum-1 bg-white/[0.06] px-3.5 py-2 text-xs font-medium text-white hover:bg-white/12"
+                  class="lum-btn px-3.5 py-2 text-xs font-medium"
                   onClick$={async () => {
                     await navigator.clipboard.writeText(canonicalCode.value);
                     pushToast(toasts, {
@@ -164,7 +164,7 @@ export default component$(() => {
               )}
               <Link
                 href={submitUrl}
-                class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 px-4 py-2 text-xs font-semibold text-white"
+                class="lum-btn lum-bg-lum-accent px-4 py-2 text-xs"
               >
                 <Upload size={14} />
                 Publish to Catalog
@@ -176,18 +176,18 @@ export default component$(() => {
             {decoded.value.islands.map((item, idx) => (
               <div
                 key={idx}
-                class="lum-card lum-grad-bg-lum-card-bg/85 flex flex-col gap-4 border border-white/8 p-5"
+                class="lum-card gap-4 p-5"
               >
                 <div class="flex items-start justify-between gap-2">
                   <div>
-                    <h3 class="text-base font-bold text-white">{item.name}</h3>
+                    <h3 class="text-base font-bold">{item.name}</h3>
                     {item.description && (
                       <p class="text-lum-text-secondary text-xs">
                         {item.description}
                       </p>
                     )}
                   </div>
-                  <span class="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-medium text-indigo-200">
+                  <span class="rounded-full bg-lum-input-bg px-2.5 py-0.5 text-xs font-medium text-lum-accent">
                     {formatVisibilityLabel(
                       item.island.visibility,
                       item.island.condition
@@ -195,19 +195,19 @@ export default component$(() => {
                   </span>
                 </div>
 
-                <div class="flex items-center justify-center rounded-2xl border border-white/6 bg-[#0a0d13]/90 p-5">
+                <div class="flex items-center justify-center rounded-2xl bg-lum-card-bg p-5">
                   <IslandPreview island={item.island} mode="interactive" />
                 </div>
 
-                <div class="flex flex-wrap gap-2 text-xs text-white/75">
-                  <span class="rounded-lg bg-white/[0.04] px-2.5 py-1">
+                <div class="flex flex-wrap gap-2 text-xs text-lum-text-secondary">
+                  <span class="rounded-lg bg-lum-input-bg px-2.5 py-1">
                     Tap: {formatTapActionLabel(item.island.tapAction)}
                   </span>
-                  <span class="rounded-lg bg-white/[0.04] px-2.5 py-1 font-mono">
+                  <span class="rounded-lg bg-lum-input-bg px-2.5 py-1 font-mono">
                     {item.island.MAIN.width}×{item.island.MAIN.height} dp
                   </span>
                   {item.island.notificationRule.package && (
-                    <span class="rounded-lg bg-white/[0.04] px-2.5 py-1 font-mono">
+                    <span class="rounded-lg bg-lum-input-bg px-2.5 py-1 font-mono">
                       {item.island.notificationRule.package}
                     </span>
                   )}
@@ -216,11 +216,11 @@ export default component$(() => {
             ))}
           </div>
 
-          <details class="lum-card lum-grad-bg-lum-card-bg/85 border border-white/8 p-5">
-            <summary class="cursor-pointer text-xs font-semibold tracking-wide text-white/80 uppercase">
+          <details class="lum-card p-5">
+            <summary class="cursor-pointer text-xs font-semibold tracking-wide text-lum-text-secondary uppercase">
               Decoded Canonical JSON
             </summary>
-            <pre class="mt-3 max-h-96 overflow-auto rounded-xl bg-black/50 p-3.5 font-mono text-[11px] leading-relaxed text-indigo-100/90">
+            <pre class="mt-3 max-h-96 overflow-auto rounded-xl bg-black/50 p-3.5 font-mono text-xs leading-relaxed text-lum-accent/90">
               {formatShareJson(decoded.value.envelope)}
             </pre>
           </details>

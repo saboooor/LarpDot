@@ -182,15 +182,15 @@ export default component$(() => {
 
   return (
     <section class="mx-auto max-w-6xl px-4 pt-10 pb-12 sm:px-6">
-      <div class="mb-6 flex flex-col justify-between gap-4 border-b border-white/8 pb-6 sm:flex-row sm:items-end">
+      <div class="mb-6 flex flex-col justify-between gap-4 pb-6 sm:flex-row sm:items-end">
         <div>
-          <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-            <Layers size={28} class="text-indigo-300" />
+          <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <Layers size={28} class="text-lum-accent" />
             Custom Island Presets
           </h1>
           <p class="text-lum-text-secondary mt-1.5 text-sm sm:text-base">
             Browse single islands and full per-app bundles created for LarpDot.
-            Copy any <code class="text-indigo-300">LARPDOT1:</code> code to
+            Copy any <code class="text-lum-accent">LARPDOT1:</code> code to
             import directly on your phone.
           </p>
         </div>
@@ -198,14 +198,14 @@ export default component$(() => {
         <div class="flex flex-wrap items-center gap-2">
           <Link
             href="/presets/inspect"
-            class="lum-btn rounded-lum-1 bg-white/[0.06] px-3.5 py-2.5 text-sm font-medium text-white hover:bg-white/12"
+            class="lum-btn px-3.5 py-2.5 text-sm font-medium"
           >
             <SearchCode size={16} />
             Inspect Code
           </Link>
           <Link
             href="/presets/submit"
-            class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 w-fit shrink-0 px-4 py-2.5 text-sm font-semibold text-white"
+            class="lum-btn lum-bg-lum-accent w-fit shrink-0 px-4 py-2.5 text-sm"
           >
             <Upload size={16} />
             Submit Preset or Bundle
@@ -214,7 +214,7 @@ export default component$(() => {
       </div>
 
       {/* Filter Toolbar */}
-      <div class="lum-card lum-grad-bg-lum-card-bg/85 mb-5 flex flex-col gap-3 border border-white/8 p-3">
+      <div class="lum-card mb-5 gap-3 p-3">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div class="relative flex flex-1 items-center">
             <Search
@@ -223,7 +223,7 @@ export default component$(() => {
             />
             <input
               type="search"
-              class="lum-input rounded-lum-1 w-full py-2 pr-3 pl-9 text-sm"
+              class="lum-input w-full py-2 pr-3 pl-9 text-sm"
               placeholder="Search presets, apps, package names, or authors..."
               value={data.search}
               onInput$={(_, el) => void onSearchInput(el.value)}
@@ -231,7 +231,7 @@ export default component$(() => {
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="inline-flex rounded-xl border border-white/10 bg-[#0d1018] p-1 text-xs">
+            <div class="inline-flex rounded-xl bg-lum-card-bg p-1 text-xs">
               {(
                 [
                   { id: 'all', label: 'All' },
@@ -245,8 +245,8 @@ export default component$(() => {
                   onClick$={() => void updateURL({ kind: option.id, page: 1 })}
                   class={{
                     'rounded-lg px-3 py-1.5 font-medium transition-colors': true,
-                    'bg-indigo-500 text-white': data.kind === option.id,
-                    'text-lum-text-secondary hover:text-white':
+                    'bg-lum-accent text-white': data.kind === option.id,
+                    'text-lum-text-secondary hover:text-lum-text':
                       data.kind !== option.id,
                   }}
                 >
@@ -257,7 +257,7 @@ export default component$(() => {
 
             <select
               aria-label="Sort presets"
-              class="lum-input rounded-lum-1 py-2 pr-8 pl-3 text-xs font-medium"
+              class="lum-input py-2 pr-8 pl-3 text-xs font-medium"
               value={`${data.sortBy}-${data.sortOrder}`}
               onChange$={(_, el) => {
                 const [sortBy, sortOrder] = el.value.split('-');
@@ -275,14 +275,14 @@ export default component$(() => {
 
         {/* App category chips */}
         {data.appCategories.length > 0 && (
-          <div class="flex flex-wrap items-center gap-1.5 border-t border-white/6 pt-2.5">
+          <div class="flex flex-wrap items-center gap-1.5 pt-2.5">
             <button
               type="button"
               onClick$={() => void updateURL({ app: '', page: 1 })}
               class={{
                 'rounded-full px-3 py-1 text-xs font-medium transition-colors': true,
-                'bg-indigo-500 text-white': !data.app,
-                'bg-white/[0.05] text-lum-text-secondary hover:bg-white/10 hover:text-white':
+                'bg-lum-accent text-white': !data.app,
+                'bg-lum-input-bg text-lum-text-secondary hover:bg-lum-input-hover-bg hover:text-lum-text':
                   Boolean(data.app),
               }}
             >
@@ -295,8 +295,8 @@ export default component$(() => {
                 onClick$={() => void updateURL({ app: cat.key, page: 1 })}
                 class={{
                   'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors': true,
-                  'bg-indigo-500 text-white': data.app === cat.key,
-                  'bg-white/[0.05] text-lum-text-secondary hover:bg-white/10 hover:text-white':
+                  'bg-lum-accent text-white': data.app === cat.key,
+                  'bg-lum-input-bg text-lum-text-secondary hover:bg-lum-input-hover-bg hover:text-lum-text':
                     data.app !== cat.key,
                 }}
               >
@@ -309,7 +309,7 @@ export default component$(() => {
       </div>
 
       {data.dbError && (
-        <div class="lum-card mb-6 border border-amber-400/30 bg-amber-950/35 p-4 text-sm text-amber-100">
+        <div class="lum-card mb-6 bg-amber-950/35 p-4 text-sm text-amber-100">
           Catalog database is not migrated yet ({data.dbError}). Run{' '}
           <code class="font-mono">pnpm wrangler:migrate-local</code> for local
           development.
@@ -319,14 +319,14 @@ export default component$(() => {
       {/* Results count */}
       <div class="text-lum-text-secondary mb-4 flex items-center justify-between text-xs">
         <span>
-          Showing <strong class="text-white">{data.items.length}</strong> of{' '}
-          <strong class="text-white">{data.totalCount}</strong>{' '}
+          Showing <strong>{data.items.length}</strong> of{' '}
+          <strong>{data.totalCount}</strong>{' '}
           {data.totalCount === 1 ? 'entry' : 'entries'}
         </span>
         {(data.search || data.app || data.kind !== 'all') && (
           <button
             type="button"
-            class="text-indigo-300 transition-colors hover:text-indigo-200"
+            class="text-lum-accent transition-colors hover:text-lum-accent"
             onClick$={() =>
               void updateURL({ search: '', app: '', kind: 'all', page: 1 })
             }
@@ -344,15 +344,15 @@ export default component$(() => {
           ))}
         </div>
       ) : (
-        <div class="lum-card lum-grad-bg-lum-card-bg/75 flex flex-col items-center justify-center gap-3 border border-white/8 px-6 py-16 text-center">
-          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-indigo-300">
+        <div class="lum-card items-center justify-center gap-3 px-6 py-16 text-center">
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-lum-input-bg text-lum-accent">
             {data.kind === 'bundle' ? (
               <Package size={24} />
             ) : (
               <Sparkles size={24} />
             )}
           </div>
-          <h2 class="text-lg font-bold text-white">No presets found</h2>
+          <h2 class="text-lg font-bold">No presets found</h2>
           <p class="text-lum-text-secondary max-w-md text-sm">
             {data.search || data.app || data.kind !== 'all'
               ? 'Try clearing your filters or searching with different keywords.'
@@ -362,7 +362,7 @@ export default component$(() => {
             {(data.search || data.app || data.kind !== 'all') && (
               <button
                 type="button"
-                class="lum-btn rounded-lum-1 bg-white/[0.06] text-sm text-white hover:bg-white/12"
+                class="lum-btn text-sm"
                 onClick$={() =>
                   void updateURL({ search: '', app: '', kind: 'all', page: 1 })
                 }
@@ -372,7 +372,7 @@ export default component$(() => {
             )}
             <Link
               href="/presets/submit"
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 text-sm font-semibold text-white"
+              class="lum-btn lum-bg-lum-accent text-sm"
             >
               <Upload size={16} />
               Submit Preset
@@ -388,20 +388,20 @@ export default component$(() => {
             type="button"
             disabled={data.page <= 1}
             onClick$={() => void updateURL({ page: data.page - 1 })}
-            class="lum-btn rounded-lum-1 bg-white/[0.06] text-xs disabled:opacity-40"
+            class="lum-btn text-xs disabled:opacity-40"
           >
             <ChevronLeft size={16} />
             Previous
           </button>
           <span class="text-lum-text-secondary px-3 text-xs">
-            Page <strong class="text-white">{data.page}</strong> of{' '}
-            <strong class="text-white">{totalPages}</strong>
+            Page <strong>{data.page}</strong> of{' '}
+            <strong>{totalPages}</strong>
           </span>
           <button
             type="button"
             disabled={data.page >= totalPages}
             onClick$={() => void updateURL({ page: data.page + 1 })}
-            class="lum-btn rounded-lum-1 bg-white/[0.06] text-xs disabled:opacity-40"
+            class="lum-btn text-xs disabled:opacity-40"
           >
             Next
             <ChevronRight size={16} />

@@ -159,25 +159,25 @@ export default component$(() => {
       <div class="mb-6">
         <Link
           href="/presets"
-          class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-3 text-xs hover:text-white"
+          class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-3 text-xs hover:text-lum-text"
         >
           <ChevronLeft size={16} />
           Back to Preset Catalog
         </Link>
 
-        <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-          <Upload size={26} class="text-indigo-300" />
+        <h1 class="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          <Upload size={26} class="text-lum-accent" />
           Submit a Custom Island Preset
         </h1>
         <p class="text-lum-text-secondary mt-1.5 text-sm">
           Export any Custom Island or App Bundle from LarpDot as a{' '}
-          <code class="text-indigo-300">LARPDOT1:</code> share code or{' '}
-          <code class="text-indigo-300">.json</code> file and paste it below.
+          <code class="text-lum-accent">LARPDOT1:</code> share code or{' '}
+          <code class="text-lum-accent">.json</code> file and paste it below.
         </p>
       </div>
 
       {action.value?.failed && (
-        <div class="lum-card mb-6 flex items-start gap-2.5 border border-rose-400/30 bg-rose-950/45 p-4 text-sm text-rose-100">
+        <div class="lum-card mb-6 items-start gap-2.5 bg-rose-950/45 p-4 text-sm text-rose-100">
           <AlertCircle size={18} class="mt-0.5 shrink-0 text-rose-300" />
           <span>{action.value.error}</span>
         </div>
@@ -185,15 +185,15 @@ export default component$(() => {
 
       <Form action={action} class="flex flex-col gap-6">
         {/* Step 1: Share code or JSON */}
-        <div class="lum-card lum-grad-bg-lum-card-bg/85 border border-white/8 p-5">
+        <div class="lum-card p-5">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <label
               for="shareInput"
-              class="text-sm font-semibold text-white"
+              class="text-sm font-semibold"
             >
               1. Paste share code or JSON
             </label>
-            <label class="lum-btn rounded-lum-1 cursor-pointer bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12">
+            <label class="lum-btn cursor-pointer px-3 py-1.5 text-xs font-medium text-lum-text-secondary">
               <FileUp size={14} />
               Load .json file
               <input
@@ -216,7 +216,7 @@ export default component$(() => {
             rows={5}
             required
             placeholder="LARPDOT1:H4sIAAAAAAAA..."
-            class="lum-input rounded-lum-1 w-full font-mono text-xs leading-relaxed"
+            class="lum-input w-full font-mono text-xs leading-relaxed"
             value={shareInput.value}
             onInput$={(_, el) => void handleDecode(el.value)}
           />
@@ -229,7 +229,7 @@ export default component$(() => {
           )}
 
           {decoded.value && (
-            <div class="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-950/20 p-4">
+            <div class="mt-4 rounded-2xl bg-emerald-950/20 p-4">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <span class="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
                   <CheckCircle2 size={15} />
@@ -237,7 +237,7 @@ export default component$(() => {
                   {decoded.value.islands.length}{' '}
                   {decoded.value.islands.length === 1 ? 'island' : 'islands'})
                 </span>
-                <span class="inline-flex items-center gap-1 rounded-full bg-white/[0.08] px-2.5 py-0.5 text-[11px] text-white/80">
+                <span class="inline-flex items-center gap-1 rounded-full bg-lum-input-bg px-2.5 py-0.5 text-xs text-lum-text-secondary">
                   {decoded.value.isBundle ? (
                     <Package size={12} />
                   ) : (
@@ -253,13 +253,13 @@ export default component$(() => {
                 {decoded.value.islands.map((item, idx) => (
                   <div
                     key={idx}
-                    class="flex flex-col items-center gap-2 rounded-xl border border-white/8 bg-[#0a0d13]/90 p-3"
+                    class="flex flex-col items-center gap-2 rounded-xl bg-lum-card-bg p-3"
                   >
                     <div class="flex w-full items-center justify-between text-xs">
-                      <span class="truncate font-semibold text-white">
+                      <span class="truncate font-semibold">
                         {item.name}
                       </span>
-                      <span class="text-lum-text-secondary text-[11px]">
+                      <span class="text-lum-text-secondary text-xs">
                         {formatVisibilityLabel(
                           item.island.visibility,
                           item.island.condition
@@ -275,15 +275,15 @@ export default component$(() => {
         </div>
 
         {/* Step 2: Metadata */}
-        <div class="lum-card lum-grad-bg-lum-card-bg/85 grid gap-4 border border-white/8 p-5 sm:grid-cols-2">
+        <div class="lum-card grid gap-4 p-5 sm:grid-cols-2">
           <div class="sm:col-span-2">
-            <h2 class="text-sm font-semibold text-white">
+            <h2 class="text-sm font-semibold">
               2. Catalog details
             </h2>
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label for="preset-name" class="text-xs font-medium text-white/85">
+            <label for="preset-name" class="text-xs font-medium text-lum-text-secondary">
               Title
             </label>
             <input
@@ -293,7 +293,7 @@ export default component$(() => {
               maxLength={48}
               required
               placeholder="e.g. Spotify Compact Waveform"
-              class="lum-input rounded-lum-1 text-sm"
+              class="lum-input text-sm"
               value={name.value}
               onInput$={(_, el) => {
                 name.value = el.value;
@@ -304,7 +304,7 @@ export default component$(() => {
           <div class="flex flex-col gap-1.5">
             <label
               for="preset-author"
-              class="text-xs font-medium text-white/85"
+              class="text-xs font-medium text-lum-text-secondary"
             >
               Author
             </label>
@@ -315,7 +315,7 @@ export default component$(() => {
               maxLength={40}
               required
               placeholder="Your name or handle"
-              class="lum-input rounded-lum-1 text-sm"
+              class="lum-input text-sm"
               value={author.value}
               onInput$={(_, el) => {
                 author.value = el.value;
@@ -326,7 +326,7 @@ export default component$(() => {
           <div class="flex flex-col gap-1.5 sm:col-span-2">
             <label
               for="preset-description"
-              class="text-xs font-medium text-white/85"
+              class="text-xs font-medium text-lum-text-secondary"
             >
               Description{' '}
               <span class="text-lum-text-secondary font-normal">(optional)</span>
@@ -337,7 +337,7 @@ export default component$(() => {
               type="text"
               maxLength={160}
               placeholder="Short note on when this island triggers and what it shows"
-              class="lum-input rounded-lum-1 text-sm"
+              class="lum-input text-sm"
               value={description.value}
               onInput$={(_, el) => {
                 description.value = el.value;
@@ -349,7 +349,7 @@ export default component$(() => {
             <div class="flex flex-col gap-1.5 sm:col-span-2">
               <label
                 for="preset-app-name"
-                class="text-xs font-medium text-white/85"
+                class="text-xs font-medium text-lum-text-secondary"
               >
                 App display name{' '}
                 <span class="text-lum-text-secondary font-mono font-normal">
@@ -362,7 +362,7 @@ export default component$(() => {
                 type="text"
                 maxLength={64}
                 placeholder="e.g. Spotify"
-                class="lum-input rounded-lum-1 text-sm"
+                class="lum-input text-sm"
                 value={appName.value}
                 onInput$={(_, el) => {
                   appName.value = el.value;
@@ -374,14 +374,14 @@ export default component$(() => {
           <div class="flex items-center justify-end gap-3 pt-2 sm:col-span-2">
             <Link
               href="/presets"
-              class="lum-btn lum-bg-transparent rounded-lum-1 text-sm"
+              class="lum-btn lum-bg-transparent text-sm"
             >
               Cancel
             </Link>
             <button
               type="submit"
               disabled={!decoded.value || action.isRunning}
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-45"
+              class="lum-btn lum-bg-lum-accent px-5 py-2.5 text-sm disabled:opacity-45"
             >
               <Upload size={16} />
               {action.isRunning ? 'Publishing...' : 'Publish to Catalog'}

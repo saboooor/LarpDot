@@ -71,13 +71,13 @@ export default component$(() => {
   if (!preset) {
     return (
       <section class="mx-auto flex max-w-2xl flex-col items-center justify-center gap-4 px-4 py-24 text-center">
-        <h1 class="text-2xl font-bold text-white">Preset not found</h1>
+        <h1 class="text-2xl font-bold">Preset not found</h1>
         <p class="text-lum-text-secondary text-sm">
           This preset may have been removed or the link may be incorrect.
         </p>
         <Link
           href="/presets"
-          class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 text-sm font-semibold text-white"
+          class="lum-btn lum-bg-lum-accent text-sm"
         >
           Back to Preset Catalog
         </Link>
@@ -98,23 +98,23 @@ export default component$(() => {
     <section class="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
       <Link
         href="/presets"
-        class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-4 text-xs hover:text-white"
+        class="lum-btn lum-bg-transparent text-lum-text-secondary -ml-2 mb-4 text-xs hover:text-lum-text"
       >
         <ChevronLeft size={16} />
         Back to Preset Catalog
       </Link>
 
       {/* Header Card */}
-      <div class="lum-card lum-grad-bg-lum-card-bg/85 mb-6 border border-white/8 p-6">
+      <div class="lum-card mb-6 p-6">
         <div class="flex flex-col justify-between gap-4 md:flex-row md:items-start">
           <div class="min-w-0 flex-1">
             <div class="mb-2 flex flex-wrap items-center gap-2">
               <span
                 class={{
                   'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold': true,
-                  'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/30':
+                  'bg-lum-accent/15 text-lum-accent':
                     preset.isBundle,
-                  'bg-white/[0.06] text-white/80 ring-1 ring-white/10':
+                  'bg-lum-input-bg text-lum-text-secondary':
                     !preset.isBundle,
                 }}
               >
@@ -131,8 +131,8 @@ export default component$(() => {
                 )}
               </span>
 
-              <span class="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-white/80">
-                <Layers size={12} class="text-indigo-300" />
+              <span class="inline-flex items-center gap-1 rounded-full bg-lum-input-bg px-2.5 py-0.5 text-xs text-lum-text-secondary">
+                <Layers size={12} class="text-lum-accent" />
                 {appLabel}
               </span>
 
@@ -143,12 +143,12 @@ export default component$(() => {
               )}
             </div>
 
-            <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+            <h1 class="text-2xl font-extrabold tracking-tight sm:text-3xl">
               {preset.name}
             </h1>
 
             <p class="text-lum-text-secondary mt-1 text-xs">
-              Shared by <strong class="text-white/90">{preset.author}</strong> •{' '}
+              Shared by <strong class="text-lum-text-secondary">{preset.author}</strong> •{' '}
               {createdLabel} •{' '}
               <span class="font-mono">
                 {copyCount.value} {copyCount.value === 1 ? 'copy' : 'copies'}
@@ -156,7 +156,7 @@ export default component$(() => {
             </p>
 
             {preset.description && (
-              <p class="mt-3 max-w-2xl text-sm leading-relaxed text-white/85">
+              <p class="mt-3 max-w-2xl text-sm leading-relaxed text-lum-text-secondary">
                 {preset.description}
               </p>
             )}
@@ -165,7 +165,7 @@ export default component$(() => {
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              class="lum-btn lum-grad-bg-lum-accent rounded-lum-1 px-4 py-2.5 text-sm font-semibold text-white"
+              class="lum-btn lum-bg-lum-accent px-4 py-2.5 text-sm"
               onClick$={async () => {
                 try {
                   await navigator.clipboard.writeText(preset.shareCode);
@@ -196,7 +196,7 @@ export default component$(() => {
 
             <button
               type="button"
-              class="lum-btn rounded-lum-1 bg-white/[0.06] px-4 py-2.5 text-sm text-white hover:bg-white/12"
+              class="lum-btn px-4 py-2.5 text-sm"
               onClick$={async () => {
                 const json = formatShareJson(preset.payload);
                 const blob = new Blob([json], { type: 'application/json' });
@@ -216,7 +216,7 @@ export default component$(() => {
 
             <button
               type="button"
-              class="lum-btn rounded-lum-1 bg-white/[0.06] px-3 py-2.5 text-sm text-white hover:bg-white/12"
+              class="lum-btn px-3 py-2.5 text-sm"
               title="Copy preset page URL"
               onClick$={async () => {
                 await navigator.clipboard.writeText(window.location.href);
@@ -234,7 +234,7 @@ export default component$(() => {
 
       {/* Islands in preset / bundle */}
       <div class="mb-6 flex flex-col gap-4">
-        <h2 class="text-sm font-semibold tracking-wide text-white/80 uppercase">
+        <h2 class="text-sm font-semibold tracking-wide text-lum-text-secondary uppercase">
           {islands.length === 1
             ? 'Island Configuration'
             : `Included Islands (${islands.length})`}
@@ -245,15 +245,15 @@ export default component$(() => {
           return (
             <div
               key={idx}
-              class="lum-card lum-grad-bg-lum-card-bg/85 grid gap-6 border border-white/8 p-5 md:grid-cols-12"
+              class="lum-card grid gap-6 p-5 md:grid-cols-12"
             >
-              <div class="flex flex-col items-center justify-center rounded-2xl border border-white/6 bg-[#0a0d13]/90 p-5 md:col-span-5">
+              <div class="flex flex-col items-center justify-center rounded-2xl bg-lum-card-bg p-5 md:col-span-5">
                 <IslandPreview island={isl} mode="interactive" />
               </div>
 
               <div class="flex flex-col gap-3 md:col-span-7">
                 <div>
-                  <h3 class="text-lg font-bold text-white">{item.name}</h3>
+                  <h3 class="text-lg font-bold">{item.name}</h3>
                   {item.description && (
                     <p class="text-lum-text-secondary mt-0.5 text-sm">
                       {item.description}
@@ -262,32 +262,32 @@ export default component$(() => {
                 </div>
 
                 <dl class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-                  <div class="rounded-xl bg-white/[0.04] p-2.5">
+                  <div class="rounded-xl bg-lum-input-bg p-2.5">
                     <dt class="text-lum-text-secondary">Trigger</dt>
-                    <dd class="mt-0.5 font-semibold text-white">
+                    <dd class="mt-0.5 font-semibold">
                       {formatVisibilityLabel(isl.visibility, isl.condition)}
                     </dd>
                   </div>
-                  <div class="rounded-xl bg-white/[0.04] p-2.5">
+                  <div class="rounded-xl bg-lum-input-bg p-2.5">
                     <dt class="text-lum-text-secondary">Tap action</dt>
-                    <dd class="mt-0.5 font-semibold text-white">
+                    <dd class="mt-0.5 font-semibold">
                       {formatTapActionLabel(isl.tapAction)}
                     </dd>
                   </div>
-                  <div class="rounded-xl bg-white/[0.04] p-2.5">
+                  <div class="rounded-xl bg-lum-input-bg p-2.5">
                     <dt class="text-lum-text-secondary">Expanded size</dt>
-                    <dd class="mt-0.5 font-mono font-semibold text-white">
+                    <dd class="mt-0.5 font-mono font-semibold">
                       {isl.MAIN.width}×{isl.MAIN.height} dp
                     </dd>
                   </div>
                 </dl>
 
                 <div class="grid gap-2 text-xs sm:grid-cols-2">
-                  <div class="rounded-xl border border-white/6 bg-white/[0.02] p-3">
+                  <div class="rounded-xl bg-lum-input-bg p-3">
                     <div class="text-lum-text-secondary mb-1.5 font-semibold">
                       Compact Wings
                     </div>
-                    <ul class="space-y-1 text-white/85">
+                    <ul class="space-y-1 text-lum-text-secondary">
                       <li>
                         <span class="text-lum-text-secondary">Left: </span>
                         {describeSlot(isl.LEFT)}
@@ -299,11 +299,11 @@ export default component$(() => {
                     </ul>
                   </div>
 
-                  <div class="rounded-xl border border-white/6 bg-white/[0.02] p-3">
+                  <div class="rounded-xl bg-lum-input-bg p-3">
                     <div class="text-lum-text-secondary mb-1.5 font-semibold">
                       Expanded Layout
                     </div>
-                    <ul class="space-y-1 text-white/85">
+                    <ul class="space-y-1 text-lum-text-secondary">
                       {slotHasContent(isl.EXPANDED_LEFT) && (
                         <li>
                           <span class="text-lum-text-secondary">
@@ -340,11 +340,11 @@ export default component$(() => {
                   isl.notificationRule.channel ||
                   (isl.notificationRule.conditions &&
                     isl.notificationRule.conditions.length > 0)) && (
-                  <div class="rounded-xl border border-white/6 bg-white/[0.02] p-3 text-xs">
+                  <div class="rounded-xl bg-lum-input-bg p-3 text-xs">
                     <div class="text-lum-text-secondary mb-1 font-semibold">
                       Notification Rule
                     </div>
-                    <div class="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-white/80">
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-lum-text-secondary">
                       {isl.notificationRule.package && (
                         <span>pkg: {isl.notificationRule.package}</span>
                       )}
@@ -392,9 +392,9 @@ export default component$(() => {
       </div>
 
       {/* Share Code & Import Instructions */}
-      <div class="lum-card lum-grad-bg-lum-card-bg/85 grid gap-5 border border-white/8 p-5 md:grid-cols-12">
+      <div class="lum-card grid gap-5 p-5 md:grid-cols-12">
         <div class="md:col-span-7">
-          <div class="mb-2 text-xs font-semibold tracking-wide text-white/80 uppercase">
+          <div class="mb-2 text-xs font-semibold tracking-wide text-lum-text-secondary uppercase">
             LarpDot Share Code
           </div>
           <textarea
@@ -404,25 +404,25 @@ export default component$(() => {
             onClick$={(_, el) => {
               el.select();
             }}
-            class="lum-input rounded-lum-1 w-full font-mono text-xs text-indigo-200"
+            class="lum-input w-full font-mono text-xs text-lum-accent"
           />
         </div>
         <div class="md:col-span-5">
-          <div class="mb-2 text-xs font-semibold tracking-wide text-white/80 uppercase">
+          <div class="mb-2 text-xs font-semibold tracking-wide text-lum-text-secondary uppercase">
             How to import in LarpDot
           </div>
           <ol class="text-lum-text-secondary list-decimal space-y-1.5 pl-4 text-xs leading-relaxed">
             <li>
-              Tap <strong class="text-white">Copy Share Code</strong> (or
+              Tap <strong>Copy Share Code</strong> (or
               download the JSON file).
             </li>
             <li>
-              Open <strong class="text-white">LarpDot</strong> on Android and
-              go to <strong class="text-white">Custom Islands</strong>.
+              Open <strong>LarpDot</strong> on Android and
+              go to <strong>Custom Islands</strong>.
             </li>
             <li>
-              Open <strong class="text-white">Presets → Import</strong>, paste
-              the <code class="text-indigo-300">LARPDOT1:</code> code, and
+              Open <strong>Presets → Import</strong>, paste
+              the <code class="text-lum-accent">LARPDOT1:</code> code, and
               apply it.
             </li>
           </ol>

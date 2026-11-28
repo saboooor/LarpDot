@@ -140,7 +140,7 @@ function renderPlaceholderText(raw: string) {
     /^\{[a-zA-Z0-9_]+\}$/.test(part) ? (
       <span
         key={idx}
-        class="mx-0.5 inline-block rounded bg-indigo-400/25 px-1 py-0.5 font-mono text-[0.9em] text-indigo-200"
+        class="mx-0.5 inline-block rounded bg-indigo-400/25 px-1 py-0.5 font-mono text-sm text-indigo-200"
       >
         {part}
       </span>
@@ -182,7 +182,7 @@ const SlotContent = component$<{
     return (
       <span
         class={{
-          'flex items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400 text-white shadow-inner': true,
+          'bg-lum-accent flex items-center justify-center rounded-md text-white': true,
           'h-5 w-5': size === 'sm',
           'h-9 w-9 rounded-xl': size === 'md',
         }}
@@ -196,7 +196,7 @@ const SlotContent = component$<{
     return (
       <span
         class={{
-          'flex items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white': true,
+          'bg-lum-accent flex items-center justify-center rounded-full text-white': true,
           'h-5 w-5': size === 'sm',
           'h-9 w-9 rounded-xl': size === 'md',
         }}
@@ -223,7 +223,7 @@ const SlotContent = component$<{
     return (
       <span
         class={{
-          'flex items-center justify-center rounded-md bg-gradient-to-br from-slate-700 to-slate-800 text-slate-200 ring-1 ring-white/10': true,
+          'bg-lum-input-bg flex items-center justify-center rounded-md text-slate-200': true,
           'h-5 w-5': size === 'sm',
           'h-9 w-9 rounded-xl': size === 'md',
         }}
@@ -284,13 +284,13 @@ export const IslandPreview = component$<IslandPreviewProps>(
               </div>
             )}
             {!hasLeft && !hasRight && (
-              <span class="text-[11px] font-medium text-white/45">
+              <span class="text-xs font-medium text-white/45">
                 {isSwipeDownOnly ? 'Swipe down' : 'Dot'}
               </span>
             )}
           </div>
         ) : (
-          <div class="island-shell relative w-full max-w-[300px] overflow-hidden rounded-[24px] p-3.5 transition-all duration-300">
+          <div class="island-shell relative w-full max-w-76 overflow-hidden rounded-3xl p-3.5 transition-all duration-300">
             {island.backgroundStyle && island.backgroundStyle !== 'NONE' && (
               <div
                 aria-hidden="true"
@@ -343,7 +343,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class={`truncate rounded-xl bg-white/[0.04] px-3 py-2 text-xs ${alignClass}`}
+                        class={`truncate rounded-xl bg-white/5 px-3 py-2 text-xs ${alignClass}`}
                         style={{
                           color,
                           fontWeight: comp.textStyle?.bold ? 700 : 500,
@@ -364,7 +364,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class="flex items-center justify-center gap-3 rounded-xl bg-white/[0.04] py-2"
+                        class="flex items-center justify-center gap-3 rounded-xl bg-white/5 py-2"
                       >
                         <span class="flex h-7 w-7 items-center justify-center rounded-full bg-white/8 text-white/75">
                           <SkipBack size={13} />
@@ -391,9 +391,9 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class="flex items-center gap-2.5 rounded-xl bg-white/[0.04] p-2"
+                        class="flex items-center gap-2.5 rounded-xl bg-white/5 p-2"
                       >
-                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400 text-white">
+                        <div class="bg-lum-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white">
                           <Disc3 size={18} />
                         </div>
                         <div class="min-w-0 flex-1">
@@ -408,7 +408,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class="flex h-16 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-slate-800/90 to-slate-900/90 text-xs text-white/60 ring-1 ring-white/8"
+                        class="bg-lum-input-bg flex h-16 items-center justify-center gap-2 rounded-xl text-xs text-white/60"
                       >
                         <Image size={15} />
                         Notification image
@@ -420,9 +420,9 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class="flex items-center justify-center rounded-xl bg-white/[0.04] p-2.5"
+                        class="flex items-center justify-center rounded-xl bg-white/5 p-2.5"
                       >
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-500 text-white">
+                        <div class="bg-lum-accent flex h-10 w-10 items-center justify-center rounded-xl text-white">
                           <LayoutGrid size={18} />
                         </div>
                       </div>
@@ -433,7 +433,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
                     return (
                       <div
                         key={idx}
-                        class="flex items-center justify-center rounded-xl bg-white/[0.04] p-2.5 text-sky-300"
+                        class="flex items-center justify-center rounded-xl bg-white/5 p-2.5 text-sky-300"
                       >
                         <Bell size={20} />
                       </div>
@@ -443,13 +443,13 @@ export const IslandPreview = component$<IslandPreviewProps>(
                   return (
                     <div
                       key={idx}
-                      class="rounded-xl bg-white/[0.04] px-3 py-2 text-left"
+                      class="rounded-xl bg-white/5 px-3 py-2 text-left"
                     >
-                      <div class="flex items-center gap-1.5 text-[11px] font-semibold text-white/85">
+                      <div class="flex items-center gap-1.5 text-xs font-semibold text-white/85">
                         <Bell size={11} class="text-indigo-300" />
                         Notification title
                       </div>
-                      <div class="mt-1 text-[11px] text-white/50">
+                      <div class="mt-1 text-xs text-white/50">
                         Live notification text & actions
                       </div>
                     </div>
@@ -457,7 +457,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
                 })}
               </div>
             ) : (
-              <div class="rounded-xl bg-white/[0.04] px-3 py-2 text-center text-[11px] text-white/50">
+              <div class="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-white/50">
                 Expanded wing layout
               </div>
             )}
@@ -467,7 +467,7 @@ export const IslandPreview = component$<IslandPreviewProps>(
         {mode === 'interactive' && hasExpanded && !isSwipeDownOnly && (
           <button
             type="button"
-            class="text-lum-text-secondary rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium transition-colors hover:border-white/20 hover:text-white"
+            class="lum-btn text-xs"
             onClick$={() => {
               showExpanded.value = !showExpanded.value;
             }}
@@ -495,172 +495,116 @@ export const HeroIslandDemo = component$(() => {
 
   return (
     <div class="flex flex-col items-center gap-5">
-      <div class="relative flex w-full max-w-[360px] flex-col items-center rounded-[36px] border border-white/10 bg-gradient-to-b from-[#151926] via-[#0f131d] to-[#0b0e15] px-5 pt-4 pb-6 shadow-2xl">
-        <div class="mb-3 flex w-full items-center justify-between px-2 text-[11px] font-medium text-white/45">
-          <span>9:41</span>
-          <span class="tracking-wide uppercase">Android Overlay</span>
-          <span>5G • 94%</span>
-        </div>
-
-        <button
-          type="button"
-          onClick$={() => {
-            expanded.value = !expanded.value;
-          }}
-          class="w-full cursor-pointer text-left focus:outline-none"
-          aria-label="Toggle Dynamic Island compact or expanded preview"
-        >
-          {!expanded.value ? (
-            <div class="mx-auto flex justify-center">
-              <div class="island-shell inline-flex h-10 items-center gap-3 rounded-full px-3.5 transition-all duration-300">
-                {activeMode.value === 'music' && (
+      <div class="w-full max-w-sm">
+        <div class="hero-island-stage bg-lum-card-bg relative rounded-3xl px-3.5 pt-3.5">
+          <span
+            aria-hidden="true"
+            class="absolute inset-x-6 top-5 flex justify-between text-xs font-medium"
+          >
+            <span>9:41</span>
+            <span>5G · 94%</span>
+          </span>
+          <button
+            type="button"
+            data-mode={activeMode.value}
+            aria-label={`Toggle ${activeMode.value} island preview`}
+            aria-expanded={expanded.value}
+            onClick$={() => {
+              expanded.value = !expanded.value;
+            }}
+            class="hero-island relative mx-auto block overflow-hidden bg-black text-left text-white"
+          >
+            <span class="hero-camera camera-cutout" aria-hidden="true" />
+            {activeMode.value === 'music' && (
+              <>
+                <span class="hero-art" aria-hidden="true" />
+                <span class="hero-wave" aria-hidden="true">
+                  {[6, 13, 18, 10, 15].map((height, i) => (
+                    <span
+                      key={height}
+                      style={{
+                        height: height + 'px',
+                        animationDelay: i * -170 + 'ms',
+                      }}
+                    />
+                  ))}
+                </span>
+                {expanded.value && (
                   <>
-                    <span class="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400 text-white">
-                      <Disc3 size={12} />
+                    <span class="absolute inset-x-24 top-10">
+                      <strong class="block truncate text-lg">Starboy</strong>
+                      <span class="block truncate text-sm text-white/70">
+                        The Weeknd
+                      </span>
                     </span>
-                    <div class="camera-cutout h-4 w-4 rounded-full" />
-                    <AudioWaveform size={14} class="text-indigo-300" />
+                    <span class="absolute top-12 right-5 flex h-10 w-14 items-center justify-center rounded-full bg-pink-200 text-black">
+                      <Pause size={20} fill="currentColor" />
+                    </span>
+                    <span class="absolute inset-x-5 bottom-5 flex items-center gap-2">
+                      <SkipBack size={19} />
+                      <span class="h-1 flex-1 rounded-full bg-white/25">
+                        <span class="block h-full w-2/7 rounded-full bg-pink-200" />
+                      </span>
+                      <SkipForward size={19} />
+                    </span>
                   </>
                 )}
-                {activeMode.value === 'live' && (
-                  <>
-                    <Navigation size={14} class="text-sky-400" />
-                    <div class="camera-cutout h-4 w-4 rounded-full" />
-                    <span class="font-mono text-xs font-semibold text-sky-200">
-                      450m
+              </>
+            )}
+            {activeMode.value === 'live' && (
+              <>
+                <span class="hero-leading text-green-400">
+                  <Navigation size={expanded.value ? 38 : 18} />
+                </span>
+                {expanded.value ? (
+                  <span class="absolute inset-x-4 top-9 flex items-center justify-between gap-3 pl-12">
+                    <span>
+                      <strong class="block text-base">
+                        Turn right on Main St
+                      </strong>
+                      <span class="text-xs text-white/70">
+                        4.2 mi · 10:45 AM
+                      </span>
                     </span>
-                  </>
-                )}
-                {activeMode.value === 'flashlight' && (
-                  <>
-                    <Flashlight size={14} class="text-amber-300" />
-                    <div class="camera-cutout h-4 w-4 rounded-full" />
-                    <span class="font-mono text-xs font-semibold text-amber-200">
-                      80%
-                    </span>
-                  </>
-                )}
-                {activeMode.value === 'custom' && (
-                  <>
-                    <Bell size={14} class="text-violet-300" />
-                    <div class="camera-cutout h-4 w-4 rounded-full" />
-                    <span class="text-xs font-semibold text-white/90">
-                      Discord
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div class="island-shell mx-auto w-full max-w-[312px] rounded-[28px] p-4 transition-all duration-300">
-              <div class="mb-3 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  {activeMode.value === 'music' && (
-                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400 text-white shadow-md">
-                      <Disc3 size={20} />
-                    </span>
-                  )}
-                  {activeMode.value === 'live' && (
-                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/25">
-                      <Navigation size={18} />
-                    </span>
-                  )}
-                  {activeMode.value === 'flashlight' && (
-                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/18 text-amber-300 ring-1 ring-amber-300/25">
-                      <Flashlight size={18} />
-                    </span>
-                  )}
-                  {activeMode.value === 'custom' && (
-                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300 ring-1 ring-violet-400/25">
-                      <Bell size={18} />
-                    </span>
-                  )}
-
-                  <div class="min-w-0">
-                    <div class="truncate text-sm font-semibold text-white">
-                      {activeMode.value === 'music' && 'Midnight City'}
-                      {activeMode.value === 'live' && 'Turn right on King St'}
-                      {activeMode.value === 'flashlight' && 'Torch Active'}
-                      {activeMode.value === 'custom' && 'Discord • #general'}
-                    </div>
-                    <div class="truncate text-xs text-white/55">
-                      {activeMode.value === 'music' && 'M83 • Visualizer on'}
-                      {activeMode.value === 'live' && '450 m • ETA 6 min'}
-                      {activeMode.value === 'flashlight' &&
-                        'Slide & hold to adjust level'}
-                      {activeMode.value === 'custom' &&
-                        'Custom notification island'}
-                    </div>
-                  </div>
-                </div>
-                <div class="camera-cutout h-4 w-4 shrink-0 self-start rounded-full" />
-              </div>
-
-              {activeMode.value === 'music' && (
-                <div class="space-y-3">
-                  <div class="flex items-center gap-2">
-                    <span class="font-mono text-[10px] text-white/45">
-                      1:42
-                    </span>
-                    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-white/12">
-                      <div class="h-full w-3/5 rounded-full bg-gradient-to-r from-indigo-400 to-sky-400" />
-                    </div>
-                    <span class="font-mono text-[10px] text-white/45">
-                      4:03
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-center gap-3">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-white/80">
-                      <SkipBack size={14} />
-                    </span>
-                    <span class="flex h-9 w-12 items-center justify-center rounded-full bg-indigo-500 text-white">
-                      <Pause size={15} />
-                    </span>
-                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-white/80">
-                      <SkipForward size={14} />
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {activeMode.value === 'live' && (
-                <div class="space-y-2">
-                  <div class="h-1.5 overflow-hidden rounded-full bg-white/12">
-                    <div class="h-full w-2/3 rounded-full bg-sky-400" />
-                  </div>
-                  <div class="flex items-center justify-between text-[11px] text-white/55">
-                    <span>Google Maps</span>
-                    <span class="font-mono text-sky-300">2.4 km left</span>
-                  </div>
-                </div>
-              )}
-
-              {activeMode.value === 'flashlight' && (
-                <div class="space-y-2.5">
-                  <div class="h-2 overflow-hidden rounded-full bg-white/12">
-                    <div class="h-full w-4/5 rounded-full bg-gradient-to-r from-amber-300 to-amber-500" />
-                  </div>
-                  <div class="flex items-center justify-between text-[11px] text-white/55">
-                    <span>Brightness • 80%</span>
-                    <span class="text-amber-200">Camera2 Boost ready</span>
-                  </div>
-                </div>
-              )}
-
-              {activeMode.value === 'custom' && (
-                <div class="flex items-center justify-between rounded-2xl bg-white/[0.05] px-3 py-2 text-xs text-white/80">
-                  <span class="truncate">New custom island preset shared</span>
-                  <span class="ml-2 shrink-0 rounded-full bg-violet-500/25 px-2 py-0.5 text-[10px] font-semibold text-violet-200">
-                    Open
+                    <span class="shrink-0 text-xs text-green-300">15 min</span>
                   </span>
-                </div>
-              )}
-            </div>
-          )}
-        </button>
-
-        <p class="mt-4 text-[11px] text-white/40">
-          Tap the island to toggle compact & expanded
+                ) : (
+                  <span class="hero-trailing">15 min</span>
+                )}
+              </>
+            )}
+            {activeMode.value === 'flashlight' && (
+              <>
+                {expanded.value && (
+                  <span aria-hidden="true" class="hero-beam" />
+                )}
+                <span class="hero-leading">
+                  <Flashlight size={expanded.value ? 36 : 18} />
+                </span>
+                <span class="hero-gauge">80</span>
+              </>
+            )}
+            {activeMode.value === 'custom' && (
+              <>
+                <span class="hero-leading text-violet-300">
+                  <Bell size={expanded.value ? 28 : 18} />
+                </span>
+                {expanded.value ? (
+                  <span class="absolute inset-x-5 top-9 pl-10">
+                    <strong class="block">Discord · #general</strong>
+                    <span class="block text-sm text-white/70">
+                      New custom island preset shared
+                    </span>
+                  </span>
+                ) : (
+                  <span class="hero-trailing">Discord</span>
+                )}
+              </>
+            )}
+          </button>
+        </div>
+        <p class="text-lum-text-secondary mt-2 text-center text-xs">
+          Tap the island to expand or minimize
         </p>
       </div>
 
@@ -668,14 +612,15 @@ export const HeroIslandDemo = component$(() => {
         {modes.map((m) => (
           <button
             key={m.id}
+            aria-pressed={activeMode.value === m.id}
             type="button"
             onClick$={() => {
               activeMode.value = m.id;
             }}
             class={{
-              'lum-btn rounded-full px-3 py-1.5 text-xs font-medium transition-all': true,
-              'lum-grad-bg-lum-accent text-white': activeMode.value === m.id,
-              'bg-white/[0.04] text-lum-text-secondary hover:bg-white/[0.08] hover:text-white':
+              'lum-btn text-xs': true,
+              'lum-bg-lum-accent text-white': activeMode.value === m.id,
+              'lum-bg-transparent text-lum-text-secondary':
                 activeMode.value !== m.id,
             }}
           >
