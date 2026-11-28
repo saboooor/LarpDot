@@ -12,10 +12,9 @@ data class IslandTouchRegion(val left: Int, val top: Int, val width: Int, val he
 internal data class CompactIslandFrame(
     val bounds: Rect,
     val trailingFraction: Float = 0.5f,
-    val hasBubbleBefore: Boolean = false,
-    val hasBubbleAfter: Boolean = false,
     val announcing: Boolean = false,
     val isMiniPill: Boolean = false,
+    val smallerSecondary: Boolean = false,
 ) {
     fun toward(target: CompactIslandFrame, fraction: Float): CompactIslandFrame {
         if (fraction <= 0f) return this
@@ -260,6 +259,20 @@ internal fun fitCompactMediaWings(
         return CompactMediaWings(wing, wing)
     }
     return CompactMediaWings(minOf(requested.leadingDp, leadingRoom * fraction), minOf(requested.trailingDp, trailingRoom * fraction))
+}
+
+/**
+ * Minimizes an empty trailing (right) wing to zero when a right-side secondary bubble is shown,
+ * keeping the pill flush to the camera cutout on the right so the secondary bubble has more room.
+ */
+internal fun collapseEmptyTrailingWing(
+    wings: CompactMediaWings,
+    hasRightWingContent: Boolean,
+    hasRightBubble: Boolean,
+): CompactMediaWings = if (!hasRightWingContent && hasRightBubble) {
+    CompactMediaWings(leadingDp = wings.leadingDp, trailingDp = 0f)
+} else {
+    wings
 }
 
 /** Shared downward swipe threshold from the camera dot (responsive for quick and angled thumb swipes). */

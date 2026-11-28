@@ -162,7 +162,7 @@ class IslandOverlayViewController(
     private var activeTouchGesture = false
     private var pendingTouchLayoutAfterGesture = false
     private var liveTopSystemGestureInsetPx = 0f
-    private val seenShortTermTitles = mutableMapOf<String, String>()
+    private val seenActivitySignatures = mutableMapOf<String, String>()
     private var autoCollapseJob: Job? = null
     private var expandedInactivityJob: Job? = null
     private val dismissalTracker = IslandDismissalTracker()
@@ -197,6 +197,7 @@ class IslandOverlayViewController(
         val isFlashlightVisible: Boolean,
         val currentActivity: NotificationActivityInfo?,
         val visibleShortTerms: List<NotificationActivityInfo>,
+        val visibleCustomIslands: List<CustomIsland>,
         val stack: IslandStack<IslandSlot>,
     )
 
@@ -211,29 +212,52 @@ class IslandOverlayViewController(
         priorityOrder: List<ca.saboor.larpdot.ui.overlay.IslandPriorityItem>,
         customIslands: List<CustomIsland>,
         eligibleActivities: List<NotificationActivityInfo> = NotificationActivityState.eligibleActivities.value,
-        matchingNotificationIds: Set<String> = if (!ScreenStateTracker.isDeviceLocked.value) {
-            val activeNotifications = CustomIslandNotifications.active.value.values
-            customIslands.filter { it.matchingNotification(activeNotifications) != null }.map { it.id }.toSet()
-        } else emptySet(),
+        customNotifications: Collection<CustomNotification> = CustomIslandNotifications.active.value.values,
+        deviceLocked: Boolean = ScreenStateTracker.isDeviceLocked.value,
+        foregroundPackage: String? = ForegroundAppTracker.foregroundPackage.value,
+        hideInRelatedApp: Boolean = OverlayPreferences.hideInRelatedAppFlow.value,
     ): VisibleOverlaySnapshot {
         val activeKeys = buildSet {
             primaryActivity?.key?.let(::add)
             shortTerms.forEach { add(it.key) }
+            eligibleActivities.forEach { add(it.key) }
         }
         dismissalTracker.pruneActivities(activeKeys)
         val isMusicAllowed = !dismissalTracker.isMediaDismissed(mediaDismissToken(track))
         val isFlashlightVisible = flashlightOn && showFlashlight &&
             !dismissalTracker.isFlashlightDismissed(flashlightOn, FlashlightController.lastFlashlightOnTime)
-        val currentActivity = primaryActivity?.takeUnless { dismissalTracker.isActivityDismissed(it.key) }
-        val visibleShortTerms = shortTerms.filterNot { dismissalTracker.isActivityDismissed(it.key) }
+        val filteredEligible = filterActivitiesForForeground(eligibleActivities, hideInRelatedApp, foregroundPackage)
+        val filteredPrimary = selectBestVisibleActivity(
+            primaryActivity = primaryActivity,
+            eligibleActivities = filteredEligible,
+            hideInRelatedApp = hideInRelatedApp,
+            foregroundPackage = foregroundPackage,
+        )
+        val filteredShortTerms = filterActivitiesForForeground(shortTerms, hideInRelatedApp, foregroundPackage)
+        val currentActivity = filteredPrimary?.takeUnless { dismissalTracker.isActivityDismissed(it.key) }
+        val visibleShortTerms = filteredShortTerms.filterNot { dismissalTracker.isActivityDismissed(it.key) }
+        val visibleCustomIslands = filterCustomIslandsForForeground(
+            customIslands = customIslands,
+            hideInRelatedApp = hideInRelatedApp,
+            foregroundPackage = foregroundPackage,
+            activeMediaPackage = track.playerPackageName,
+            eligibleActivities = filteredEligible,
+            activeNotifications = customNotifications,
+            resolveWidgetPackage = { CustomIslandWidgets.info(it)?.provider?.packageName },
+        )
+        val matchingNotificationIds = matchingCustomNotificationIds(
+            customIslands = visibleCustomIslands,
+            notifications = customNotifications,
+            deviceLocked = deviceLocked,
+        )
         val stack = builtInIslandSlots(
             music = musicEnabled && track.hasMedia && !hideMedia && isMusicAllowed,
             flashlight = isFlashlightVisible,
             activity = currentActivity,
             shortTerms = visibleShortTerms,
             priorityOrder = priorityOrder,
-            eligibleActivities = eligibleActivities,
-            customIslands = customIslands,
+            eligibleActivities = filteredEligible,
+            customIslands = visibleCustomIslands,
             matchingNotificationIds = matchingNotificationIds,
         )
         return VisibleOverlaySnapshot(
@@ -241,6 +265,7 @@ class IslandOverlayViewController(
             isFlashlightVisible = isFlashlightVisible,
             currentActivity = currentActivity,
             visibleShortTerms = visibleShortTerms,
+            visibleCustomIslands = visibleCustomIslands,
             stack = stack,
         )
     }
@@ -307,7 +332,12 @@ class IslandOverlayViewController(
         isMusicActive = MediaPlaybackState.isMusicActive.value && !ForegroundAppTracker.shouldHideMedia.value
         isFlashlightActive = FlashlightController.isFlashlightOn.value && OverlayPreferences.isShowFlashlightIslandEnabled(context)
         isSongAnnouncementActive = MediaPlaybackState.isSongAnnouncementActive.value && OverlayPreferences.isShowSongAnnouncementEnabled(context)
-        isNotificationActivityActive = NotificationActivityState.current.value != null
+        isNotificationActivityActive = selectBestVisibleActivity(
+            primaryActivity = NotificationActivityState.current.value,
+            eligibleActivities = NotificationActivityState.eligibleActivities.value,
+            hideInRelatedApp = OverlayPreferences.hideInRelatedAppFlow.value,
+            foregroundPackage = ForegroundAppTracker.foregroundPackage.value,
+        ) != null
 
         val cutout = CutoutDetector.detect(context)
         currentCutoutInfo = cutout
@@ -551,12 +581,14 @@ class IslandOverlayViewController(
             OverlayPreferences.getNotificationActivitySettings(context)
             OverlayPreferences.getIslandPriorityOrder(context)
             OverlayPreferences.initializeMusicSettings(context)
-            seenShortTermTitles.clear()
-            NotificationActivityState.shortTermActivities.value.forEach { seenShortTermTitles[it.key] = it.title }
+            seenActivitySignatures.clear()
+            NotificationActivityState.eligibleActivities.value.forEach {
+                seenActivitySignatures[it.key] = autoExpandActivitySignature(it)
+            }
             observeMediaState()
             observeFlashlightState()
             observeNotificationActivityState()
-            observeShortTermActivities()
+            observeAutoExpandActivities()
             observePriorityOrder()
             observeDebugMode()
             observeCustomIsland()
@@ -592,13 +624,12 @@ class IslandOverlayViewController(
             val eligibleActivities by NotificationActivityState.eligibleActivities.collectAsState()
             val customNotifications by CustomIslandNotifications.active.collectAsState()
             val deviceLocked by ScreenStateTracker.isDeviceLocked.collectAsState()
+            val foregroundPackage by ForegroundAppTracker.foregroundPackage.collectAsState()
+            val hideInRelatedApp by OverlayPreferences.hideInRelatedAppFlow.collectAsState()
             val activeExpandedType by expandedType.collectAsState()
             @Suppress("UNUSED_VARIABLE")
             val rev = dismissalRevision
 
-            val matchingCustomNotificationIds = if (!deviceLocked) {
-                customIslands.filter { it.matchingNotification(customNotifications.values) != null }.map { it.id }.toSet()
-            } else emptySet()
             val snapshot = resolveVisibleSnapshot(
                 track = mediaTrack,
                 musicEnabled = isMusicActiveNow,
@@ -610,7 +641,10 @@ class IslandOverlayViewController(
                 priorityOrder = priorityOrder,
                 customIslands = customIslands,
                 eligibleActivities = eligibleActivities,
-                matchingNotificationIds = matchingCustomNotificationIds,
+                customNotifications = customNotifications.values,
+                deviceLocked = deviceLocked,
+                foregroundPackage = foregroundPackage,
+                hideInRelatedApp = hideInRelatedApp,
             )
             val compactSlot = snapshot.stack.primary?.content
             val compactType = compactSlot?.type
@@ -643,7 +677,7 @@ class IslandOverlayViewController(
                     isMusicAllowed = snapshot.isMusicAllowed,
                     notificationActivity = snapshot.currentActivity,
                     shortTermActivities = snapshot.visibleShortTerms,
-                    customIslands = customIslands,
+                    customIslands = snapshot.visibleCustomIslands,
                     hasSwipeDownCustomIsland = customIslandSettings.swipeDownIsland != null,
                     isFlashlightOn = snapshot.isFlashlightVisible,
                     isExpanded = morphing,
@@ -697,6 +731,8 @@ class IslandOverlayViewController(
                     }
                     val activeAutoExpanded = autoExpandedActivityKey?.let { key ->
                         snapshot.visibleShortTerms.firstOrNull { it.key == key }
+                            ?: filterActivitiesForForeground(eligibleActivities, hideInRelatedApp, foregroundPackage)
+                                .firstOrNull { it.key == key }
                     }
                     val expandedNotificationActivity = if (autoExpandedActivityKey != null) {
                         activeAutoExpanded ?: retainedExpandedActivity
@@ -884,7 +920,7 @@ class IslandOverlayViewController(
         pendingAutoExpandQueue.clear()
     }
 
-    private fun autoExpandShortTermAlert(
+    private fun autoExpandActivity(
         info: NotificationActivityInfo,
         settings: NotificationActivitySettings,
         fromQueue: Boolean = false,
@@ -894,10 +930,12 @@ class IslandOverlayViewController(
         if (swipeDownPullProgress != null) return
         if (isIslandExpanded && autoExpandedActivityKey == null) return
 
+        val needsOwnTimer = fromQueue || !info.isSystemActivity || isPermanentShortTermAlert(info, settings)
+
         // Same activity already temporarily expanded: update its content in place.
         if (isIslandExpanded && autoExpandedActivityKey == info.key) {
             retainedExpandedActivity = info
-            if (autoExpandedHasOwnTimer || isPermanentShortTermAlert(info, settings)) {
+            if (autoExpandedHasOwnTimer || needsOwnTimer) {
                 autoExpandedHasOwnTimer = true
                 scheduleAutoExpandCollapseTimer(info.key)
             }
@@ -915,7 +953,7 @@ class IslandOverlayViewController(
         autoCollapseJob?.cancel()
         autoCollapseJob = null
         cancelExpandedAutoCollapse()
-        autoExpandedHasOwnTimer = fromQueue || isPermanentShortTermAlert(info, settings)
+        autoExpandedHasOwnTimer = needsOwnTimer
 
         expandOverlayInternal(
             type = IslandType.NOTIFICATION_ACTIVITY,
@@ -958,13 +996,21 @@ class IslandOverlayViewController(
             return
         }
         val settings = OverlayPreferences.notificationActivitySettingsFlow.value
-        if (!settings.expandShortTermAlerts) {
-            pendingAutoExpandQueue.clear()
+        val foreground = ForegroundAppTracker.foregroundPackage.value
+        val hideInRelatedApp = OverlayPreferences.hideInRelatedAppFlow.value
+        val visibleEligible = filterActivitiesForForeground(
+            activities = NotificationActivityState.eligibleActivities.value,
+            hideInRelatedApp = hideInRelatedApp,
+            foregroundPackage = foreground,
+        )
+        while (pendingAutoExpandQueue.isNotEmpty()) {
+            val next = pendingAutoExpandQueue.pollNext(dismissalTracker::isActivityDismissed) ?: return
+            if (!settings.allowsAutoExpand(next)) continue
+            if (shouldHideForForegroundApp(hideInRelatedApp, foreground, next.packageName)) continue
+            val live = visibleEligible.firstOrNull { it.key == next.key } ?: next
+            autoExpandActivity(live, settings, fromQueue = true)
             return
         }
-        val next = pendingAutoExpandQueue.pollNext(dismissalTracker::isActivityDismissed) ?: return
-        val live = NotificationActivityState.shortTermActivities.value.firstOrNull { it.key == next.key } ?: next
-        autoExpandShortTermAlert(live, settings, fromQueue = true)
     }
 
     private fun scheduleExpandedAutoCollapse() {
@@ -1125,6 +1171,7 @@ class IslandOverlayViewController(
     @android.annotation.SuppressLint("RtlHardcoded")
     private fun layoutTouchWindow() {
         if (isHiding) {
+            IslandBackdropLuminanceTracker.updateIslandRegion(null)
             removeTouchWindow()
             return
         }
@@ -1142,13 +1189,24 @@ class IslandOverlayViewController(
         val stack = currentStack()
         val secondaryBounds = stack.secondary.mapNotNull { secondarySurfaceFrames[it.content]?.bounds }
         val swipeDownBounds = if (!isIslandExpanded) currentSwipeDownZone(padded = false) else null
+        val compactBounds = if (stack.primary != null) compactSurfaceFrame?.bounds else null
         val bounds = activeIslandTouchBounds(
             isExpanded = isIslandExpanded,
             expandedBounds = expandedCardBounds,
-            compactBounds = if (stack.primary != null) compactSurfaceFrame?.bounds else null,
+            compactBounds = compactBounds,
             secondaryBounds = secondaryBounds,
             swipeDownBounds = swipeDownBounds,
         )
+        val winOffsetX = (compactWindowParams?.x ?: 0).toFloat()
+        val winOffsetY = (compactWindowParams?.y ?: 0).toFloat()
+        val samplePrimary = (if (isIslandExpanded) expandedCardBounds else compactBounds)
+            ?.translate(winOffsetX, winOffsetY)
+        val sampleExcluded = if (isIslandExpanded) {
+            emptyList()
+        } else {
+            secondaryBounds.map { it.translate(winOffsetX, winOffsetY) }
+        }
+        IslandBackdropLuminanceTracker.updateIslandRegion(samplePrimary, sampleExcluded)
         val region = islandTouchRegion(
             bounds, 6f * context.resources.displayMetrics.density,
         )
@@ -1294,21 +1352,48 @@ class IslandOverlayViewController(
 
     private fun observeNotificationActivityState() {
         controllerScope.launch {
-            NotificationActivityState.current.collectLatest {
-                updateVisibility(VisibilityKey.ACTIVITY, it != null)
+            combine(
+                NotificationActivityState.current,
+                NotificationActivityState.eligibleActivities,
+                ForegroundAppTracker.foregroundPackage,
+                OverlayPreferences.hideInRelatedAppFlow,
+            ) { current, eligible, foreground, hideEnabled ->
+                Triple(
+                    selectBestVisibleActivity(current, eligible, hideEnabled, foreground),
+                    foreground,
+                    hideEnabled,
+                )
+            }.collectLatest { (visibleActivity, foreground, hideEnabled) ->
+                if (isIslandExpanded && _expandedType.value == IslandType.NOTIFICATION_ACTIVITY) {
+                    val expandedActivity = if (autoExpandedActivityKey != null) {
+                        retainedExpandedActivity
+                    } else {
+                        selectedSlot?.activity ?: retainedExpandedActivity
+                    }
+                    if (expandedActivity != null && shouldHideForForegroundApp(hideEnabled, foreground, expandedActivity.packageName)) {
+                        collapseOverlay()
+                    }
+                }
+                updateVisibility(VisibilityKey.ACTIVITY, visibleActivity != null)
+                updateOverlayLayout()
             }
         }
     }
 
-    private fun observeShortTermActivities() {
+    private fun observeAutoExpandActivities() {
         controllerScope.launch {
-            NotificationActivityState.shortTermActivities.collectLatest { shortTerms ->
+            NotificationActivityState.eligibleActivities.collectLatest { eligible ->
                 val settings = OverlayPreferences.notificationActivitySettingsFlow.value
-                pendingAutoExpandQueue.updateLive(shortTerms)
+                val visibleActivities = filterActivitiesForForeground(
+                    activities = eligible,
+                    hideInRelatedApp = OverlayPreferences.hideInRelatedAppFlow.value,
+                    foregroundPackage = ForegroundAppTracker.foregroundPackage.value,
+                )
+                pendingAutoExpandQueue.updateLive(visibleActivities)
                 val activeAutoKey = autoExpandedActivityKey
                 if (activeAutoKey != null) {
                     val dismissed = dismissalTracker.isActivityDismissed(activeAutoKey)
-                    val liveAuto = if (dismissed) null else shortTerms.firstOrNull { it.key == activeAutoKey }
+                    val liveAuto = if (dismissed) null else visibleActivities.firstOrNull { it.key == activeAutoKey }
                     if (liveAuto != null) {
                         retainedExpandedActivity = liveAuto
                     } else if (isIslandExpanded && (dismissed || !autoExpandedHasOwnTimer)) {
@@ -1320,16 +1405,16 @@ class IslandOverlayViewController(
                     val stillPresent = currentStack().ordered.any { it.content == activeSlot }
                     if (!stillPresent) collapseOverlay()
                 }
-                val candidates = selectAutoExpandShortTermAlerts(
-                    shortTerms = shortTerms,
-                    seenSignatures = seenShortTermTitles,
-                    expandEnabled = settings.expandShortTermAlerts,
+                val candidates = selectAutoExpandActivities(
+                    activities = visibleActivities,
+                    seenSignatures = seenActivitySignatures,
+                    settings = settings,
                     isDismissed = dismissalTracker::isActivityDismissed,
                 )
-                seenShortTermTitles.clear()
-                shortTerms.forEach { seenShortTermTitles[it.key] = it.title }
+                seenActivitySignatures.clear()
+                eligible.forEach { seenActivitySignatures[it.key] = autoExpandActivitySignature(it) }
                 candidates.forEach { candidate ->
-                    autoExpandShortTermAlert(candidate, settings)
+                    autoExpandActivity(candidate, settings)
                 }
                 updateOverlayLayout()
             }
@@ -1354,12 +1439,34 @@ class IslandOverlayViewController(
 
     private fun observeCustomIsland() {
         controllerScope.launch {
-            CustomIslandStore.settings.collectLatest { settings ->
+            val foregroundSignals = combine(
+                ForegroundAppTracker.foregroundPackage,
+                OverlayPreferences.hideInRelatedAppFlow,
+                MediaPlaybackState.currentTrack,
+            ) { foreground, hideEnabled, track -> Triple(foreground, hideEnabled, track) }
+            combine(
+                CustomIslandStore.settings,
+                foregroundSignals,
+                NotificationActivityState.eligibleActivities,
+                CustomIslandNotifications.active,
+            ) { settings, (foreground, hideEnabled, track), eligible, notifications ->
+                val filteredEligible = filterActivitiesForForeground(eligible, hideEnabled, foreground)
+                val visibleCustomIslands = filterCustomIslandsForForeground(
+                    customIslands = settings.activeIslands,
+                    hideInRelatedApp = hideEnabled,
+                    foregroundPackage = foreground,
+                    activeMediaPackage = track.playerPackageName,
+                    eligibleActivities = filteredEligible,
+                    activeNotifications = notifications.values,
+                    resolveWidgetPackage = { CustomIslandWidgets.info(it)?.provider?.packageName },
+                )
+                settings to visibleCustomIslands
+            }.collectLatest { (settings, visibleCustomIslands) ->
                 if (_expandedType.value == IslandType.CUSTOM) {
                     val expected = if (isSwipeDownCustomExpanded) {
                         settings.swipeDownIsland
                     } else {
-                        expandedCustomIsland?.id?.let { id -> settings.activeIslands.firstOrNull { it.id == id } }
+                        expandedCustomIsland?.id?.let { id -> visibleCustomIslands.firstOrNull { it.id == id } }
                     }
                     if (expandedCustomIsland != expected) {
                         if (expected != null) expandedCustomIsland = expected
@@ -1472,7 +1579,7 @@ class IslandOverlayViewController(
         autoCollapseJob = null
         clearPendingAutoExpansions()
         cancelExpandedAutoCollapse()
-        seenShortTermTitles.clear()
+        seenActivitySignatures.clear()
         dismissalTracker.clear()
         islandLifecycle.clear()
         isSongAnnouncementActive = false
@@ -1575,35 +1682,40 @@ internal class AutoExpandAlertQueue {
     }
 }
 
-internal fun selectAutoExpandShortTermAlerts(
-    shortTerms: List<NotificationActivityInfo>,
-    seenSignatures: Map<String, String>,
-    expandEnabled: Boolean,
-    isDismissed: (String) -> Boolean,
-): List<NotificationActivityInfo> {
-    if (!expandEnabled) return emptyList()
-    return shortTerms
-        .filter { !isDismissed(it.key) }
-        .filter { info ->
-            val previousTitle = seenSignatures[info.key]
-            previousTitle == null ||
-                ((info.kind == NotificationActivityKind.SOUND_MODE ||
-                    info.kind == NotificationActivityKind.AUDIO_OUTPUT ||
-                    info.kind == NotificationActivityKind.DND) &&
-                    previousTitle != info.title)
-        }
-        .sortedWith(compareBy({ it.postedAtMillis }, { it.key }))
-}
+internal fun autoExpandActivitySignature(info: NotificationActivityInfo): String =
+    if (info.kind == NotificationActivityKind.LIVE_UPDATE) {
+        "${info.title}\u0000${info.text.orEmpty()}\u0000${info.shortCriticalText.orEmpty()}"
+    } else {
+        info.title
+    }
 
-internal fun selectAutoExpandShortTermAlert(
-    shortTerms: List<NotificationActivityInfo>,
+internal fun selectAutoExpandActivities(
+    activities: List<NotificationActivityInfo>,
     seenSignatures: Map<String, String>,
-    expandEnabled: Boolean,
+    settings: NotificationActivitySettings,
     isDismissed: (String) -> Boolean,
-): NotificationActivityInfo? = selectAutoExpandShortTermAlerts(
-    shortTerms = shortTerms,
+): List<NotificationActivityInfo> = activities
+    .filter { !isDismissed(it.key) }
+    .filter { info ->
+        val previous = seenSignatures[info.key]
+        val current = autoExpandActivitySignature(info)
+        if (previous == null) {
+            settings.shouldAutoExpandOnStart(info)
+        } else {
+            previous != current && settings.shouldAutoExpandOnUpdate(info)
+        }
+    }
+    .sortedWith(compareBy({ it.postedAtMillis }, { it.key }))
+
+internal fun selectAutoExpandActivity(
+    activities: List<NotificationActivityInfo>,
+    seenSignatures: Map<String, String>,
+    settings: NotificationActivitySettings,
+    isDismissed: (String) -> Boolean,
+): NotificationActivityInfo? = selectAutoExpandActivities(
+    activities = activities,
     seenSignatures = seenSignatures,
-    expandEnabled = expandEnabled,
+    settings = settings,
     isDismissed = isDismissed,
 ).lastOrNull()
 

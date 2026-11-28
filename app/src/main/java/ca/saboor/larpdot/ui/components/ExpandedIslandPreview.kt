@@ -32,6 +32,7 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +106,11 @@ fun ExpandedIslandPreview(
     val nowPlaying by MediaPlaybackState.currentTrack.collectAsState()
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val showIslandOutline = ca.saboor.larpdot.service.resolveIslandOutlineVisible(
+        islandOutlineMode,
+        ca.saboor.larpdot.service.isPitchBlackPixel(MaterialTheme.colorScheme.background.toArgb()),
+    )
     val leftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
     val rightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
     val hasMinimizedTitle = leftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
@@ -278,9 +284,11 @@ fun ExpandedIslandPreview(
                                 cornerRadius = compactCornerRadius,
                                 shape = RoundedCornerShape(compactCornerRadius),
                                 strokeWidth = if (selectedElement == MusicPreviewElement.MINIMIZED_BACKGROUND) 1.5.dp else 0.75.dp,
-                                trackColor = if (selectedElement == MusicPreviewElement.MINIMIZED_BACKGROUND) {
-                                    MaterialTheme.colorScheme.primary
-                                } else Color(0x30FFFFFF),
+                                trackColor = when {
+                                    selectedElement == MusicPreviewElement.MINIMIZED_BACKGROUND -> MaterialTheme.colorScheme.primary
+                                    showIslandOutline -> Color(0x30FFFFFF)
+                                    else -> Color.Transparent
+                                },
                                 progressColor = Color.Transparent,
                             )
                         ),
@@ -339,9 +347,11 @@ fun ExpandedIslandPreview(
                             cornerRadius = expandedCornerRadiusDp,
                             shape = containerShape,
                             strokeWidth = if (selectedElement == MusicPreviewElement.EXPANDED_BACKGROUND) 1.5.dp else 0.75.dp,
-                            trackColor = if (selectedElement == MusicPreviewElement.EXPANDED_BACKGROUND) {
-                                MaterialTheme.colorScheme.primary
-                            } else Color(0x30FFFFFF),
+                            trackColor = when {
+                                selectedElement == MusicPreviewElement.EXPANDED_BACKGROUND -> MaterialTheme.colorScheme.primary
+                                showIslandOutline -> Color(0x30FFFFFF)
+                                else -> Color.Transparent
+                            },
                             progressColor = Color.Transparent,
                         )
                     )

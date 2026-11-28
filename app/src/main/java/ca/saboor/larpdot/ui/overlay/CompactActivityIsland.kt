@@ -1,5 +1,6 @@
 package ca.saboor.larpdot.ui.overlay
 
+import android.graphics.Bitmap
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -50,6 +52,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ca.saboor.larpdot.media.DominantColorExtractor
+import androidx.core.graphics.get
 import ca.saboor.larpdot.notification.NotificationActivityInfo
 import ca.saboor.larpdot.notification.NotificationActivityKind
 import ca.saboor.larpdot.service.OverlayPreferences
@@ -98,6 +102,75 @@ internal fun isCertainDownload(activity: NotificationActivityInfo): Boolean {
     return false
 }
 
+internal fun resolveActivityAppColor(
+    activity: NotificationActivityInfo,
+    appDominantColor: Color?,
+): Color? {
+    if (activity.packageName.isBlank() || activity.packageName == "system" || activity.packageName == "android") {
+        return null
+    }
+    activity.notificationColor?.let { raw ->
+        return Color(DominantColorExtractor.ensureColorVisible(raw))
+    }
+    return appDominantColor
+}
+
+internal fun resolveActivityIconTint(
+    activity: NotificationActivityInfo,
+    useAppColor: Boolean,
+    appDominantColor: Color?,
+    primaryColor: Color,
+): Color {
+    if (useAppColor) {
+        resolveActivityAppColor(activity, appDominantColor)?.let { return it }
+    }
+    return when (activity.kind) {
+        NotificationActivityKind.SOUND_MODE -> when {
+            activity.title.contains("Silent", ignoreCase = true) -> Color(0xFFFF5252)
+            activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
+            else -> Color(0xFF4CAF50)
+        }
+        NotificationActivityKind.DND -> {
+            if (activity.title.contains("Off", ignoreCase = true)) Color(0xFF9E9E9E)
+            else Color(0xFF9C7CF8)
+        }
+        NotificationActivityKind.BLUETOOTH -> {
+            val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
+            if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor
+        }
+        else -> activityIconTint(activity.kind, primaryColor)
+    }
+}
+
+private fun isMonochromeBitmap(bitmap: Bitmap): Boolean {
+    if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return false
+    val stepX = (bitmap.width / 12).coerceAtLeast(1)
+    val stepY = (bitmap.height / 12).coerceAtLeast(1)
+    var visiblePixels = 0
+    var colorfulPixels = 0
+    var y = 0
+    while (y < bitmap.height) {
+        var x = 0
+        while (x < bitmap.width) {
+            val pixel = bitmap[x, y]
+            val alpha = (pixel ushr 24) and 0xFF
+            if (alpha > 40) {
+                visiblePixels++
+                val r = (pixel ushr 16) and 0xFF
+                val g = (pixel ushr 8) and 0xFF
+                val b = pixel and 0xFF
+                val spread = maxOf(r, g, b) - minOf(r, g, b)
+                if (spread > 32) {
+                    colorfulPixels++
+                }
+            }
+            x += stepX
+        }
+        y += stepY
+    }
+    return visiblePixels > 0 && colorfulPixels * 10 <= visiblePixels
+}
+
 @Composable
 fun ActivityIcon(
     activity: NotificationActivityInfo,
@@ -105,19 +178,34 @@ fun ActivityIcon(
     iconShape: Shape = RoundedCornerShape(4.dp),
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
+    val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
+    val useAppColor = activitySettings.useAppColorForIcons
+    val appDominantColor = if (useAppColor && activity.notificationColor == null) {
+        rememberAppDominantColor(activity.packageName)
+    } else null
+    val resolvedAppColor = remember(activity.packageName, activity.notificationColor, appDominantColor) {
+        resolveActivityAppColor(activity, appDominantColor)
+    }
     val maneuver = activity.maneuverIcon
     val appIcon = activity.appIcon
 
     when {
         activity.kind == NotificationActivityKind.NAVIGATION && maneuver != null -> {
+            val maneuverTint = if (useAppColor && resolvedAppColor != null) {
+                val monochrome = remember(maneuver) { isMonochromeBitmap(maneuver) }
+                if (monochrome) ColorFilter.tint(resolvedAppColor) else null
+            } else null
             Image(
                 bitmap = remember(maneuver) { maneuver.asImageBitmap() },
                 contentDescription = activity.title.ifBlank { activity.appName },
                 modifier = modifier.clip(iconShape),
                 contentScale = ContentScale.Fit,
+                colorFilter = maneuverTint,
             )
         }
-        activity.kind == NotificationActivityKind.PROGRESS && !isCertainDownload(activity) && appIcon != null -> {
+        (activity.kind == NotificationActivityKind.LIVE_UPDATE ||
+            (activity.kind == NotificationActivityKind.PROGRESS && !isCertainDownload(activity))) &&
+            appIcon != null -> {
             Image(
                 bitmap = remember(appIcon) { appIcon.asImageBitmap() },
                 contentDescription = activity.appName,
@@ -126,22 +214,12 @@ fun ActivityIcon(
             )
         }
         else -> {
-            val tint = when (activity.kind) {
-                NotificationActivityKind.SOUND_MODE -> when {
-                    activity.title.contains("Silent", ignoreCase = true) -> Color(0xFFFF5252)
-                    activity.title.contains("Vibrate", ignoreCase = true) -> Color(0xFFFFA000)
-                    else -> Color(0xFF4CAF50)
-                }
-                NotificationActivityKind.DND -> {
-                    if (activity.title.contains("Off", ignoreCase = true)) Color(0xFF9E9E9E)
-                    else Color(0xFF9C7CF8)
-                }
-                NotificationActivityKind.BLUETOOTH -> {
-                    val isDisconnected = activity.text?.contains("Disconnected", ignoreCase = true) == true
-                    if (isDisconnected) primaryColor.copy(alpha = 0.45f) else primaryColor
-                }
-                else -> activityIconTint(activity.kind, primaryColor)
-            }
+            val tint = resolveActivityIconTint(
+                activity = activity,
+                useAppColor = useAppColor,
+                appDominantColor = appDominantColor,
+                primaryColor = primaryColor,
+            )
             val description = when (activity.kind) {
                 NotificationActivityKind.BLUETOOTH,
                 NotificationActivityKind.AUDIO_OUTPUT,
@@ -185,7 +263,7 @@ fun formatCompactStatus(status: String): AnnotatedString {
         var lastIndex = 0
         for (match in PERCENT_CHAR_REGEX.findAll(status)) {
             append(status.substring(lastIndex, match.range.first))
-            withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.Medium)) {
+            withStyle(SpanStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium)) {
                 append("%")
             }
             lastIndex = match.range.last + 1
@@ -235,7 +313,7 @@ private fun compactActivityStatusStyle(status: String, compactFontSize: Boolean)
     val fontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val fontWeightValue by OverlayPreferences.islandFontWeightFlow.collectAsState()
     return MaterialTheme.typography.labelSmall.copy(
-        fontSize = if (compactFontSize || status.contains('%')) 10.5.sp else 11.5.sp,
+        fontSize = if (compactFontSize || status.contains('%')) 12.sp else 13.sp,
         fontFamily = fontStyle.fontFamily,
         fontWeight = FontWeight(fontWeightValue),
     )
@@ -367,7 +445,7 @@ internal fun CompactNotificationActivityContent(
                     Text(
                         text = formattedStatus,
                         color = Color.White,
-                        style = statusStyle.copy(fontSize = if (isPercentage) 9.5.sp else 10.sp),
+                        style = statusStyle.copy(fontSize = if (isPercentage) 11.sp else 12.sp),
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Visible,
@@ -377,40 +455,44 @@ internal fun CompactNotificationActivityContent(
             }
         }
     } else {
-        val leadingWeight = (1f - trailingWingFraction).coerceAtLeast(0.001f)
-        val trailingWeight = trailingWingFraction.coerceAtLeast(0.001f)
+        val leadingWeight = (1f - trailingWingFraction).coerceIn(0f, 1f)
+        val trailingWeight = trailingWingFraction.coerceIn(0f, 1f)
         Row(
             modifier = modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(leadingWeight)
-                    .fillMaxHeight()
-                    .padding(start = compactActivityOuterPadding),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                icon()
+            if (leadingWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(leadingWeight)
+                        .fillMaxHeight()
+                        .padding(start = compactActivityOuterPadding),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    icon()
+                }
             }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
-            Box(
-                modifier = Modifier
-                    .weight(trailingWeight)
-                    .fillMaxHeight()
-                    .padding(end = if (radialProgress != null) compactRingInset else compactActivityOuterPadding),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                if (radialProgress != null) {
-                    val (percent, ringColor) = radialProgress
-                    RadialProgressGauge(
-                        progress = percent / 100f,
-                        text = percent.toString(),
-                        color = ringColor,
-                        diameter = compactRingDiameter,
-                        modifier = Modifier.morphingElement(progressAnchor),
-                    )
-                } else if (status.isNotEmpty()) {
-                    summary()
+            if (trailingWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(trailingWeight)
+                        .fillMaxHeight()
+                        .padding(end = if (radialProgress != null) compactRingInset else compactActivityOuterPadding),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    if (radialProgress != null) {
+                        val (percent, ringColor) = radialProgress
+                        RadialProgressGauge(
+                            progress = percent / 100f,
+                            text = percent.toString(),
+                            color = ringColor,
+                            diameter = compactRingDiameter,
+                            modifier = Modifier.morphingElement(progressAnchor),
+                        )
+                    } else if (status.isNotEmpty()) {
+                        summary()
+                    }
                 }
             }
         }
@@ -418,6 +500,7 @@ internal fun CompactNotificationActivityContent(
 }
 
 internal fun activityIcon(kind: NotificationActivityKind): ImageVector = when (kind) {
+    NotificationActivityKind.LIVE_UPDATE -> LarpIcons.NotificationsActive
     NotificationActivityKind.PROGRESS -> LarpIcons.Download
     NotificationActivityKind.NAVIGATION -> LarpIcons.Navigation
     NotificationActivityKind.CALL -> LarpIcons.Call
@@ -431,6 +514,7 @@ internal fun activityIcon(kind: NotificationActivityKind): ImageVector = when (k
 }
 
 internal fun activityIcon(activity: NotificationActivityInfo): ImageVector = when (activity.kind) {
+    NotificationActivityKind.LIVE_UPDATE -> LarpIcons.NotificationsActive
     NotificationActivityKind.PROGRESS -> if (isCertainDownload(activity)) LarpIcons.Download else LarpIcons.Notifications
     NotificationActivityKind.NAVIGATION -> LarpIcons.Navigation
     NotificationActivityKind.CALL -> LarpIcons.Call
@@ -501,6 +585,7 @@ internal fun activityIconTint(kind: NotificationActivityKind, fallback: Color): 
     NotificationActivityKind.BATTERY_LOW -> Color(0xFFFF5252)
     NotificationActivityKind.SOUND_MODE -> Color(0xFFFFA000)
     NotificationActivityKind.DND -> Color(0xFF9C7CF8)
+    NotificationActivityKind.LIVE_UPDATE,
     NotificationActivityKind.TIMER,
     NotificationActivityKind.NAVIGATION,
     NotificationActivityKind.BLUETOOTH,
@@ -574,6 +659,9 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
     if (activity.kind == NotificationActivityKind.BLUETOOTH) {
         return batteryPercentOf(activity)?.let { "$it%" }.orEmpty()
     }
+    if (activity.kind == NotificationActivityKind.LIVE_UPDATE) {
+        activity.shortCriticalText?.takeIf(String::isNotBlank)?.let { return it }
+    }
     // For navigation: NEVER put percentage on the right.
     if (activity.kind == NotificationActivityKind.NAVIGATION) {
         val shortEta = findShortEta(activity.title) ?: findShortEta(activity.text)
@@ -581,6 +669,8 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
 
         val shortTime = findShortTime(activity.title) ?: findShortTime(activity.text)
         if (shortTime != null) return shortTime
+
+        activity.shortCriticalText?.takeIf(String::isNotBlank)?.let { return it }
 
         return ""
     }
@@ -597,6 +687,7 @@ internal fun compactStatusFallback(activity: NotificationActivityInfo): String {
     if (shortTime != null) return shortTime
 
     return when (activity.kind) {
+        NotificationActivityKind.LIVE_UPDATE -> ""
         NotificationActivityKind.CALL -> "Call"
         NotificationActivityKind.NAVIGATION -> ""
         NotificationActivityKind.TIMER -> "Timer"

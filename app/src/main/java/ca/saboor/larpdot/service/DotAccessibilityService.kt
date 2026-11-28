@@ -47,6 +47,9 @@ class DotAccessibilityService : AccessibilityService() {
         if (OverlayPreferences.hideInFullscreenFlow.value) {
             scheduleFullscreenCheck(event.packageName?.toString())
         }
+        if (OverlayPreferences.islandOutlineModeFlow.value == OverlayPreferences.IslandOutlineMode.DYNAMIC) {
+            IslandBackdropLuminanceTracker.requestSample()
+        }
     }
 
     private fun scheduleFullscreenCheck(foregroundPackage: String?) {
@@ -140,12 +143,33 @@ class DotAccessibilityService : AccessibilityService() {
             }
         }
 
+        serviceScope.launch {
+            OverlayPreferences.islandOutlineModeFlow.collectLatest { mode ->
+                if (mode == OverlayPreferences.IslandOutlineMode.DYNAMIC) {
+                    IslandBackdropLuminanceTracker.requestSample(delayMs = 0L)
+                } else {
+                    IslandBackdropLuminanceTracker.reset()
+                }
+            }
+        }
+
+        serviceScope.launch {
+            ScreenStateTracker.isScreenOn.collectLatest { isScreenOn ->
+                if (isScreenOn && OverlayPreferences.islandOutlineModeFlow.value == OverlayPreferences.IslandOutlineMode.DYNAMIC) {
+                    IslandBackdropLuminanceTracker.requestSample()
+                }
+            }
+        }
+
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         FullscreenStateTracker.updateOrientation(newConfig)
         overlayController?.onConfigurationChanged(newConfig)
+        if (OverlayPreferences.islandOutlineModeFlow.value == OverlayPreferences.IslandOutlineMode.DYNAMIC) {
+            IslandBackdropLuminanceTracker.requestSample()
+        }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -157,6 +181,7 @@ class DotAccessibilityService : AccessibilityService() {
         if (instance == this) instance = null
         _isServiceConnected.value = false
         FullscreenStateTracker.reset()
+        IslandBackdropLuminanceTracker.reset()
         flashlightBroadcast.unregister(this)
         overlayController?.destroy()
         overlayController = null
@@ -170,6 +195,7 @@ class DotAccessibilityService : AccessibilityService() {
         fullscreenConfirmationJob = null
         if (instance == this) instance = null
         _isServiceConnected.value = false
+        IslandBackdropLuminanceTracker.reset()
         flashlightBroadcast.unregister(this)
         serviceJob.cancel()
         overlayController?.destroy()

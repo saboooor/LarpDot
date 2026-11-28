@@ -8,8 +8,6 @@ import java.io.FileNotFoundException
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONArray
-import org.json.JSONObject
 
 internal enum class CustomIslandPosition(val label: String) {
     LEFT("Left wing"),
@@ -111,6 +109,8 @@ internal enum class CustomComponentKind(val label: String, val image: CustomIsla
     WIDGET("Widget"), TEXT("Text"), BUTTONS("Buttons"),
     ALBUM_ART("Album Art", CustomIslandImage.ALBUM_ART),
     NOTIFICATION_IMAGE("Notification Image", CustomIslandImage.NOTIFICATION_IMAGE),
+    APP_ICON("App Icon", CustomIslandImage.APP_ICON),
+    NOTIFICATION_ICON("Notification Icon", CustomIslandImage.NOTIFICATION_ICON),
     NOTIFICATION_CONTENT("Notification Content"),
 }
 
@@ -155,17 +155,32 @@ internal data class CustomIsland(
     val tapAction: CustomIslandTapAction = CustomIslandTapAction.EXPAND,
     val notificationActionTitle: String = "",
     val tapAppPackage: String? = null,
+    val backgroundStyle: OverlayPreferences.ExpandedBackgroundStyle = OverlayPreferences.ExpandedBackgroundStyle.NONE,
+    val backgroundImage: CustomIslandImage? = null,
 ) {
-    val expandedComponents get() = components.ifEmpty {
-        main.widgetId?.let {
-            listOf(CustomIslandComponent("legacy-$it", CustomComponentKind.WIDGET, it, main.height, colorKey = main.colorKey))
-        }.orEmpty()
-    }
+    val expandedComponents get() = components
     val hasExpandedContent get() = expandedComponents.isNotEmpty() || expandedLeft.hasContent || expandedRight.hasContent
     val widgetIds get() = listOfNotNull(left.widgetId, right.widgetId) + expandedComponents.mapNotNull { it.widgetId }
 
     val isSwipeDownOnly get() = visibility == CustomIslandVisibility.SWIPE_DOWN
     val hasContent get() = if (isSwipeDownOnly) hasExpandedContent else left.hasContent || right.hasContent || hasExpandedContent
+    val effectiveBackgroundImage: CustomIslandImage get() = backgroundImage ?: defaultBackgroundImage()
+
+    fun defaultBackgroundImage(): CustomIslandImage = when {
+        visibility == CustomIslandVisibility.CONDITIONAL && condition == CustomIslandCondition.NOTIFICATION ->
+            CustomIslandImage.NOTIFICATION_IMAGE
+        visibility == CustomIslandVisibility.CONDITIONAL && condition == CustomIslandCondition.LIVE_ACTIVITY ->
+            CustomIslandImage.APP_ICON
+        visibility == CustomIslandVisibility.CONDITIONAL && condition == CustomIslandCondition.MUSIC ->
+            CustomIslandImage.ALBUM_ART
+        associatedAppPackage() != null -> CustomIslandImage.APP_ICON
+        else -> CustomIslandImage.ALBUM_ART
+    }
+    fun associatedAppPackage(resolveWidgetPackage: (Int) -> String? = { null }): String? =
+        notificationRule.packageName.takeIf(String::isNotBlank)
+            ?: tapAppPackage?.takeIf(String::isNotBlank)
+            ?: widgetIds.firstNotNullOfOrNull { id -> resolveWidgetPackage(id)?.takeIf(String::isNotBlank) }
+
     fun slot(position: CustomIslandPosition) = when (position) {
         CustomIslandPosition.LEFT -> left
         CustomIslandPosition.RIGHT -> right
@@ -311,6 +326,53 @@ internal fun enforceSingleSwipeDownIsland(
     }
 }
 
+internal data class CustomIslandAppGroup<T>(
+    val packageName: String?,
+    val appName: String,
+    val items: List<T>,
+)
+
+internal fun <T> groupByApp(
+    items: List<T>,
+    packageOf: (T) -> String?,
+    resolveAppName: (String) -> String,
+    generalLabel: String = "General",
+): List<CustomIslandAppGroup<T>> {
+    if (items.isEmpty()) return emptyList()
+    val grouped = linkedMapOf<String?, MutableList<T>>()
+    for (item in items) {
+        val pkg = packageOf(item)?.trim()?.takeIf(String::isNotBlank)
+        grouped.getOrPut(pkg) { mutableListOf() }.add(item)
+    }
+    val appGroups = grouped.entries
+        .filter { it.key != null }
+        .map { (pkg, groupItems) ->
+            val name = resolveAppName(pkg!!).ifBlank { pkg }
+            CustomIslandAppGroup(packageName = pkg, appName = name, items = groupItems)
+        }
+        .sortedBy { it.appName.lowercase() }
+    val generalGroup = grouped[null]?.let {
+        listOf(CustomIslandAppGroup(packageName = null, appName = generalLabel, items = it))
+    }.orEmpty()
+    return appGroups + generalGroup
+}
+
+internal fun swapCustomIslands(
+    islands: List<CustomIsland>,
+    firstId: String,
+    secondId: String,
+): List<CustomIsland> {
+    if (firstId == secondId || islands.size < 2) return islands
+    val firstIndex = islands.indexOfFirst { it.id == firstId }
+    val secondIndex = islands.indexOfFirst { it.id == secondId }
+    if (firstIndex < 0 || secondIndex < 0) return islands
+    return islands.toMutableList().apply {
+        val tmp = this[firstIndex]
+        this[firstIndex] = this[secondIndex]
+        this[secondIndex] = tmp
+    }
+}
+
 internal fun reorderCustomIslands(
     islands: List<CustomIsland>,
     id: String,
@@ -327,6 +389,35 @@ internal fun reorderCustomIslands(
     }
 }
 
+internal fun cloneCustomIslandForDuplicate(
+    source: CustomIsland,
+    existingIslands: List<CustomIsland>,
+): CustomIsland {
+    val (portable, _) = CustomIslandPresetCodec.stripDeviceLocalWidgets(source)
+    val baseName = portable.name.trim()
+    val copiedName = if (baseName.isNotEmpty()) {
+        val suffix = " (Copy)"
+        val maxBase = (48 - suffix.length).coerceAtLeast(1)
+        "${baseName.take(maxBase)}$suffix"
+    } else ""
+    val targetVisibility = if (
+        portable.isSwipeDownOnly &&
+        existingIslands.any { it.isSwipeDownOnly }
+    ) {
+        CustomIslandVisibility.IDLE
+    } else {
+        portable.visibility
+    }
+    return portable.copy(
+        id = UUID.randomUUID().toString(),
+        name = copiedName,
+        visibility = targetVisibility,
+        components = portable.expandedComponents.map { component ->
+            component.copy(id = UUID.randomUUID().toString())
+        },
+    )
+}
+
 internal object CustomIslandStore {
     private lateinit var file: AtomicFile
     private val mutableSettings = MutableStateFlow(CustomIslandSettings())
@@ -335,7 +426,7 @@ internal object CustomIslandStore {
         val savedFile = File(context.noBackupFilesDir, "custom-islands.json")
         file = AtomicFile(savedFile)
         return runCatching {
-            mutableSettings.value = decode(JSONObject(file.readFully().toString(Charsets.UTF_8)))
+            mutableSettings.value = CustomIslandJsonCodec.decodeSettings(file.readFully().toString(Charsets.UTF_8))
         }.recoverCatching { error ->
             if (error !is FileNotFoundException || savedFile.exists() || File("${savedFile.path}.bak").exists()) {
                 throw error
@@ -349,10 +440,34 @@ internal object CustomIslandStore {
         return island.id.takeIf { save(settings.value.copy(islands = settings.value.islands + island)) }
     }
 
+    fun duplicate(id: String): String? {
+        val previous = settings.value
+        val sourceIndex = previous.islands.indexOfFirst { it.id == id }
+        if (sourceIndex < 0) return null
+        val duplicated = cloneCustomIslandForDuplicate(previous.islands[sourceIndex], previous.islands)
+        val updated = previous.islands.toMutableList().apply {
+            add(sourceIndex + 1, duplicated)
+        }
+        return duplicated.id.takeIf { save(previous.copy(islands = updated)) }
+    }
+
     fun addFromPreset(preset: CustomIslandPreset): String? {
         val previous = settings.value
         val island = preset.instantiateForStore(previous.islands)
         return island.id.takeIf { save(previous.copy(islands = previous.islands + island)) }
+    }
+
+    fun addAllFromPresets(presets: List<CustomIslandPreset>): List<String> {
+        if (presets.isEmpty()) return emptyList()
+        val previous = settings.value
+        val combined = previous.islands.toMutableList()
+        val addedIds = mutableListOf<String>()
+        for (preset in presets) {
+            val island = preset.instantiateForStore(combined)
+            combined.add(island)
+            addedIds.add(island.id)
+        }
+        return if (save(previous.copy(islands = combined))) addedIds else emptyList()
     }
 
     fun rename(id: String, name: String) {
@@ -422,6 +537,14 @@ internal object CustomIslandStore {
         }
     }
 
+    fun swap(firstId: String, secondId: String) {
+        val previous = settings.value
+        val swapped = swapCustomIslands(previous.islands, firstId, secondId)
+        if (swapped != previous.islands) {
+            save(previous.copy(islands = swapped))
+        }
+    }
+
     fun remove(id: String) {
         val previous = settings.value
         val island = previous.islands.firstOrNull { it.id == id } ?: return
@@ -456,6 +579,29 @@ internal object CustomIslandStore {
 
     fun setNotificationRule(id: String, rule: CustomNotificationRule) {
         updateIsland(id) { it.copy(notificationRule = rule) }
+    }
+
+    fun setBackgroundStyle(id: String, style: OverlayPreferences.ExpandedBackgroundStyle) {
+        updateIsland(id) { island ->
+            val resolvedImage = if (style != OverlayPreferences.ExpandedBackgroundStyle.NONE && island.backgroundImage == null) {
+                island.defaultBackgroundImage()
+            } else {
+                island.backgroundImage
+            }
+            island.copy(backgroundStyle = style, backgroundImage = resolvedImage)
+        }
+    }
+
+    fun setBackgroundImage(id: String, image: CustomIslandImage) {
+        updateIsland(id) { it.copy(backgroundImage = image) }
+    }
+
+    fun setBackground(
+        id: String,
+        style: OverlayPreferences.ExpandedBackgroundStyle,
+        image: CustomIslandImage?,
+    ) {
+        updateIsland(id) { it.copy(backgroundStyle = style, backgroundImage = image ?: it.backgroundImage) }
     }
 
     fun editComponents(id: String, edit: (List<CustomIslandComponent>) -> List<CustomIslandComponent>) {
@@ -519,7 +665,7 @@ internal object CustomIslandStore {
     }
 
     private fun save(settings: CustomIslandSettings): Boolean = runCatching {
-        val bytes = encode(settings).toString().toByteArray(Charsets.UTF_8)
+        val bytes = CustomIslandJsonCodec.encodeSettings(settings).toString().toByteArray(Charsets.UTF_8)
         val stream = file.startWrite()
         try {
             stream.write(bytes)
@@ -530,236 +676,4 @@ internal object CustomIslandStore {
         }
         mutableSettings.value = settings
     }.onFailure { Log.w("CustomIslands", "Could not save islands", it) }.isSuccess
-
-    private fun encode(settings: CustomIslandSettings) = JSONObject().apply {
-        put("active", settings.activeIds.firstOrNull())
-        put("activeIds", JSONArray(settings.activeIds.toList()))
-        put("swipeDown", settings.swipeDownId)
-        put("islands", JSONArray().apply {
-            settings.islands.forEach { island ->
-                put(JSONObject().apply {
-                    put("id", island.id)
-                    put("name", island.name)
-                    put("visibility", island.visibility.name)
-                    put("condition", island.condition.name)
-                    put("tapAction", island.tapAction.name)
-                    put("notificationActionTitle", island.notificationActionTitle)
-                    put("tapAppPackage", island.tapAppPackage)
-                    put("activityKind", island.activityKind?.name)
-                    put("notificationRule", with(island.notificationRule) {
-                        JSONObject().put("package", packageName).put("channel", channelId)
-                            .put("title", titleContains).put("text", textContains).put("matchChannel", matchChannel)
-                    })
-                    put("components", JSONArray().apply {
-                        island.components.forEach { component ->
-                            put(JSONObject().put("id", component.id).put("kind", component.kind.name)
-                                .put("widget", component.widgetId).put("height", component.height).put("text", component.text)
-                                .put("textStyle", component.textStyle?.takeIf { component.kind == CustomComponentKind.TEXT }?.let {
-                                    JSONObject().put("size", it.size).put("rgb", it.rgb).put("colorMode", it.colorMode.name)
-                                        .put("bold", it.bold).put("italic", it.italic).put("underline", it.underline)
-                                        .put("alignment", it.alignment.name)
-                                })
-                                .put("buttonStyle", component.buttonStyle.takeIf { component.kind == CustomComponentKind.BUTTONS }?.let {
-                                    JSONObject().put("playBackground", it.playPauseBackground).put("playAccent", it.playPauseAccentColor)
-                                        .put("skipBackground", it.skipBackground).put("radius", it.cornerRadiusDp.toDouble())
-                                        .put("connected", it.material3ButtonGroup)
-                                })
-                                .put("colorKey", component.colorKey?.let {
-                                    JSONObject().put("rgb", it.rgb).put("tolerance", it.tolerancePercent)
-                                }))
-                        }
-                    })
-                    CustomIslandPosition.entries.forEach { position ->
-                        val slot = island.slot(position)
-                        put(position.name, JSONObject().apply {
-                            put("icon", slot.icon?.name)
-                            put("image", slot.image?.name)
-                            if (slot.supportsIconColor) {
-                                put("iconColor", JSONObject()
-                                    .put("mode", slot.iconColor.mode.name)
-                                    .put("rgb", slot.iconColor.rgb))
-                            }
-                            if (slot.text != null) {
-                                put("text", slot.text)
-                                put("textStyle", JSONObject()
-                                    .put("size", slot.textStyle.size)
-                                    .put("rgb", slot.textStyle.rgb)
-                                    .put("colorMode", slot.textStyle.colorMode.name)
-                                    .put("bold", slot.textStyle.bold)
-                                    .put("italic", slot.textStyle.italic)
-                                    .put("underline", slot.textStyle.underline)
-                                    .put("alignment", slot.textStyle.alignment.name))
-                            }
-                            put("widget", slot.widgetId)
-                            put("width", slot.width)
-                            put("height", slot.height)
-                            put("paddingX", slot.paddingX)
-                            put("paddingY", slot.paddingY)
-                            if (position == CustomIslandPosition.MAIN && slot.spanFullIsland) {
-                                put("spanFullIsland", true)
-                            }
-                            slot.colorKey?.let { key ->
-                                put("colorKey", JSONObject().put("rgb", key.rgb).put("tolerance", key.tolerancePercent))
-                            }
-                        })
-                    }
-                })
-            }
-        })
-        settings.pending?.let {
-            put("pending", JSONObject().put("island", it.islandId).put("position", it.position.name).put("id", it.widgetId))
-        }
-    }
-
-    private fun decode(root: JSONObject): CustomIslandSettings {
-        val saved = root.getJSONArray("islands")
-        val islands = (0 until saved.length()).mapNotNull { index ->
-            val json = saved.optJSONObject(index) ?: return@mapNotNull null
-            val id = json.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
-            fun slot(position: CustomIslandPosition): CustomIslandSlot {
-                val entry = json.optJSONObject(position.name) ?: return position.emptySlot()
-                val widget = if (position.isExpandedWing) null else entry.optInt("widget", -1).takeIf { it > 0 }
-                val colorKey = if (widget != null) entry.optJSONObject("colorKey") else null
-                val slotText = if (widget == null && position != CustomIslandPosition.MAIN && entry.has("text") && !entry.isNull("text")) {
-                    entry.optString("text").take(120)
-                } else null
-                val slotTextStyle = entry.optJSONObject("textStyle")?.let {
-                    CustomTextStyle(
-                        size = it.optInt("size", 12).coerceIn(8, 64),
-                        rgb = it.optInt("rgb", 0xFFFFFF).coerceIn(0, 0xFFFFFF),
-                        bold = it.optBoolean("bold"),
-                        italic = it.optBoolean("italic"),
-                        underline = it.optBoolean("underline"),
-                        alignment = CustomTextAlignment.entries.firstOrNull { alignment ->
-                            alignment.name == it.optString("alignment")
-                        } ?: CustomTextAlignment.CENTER,
-                        colorMode = CustomColorMode.entries.firstOrNull { mode ->
-                            mode.name == it.optString("colorMode")
-                        } ?: CustomColorMode.CUSTOM,
-                    )
-                } ?: CustomTextStyle(size = 12, alignment = CustomTextAlignment.CENTER)
-                val slotIconColor = entry.optJSONObject("iconColor")?.let {
-                    CustomIslandColor(
-                        mode = CustomColorMode.entries.firstOrNull { mode ->
-                            mode.name == it.optString("mode")
-                        } ?: CustomColorMode.MATERIAL_YOU,
-                        rgb = it.optInt("rgb", 0xFFFFFF).coerceIn(0, 0xFFFFFF),
-                    )
-                } ?: CustomIslandColor()
-                return CustomIslandSlot(
-                    icon = if (widget == null && slotText == null && position != CustomIslandPosition.MAIN) {
-                        CustomIslandIcon.entries.firstOrNull { it.name == entry.optString("icon") }
-                    } else null,
-                    widgetId = widget,
-                    image = if (widget == null && slotText == null && position != CustomIslandPosition.MAIN) {
-                        CustomIslandImage.entries.firstOrNull { it.name == entry.optString("image") }
-                    } else null,
-                    text = slotText,
-                    textStyle = slotTextStyle,
-                    iconColor = slotIconColor,
-                    width = entry.optInt("width", position.defaultWidth).coerceIn(position.minWidth, position.maxWidth),
-                    height = entry.optInt("height", position.defaultHeight).coerceIn(1, 300),
-                    colorKey = colorKey?.optInt("rgb", -1)?.takeIf { it in 0..0xFFFFFF }?.let { rgb ->
-                        WidgetColorKey(rgb, colorKey.optInt("tolerance", 10).coerceIn(0, 100))
-                    },
-                    paddingX = entry.optInt("paddingX", 8).coerceIn(0, 32),
-                    paddingY = entry.optInt("paddingY", 8).coerceIn(0, 32),
-                    spanFullIsland = position == CustomIslandPosition.MAIN && entry.optBoolean("spanFullIsland", false),
-                )
-            }
-            val rule = json.optJSONObject("notificationRule")
-            val components = json.optJSONArray("components") ?: JSONArray()
-            CustomIsland(
-                tapAction = CustomIslandTapAction.entries.firstOrNull { it.name == json.optString("tapAction") }
-                    ?: CustomIslandTapAction.EXPAND,
-                notificationActionTitle = json.optString("notificationActionTitle"),
-                tapAppPackage = json.optString("tapAppPackage").takeIf(String::isNotBlank),
-                activityKind = ca.saboor.larpdot.notification.NotificationActivityKind.entries.firstOrNull { it.name == json.optString("activityKind") },
-                notificationRule = CustomNotificationRule(rule?.optString("package").orEmpty(), rule?.optString("channel").orEmpty(),
-                    rule?.optString("title").orEmpty(), rule?.optString("text").orEmpty(), rule?.optBoolean("matchChannel", true) ?: true),
-                components = (0 until components.length()).mapNotNull { index ->
-                    val entry = components.optJSONObject(index) ?: return@mapNotNull null
-                    val kind = CustomComponentKind.entries.firstOrNull { it.name == entry.optString("kind") } ?: return@mapNotNull null
-                    val widgetId = entry.optInt("widget", -1).takeIf { it > 0 }
-                    if (kind == CustomComponentKind.WIDGET && widgetId == null) return@mapNotNull null
-                    val key = entry.optJSONObject("colorKey")
-                    val textStyle = entry.optJSONObject("textStyle")?.let {
-                        CustomTextStyle(
-                            size = it.optInt("size", 14).coerceIn(8, 64),
-                            rgb = it.optInt("rgb", 0xFFFFFF).coerceIn(0, 0xFFFFFF),
-                            bold = it.optBoolean("bold"),
-                            italic = it.optBoolean("italic"),
-                            underline = it.optBoolean("underline"),
-                            alignment = CustomTextAlignment.entries.firstOrNull { alignment ->
-                                alignment.name == it.optString("alignment")
-                            } ?: CustomTextAlignment.START,
-                            colorMode = CustomColorMode.entries.firstOrNull { mode ->
-                                mode.name == it.optString("colorMode")
-                            } ?: CustomColorMode.CUSTOM,
-                        )
-                    }
-                    val buttonStyle = entry.optJSONObject("buttonStyle")?.let {
-                        OverlayPreferences.PlaybackControlsStyle(
-                            playPauseBackground = it.optBoolean("playBackground", true),
-                            playPauseAccentColor = it.optBoolean("playAccent"),
-                            skipBackground = it.optBoolean("skipBackground"),
-                            cornerRadiusDp = it.optDouble("radius", 20.0).takeIf(Double::isFinite)
-                                ?.coerceIn(0.0, 32.0)?.toFloat() ?: 20f,
-                            material3ButtonGroup = it.optBoolean("connected"),
-                        )
-                    } ?: OverlayPreferences.PlaybackControlsStyle()
-                    CustomIslandComponent(
-                        id = entry.optString("id").ifBlank { UUID.randomUUID().toString() },
-                        kind = kind,
-                        widgetId = widgetId,
-                        height = entry.optInt("height", 150).coerceIn(24, 300),
-                        text = entry.optString("text"),
-                        colorKey = key?.optInt("rgb", -1)?.takeIf { it in 0..0xFFFFFF }?.let {
-                            WidgetColorKey(it, key.optInt("tolerance", 10).coerceIn(0, 100))
-                        },
-                        textStyle = textStyle,
-                        buttonStyle = buttonStyle,
-                    )
-                },
-                id = id,
-                name = json.optString("name", "Custom island"),
-                left = slot(CustomIslandPosition.LEFT),
-                right = slot(CustomIslandPosition.RIGHT),
-                main = slot(CustomIslandPosition.MAIN),
-                expandedLeft = slot(CustomIslandPosition.EXPANDED_LEFT),
-                expandedRight = slot(CustomIslandPosition.EXPANDED_RIGHT),
-                visibility = CustomIslandVisibility.entries.firstOrNull { it.name == json.optString("visibility") }
-                    ?: CustomIslandVisibility.IDLE,
-                condition = CustomIslandCondition.entries.firstOrNull { it.name == json.optString("condition") }
-                    ?: CustomIslandCondition.MUSIC,
-            )
-        }
-        val pending = root.optJSONObject("pending")?.let { json ->
-            val id = json.optInt("id", -1)
-            val position = CustomIslandPosition.entries.firstOrNull { it.name == json.optString("position") }
-            val islandId = json.optString("island")
-            if (id > 0 && position != null && islands.any { it.id == islandId }) {
-                PendingIslandWidget(islandId, position, id)
-            } else null
-        }
-        val swipeDownId = root.optString("swipeDown").takeIf(String::isNotBlank)
-        val normalizedIslands = enforceSingleSwipeDownIsland(islands, preferredId = swipeDownId)
-        val validIslandIds = normalizedIslands.map { it.id }.toSet()
-        val activeIdsArray = root.optJSONArray("activeIds")
-        val decodedActiveIds = if (activeIdsArray != null) {
-            buildSet {
-                for (i in 0 until activeIdsArray.length()) {
-                    activeIdsArray.optString(i).takeIf { it in validIslandIds }?.let(::add)
-                }
-            }
-        } else {
-            root.optString("active").takeIf { it in validIslandIds }?.let(::setOf).orEmpty()
-        }
-        return CustomIslandSettings(
-            islands = normalizedIslands,
-            activeIds = decodedActiveIds,
-            swipeDownId = swipeDownId,
-            pending = pending,
-        )
-    }
 }

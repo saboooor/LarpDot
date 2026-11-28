@@ -3,6 +3,7 @@ package ca.saboor.larpdot.ui.overlay
 import android.graphics.Bitmap
 import android.util.LruCache
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,9 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,8 @@ import ca.saboor.larpdot.service.CustomIslandImage
 import ca.saboor.larpdot.service.CustomIslandNotifications
 import ca.saboor.larpdot.service.CustomIslandSources
 import ca.saboor.larpdot.service.CustomIslandVisibility
+import ca.saboor.larpdot.service.CustomIslandWidgets
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.ScreenStateTracker
 import ca.saboor.larpdot.service.loadNotificationSmallIconBitmap
 import ca.saboor.larpdot.service.resolveSources
@@ -113,20 +118,16 @@ internal val CustomIslandImage.placeholderIcon
     }
 
 @Composable
-internal fun CustomIslandImageContent(
+internal fun rememberCustomIslandImageBitmap(
     source: CustomIslandImage,
     sources: CustomIslandSources,
-    modifier: Modifier,
-    compact: Boolean,
-    preview: Boolean,
     appOverride: String? = null,
-    tint: Color? = null,
-) {
+): Bitmap? {
     val context = LocalContext.current
     val app = appOverride ?: sources.appPackage
     val notificationArtwork = sources.image
     val notificationSmallIcon = sources.notificationIcon
-    val bitmap = when (source) {
+    return when (source) {
         CustomIslandImage.ALBUM_ART -> sources.media.albumArt
         CustomIslandImage.APP_ICON -> if (app != null) key(app) {
             val icon by produceState<Bitmap?>(null, context, app) {
@@ -147,6 +148,94 @@ internal fun CustomIslandImageContent(
             picture
         } else null
     }?.takeUnless(Bitmap::isRecycled)
+}
+
+@Composable
+internal fun CustomIslandExpandedBackground(
+    island: CustomIsland,
+    sources: CustomIslandSources,
+    backgroundOpacity: Float,
+    preview: Boolean,
+    dominantColor: Color? = null,
+    modifier: Modifier = Modifier,
+) {
+    val style = island.backgroundStyle
+    if (style == OverlayPreferences.ExpandedBackgroundStyle.NONE) return
+    val imageSource = island.effectiveBackgroundImage
+    val appOverride = remember(island) {
+        island.associatedAppPackage { widgetId -> CustomIslandWidgets.info(widgetId)?.provider?.packageName }
+    }
+    val resolvedApp = when {
+        island.visibility == CustomIslandVisibility.CONDITIONAL && sources.appPackage != null -> sources.appPackage
+        else -> appOverride ?: sources.appPackage
+    }
+    val bitmap = rememberCustomIslandImageBitmap(
+        source = imageSource,
+        sources = sources,
+        appOverride = resolvedApp,
+    )
+    val accent = dominantColor ?: MaterialTheme.colorScheme.primary
+    if (bitmap != null) {
+        ExpandedImageBackground(
+            bitmap = bitmap,
+            style = style,
+            isVertical = false,
+            backgroundOpacity = backgroundOpacity,
+            tint = if (imageSource == CustomIslandImage.NOTIFICATION_ICON) accent else null,
+            modifier = modifier,
+        )
+    } else if (preview) {
+        val previewBrush = when (style) {
+            OverlayPreferences.ExpandedBackgroundStyle.NONE -> return
+            OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to accent.copy(alpha = 0.42f),
+                    0.55f to accent.copy(alpha = 0.14f),
+                    1.00f to Color.Transparent,
+                ),
+            )
+            OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to accent.copy(alpha = 0.52f),
+                    0.45f to accent.copy(alpha = 0.24f),
+                    0.80f to accent.copy(alpha = 0.08f),
+                    1.00f to Color.Transparent,
+                ),
+            )
+            OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND -> Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to accent.copy(alpha = 0.42f),
+                    0.50f to accent.copy(alpha = 0.28f),
+                    1.00f to accent.copy(alpha = 0.18f),
+                ),
+            )
+            OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to accent.copy(alpha = 0.34f),
+                    0.50f to accent.copy(alpha = 0.22f),
+                    1.00f to accent.copy(alpha = 0.12f),
+                ),
+            )
+        }
+        Box(
+            modifier = modifier
+                .graphicsLayer { alpha = backgroundOpacity }
+                .background(previewBrush),
+        )
+    }
+}
+
+@Composable
+internal fun CustomIslandImageContent(
+    source: CustomIslandImage,
+    sources: CustomIslandSources,
+    modifier: Modifier,
+    compact: Boolean,
+    preview: Boolean,
+    appOverride: String? = null,
+    tint: Color? = null,
+) {
+    val bitmap = rememberCustomIslandImageBitmap(source, sources, appOverride)
 
     if (bitmap != null) {
         val image = remember(bitmap) { bitmap.asImageBitmap() }

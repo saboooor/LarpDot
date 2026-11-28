@@ -444,7 +444,13 @@ class IslandStackTest {
         assertFalse(swipeDownNoWidget.hasContent)
 
         val swipeDownWithWidget = swipeDownNoWidget.copy(
-            main = swipeDownNoWidget.main.copy(widgetId = 42),
+            components = listOf(
+                ca.saboor.larpdot.service.CustomIslandComponent(
+                    id = "w42",
+                    kind = ca.saboor.larpdot.service.CustomComponentKind.WIDGET,
+                    widgetId = 42,
+                ),
+            ),
         )
         assertTrue(swipeDownWithWidget.hasContent)
 

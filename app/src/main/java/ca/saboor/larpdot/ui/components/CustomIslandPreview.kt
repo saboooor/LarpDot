@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -46,14 +47,15 @@ import ca.saboor.larpdot.service.CustomIslandWidgets
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.overlay.CameraCover
 import ca.saboor.larpdot.ui.overlay.CustomExpandedWingIcon
+import ca.saboor.larpdot.ui.overlay.CustomIslandExpandedBackground
 import ca.saboor.larpdot.ui.overlay.CustomIslandWidget
 import ca.saboor.larpdot.ui.overlay.CustomIslandWings
 import ca.saboor.larpdot.ui.overlay.CustomExpandedComponents
 import ca.saboor.larpdot.ui.overlay.CustomWingText
-import ca.saboor.larpdot.ui.overlay.customIslandCompactExtra
 import ca.saboor.larpdot.ui.overlay.customWidgetWingInset
 import ca.saboor.larpdot.ui.overlay.image
 import ca.saboor.larpdot.ui.overlay.islandCameraGeometry
+import ca.saboor.larpdot.ui.overlay.rememberCustomIslandCompactExtra
 import ca.saboor.larpdot.ui.overlay.rememberCustomIslandDominantColor
 import ca.saboor.larpdot.ui.overlay.rememberCustomIslandPlaceholderValues
 import ca.saboor.larpdot.ui.overlay.secondaryBubbleIconSize
@@ -84,20 +86,34 @@ internal fun CustomIslandPreview(
     val blur by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val opacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
     val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val previewBackgroundArgb = MaterialTheme.colorScheme.background.toArgb()
+    val showIslandOutline = ca.saboor.larpdot.service.resolveIslandOutlineVisible(
+        islandOutlineMode,
+        ca.saboor.larpdot.service.isPitchBlackPixel(previewBackgroundArgb),
+    )
 
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val compactWidth = (diameter + customIslandCompactExtra(island, diameter)).coerceAtMost(maxWidth)
+        val compactExtra = rememberCustomIslandCompactExtra(
+            island = island,
+            thickness = diameter,
+            preview = true,
+            placeholderValues = placeholderValues,
+        )
+        val compactWidth = (diameter + compactExtra).coerceAtMost(maxWidth)
         val spanFull = island.main.spanFullIsland
         val cardWidth = (island.main.width.dp + island.main.paddingX.dp * 2).coerceAtMost(maxWidth)
         val cameraTop = (with(density) { cutoutInfo.centerY.toDp() } - diameter / 2 - 14.dp).coerceAtLeast(0.dp)
         val compactShape = RoundedCornerShape(diameter / 2)
         val cardShape = previewCardShape(cornerRadius.dp, squircle, blur)
-        val outline = Color(0x30FFFFFF)
+        val outline = if (showIslandOutline) Color(0x30FFFFFF) else Color.Transparent
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!island.isSwipeDownOnly) {
                 Surface(
-                    modifier = Modifier.width(compactWidth).height(diameter).border(0.75.dp, outline, compactShape),
+                    modifier = Modifier.width(compactWidth).height(diameter).then(
+                        if (showIslandOutline) Modifier.border(0.75.dp, outline, compactShape) else Modifier
+                    ),
                     shape = compactShape,
                     color = Color.Black,
                     shadowElevation = 6.dp,
@@ -119,12 +135,22 @@ internal fun CustomIslandPreview(
             }
 
             Surface(
-                modifier = Modifier.width(cardWidth).heightIn(max = 360.dp).border(0.75.dp, outline, cardShape),
+                modifier = Modifier.width(cardWidth).heightIn(max = 360.dp).then(
+                    if (showIslandOutline) Modifier.border(0.75.dp, outline, cardShape) else Modifier
+                ),
                 shape = cardShape,
                 color = Color.Black.copy(alpha = opacity.coerceIn(0f, 1f)),
                 shadowElevation = 14.dp,
             ) {
                 Box(Modifier.fillMaxWidth()) {
+                    CustomIslandExpandedBackground(
+                        island = island,
+                        sources = sources,
+                        backgroundOpacity = opacity,
+                        preview = true,
+                        dominantColor = dominantColor,
+                        modifier = Modifier.matchParentSize(),
+                    )
                     CameraCover(
                         style = cameraCoverStyle,
                         centerX = cardWidth / 2f,
@@ -210,10 +236,13 @@ private fun CustomExpandedWingPreview(
     val shape = RoundedCornerShape(12.dp)
     val highlight = selected == position
     val borderColor = if (highlight) MaterialTheme.colorScheme.primary else Color(0x33FFFFFF)
-    val wingWidth = if (slot.text != null) slot.width.coerceAtLeast(48).dp else 48.dp
+    val wingModifier = if (slot.text != null) {
+        modifier.widthIn(min = 48.dp, max = 140.dp)
+    } else {
+        modifier.width(48.dp)
+    }
     Box(
-        modifier = modifier
-            .width(wingWidth)
+        modifier = wingModifier
             .height(48.dp)
             .border(if (highlight) 2.dp else 1.dp, borderColor, shape)
             .clickable(onClickLabel = "Edit ${position.label.lowercase()}", role = Role.Button) { onSelect(position) },
@@ -289,7 +318,7 @@ private fun CustomSlotPreview(
             preview = true,
             maxLines = 1,
             dominantColor = dominantColor,
-            modifier = Modifier.widthIn(max = slot.width.dp),
+            modifier = Modifier,
         )
         slot.image != null && sources != null -> CustomIslandImageContent(
             slot.image,

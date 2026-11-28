@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withTranslation
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
@@ -43,15 +44,41 @@ import java.lang.ref.WeakReference
 import kotlin.math.roundToInt
 
 internal const val BLUR_CORE_SIZE = 32
-internal const val BLUR_PADDING = 14
+internal const val BLUR_PADDING = 18
 internal const val BLUR_BUFFER_SIZE = BLUR_CORE_SIZE + (BLUR_PADDING * 2)
-internal const val BLUR_RADIUS = 4
+internal const val BLUR_RADIUS = 5
 internal const val BLUR_PASSES = 3
-private const val GLOW_SATURATION_BOOST = 1.15f
-private const val GLOW_CORE_OVERSCAN = 1.08f
-private const val GLOW_INTENSITY_ALPHA = 0.90f
+internal const val GLOW_TOP_SQUISH_PX = 12
+private const val GLOW_SATURATION_BOOST = 1.04f
+private const val GLOW_CORE_OVERSCAN = 1.02f
+internal const val GLOW_INTENSITY_ALPHA = 0.42f
 private const val GLOW_ALPHA_EPSILON = 0.004f
 private const val BLUR_CACHE_MAX_ENTRIES = 16
+
+internal data class GlowHaloLayout(
+    val dstLeft: Int,
+    val dstTop: Int,
+    val dstWidth: Int,
+    val dstHeight: Int,
+) {
+    val leftOverhang: Int get() = -dstLeft
+    val rightOverhang: Int get() = dstLeft + dstWidth
+    val bottomOverhang: Int get() = dstTop + dstHeight
+}
+
+internal fun computeGlowHaloLayout(tileSize: Size): GlowHaloLayout {
+    val scaleFactor = GLOW_CORE_OVERSCAN * (BLUR_BUFFER_SIZE.toFloat() / BLUR_CORE_SIZE.toFloat())
+    val dstWidth = (tileSize.width * scaleFactor).roundToInt().coerceAtLeast(1)
+    val dstHeight = (tileSize.height * scaleFactor).roundToInt().coerceAtLeast(1)
+    val dstLeft = ((tileSize.width - dstWidth) / 2f).roundToInt()
+    val dstTop = ((tileSize.height - dstHeight) / 2f).roundToInt()
+    return GlowHaloLayout(
+        dstLeft = dstLeft,
+        dstTop = dstTop,
+        dstWidth = dstWidth,
+        dstHeight = dstHeight,
+    )
+}
 
 @Immutable
 internal data class AlbumArtGlowShapeKey(
@@ -158,7 +185,7 @@ internal fun DrawScope.drawBlendedAlbumArtGlow(
     drawBlurredArtworkHalo(
         glow = glow,
         tileSize = Size(side, side),
-        opacity = 0.85f,
+        opacity = 0.70f,
     )
 }
 
@@ -171,18 +198,18 @@ private fun DrawScope.drawBlurredArtworkHalo(
     val effectiveAlpha = (glow.alpha * opacity * GLOW_INTENSITY_ALPHA).coerceIn(0f, 1f)
     if (effectiveAlpha <= 0f || tileSize.width <= 0f || tileSize.height <= 0f) return
 
-    val scaleFactor = GLOW_CORE_OVERSCAN * (BLUR_BUFFER_SIZE.toFloat() / BLUR_CORE_SIZE.toFloat())
-    val dstWidth = (tileSize.width * scaleFactor).roundToInt().coerceAtLeast(1)
-    val dstHeight = (tileSize.height * scaleFactor).roundToInt().coerceAtLeast(1)
-    val dstLeft = ((tileSize.width - dstWidth) / 2f).roundToInt()
-    val dstTop = ((tileSize.height - dstHeight) / 2f + tileSize.height * 0.30f).roundToInt()
+    val layout = computeGlowHaloLayout(tileSize)
 
-    clipRect(left = dstLeft.toFloat(), top = 0f, right = (dstLeft + dstWidth).toFloat(),
-        bottom = (dstTop + dstHeight).toFloat()) {
+    clipRect(
+        left = layout.dstLeft.toFloat(),
+        top = 0f,
+        right = (layout.dstLeft + layout.dstWidth).toFloat(),
+        bottom = (layout.dstTop + layout.dstHeight).toFloat(),
+    ) {
         drawImage(
             image = blurred,
-            dstOffset = IntOffset(dstLeft, dstTop),
-            dstSize = IntSize(dstWidth, dstHeight),
+            dstOffset = IntOffset(layout.dstLeft, layout.dstTop),
+            dstSize = IntSize(layout.dstWidth, layout.dstHeight),
             alpha = effectiveAlpha,
             filterQuality = FilterQuality.High,
         )
@@ -258,23 +285,25 @@ private fun createBlurredArtworkBitmap(source: Bitmap, shape: Shape? = null): Bi
         val canvas = Canvas(buffer)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val shapePath = createShapeMaskPath(shape)
-        canvas.save()
-        canvas.translate(BLUR_PADDING.toFloat(), BLUR_PADDING.toFloat())
-        if (shapePath != null) {
-            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.WHITE
-                style = Paint.Style.FILL
+        val verticalSquishScale = (BLUR_CORE_SIZE - GLOW_TOP_SQUISH_PX).toFloat() / BLUR_CORE_SIZE.toFloat()
+        canvas.withTranslation(BLUR_PADDING.toFloat(), BLUR_PADDING.toFloat()) {
+            // Squish vertically toward the bottom edge so left, right, and bottom glow match while top fades to zero.
+            scale(1f, verticalSquishScale, 0f, BLUR_CORE_SIZE.toFloat())
+            if (shapePath != null) {
+                val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = AndroidColor.WHITE
+                    style = Paint.Style.FILL
+                }
+                drawPath(shapePath, maskPaint)
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
             }
-            canvas.drawPath(shapePath, maskPaint)
-            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+            drawBitmap(
+                readableSource,
+                Rect(cropLeft, cropTop, cropLeft + cropSide, cropTop + cropSide),
+                Rect(0, 0, BLUR_CORE_SIZE, BLUR_CORE_SIZE),
+                paint,
+            )
         }
-        canvas.drawBitmap(
-            readableSource,
-            Rect(cropLeft, cropTop, cropLeft + cropSide, cropTop + cropSide),
-            Rect(0, 0, BLUR_CORE_SIZE, BLUR_CORE_SIZE),
-            paint,
-        )
-        canvas.restore()
 
         val pixels = IntArray(BLUR_BUFFER_SIZE * BLUR_BUFFER_SIZE)
         buffer.getPixels(pixels, 0, BLUR_BUFFER_SIZE, 0, 0, BLUR_BUFFER_SIZE, BLUR_BUFFER_SIZE)

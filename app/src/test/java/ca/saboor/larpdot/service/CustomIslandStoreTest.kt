@@ -19,7 +19,17 @@ class CustomIslandStoreTest {
         visibility = visibility,
         left = CustomIslandSlot(icon = leftIcon, width = 64, height = 24),
         right = CustomIslandSlot(icon = rightIcon, width = 64, height = 24),
-        main = CustomIslandSlot(widgetId = mainWidgetId, width = 300, height = 150, spanFullIsland = spanFullIsland),
+        main = CustomIslandSlot(width = 300, height = 150, spanFullIsland = spanFullIsland),
+        components = listOfNotNull(
+            mainWidgetId?.let {
+                CustomIslandComponent(
+                    id = "w-$it",
+                    kind = CustomComponentKind.WIDGET,
+                    widgetId = it,
+                    height = 150,
+                )
+            },
+        ),
     )
 
     @Test

@@ -9,15 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
 internal class BooleanPref(
     private val key: String,
     private val default: Boolean,
-    private val fallbackKey: String? = null,
 ) {
     private val _flow = MutableStateFlow(default)
     val flow: StateFlow<Boolean> = _flow.asStateFlow()
     private var initialized = false
 
     fun reload(prefs: SharedPreferences): Boolean {
-        val fallback = if (fallbackKey != null) prefs.getBoolean(fallbackKey, default) else default
-        val value = prefs.getBoolean(key, fallback)
+        val value = prefs.getBoolean(key, default)
         _flow.value = value
         initialized = true
         return value
@@ -27,11 +25,6 @@ internal class BooleanPref(
 
     fun set(prefs: SharedPreferences, value: Boolean) {
         prefs.edit { putBoolean(key, value) }
-        _flow.value = value
-        initialized = true
-    }
-
-    fun forceSet(value: Boolean) {
         _flow.value = value
         initialized = true
     }
@@ -99,15 +92,13 @@ internal class EnumPref<T : Enum<T>>(
     private val default: T,
     private val parse: (String?) -> T,
     private val serialize: (T) -> String = { it.name },
-    private val fallbackKey: String? = null,
 ) {
     private val _flow = MutableStateFlow(default)
     val flow: StateFlow<T> = _flow.asStateFlow()
     private var initialized = false
 
     fun reload(prefs: SharedPreferences): T {
-        val fallback = fallbackKey?.let { prefs.getString(it, null) }
-        val value = parse(prefs.getString(key, fallback))
+        val value = parse(prefs.getString(key, null))
         _flow.value = value
         initialized = true
         return value

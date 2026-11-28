@@ -12,8 +12,9 @@ import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.normalizeIslandPriorityOrder
 
 data class IslandBackupConfig(
-    val bubbleStyle: OverlayPreferences.BubbleStyle = OverlayPreferences.BubbleStyle.MATERIAL_3,
-    val smallerBubbles: Boolean = false,
+    val islandOutlineMode: OverlayPreferences.IslandOutlineMode = OverlayPreferences.IslandOutlineMode.ON,
+    val smallerBubblesMode: OverlayPreferences.SmallerBubblesMode = OverlayPreferences.SmallerBubblesMode.OFF,
+    val islandSpacingDp: Float = OverlayPreferences.DEFAULT_ISLAND_SPACING_DP,
     val minimizedMaxWidthPercent: Float = 72f,
     val islandCornerRadius: Float = 36f,
     val islandSquircleEnabled: Boolean = true,
@@ -35,7 +36,7 @@ data class IslandBackupConfig(
     val showProgressSquiggles: Boolean = true,
     val progressBarAccentColor: Boolean = false,
     val progressTimestampPlacement: OverlayPreferences.ProgressTimestampPlacement =
-        OverlayPreferences.ProgressTimestampPlacement.legacyDefault(expandedPlayerLayout),
+        OverlayPreferences.ProgressTimestampPlacement.HIDDEN,
     val playbackPlayPauseBg: Boolean = true,
     val playbackSkipBg: Boolean = false,
     val playbackCornerRadiusDp: Float = 22f,
@@ -46,9 +47,6 @@ data class IslandBackupConfig(
     val trackInfoShowAlbum: Boolean = false,
     val trackInfoAlbumBesideArtist: Boolean = false,
     val trackInfoTitleAccent: Boolean = false,
-    val showMinimizedTitle: Boolean = false,
-    val minimizedMusicTimestamp: OverlayPreferences.MinimizedMusicTimestamp = OverlayPreferences.MinimizedMusicTimestamp.NONE,
-    val showMinimizedVisualizer: Boolean = true,
     val minimizedMusicLeftSide: OverlayPreferences.MinimizedMusicSideContent = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
     val minimizedMusicRightSide: OverlayPreferences.MinimizedMusicSideContent = OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
     val showMinimizedProgressOutline: Boolean = true,
@@ -60,7 +58,6 @@ data class IslandBackupConfig(
     val expandedGlowRight: Boolean = true,
     val expandedGlowTop: Boolean = false,
     val expandedGlowBottom: Boolean = true,
-    val bpmPulseEnabled: Boolean = true,
     val minimizedBpmPulseEnabled: Boolean = true,
     val expandedBpmPulseEnabled: Boolean = true,
     val pulseAmount: Float = 1f,
@@ -68,7 +65,6 @@ data class IslandBackupConfig(
     val waveformBandCount: Int = OverlayPreferences.DEFAULT_WAVEFORM_BAND_COUNT,
     val waveformBarWidth: Float = 2.5f,
     val waveformBarSpacing: Float = 1.5f,
-    val showMinimizedFlashlightOutline: Boolean = true,
     val minimizedFlashlightLeftSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.MinimizedFlashlightSideContent.ICON,
     val minimizedFlashlightRightSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS,
     val showExpandedFlashlightOutline: Boolean = true,
@@ -88,7 +84,7 @@ data class IslandBackupConfig(
     val hideInFullscreen: Boolean = false,
     val hideInLandscape: Boolean = false,
     val hideInDnd: Boolean = false,
-    val hideMusicWhenAppOpen: Boolean = true,
+    val hideInRelatedApp: Boolean = true,
     val showSongAnnouncement: Boolean = true,
     val expandedShowTrackInfo: Boolean = true,
     val expandedShowProgress: Boolean = true,
@@ -99,6 +95,7 @@ data class IslandBackupConfig(
     val visualizerMode: OverlayPreferences.VisualizerMode = OverlayPreferences.VisualizerMode.SIMULATED,
     val previewAudioSource: OverlayPreferences.PreviewAudioSource = OverlayPreferences.PreviewAudioSource.AUTO,
     val activitiesEnabled: Boolean = true,
+    val activityLiveUpdates: Boolean = true,
     val activityProgress: Boolean = true,
     val activityNavigation: Boolean = true,
     val activityCalls: Boolean = true,
@@ -118,8 +115,23 @@ data class IslandBackupConfig(
     val activityPermanentDnd: Boolean = false,
     val activityPermanentBluetooth: Boolean = false,
     val activityPermanentAudioOutput: Boolean = false,
-    val activityExpandShortTerm: Boolean = false,
+    val activityAutoExpandLiveUpdates: Boolean = false,
+    val activityAutoExpandLiveUpdatesOnChange: Boolean = false,
+    val activityAutoExpandProgress: Boolean = false,
+    val activityAutoExpandNavigation: Boolean = false,
+    val activityAutoExpandCalls: Boolean = false,
+    val activityAutoExpandTimers: Boolean = false,
+    val activityAutoExpandCharging: Boolean = false,
+    val activityAutoExpandLowBattery: Boolean = false,
+    val activityAutoExpandChargeLimit: Boolean = false,
+    val activityAutoExpandSoundMode: Boolean = false,
+    val activityAutoExpandDnd: Boolean = false,
+    val activityAutoExpandBluetooth: Boolean = false,
+    val activityAutoExpandAudioOutput: Boolean = false,
     val activityProgressOutline: Boolean = true,
+    val activityHideStatusBarLiveUpdates: Boolean = false,
+    val activityMinimizeStatusBarLiveUpdates: Boolean = false,
+    val activityUseAppColorForIcons: Boolean = false,
     val islandPriorityOrder: List<IslandPriorityItem> = DEFAULT_ISLAND_PRIORITY_ORDER,
     val cutoutManualEnabled: Boolean? = null,
     val cutoutOffsetX: Float? = null,
@@ -128,11 +140,12 @@ data class IslandBackupConfig(
 )
 
 object IslandConfigurationBackup {
-    private const val BACKUP_VERSION = 4
+    private const val BACKUP_VERSION = 1
 
     private fun applyVisualAppearance(context: Context, config: IslandBackupConfig) {
-        OverlayPreferences.setBubbleStyle(context, config.bubbleStyle)
-        OverlayPreferences.setSmallerBubblesEnabled(context, config.smallerBubbles)
+        OverlayPreferences.setIslandOutlineMode(context, config.islandOutlineMode)
+        OverlayPreferences.setSmallerBubblesMode(context, config.smallerBubblesMode)
+        OverlayPreferences.setIslandSpacingDp(context, config.islandSpacingDp)
         OverlayPreferences.setIslandCornerRadius(context, config.islandCornerRadius)
         OverlayPreferences.setIslandSquircleEnabled(context, config.islandSquircleEnabled)
         OverlayPreferences.setExpandedBackgroundOpacity(context, config.expandedBackgroundOpacity)
@@ -175,7 +188,6 @@ object IslandConfigurationBackup {
         )
         OverlayPreferences.setMinimizedMusicLeftSide(context, config.minimizedMusicLeftSide)
         OverlayPreferences.setMinimizedMusicRightSide(context, config.minimizedMusicRightSide)
-        OverlayPreferences.setShowMinimizedVisualizerEnabled(context, config.showMinimizedVisualizer)
         OverlayPreferences.setShowMinimizedProgressOutlineEnabled(context, config.showMinimizedProgressOutline)
         OverlayPreferences.setShowExpandedProgressOutlineEnabled(context, config.showExpandedProgressOutline)
         OverlayPreferences.setAlbumArtGlowEnabled(context, config.albumArtGlowEnabled)
@@ -217,8 +229,9 @@ object IslandConfigurationBackup {
     fun toJson(config: IslandBackupConfig): String {
         val entries = buildList<Pair<String, String>> {
             add("version" to BACKUP_VERSION.toString())
-            add("bubbleStyle" to quote(config.bubbleStyle.name))
-            add("smallerBubbles" to config.smallerBubbles.toString())
+            add("islandOutlineMode" to quote(config.islandOutlineMode.name))
+            add("smallerBubblesMode" to quote(config.smallerBubblesMode.name))
+            add("islandSpacingDp" to config.islandSpacingDp.toString())
             add("minimizedMaxWidthPercent" to config.minimizedMaxWidthPercent.toString())
             add("islandCornerRadius" to config.islandCornerRadius.toString())
             add("islandSquircleEnabled" to config.islandSquircleEnabled.toString())
@@ -250,9 +263,6 @@ object IslandConfigurationBackup {
             add("trackInfoShowAlbum" to config.trackInfoShowAlbum.toString())
             add("trackInfoAlbumBesideArtist" to config.trackInfoAlbumBesideArtist.toString())
             add("trackInfoTitleAccent" to config.trackInfoTitleAccent.toString())
-            add("showMinimizedTitle" to config.showMinimizedTitle.toString())
-            add("minimizedMusicTimestamp" to quote(config.minimizedMusicTimestamp.name))
-            add("showMinimizedVisualizer" to config.showMinimizedVisualizer.toString())
             add("minimizedMusicLeftSide" to quote(config.minimizedMusicLeftSide.name))
             add("minimizedMusicRightSide" to quote(config.minimizedMusicRightSide.name))
             add("showMinimizedProgressOutline" to config.showMinimizedProgressOutline.toString())
@@ -264,7 +274,6 @@ object IslandConfigurationBackup {
             add("expandedGlowRight" to config.expandedGlowRight.toString())
             add("expandedGlowTop" to config.expandedGlowTop.toString())
             add("expandedGlowBottom" to config.expandedGlowBottom.toString())
-            add("bpmPulseEnabled" to config.bpmPulseEnabled.toString())
             add("minimizedBpmPulseEnabled" to config.minimizedBpmPulseEnabled.toString())
             add("expandedBpmPulseEnabled" to config.expandedBpmPulseEnabled.toString())
             add("pulseAmount" to config.pulseAmount.toString())
@@ -272,7 +281,6 @@ object IslandConfigurationBackup {
             add("waveformBandCount" to config.waveformBandCount.toString())
             add("waveformBarWidth" to config.waveformBarWidth.toString())
             add("waveformBarSpacing" to config.waveformBarSpacing.toString())
-            add("showMinimizedFlashlightOutline" to config.showMinimizedFlashlightOutline.toString())
             add("minimizedFlashlightLeftSide" to quote(config.minimizedFlashlightLeftSide.name))
             add("minimizedFlashlightRightSide" to quote(config.minimizedFlashlightRightSide.name))
             add("showExpandedFlashlightOutline" to config.showExpandedFlashlightOutline.toString())
@@ -292,7 +300,7 @@ object IslandConfigurationBackup {
             add("hideInFullscreen" to config.hideInFullscreen.toString())
             add("hideInLandscape" to config.hideInLandscape.toString())
             add("hideInDnd" to config.hideInDnd.toString())
-            add("hideMusicWhenAppOpen" to config.hideMusicWhenAppOpen.toString())
+            add("hideInRelatedApp" to config.hideInRelatedApp.toString())
             add("showSongAnnouncement" to config.showSongAnnouncement.toString())
             add("expandedShowTrackInfo" to config.expandedShowTrackInfo.toString())
             add("expandedShowProgress" to config.expandedShowProgress.toString())
@@ -303,6 +311,7 @@ object IslandConfigurationBackup {
             add("visualizerMode" to quote(config.visualizerMode.name))
             add("previewAudioSource" to quote(config.previewAudioSource.name))
             add("activitiesEnabled" to config.activitiesEnabled.toString())
+            add("activityLiveUpdates" to config.activityLiveUpdates.toString())
             add("activityProgress" to config.activityProgress.toString())
             add("activityNavigation" to config.activityNavigation.toString())
             add("activityCalls" to config.activityCalls.toString())
@@ -322,8 +331,23 @@ object IslandConfigurationBackup {
             add("activityPermanentDnd" to config.activityPermanentDnd.toString())
             add("activityPermanentBluetooth" to config.activityPermanentBluetooth.toString())
             add("activityPermanentAudioOutput" to config.activityPermanentAudioOutput.toString())
-            add("activityExpandShortTerm" to config.activityExpandShortTerm.toString())
+            add("activityAutoExpandLiveUpdates" to config.activityAutoExpandLiveUpdates.toString())
+            add("activityAutoExpandLiveUpdatesOnChange" to config.activityAutoExpandLiveUpdatesOnChange.toString())
+            add("activityAutoExpandProgress" to config.activityAutoExpandProgress.toString())
+            add("activityAutoExpandNavigation" to config.activityAutoExpandNavigation.toString())
+            add("activityAutoExpandCalls" to config.activityAutoExpandCalls.toString())
+            add("activityAutoExpandTimers" to config.activityAutoExpandTimers.toString())
+            add("activityAutoExpandCharging" to config.activityAutoExpandCharging.toString())
+            add("activityAutoExpandLowBattery" to config.activityAutoExpandLowBattery.toString())
+            add("activityAutoExpandChargeLimit" to config.activityAutoExpandChargeLimit.toString())
+            add("activityAutoExpandSoundMode" to config.activityAutoExpandSoundMode.toString())
+            add("activityAutoExpandDnd" to config.activityAutoExpandDnd.toString())
+            add("activityAutoExpandBluetooth" to config.activityAutoExpandBluetooth.toString())
+            add("activityAutoExpandAudioOutput" to config.activityAutoExpandAudioOutput.toString())
             add("activityProgressOutline" to config.activityProgressOutline.toString())
+            add("activityHideStatusBarLiveUpdates" to config.activityHideStatusBarLiveUpdates.toString())
+            add("activityMinimizeStatusBarLiveUpdates" to config.activityMinimizeStatusBarLiveUpdates.toString())
+            add("activityUseAppColorForIcons" to config.activityUseAppColorForIcons.toString())
             add("islandPriorityOrder" to quote(normalizeIslandPriorityOrder(config.islandPriorityOrder).joinToString(",") { it.name }))
             config.cutoutManualEnabled?.let { add("cutoutManualEnabled" to it.toString()) }
             config.cutoutOffsetX?.let { add("cutoutOffsetX" to it.toString()) }
@@ -342,26 +366,6 @@ object IslandConfigurationBackup {
         fun finiteFloat(key: String): Float? = fields[key]?.toFloatOrNull()?.takeIf(Float::isFinite)
         if (fields.keys.none { it in KNOWN_BACKUP_KEYS }) return null
         val defaults = IslandBackupConfig()
-        val expandedPlayerLayout = enumOrDefault(fields["expandedPlayerLayout"], defaults.expandedPlayerLayout)
-        val legacyBpmPulse = fields["bpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.bpmPulseEnabled
-        val parsedMinimizedTitle = fields["showMinimizedTitle"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedTitle
-        val parsedMinimizedTimestamp = enumOrDefault(fields["minimizedMusicTimestamp"], defaults.minimizedMusicTimestamp)
-        val legacyMusicRightSide = when (parsedMinimizedTimestamp) {
-            OverlayPreferences.MinimizedMusicTimestamp.REMAINING -> OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT
-            OverlayPreferences.MinimizedMusicTimestamp.ELAPSED -> OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED
-            OverlayPreferences.MinimizedMusicTimestamp.NONE -> if (parsedMinimizedTitle) {
-                OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
-            } else {
-                OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
-            }
-        }
-        val parsedMinimizedFlashlightOutline =
-            fields["showMinimizedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedFlashlightOutline
-        val legacyFlashlightRightSide = if (parsedMinimizedFlashlightOutline) {
-            OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
-        } else {
-            OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE
-        }
         val rawPriority = fields["islandPriorityOrder"]
         val parsedPriority = if (!rawPriority.isNullOrBlank()) {
             normalizeIslandPriorityOrder(
@@ -371,8 +375,9 @@ object IslandConfigurationBackup {
             defaults.islandPriorityOrder
         }
         return IslandBackupConfig(
-            bubbleStyle = enumOrDefault(fields["bubbleStyle"], defaults.bubbleStyle),
-            smallerBubbles = fields["smallerBubbles"]?.toBooleanStrictOrNull() ?: defaults.smallerBubbles,
+            islandOutlineMode = enumOrDefault(fields["islandOutlineMode"], defaults.islandOutlineMode),
+            smallerBubblesMode = enumOrDefault(fields["smallerBubblesMode"], defaults.smallerBubblesMode),
+            islandSpacingDp = (finiteFloat("islandSpacingDp") ?: defaults.islandSpacingDp).coerceIn(0f, 24f),
             minimizedMaxWidthPercent = (finiteFloat("minimizedMaxWidthPercent") ?: defaults.minimizedMaxWidthPercent).coerceIn(40f, 100f),
             islandCornerRadius = (finiteFloat("islandCornerRadius") ?: defaults.islandCornerRadius).coerceIn(0f, 100f),
             islandSquircleEnabled = fields["islandSquircleEnabled"]?.toBooleanStrictOrNull() ?: defaults.islandSquircleEnabled,
@@ -389,14 +394,11 @@ object IslandConfigurationBackup {
             showExpandedAlbumArt = fields["showExpandedAlbumArt"]?.toBooleanStrictOrNull() ?: defaults.showExpandedAlbumArt,
             expandedAlbumArtShape = enumOrDefault(fields["expandedAlbumArtShape"], defaults.expandedAlbumArtShape),
             expandedAlbumArtRotation = (finiteFloat("expandedAlbumArtRotation") ?: defaults.expandedAlbumArtRotation).coerceIn(0f, 360f),
-            expandedPlayerLayout = expandedPlayerLayout,
+            expandedPlayerLayout = enumOrDefault(fields["expandedPlayerLayout"], defaults.expandedPlayerLayout),
             audioOutputStyle = enumOrDefault(fields["audioOutputStyle"], defaults.audioOutputStyle),
             showProgressSquiggles = fields["showProgressSquiggles"]?.toBooleanStrictOrNull() ?: defaults.showProgressSquiggles,
             progressBarAccentColor = fields["progressBarAccentColor"]?.toBooleanStrictOrNull() ?: defaults.progressBarAccentColor,
-            progressTimestampPlacement = enumOrDefault(
-                fields["progressTimestampPlacement"],
-                OverlayPreferences.ProgressTimestampPlacement.legacyDefault(expandedPlayerLayout),
-            ),
+            progressTimestampPlacement = enumOrDefault(fields["progressTimestampPlacement"], defaults.progressTimestampPlacement),
             playbackPlayPauseBg = fields["playbackPlayPauseBg"]?.toBooleanStrictOrNull() ?: defaults.playbackPlayPauseBg,
             playbackSkipBg = fields["playbackSkipBg"]?.toBooleanStrictOrNull() ?: defaults.playbackSkipBg,
             playbackCornerRadiusDp = (finiteFloat("playbackCornerRadiusDp") ?: defaults.playbackCornerRadiusDp).coerceIn(0f, 32f),
@@ -407,11 +409,8 @@ object IslandConfigurationBackup {
             trackInfoShowAlbum = fields["trackInfoShowAlbum"]?.toBooleanStrictOrNull() ?: defaults.trackInfoShowAlbum,
             trackInfoAlbumBesideArtist = fields["trackInfoAlbumBesideArtist"]?.toBooleanStrictOrNull() ?: defaults.trackInfoAlbumBesideArtist,
             trackInfoTitleAccent = fields["trackInfoTitleAccent"]?.toBooleanStrictOrNull() ?: defaults.trackInfoTitleAccent,
-            minimizedMusicTimestamp = parsedMinimizedTimestamp,
-            showMinimizedTitle = parsedMinimizedTitle,
-            showMinimizedVisualizer = fields["showMinimizedVisualizer"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedVisualizer,
             minimizedMusicLeftSide = enumOrDefault(fields["minimizedMusicLeftSide"], defaults.minimizedMusicLeftSide),
-            minimizedMusicRightSide = enumOrDefault(fields["minimizedMusicRightSide"], legacyMusicRightSide),
+            minimizedMusicRightSide = enumOrDefault(fields["minimizedMusicRightSide"], defaults.minimizedMusicRightSide),
             showMinimizedProgressOutline = fields["showMinimizedProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.showMinimizedProgressOutline,
             showExpandedProgressOutline = fields["showExpandedProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.showExpandedProgressOutline,
             albumArtGlowEnabled = fields["albumArtGlowEnabled"]?.toBooleanStrictOrNull() ?: defaults.albumArtGlowEnabled,
@@ -421,17 +420,15 @@ object IslandConfigurationBackup {
             expandedGlowRight = fields["expandedGlowRight"]?.toBooleanStrictOrNull() ?: defaults.expandedGlowRight,
             expandedGlowTop = fields["expandedGlowTop"]?.toBooleanStrictOrNull() ?: defaults.expandedGlowTop,
             expandedGlowBottom = fields["expandedGlowBottom"]?.toBooleanStrictOrNull() ?: defaults.expandedGlowBottom,
-            bpmPulseEnabled = legacyBpmPulse,
-            minimizedBpmPulseEnabled = fields["minimizedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: legacyBpmPulse,
-            expandedBpmPulseEnabled = fields["expandedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: legacyBpmPulse,
+            minimizedBpmPulseEnabled = fields["minimizedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.minimizedBpmPulseEnabled,
+            expandedBpmPulseEnabled = fields["expandedBpmPulseEnabled"]?.toBooleanStrictOrNull() ?: defaults.expandedBpmPulseEnabled,
             pulseAmount = (finiteFloat("pulseAmount") ?: defaults.pulseAmount).coerceIn(0.25f, 3.0f),
             pulseEntireIslandEnabled = fields["pulseEntireIslandEnabled"]?.toBooleanStrictOrNull() ?: defaults.pulseEntireIslandEnabled,
             waveformBandCount = (fields["waveformBandCount"]?.toIntOrNull() ?: defaults.waveformBandCount).coerceIn(0, 30),
             waveformBarWidth = (finiteFloat("waveformBarWidth") ?: defaults.waveformBarWidth).coerceIn(0.5f, 6f),
             waveformBarSpacing = (finiteFloat("waveformBarSpacing") ?: defaults.waveformBarSpacing).coerceIn(0f, 8f),
-            showMinimizedFlashlightOutline = parsedMinimizedFlashlightOutline,
             minimizedFlashlightLeftSide = enumOrDefault(fields["minimizedFlashlightLeftSide"], defaults.minimizedFlashlightLeftSide),
-            minimizedFlashlightRightSide = enumOrDefault(fields["minimizedFlashlightRightSide"], legacyFlashlightRightSide),
+            minimizedFlashlightRightSide = enumOrDefault(fields["minimizedFlashlightRightSide"], defaults.minimizedFlashlightRightSide),
             showExpandedFlashlightOutline = fields["showExpandedFlashlightOutline"]?.toBooleanStrictOrNull() ?: defaults.showExpandedFlashlightOutline,
             flashlightExpandedStyle = enumOrDefault(fields["flashlightExpandedStyle"], defaults.flashlightExpandedStyle),
             flashlightBeamBlur = fields["flashlightBeamBlur"]?.toBooleanStrictOrNull() ?: defaults.flashlightBeamBlur,
@@ -451,7 +448,7 @@ object IslandConfigurationBackup {
             hideInFullscreen = fields["hideInFullscreen"]?.toBooleanStrictOrNull() ?: defaults.hideInFullscreen,
             hideInLandscape = fields["hideInLandscape"]?.toBooleanStrictOrNull() ?: defaults.hideInLandscape,
             hideInDnd = fields["hideInDnd"]?.toBooleanStrictOrNull() ?: defaults.hideInDnd,
-            hideMusicWhenAppOpen = fields["hideMusicWhenAppOpen"]?.toBooleanStrictOrNull() ?: defaults.hideMusicWhenAppOpen,
+            hideInRelatedApp = fields["hideInRelatedApp"]?.toBooleanStrictOrNull() ?: defaults.hideInRelatedApp,
             showSongAnnouncement = fields["showSongAnnouncement"]?.toBooleanStrictOrNull() ?: defaults.showSongAnnouncement,
             expandedShowTrackInfo = fields["expandedShowTrackInfo"]?.toBooleanStrictOrNull() ?: defaults.expandedShowTrackInfo,
             expandedShowProgress = fields["expandedShowProgress"]?.toBooleanStrictOrNull() ?: defaults.expandedShowProgress,
@@ -462,6 +459,7 @@ object IslandConfigurationBackup {
             visualizerMode = enumOrDefault(fields["visualizerMode"], defaults.visualizerMode),
             previewAudioSource = enumOrDefault(fields["previewAudioSource"], defaults.previewAudioSource),
             activitiesEnabled = fields["activitiesEnabled"]?.toBooleanStrictOrNull() ?: defaults.activitiesEnabled,
+            activityLiveUpdates = fields["activityLiveUpdates"]?.toBooleanStrictOrNull() ?: defaults.activityLiveUpdates,
             activityProgress = fields["activityProgress"]?.toBooleanStrictOrNull() ?: defaults.activityProgress,
             activityNavigation = fields["activityNavigation"]?.toBooleanStrictOrNull() ?: defaults.activityNavigation,
             activityCalls = fields["activityCalls"]?.toBooleanStrictOrNull() ?: defaults.activityCalls,
@@ -482,8 +480,26 @@ object IslandConfigurationBackup {
             activityPermanentDnd = fields["activityPermanentDnd"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentDnd,
             activityPermanentBluetooth = fields["activityPermanentBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentBluetooth,
             activityPermanentAudioOutput = fields["activityPermanentAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityPermanentAudioOutput,
-            activityExpandShortTerm = fields["activityExpandShortTerm"]?.toBooleanStrictOrNull() ?: defaults.activityExpandShortTerm,
+            activityAutoExpandLiveUpdates = fields["activityAutoExpandLiveUpdates"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandLiveUpdates,
+            activityAutoExpandLiveUpdatesOnChange = fields["activityAutoExpandLiveUpdatesOnChange"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandLiveUpdatesOnChange,
+            activityAutoExpandProgress = fields["activityAutoExpandProgress"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandProgress,
+            activityAutoExpandNavigation = fields["activityAutoExpandNavigation"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandNavigation,
+            activityAutoExpandCalls = fields["activityAutoExpandCalls"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandCalls,
+            activityAutoExpandTimers = fields["activityAutoExpandTimers"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandTimers,
+            activityAutoExpandCharging = fields["activityAutoExpandCharging"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandCharging,
+            activityAutoExpandLowBattery = fields["activityAutoExpandLowBattery"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandLowBattery,
+            activityAutoExpandChargeLimit = fields["activityAutoExpandChargeLimit"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandChargeLimit,
+            activityAutoExpandSoundMode = fields["activityAutoExpandSoundMode"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandSoundMode,
+            activityAutoExpandDnd = fields["activityAutoExpandDnd"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandDnd,
+            activityAutoExpandBluetooth = fields["activityAutoExpandBluetooth"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandBluetooth,
+            activityAutoExpandAudioOutput = fields["activityAutoExpandAudioOutput"]?.toBooleanStrictOrNull() ?: defaults.activityAutoExpandAudioOutput,
             activityProgressOutline = fields["activityProgressOutline"]?.toBooleanStrictOrNull() ?: defaults.activityProgressOutline,
+            activityHideStatusBarLiveUpdates = fields["activityHideStatusBarLiveUpdates"]?.toBooleanStrictOrNull()
+                ?: defaults.activityHideStatusBarLiveUpdates,
+            activityMinimizeStatusBarLiveUpdates = fields["activityMinimizeStatusBarLiveUpdates"]?.toBooleanStrictOrNull()
+                ?: defaults.activityMinimizeStatusBarLiveUpdates,
+            activityUseAppColorForIcons = fields["activityUseAppColorForIcons"]?.toBooleanStrictOrNull()
+                ?: defaults.activityUseAppColorForIcons,
             islandPriorityOrder = parsedPriority,
             cutoutManualEnabled = fields["cutoutManualEnabled"]?.toBooleanStrictOrNull(),
             cutoutOffsetX = finiteFloat("cutoutOffsetX"),
@@ -528,8 +544,9 @@ object IslandConfigurationBackup {
         val expandedVisibility = OverlayPreferences.getExpandedElementVisibility(context)
         val activities = OverlayPreferences.getNotificationActivitySettings(context)
         val config = IslandBackupConfig(
-            bubbleStyle = OverlayPreferences.getBubbleStyle(context),
-            smallerBubbles = OverlayPreferences.areSmallerBubblesEnabled(context),
+            islandOutlineMode = OverlayPreferences.getIslandOutlineMode(context),
+            smallerBubblesMode = OverlayPreferences.getSmallerBubblesMode(context),
+            islandSpacingDp = OverlayPreferences.getIslandSpacingDp(context),
             minimizedMaxWidthPercent = OverlayPreferences.minimizedMaxWidthPercent.value,
             islandCornerRadius = OverlayPreferences.islandCornerRadius.value,
             islandSquircleEnabled = OverlayPreferences.islandSquircleEnabled.value,
@@ -561,9 +578,6 @@ object IslandConfigurationBackup {
             trackInfoShowAlbum = trackInfo.showAlbum,
             trackInfoAlbumBesideArtist = trackInfo.albumBesideArtist,
             trackInfoTitleAccent = trackInfo.titleAccentColor,
-            showMinimizedTitle = OverlayPreferences.isShowMinimizedTitleEnabled(context),
-            minimizedMusicTimestamp = OverlayPreferences.getMinimizedMusicTimestamp(context),
-            showMinimizedVisualizer = OverlayPreferences.isShowMinimizedVisualizerEnabled(context),
             minimizedMusicLeftSide = OverlayPreferences.getMinimizedMusicLeftSide(context),
             minimizedMusicRightSide = OverlayPreferences.getMinimizedMusicRightSide(context),
             showMinimizedProgressOutline = OverlayPreferences.isShowMinimizedProgressOutlineEnabled(context),
@@ -575,7 +589,6 @@ object IslandConfigurationBackup {
             expandedGlowRight = glowSides.right,
             expandedGlowTop = glowSides.top,
             expandedGlowBottom = glowSides.bottom,
-            bpmPulseEnabled = OverlayPreferences.isBpmPulseEnabled(context),
             minimizedBpmPulseEnabled = OverlayPreferences.isMinimizedBpmPulseEnabled(context),
             expandedBpmPulseEnabled = OverlayPreferences.isExpandedBpmPulseEnabled(context),
             pulseAmount = OverlayPreferences.getPulseAmount(context),
@@ -583,7 +596,6 @@ object IslandConfigurationBackup {
             waveformBandCount = OverlayPreferences.waveformBandCountFlow.value,
             waveformBarWidth = OverlayPreferences.waveformBarWidthFlow.value,
             waveformBarSpacing = OverlayPreferences.waveformBarSpacingFlow.value,
-            showMinimizedFlashlightOutline = OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context),
             minimizedFlashlightLeftSide = OverlayPreferences.getMinimizedFlashlightLeftSide(context),
             minimizedFlashlightRightSide = OverlayPreferences.getMinimizedFlashlightRightSide(context),
             showExpandedFlashlightOutline = OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context),
@@ -603,7 +615,7 @@ object IslandConfigurationBackup {
             hideInFullscreen = OverlayPreferences.isHideInFullscreenEnabled(context),
             hideInLandscape = OverlayPreferences.isHideInLandscapeEnabled(context),
             hideInDnd = OverlayPreferences.isHideInDndEnabled(context),
-            hideMusicWhenAppOpen = OverlayPreferences.isHideMusicWhenAppOpenEnabled(context),
+            hideInRelatedApp = OverlayPreferences.isHideInRelatedAppEnabled(context),
             showSongAnnouncement = OverlayPreferences.isShowSongAnnouncementEnabled(context),
             expandedShowTrackInfo = expandedVisibility.trackInfo,
             expandedShowProgress = expandedVisibility.progress,
@@ -614,6 +626,7 @@ object IslandConfigurationBackup {
             visualizerMode = OverlayPreferences.getVisualizerMode(context),
             previewAudioSource = OverlayPreferences.getPreviewAudioSource(context),
             activitiesEnabled = activities.enabled,
+            activityLiveUpdates = activities.liveUpdates,
             activityProgress = activities.progress,
             activityNavigation = activities.navigation,
             activityCalls = activities.calls,
@@ -633,8 +646,23 @@ object IslandConfigurationBackup {
             activityPermanentDnd = activities.permanentDnd,
             activityPermanentBluetooth = activities.permanentBluetooth,
             activityPermanentAudioOutput = activities.permanentAudioOutput,
-            activityExpandShortTerm = activities.expandShortTermAlerts,
+            activityAutoExpandLiveUpdates = activities.autoExpandLiveUpdates,
+            activityAutoExpandLiveUpdatesOnChange = activities.autoExpandLiveUpdatesOnChange,
+            activityAutoExpandProgress = activities.autoExpandProgress,
+            activityAutoExpandNavigation = activities.autoExpandNavigation,
+            activityAutoExpandCalls = activities.autoExpandCalls,
+            activityAutoExpandTimers = activities.autoExpandTimers,
+            activityAutoExpandCharging = activities.autoExpandCharging,
+            activityAutoExpandLowBattery = activities.autoExpandLowBattery,
+            activityAutoExpandChargeLimit = activities.autoExpandChargeLimit,
+            activityAutoExpandSoundMode = activities.autoExpandSoundMode,
+            activityAutoExpandDnd = activities.autoExpandDnd,
+            activityAutoExpandBluetooth = activities.autoExpandBluetooth,
+            activityAutoExpandAudioOutput = activities.autoExpandAudioOutput,
             activityProgressOutline = activities.progressOutline,
+            activityHideStatusBarLiveUpdates = activities.hideStatusBarLiveUpdates,
+            activityMinimizeStatusBarLiveUpdates = activities.minimizeStatusBarLiveUpdates,
+            activityUseAppColorForIcons = activities.useAppColorForIcons,
             islandPriorityOrder = OverlayPreferences.getIslandPriorityOrder(context),
             cutoutManualEnabled = cutout.isManualEnabled,
             cutoutOffsetX = cutout.offsetX,
@@ -660,7 +688,7 @@ object IslandConfigurationBackup {
         OverlayPreferences.setHideInFullscreenEnabled(context, config.hideInFullscreen)
         OverlayPreferences.setHideInLandscapeEnabled(context, config.hideInLandscape)
         OverlayPreferences.setHideInDndEnabled(context, config.hideInDnd)
-        OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, config.hideMusicWhenAppOpen)
+        OverlayPreferences.setHideInRelatedAppEnabled(context, config.hideInRelatedApp)
         OverlayPreferences.setShowSongAnnouncementEnabled(context, config.showSongAnnouncement)
         OverlayPreferences.setExpandedElementVisibility(
             context,
@@ -679,6 +707,7 @@ object IslandConfigurationBackup {
             context,
             NotificationActivitySettings(
                 enabled = config.activitiesEnabled,
+                liveUpdates = config.activityLiveUpdates,
                 progress = config.activityProgress,
                 navigation = config.activityNavigation,
                 calls = config.activityCalls,
@@ -698,8 +727,23 @@ object IslandConfigurationBackup {
                 permanentDnd = config.activityPermanentDnd,
                 permanentBluetooth = config.activityPermanentBluetooth,
                 permanentAudioOutput = config.activityPermanentAudioOutput,
-                expandShortTermAlerts = config.activityExpandShortTerm,
+                autoExpandLiveUpdates = config.activityAutoExpandLiveUpdates,
+                autoExpandLiveUpdatesOnChange = config.activityAutoExpandLiveUpdatesOnChange,
+                autoExpandProgress = config.activityAutoExpandProgress,
+                autoExpandNavigation = config.activityAutoExpandNavigation,
+                autoExpandCalls = config.activityAutoExpandCalls,
+                autoExpandTimers = config.activityAutoExpandTimers,
+                autoExpandCharging = config.activityAutoExpandCharging,
+                autoExpandLowBattery = config.activityAutoExpandLowBattery,
+                autoExpandChargeLimit = config.activityAutoExpandChargeLimit,
+                autoExpandSoundMode = config.activityAutoExpandSoundMode,
+                autoExpandDnd = config.activityAutoExpandDnd,
+                autoExpandBluetooth = config.activityAutoExpandBluetooth,
+                autoExpandAudioOutput = config.activityAutoExpandAudioOutput,
                 progressOutline = config.activityProgressOutline,
+                hideStatusBarLiveUpdates = config.activityHideStatusBarLiveUpdates,
+                minimizeStatusBarLiveUpdates = config.activityMinimizeStatusBarLiveUpdates,
+                useAppColorForIcons = config.activityUseAppColorForIcons,
             ),
         )
         OverlayPreferences.setIslandPriorityOrder(context, config.islandPriorityOrder)

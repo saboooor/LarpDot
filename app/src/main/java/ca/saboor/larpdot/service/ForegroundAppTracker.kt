@@ -13,6 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.core.net.toUri
 import ca.saboor.larpdot.media.MediaPlaybackState
+import ca.saboor.larpdot.notification.NotificationActivityState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +38,7 @@ object ForegroundAppTracker {
         isActiveMediaAppOpen(foreground, track.playerPackageName)
     }.stateIn(scope, SharingStarted.Eagerly, false)
     val shouldHideMedia = combine(
-        foregroundPackage, MediaPlaybackState.currentTrack, OverlayPreferences.hideMusicWhenAppOpenFlow,
+        foregroundPackage, MediaPlaybackState.currentTrack, OverlayPreferences.hideInRelatedAppFlow,
     ) { foreground, track, enabled -> shouldHideMediaApp(enabled, foreground, track.playerPackageName) }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
@@ -57,10 +58,14 @@ object ForegroundAppTracker {
             val usage = app.getSystemService(UsageStatsManager::class.java)
             combine(
                 ScreenStateTracker.isScreenOn,
+                OverlayPreferences.hideInRelatedAppFlow,
                 MediaPlaybackState.isMusicActive,
-                OverlayPreferences.hideMusicWhenAppOpenFlow,
-            ) { screenOn, musicActive, hideEnabled ->
-                screenOn to (screenOn && musicActive && hideEnabled)
+                NotificationActivityState.eligibleActivities,
+                CustomIslandStore.settings,
+            ) { screenOn, hideEnabled, musicActive, activities, customSettings ->
+                val hasAppBoundActivity = activities.any { it.packageName.isNotBlank() && it.packageName != "android" }
+                val hasAnyTrackableIsland = musicActive || hasAppBoundActivity || customSettings.activeIslands.isNotEmpty()
+                screenOn to (screenOn && hideEnabled && hasAnyTrackableIsland)
             }.distinctUntilChanged().collectLatest { (screenOn, trackingNeeded) ->
                 if (!screenOn) {
                     _foregroundPackage.value = null
@@ -76,7 +81,7 @@ object ForegroundAppTracker {
                     val granted = refreshUsageAccess(app)
                     if (previouslyGranted && !granted) _foregroundPackage.value = null
                     previouslyGranted = granted
-                    if (granted && MediaPlaybackState.currentTrack.value.hasMedia) {
+                    if (granted) {
                         val now = System.currentTimeMillis()
                         val start = if (cursor == 0L || cursor > now) now - 24 * 60 * 60 * 1000L else cursor
                         try {

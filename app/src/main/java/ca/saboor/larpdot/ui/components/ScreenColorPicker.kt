@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,8 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.get
+import ca.saboor.larpdot.R
 import ca.saboor.larpdot.service.DotAccessibilityService
 import ca.saboor.larpdot.ui.theme.LarpIcons
+import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -77,7 +81,7 @@ internal fun sampleBitmapPixelRgb(
     if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return null
     val x = (normalizedX.coerceIn(0f, 1f) * (bitmap.width - 1)).roundToInt()
     val y = (normalizedY.coerceIn(0f, 1f) * (bitmap.height - 1)).roundToInt()
-    return bitmap.getPixel(x, y) and 0xFFFFFF
+    return bitmap[x, y] and 0xFFFFFF
 }
 
 internal fun captureScreenBitmap(
@@ -151,7 +155,7 @@ internal fun canPickFromOtherApps(): Boolean =
  * to another app or the home screen and tap "Pick color" to capture that screen.
  */
 internal object ExternalScreenColorSession {
-    private var activeOverlay: View? = null
+    private var activeOverlayRef: WeakReference<View>? = null
 
     fun start(
         activity: Activity?,
@@ -165,7 +169,9 @@ internal object ExternalScreenColorSession {
         val density = service.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).roundToInt()
 
-        val container = LinearLayout(service).apply {
+        val container = object : LinearLayout(service) {
+            override fun performClick(): Boolean = super.performClick()
+        }.apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -179,7 +185,7 @@ internal object ExternalScreenColorSession {
         }
 
         val pickButton = TextView(service).apply {
-            text = "Pick color"
+            setText(R.string.screen_color_picker_pick)
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -191,7 +197,7 @@ internal object ExternalScreenColorSession {
         }
 
         val cancelButton = TextView(service).apply {
-            text = "Cancel"
+            setText(R.string.screen_color_picker_cancel)
             setTextColor(0xCCFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(12), dp(6), dp(6), dp(6))
@@ -216,7 +222,7 @@ internal object ExternalScreenColorSession {
         var touchStartX = 0f
         var touchStartY = 0f
         var dragged = false
-        container.setOnTouchListener { _, event ->
+        container.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     dragStartX = params.x
@@ -235,6 +241,10 @@ internal object ExternalScreenColorSession {
                         params.y = (dragStartY - dy).coerceAtLeast(dp(24))
                         runCatching { wm.updateViewLayout(container, params) }
                     }
+                    dragged
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!dragged) view.performClick()
                     dragged
                 }
                 else -> false
@@ -270,7 +280,7 @@ internal object ExternalScreenColorSession {
 
         val added = runCatching {
             wm.addView(container, params)
-            activeOverlay = container
+            activeOverlayRef = WeakReference(container)
             true
         }.getOrDefault(false)
         if (!added) return false
@@ -280,8 +290,9 @@ internal object ExternalScreenColorSession {
     }
 
     fun dismiss(context: Context? = DotAccessibilityService.instance) {
-        val view = activeOverlay ?: return
-        activeOverlay = null
+        val view = activeOverlayRef?.get()
+        activeOverlayRef = null
+        if (view == null) return
         val wm = context?.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         runCatching { wm.removeViewImmediate(view) }
     }
@@ -298,7 +309,7 @@ internal fun ScreenColorPickerOverlay(
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     var samplePoint by remember(bitmap) { mutableStateOf<Offset?>(null) }
     var sampleNorm by remember(bitmap) { mutableStateOf<Offset?>(null) }
-    var sampledRgb by remember(bitmap, initialRgb) { mutableStateOf(initialRgb and 0xFFFFFF) }
+    var sampledRgb by remember(bitmap, initialRgb) { mutableIntStateOf(initialRgb and 0xFFFFFF) }
 
     DisposableEffect(bitmap) {
         onDispose {
@@ -386,7 +397,7 @@ internal fun ScreenColorPickerOverlay(
                             for (dx in -gridHalf..gridHalf) {
                                 val px = (bmpX + dx).coerceIn(0, bitmap.width - 1)
                                 val py = (bmpY + dy).coerceIn(0, bitmap.height - 1)
-                                val pixelColor = Color(bitmap.getPixel(px, py) or 0xFF000000.toInt())
+                                val pixelColor = Color(bitmap[px, py] or 0xFF000000.toInt())
                                 drawRect(
                                     color = pixelColor,
                                     topLeft = Offset(

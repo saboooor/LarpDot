@@ -19,9 +19,11 @@ Do **NOT** implement, re-introduce, or propose any of the features listed below 
 6. **Quick timer & stopwatch**
    - Do not add a built-in quick timer, countdown timer launcher, or stopwatch live activity / card inside LarpDot (system/third-party clock notifications handled generically as Live Activities are separate).
 7. **Flashlight compact pill tap-action setting**
-   - Do not restore the flashlight-specific “Tap to Toggle” / “Tap to Expand” selector. A single tap on a secondary flashlight bubble toggles right-side info.
+   - Do not restore the flashlight-specific “Tap to Toggle” / “Tap to Expand” selector. Secondary bubbles match their main island's single-tap action (expanding if no single-tap action exists), and swiping right shows right-side info.
 8. **Song history**
    - Do not add the Music History category, a Recently Played list, or local recording of played tracks for song history.
+9. **Material 3 bubble shape**
+   - Do not add a Material 3 / grouped flattened-corner bubble shape option (`BubbleStyle.MATERIAL_3`, `groupedIslandShape`, or a bubble shape style selector). Bubbles always use uniform rounded corners.
 
 ### Maintaining this list
 When the user rejects or asks to remove a feature so future AI sessions do not rebuild it, add it to the **Do Not Implement** list above with a concise description of what is disallowed.

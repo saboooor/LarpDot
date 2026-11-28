@@ -146,4 +146,45 @@ class AlbumArtGlowTest {
             AlbumArtGlowShapeKey.of(ca.saboor.larpdot.service.OverlayPreferences.NestedAlbumArtShape.DIAMOND, 315f),
         )
     }
+
+    @Test
+    fun squishedGlowMatchesBottomWithLeftAndRightWhileHavingNoTopGlow() {
+        val layout = computeGlowHaloLayout(androidx.compose.ui.geometry.Size(120f, 120f))
+        assertEquals("Left and right overhang must match", layout.leftOverhang, layout.rightOverhang - 120)
+        assertEquals("Bottom overhang must match left and right overhang", layout.leftOverhang, layout.bottomOverhang - 120)
+        assertTrue("Glow intensity should stay soft and subtle", GLOW_INTENSITY_ALPHA <= 0.5f)
+
+        val pixels = IntArray(BLUR_BUFFER_SIZE * BLUR_BUFFER_SIZE)
+        for (y in (BLUR_PADDING + GLOW_TOP_SQUISH_PX) until (BLUR_PADDING + BLUR_CORE_SIZE)) {
+            for (x in BLUR_PADDING until (BLUR_PADDING + BLUR_CORE_SIZE)) {
+                pixels[y * BLUR_BUFFER_SIZE + x] = packArgb(255, 220, 120, 80)
+            }
+        }
+        blurArtworkPixels(
+            pixels = pixels,
+            width = BLUR_BUFFER_SIZE,
+            height = BLUR_BUFFER_SIZE,
+            radius = BLUR_RADIUS,
+            passes = BLUR_PASSES,
+            saturationBoost = 1f,
+        )
+
+        val sampleRow = BLUR_PADDING + GLOW_TOP_SQUISH_PX + (BLUR_CORE_SIZE - GLOW_TOP_SQUISH_PX) / 2
+        val midX = BLUR_BUFFER_SIZE / 2
+        val leftSample = alpha(pixels[sampleRow * BLUR_BUFFER_SIZE + (BLUR_PADDING - 4)])
+        val rightSample = alpha(pixels[sampleRow * BLUR_BUFFER_SIZE + (BLUR_PADDING + BLUR_CORE_SIZE + 3)])
+        val bottomSample = alpha(pixels[(BLUR_PADDING + BLUR_CORE_SIZE + 3) * BLUR_BUFFER_SIZE + midX])
+        val topEdgeSample = alpha(pixels[(BLUR_PADDING - 1) * BLUR_BUFFER_SIZE + midX])
+
+        assertTrue("Left glow should be softly visible", leftSample > 20)
+        assertEquals("Left and right glow must match", leftSample, rightSample)
+        assertTrue(
+            "Bottom glow ($bottomSample) should closely match left/right glow ($leftSample)",
+            kotlin.math.abs(bottomSample - leftSample) <= 6,
+        )
+        assertTrue(
+            "Top edge above artwork should have no visible glow (got $topEdgeSample)",
+            topEdgeSample <= 3,
+        )
+    }
 }

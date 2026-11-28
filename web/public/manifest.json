@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
+  "name": "LarpDot",
+  "short_name": "LarpDot",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0c0e14",
+  "theme_color": "#0c0e14",
+  "description": "Customizable Dynamic Island overlay for Android and community Custom Island preset catalog."
+}

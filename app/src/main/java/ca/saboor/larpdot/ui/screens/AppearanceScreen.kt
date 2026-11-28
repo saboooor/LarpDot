@@ -33,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import ca.saboor.larpdot.service.DotAccessibilityService
+import ca.saboor.larpdot.service.IslandBackdropLuminanceTracker
 import ca.saboor.larpdot.service.IslandBackupConfig
 import ca.saboor.larpdot.service.IslandConfigurationBackup
 import ca.saboor.larpdot.service.OverlayPreferences
@@ -57,8 +59,10 @@ fun AppearanceScreen(
     val islandFontStyle by OverlayPreferences.islandFontStyleFlow.collectAsState()
     val fontWeight by OverlayPreferences.islandFontWeightFlow.collectAsState()
     val cameraCoverStyle by OverlayPreferences.cameraCoverStyleFlow.collectAsState()
-    val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
-    val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val isAccessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
+    val smallerBubblesMode by OverlayPreferences.smallerBubblesModeFlow.collectAsState()
+    val islandSpacingDp by OverlayPreferences.islandSpacingDpFlow.collectAsState()
     val cornerRadius by OverlayPreferences.islandCornerRadius.collectAsState()
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
@@ -106,8 +110,8 @@ fun AppearanceScreen(
 
     LaunchedEffect(Unit) {
         OverlayPreferences.loadIslandAppearance(context)
-        OverlayPreferences.getBubbleStyle(context)
-        OverlayPreferences.areSmallerBubblesEnabled(context)
+        OverlayPreferences.getSmallerBubblesMode(context)
+        OverlayPreferences.getIslandSpacingDp(context)
     }
 
     LazyColumn(
@@ -125,6 +129,44 @@ fun AppearanceScreen(
                         onValueChange = { OverlayPreferences.setIslandCornerRadius(context, it) },
                         onNudge = { OverlayPreferences.setIslandCornerRadius(context, cornerRadius + it) },
                     )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "Island outline",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        LarpConnectedButtons(
+                            options = OverlayPreferences.IslandOutlineMode.entries.map { mode ->
+                                LarpButtonOption(
+                                    checked = islandOutlineMode == mode,
+                                    label = mode.label,
+                                    onCheckedChange = { OverlayPreferences.setIslandOutlineMode(context, mode) },
+                                )
+                            },
+                        )
+                        AnimatedVisibility(
+                            visible = islandOutlineMode == OverlayPreferences.IslandOutlineMode.DYNAMIC,
+                            enter = LarpMotion.reveal,
+                            exit = LarpMotion.conceal,
+                        ) {
+                            val note = when {
+                                !IslandBackdropLuminanceTracker.isSupported() ->
+                                    "Dynamic outline requires Android 11 or higher."
+                                !isAccessibilityConnected ->
+                                    "Enable the Accessibility Service to detect pitch-black backgrounds."
+                                else ->
+                                    "Shows the outline only when the background behind the island is pitch black."
+                            }
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     LarpSwitchRow(
                         title = "Squircle corners",
                         checked = squircleEnabled && !blurEnabled,
@@ -178,23 +220,35 @@ fun AppearanceScreen(
         item {
             SectionHeader(title = "Bubbles")
             LarpCard {
-                LarpConnectedButtons(
-                    options = OverlayPreferences.BubbleStyle.entries.map { style ->
-                        LarpButtonOption(
-                            checked = bubbleStyle == style,
-                            label = style.label,
-                            onCheckedChange = { OverlayPreferences.setBubbleStyle(context, style) },
-                        )
-                    },
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Smaller secondary bubbles",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    LarpConnectedButtons(
+                        options = OverlayPreferences.SmallerBubblesMode.entries.map { mode ->
+                            LarpButtonOption(
+                                checked = smallerBubblesMode == mode,
+                                label = mode.label,
+                                onCheckedChange = { OverlayPreferences.setSmallerBubblesMode(context, mode) },
+                            )
+                        },
+                    )
+                }
 
                 LarpDivider()
 
-                LarpSwitchRow(
-                    title = "Smaller Bubbles",
-                    icon = LarpIcons.BubbleChart,
-                    checked = smallerBubbles,
-                    onCheckedChange = { OverlayPreferences.setSmallerBubblesEnabled(context, it) },
+                CutoutSliderRow(
+                    label = "Space between islands",
+                    value = islandSpacingDp,
+                    valueRange = 0f..24f,
+                    unit = "dp",
+                    onValueChange = { OverlayPreferences.setIslandSpacingDp(context, it) },
+                    onNudge = { OverlayPreferences.setIslandSpacingDp(context, islandSpacingDp + it) },
                 )
             }
         }

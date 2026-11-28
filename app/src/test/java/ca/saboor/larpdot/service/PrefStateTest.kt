@@ -48,15 +48,16 @@ class PrefStateTest {
     private enum class SampleMode { ALPHA, BETA }
 
     @Test
-    fun booleanPrefSupportsFallbackAndForceSet() {
-        val prefs = FakeSharedPreferences().apply { data["legacy_key"] = true }
-        val pref = BooleanPref("new_key", default = false, fallbackKey = "legacy_key")
-        assertTrue(pref.get(prefs))
+    fun booleanPrefReadsPersistsAndUpdatesFlow() {
+        val prefs = FakeSharedPreferences()
+        val pref = BooleanPref("flag_key", default = false)
+        assertFalse(pref.get(prefs))
+        pref.set(prefs, true)
+        assertTrue(pref.flow.value)
+        assertEquals(true, prefs.data["flag_key"])
         pref.set(prefs, false)
         assertFalse(pref.flow.value)
-        assertEquals(false, prefs.data["new_key"])
-        pref.forceSet(true)
-        assertTrue(pref.flow.value)
+        assertEquals(false, prefs.data["flag_key"])
     }
 
     @Test
@@ -79,18 +80,17 @@ class PrefStateTest {
     }
 
     @Test
-    fun enumPrefReadsFallbackAndPersistsCustomSerializer() {
-        val prefs = FakeSharedPreferences().apply { data["old_mode"] = "BETA" }
+    fun enumPrefReadsAndPersistsCustomSerializer() {
+        val prefs = FakeSharedPreferences().apply { data["mode"] = "beta" }
         val pref = EnumPref(
-            key = "new_mode",
+            key = "mode",
             default = SampleMode.ALPHA,
             parse = { name -> SampleMode.entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: SampleMode.ALPHA },
             serialize = { it.name.lowercase() },
-            fallbackKey = "old_mode",
         )
         assertEquals(SampleMode.BETA, pref.get(prefs))
         pref.set(prefs, SampleMode.ALPHA)
-        assertEquals("alpha", prefs.data["new_mode"])
+        assertEquals("alpha", prefs.data["mode"])
         assertEquals(SampleMode.ALPHA, pref.flow.value)
     }
 }

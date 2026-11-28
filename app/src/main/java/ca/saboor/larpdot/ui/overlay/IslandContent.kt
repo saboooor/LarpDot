@@ -42,7 +42,8 @@ internal fun IslandCompactContent(
         )
         IslandType.FLASHLIGHT -> CompactFlashlightContent(
             cutoutDiameterDp = diameter, onExpand = onExpand,
-            onFlashlightToggle = onFlashlightToggle, isLandscape = landscape, status = model.presentation.status,
+            onFlashlightToggle = onFlashlightToggle, isLandscape = landscape,
+            trailingWingFraction = trailingWingFraction, status = model.presentation.status,
             iconAnchor = iconAnchor, progressAnchor = progressAnchor,
         )
         IslandType.NOTIFICATION_ACTIVITY -> if (activity != null) CompactNotificationActivityContent(

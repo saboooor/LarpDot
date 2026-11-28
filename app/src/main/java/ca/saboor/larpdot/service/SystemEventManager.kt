@@ -82,13 +82,12 @@ object SystemEventManager {
             intent ?: return
             val action = intent.action ?: return
             val settings = OverlayPreferences.notificationActivitySettingsFlow.value
-            if (!settings.enabled) return
 
             when (action) {
                 Intent.ACTION_POWER_CONNECTED -> {
                     isChargingActive = true
                     chargeLimitNotifiedForSession = false
-                    if (settings.batteryCharging) {
+                    if (settings.enabled && settings.batteryCharging) {
                         postChargingAlert(context, settings.permanentCharging)
                     }
                 }
@@ -100,10 +99,10 @@ object SystemEventManager {
                     dismissAlert("system_battery_charge_limit")
                 }
                 Intent.ACTION_BATTERY_CHANGED -> {
-                    handleBatteryChanged(context, intent, settings)
+                    if (settings.enabled) handleBatteryChanged(context, intent, settings)
                 }
                 Intent.ACTION_BATTERY_LOW -> {
-                    if (settings.batteryLow) {
+                    if (settings.enabled && settings.batteryLow) {
                         val pct = getBatteryPercentage(context)
                         lowBatteryNotifiedForSession = true
                         lastLowBatteryPercent = pct
@@ -125,7 +124,7 @@ object SystemEventManager {
                     if (lastRingerMode == currentMode) return
                     lastRingerMode = currentMode
 
-                    if (settings.soundMode) {
+                    if (settings.enabled && settings.soundMode) {
                         val (title, text) = classifySoundMode(currentMode)
                         postAlert(
                             key = "system_sound_mode",
@@ -141,6 +140,7 @@ object SystemEventManager {
                 }
                 BluetoothDevice.ACTION_ACL_CONNECTED,
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                    if (!settings.enabled) return
                     val device = getBluetoothDevice(intent) ?: return
                     val connected = action == BluetoothDevice.ACTION_ACL_CONNECTED
                     val id = bluetoothId(device)
@@ -164,6 +164,7 @@ object SystemEventManager {
                 BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
                 BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
                 BluetoothLeAudio.ACTION_LE_AUDIO_CONNECTION_STATE_CHANGED -> {
+                    if (!settings.enabled) return
                     val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
                     if (state != BluetoothProfile.STATE_CONNECTED && state != BluetoothProfile.STATE_DISCONNECTED) return
                     val device = getBluetoothDevice(intent) ?: return
@@ -279,7 +280,7 @@ object SystemEventManager {
         lastInterruptionFilter = filter
         val status = classifyDndFilter(filter) ?: return
         _isDoNotDisturbActive.value = status.isActive
-        if (!settings.dnd) return
+        if (!settings.enabled || !settings.dnd) return
 
         if (status.isActive) {
             postAlert(

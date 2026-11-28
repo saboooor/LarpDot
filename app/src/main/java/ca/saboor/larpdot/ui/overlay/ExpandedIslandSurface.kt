@@ -189,8 +189,6 @@ internal fun IslandSurfaceOverlay(
     } ?: 0f
     val compactFrame = returnFrame?.let { sourceFrame.toward(it, handoff) } ?: sourceFrame
     val startBounds = compactFrame.bounds
-    val hasBubbleBefore = compactFrame.hasBubbleBefore
-    val hasBubbleAfter = compactFrame.hasBubbleAfter
 
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.dp
@@ -204,15 +202,27 @@ internal fun IslandSurfaceOverlay(
     val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
     val cutoutDiameterDp = cameraGeometry.diameter.dp
     val compactPillThickness = cameraGeometry.thickness.dp
-    val bubbleStyle by OverlayPreferences.bubbleStyleFlow.collectAsState()
-    val smallerBubbles by OverlayPreferences.smallerBubblesFlow.collectAsState()
-    val secondaryBubbleThickness = secondaryBubbleThicknessDp(compactPillThickness.value, smallerBubbles).dp
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val isBackgroundPitchBlack by ca.saboor.larpdot.service.IslandBackdropLuminanceTracker.isBackgroundPitchBlack.collectAsState()
+    val outlineVisibility by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (ca.saboor.larpdot.service.resolveIslandOutlineVisible(islandOutlineMode, isBackgroundPitchBlack)) 1f else 0f,
+        animationSpec = LarpMotion.fade(220),
+        label = "expanded_outline_visibility",
+    )
+    val smallerBubblesMode by OverlayPreferences.smallerBubblesModeFlow.collectAsState()
+    val secondaryBubbleThickness = secondaryBubbleThicknessDp(
+        compactPillThickness.value,
+        compactFrame.smallerSecondary || smallerBubblesMode == OverlayPreferences.SmallerBubblesMode.ALWAYS,
+    ).dp
     val cutoutCenterYDp = with(density) { cutoutInfo.centerY.toDp() }
     // The expanded card starts 14dp below the screen top; the camera dot itself is the top inset.
     val expandedCutoutClearanceDp = if (isLandscape) 0.dp else
         (cutoutCenterYDp + cutoutDiameterDp / 2f - 14.dp).coerceAtLeast(0.dp)
 
-    val showMinimizedTitle by OverlayPreferences.showMinimizedTitleFlow.collectAsState()
+    val musicLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
+    val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
+    val showMinimizedTitle = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
+        musicRightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
     val notificationActivityStatus = notificationActivity?.let { rememberCompactActivityStatus(it) }
     val flashlightStatus = rememberCompactFlashlightStatus()
     val announcementActive = compactFrame.announcing
@@ -290,8 +300,6 @@ internal fun IslandSurfaceOverlay(
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val expandedCornerRadiusDp = cornerRadius.dp.coerceAtMost(minOf(cardWidth, cardHeight) / 2f)
 
-    val musicLeftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
-    val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
     val showMinimizedVisualizer = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER ||
         musicRightSide == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER
     val visualizerMotion = if (expandedType == IslandType.MEDIA && expandedElementVisibility.visualizer &&
@@ -356,29 +364,16 @@ internal fun IslandSurfaceOverlay(
     val currentCornerRadius = androidx.compose.ui.unit.lerp(startCorner, expandedCornerRadiusDp, expansion)
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val useRoundedCorners = !squircleEnabled || blurEnabled
-    val cornerMix = if (useRoundedCorners) motionFraction(expansion, 0f, 0.12f) else expansion
-    val innerCorner = androidx.compose.ui.unit.lerp(
-        (startCorner * 0.3f).coerceAtMost(6.dp),
-        currentCornerRadius,
-        cornerMix,
-    )
-    val grouped = bubbleStyle == OverlayPreferences.BubbleStyle.MATERIAL_3
-    val beforeCorner = if (grouped && hasBubbleBefore) innerCorner else currentCornerRadius
-    val afterCorner = if (grouped && hasBubbleAfter) innerCorner else currentCornerRadius
     val blurRadius by OverlayPreferences.backdropBlurRadius.collectAsState()
     val blurAvailable = blurEnabled && rememberBackdropBlurStatus() == BackdropBlurStatus.AVAILABLE
     val blurReveal = motionFraction(expansion, 0.12f, 0.88f)
     val useBackdropBlur = blurAvailable && blurReveal > 0f
     // Native backdrop blur can only follow evenly rounded corners.
-    val containerShape = if (useRoundedCorners && (!grouped || expansion >= 0.12f)) {
+    val containerShape = if (useRoundedCorners) {
         RoundedCornerShape(currentCornerRadius)
     } else squircleShape(
         radiusPx = with(density) { currentCornerRadius.toPx() },
-        curvatureFactor = if (useRoundedCorners) 0.5522848f else 0.5522848f + 0.2477152f * expansion,
-        topLeftRadiusPx = with(density) { beforeCorner.toPx() },
-        topRightRadiusPx = with(density) { (if (isLandscape) beforeCorner else afterCorner).toPx() },
-        bottomRightRadiusPx = with(density) { afterCorner.toPx() },
-        bottomLeftRadiusPx = with(density) { (if (isLandscape) afterCorner else beforeCorner).toPx() },
+        curvatureFactor = 0.5522848f + 0.2477152f * expansion,
     )
 
     val compactAlpha = 1f - motionFraction(contentExpansion, 0.04f, 0.54f)
@@ -469,7 +464,7 @@ internal fun IslandSurfaceOverlay(
                         else -> expansion
                     }
                 }
-                .islandOutline(containerShape, currentCornerRadius)
+                .islandOutline(containerShape, currentCornerRadius, outlineVisibility, enabled = outlineVisibility > 0.001f)
                 .shadow(currentElevation, containerShape, clip = false),
         ) {
             Box(
@@ -510,8 +505,6 @@ internal fun IslandSurfaceOverlay(
                                 bubbleThickness = secondaryBubbleThickness,
                                 isMiniPill = compactFrame.isMiniPill,
                                 isLandscape = isLandscape,
-                                beforeMain = hasBubbleAfter,
-                                bubbleStyle = bubbleStyle,
                                 notificationActivity = notificationActivity,
                                 mediaInfo = mediaInfo,
                                 notificationActivityStatus = notificationActivityStatus,
@@ -561,12 +554,11 @@ internal fun IslandSurfaceOverlay(
                             .artworkContainer(artworkMotion?.expanded)
                             .elementMotionContainer(elementMotions.map { it.expanded }),
                     ) {
-                        if (expandedType != IslandType.MEDIA) CameraCover(
+                        if (expandedType != IslandType.MEDIA && expandedType != IslandType.CUSTOM) CameraCover(
                             style = cameraCoverStyle,
                             centerX = cutoutCenterXDp - ((drawWindowWidthDp - expandedWidth) / 2f + expandedOffsetX),
                             centerY = cutoutCenterYDp - panelPlacement.top.dp,
                             diameter = cutoutDiameterDp,
-                            modifier = if (expandedType == IslandType.CUSTOM) Modifier.matchParentSize() else Modifier,
                         )
                         when (expandedType) {
                             IslandType.CUSTOM -> customIsland?.let {
@@ -587,6 +579,10 @@ internal fun IslandSurfaceOverlay(
                                     modifier = Modifier.onSizeChanged { size ->
                                         measuredCustomHeight = with(density) { size.height.toDp() }
                                     },
+                                    cameraCoverStyle = cameraCoverStyle,
+                                    cutoutCenterX = cutoutCenterXDp - ((drawWindowWidthDp - expandedWidth) / 2f + expandedOffsetX),
+                                    cutoutCenterY = cutoutCenterYDp - panelPlacement.top.dp,
+                                    cutoutDiameterDp = cutoutDiameterDp,
                                     leftWingAnchor = expandedLeftAnchor,
                                     rightWingAnchor = expandedRightAnchor,
                                 )

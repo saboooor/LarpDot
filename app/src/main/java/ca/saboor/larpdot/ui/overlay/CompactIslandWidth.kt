@@ -37,7 +37,7 @@ internal fun secondaryMusicRightInfoExtent(
         compactTimestampWidthSample(mediaInfo.durationMs, timestamp)
     } else mediaInfo.title
     val textMeasurer = rememberTextMeasurer()
-    val size = textMeasurer.measure(sample, MaterialTheme.typography.labelSmall, softWrap = false, maxLines = 1).size
+    val size = textMeasurer.measure(sample, MaterialTheme.typography.labelMedium, softWrap = false, maxLines = 1).size
     return with(LocalDensity.current) { size.width.toDp().coerceAtMost(96.dp) }
 }
 
@@ -53,14 +53,16 @@ internal fun configuredCompactMediaWings(
     landscape: Boolean,
     leadingBubbleExtentDp: Float = 0f,
     trailingBubbleExtentDp: Float = 0f,
+    hasRightWingContent: Boolean = true,
+    hasRightBubble: Boolean = false,
 ): CompactMediaWings {
     val albumArtStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
-    val showProgressRing by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val showProgressRing by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val leftSide by OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState()
     val rightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
     val density = LocalDensity.current.density
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelSmall
+    val labelStyle = MaterialTheme.typography.labelMedium
     val hasTitleSide = leftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
         rightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
     val hasArtSide = leftSide == OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART ||
@@ -79,7 +81,7 @@ internal fun configuredCompactMediaWings(
 
     fun textWidth(text: String): Float {
         val textStyle = if (announcing) labelStyle.copy(
-            fontSize = 11.5.sp,
+            fontSize = 13.sp,
             fontWeight = labelStyle.fontWeight,
         ) else labelStyle
         return textMeasurer.measure(
@@ -150,10 +152,11 @@ internal fun configuredCompactMediaWings(
         compactMediaWings(maxOf(artExtra, timeExtraWidth), if (hasVisualizerSide) visualizerWidthDp else 0f)
     }
     if (landscape) return requested
+    val adjusted = collapseEmptyTrailingWing(requested, hasRightWingContent, hasRightBubble)
     return rememberFittedCompactWings(
-        requested, cameraDiameterDp, cameraCenterXPx,
+        adjusted, cameraDiameterDp, cameraCenterXPx,
         leadingBubbleExtentDp, trailingBubbleExtentDp,
-        symmetric = !announcing,
+        symmetric = !announcing && (hasRightWingContent || !hasRightBubble),
     )
 }
 

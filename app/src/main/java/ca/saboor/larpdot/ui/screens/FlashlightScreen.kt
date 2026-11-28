@@ -125,7 +125,6 @@ fun FlashlightScreen(
         OverlayPreferences.getFlashlightExpandedStyle(context)
         OverlayPreferences.isFlashlightBeamBlurEnabled(context)
         OverlayPreferences.isShowFlashlightIslandEnabled(context)
-        OverlayPreferences.isShowMinimizedFlashlightOutlineEnabled(context)
         OverlayPreferences.getMinimizedFlashlightLeftSide(context)
         OverlayPreferences.getMinimizedFlashlightRightSide(context)
         OverlayPreferences.isShowExpandedFlashlightOutlineEnabled(context)

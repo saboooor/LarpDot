@@ -86,7 +86,7 @@ private fun AnnouncementTrackText(
         MarqueeText(
             text = title.ifBlank { "Playing Track" },
             color = Color.White,
-            style = MaterialTheme.typography.labelSmall.copy(
+            style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
                 fontSize = titleFontSize.sp,
                 fontFamily = fontFamily,
@@ -100,7 +100,7 @@ private fun AnnouncementTrackText(
         MarqueeText(
             text = artist.ifBlank { "Media Player" },
             color = accentColor.copy(alpha = 0.95f),
-            style = MaterialTheme.typography.labelSmall.copy(
+            style = MaterialTheme.typography.labelMedium.copy(
                 fontSize = artistFontSize.sp,
                 fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value),
                 fontFamily = fontFamily,
@@ -380,14 +380,12 @@ internal fun SecondaryMusicDotContent(
     bubbleThickness: Dp,
     isMiniPill: Boolean,
     isLandscape: Boolean,
-    beforeMain: Boolean,
-    bubbleStyle: OverlayPreferences.BubbleStyle,
     artworkAnchor: ArtworkAnchor? = null,
     visualizerAnchor: IslandElementAnchor? = null,
     albumArtStyle: OverlayPreferences.AlbumArtStyle = OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState().value,
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
-    showProgressRing: Boolean = OverlayPreferences.showProgressOutlineFlow.collectAsState().value,
+    showProgressRing: Boolean = OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState().value,
 ) {
     val artworkShape = nestedAlbumArtShape(nestedShape, nestedRotation)
     val density = LocalDensity.current
@@ -400,14 +398,9 @@ internal fun SecondaryMusicDotContent(
         shape = if (usesShapedGlow) artworkShape else null,
         shapeKey = if (usesShapedGlow) AlbumArtGlowShapeKey.of(nestedShape, nestedRotation) else null,
     )
-    val grouped = bubbleStyle == OverlayPreferences.BubbleStyle.MATERIAL_3
-    val outerPadding = 8.dp
-    val innerPadding = if (grouped) 6.dp else outerPadding
+    val trailingPadding = 8.dp
     val ringDiameter = compactBatteryRingDiameter(bubbleThickness)
     val hasMusicProgressRing = showProgressRing && mediaInfo.hasMedia && mediaInfo.durationMs > 0L
-    val hasCircularArtwork = nestedShape == OverlayPreferences.NestedAlbumArtShape.CIRCLE &&
-        (mediaInfo.albumArt != null || albumArtStyle == OverlayPreferences.AlbumArtStyle.NESTED)
-    val contentShift = if (grouped && !isPillShaped && !hasMusicProgressRing && !hasCircularArtwork) 1.5.dp else 0.dp
     val iconScale = (minOf(bubbleWidth, bubbleHeight) / bubbleThickness).coerceIn(0f, 1f)
     val nestedArtSize = compactNestedArtworkSize(bubbleThickness, minimum = 14.dp)
     val leadingSize = if (hasMusicProgressRing) ringDiameter else nestedArtSize
@@ -483,9 +476,6 @@ internal fun SecondaryMusicDotContent(
                 OverlayPreferences.AlbumArtStyle.NESTED -> Unit
             }
             if (hasMusicProgressRing) {
-                val dotArtworkShape = if (!isPillShaped && grouped) {
-                    groupedIslandShape(bubbleThickness / 2f, !beforeMain, beforeMain, isLandscape)
-                } else CircleShape
                 Box(
                     modifier = Modifier
                         .align(
@@ -501,7 +491,7 @@ internal fun SecondaryMusicDotContent(
                     CompactMusicProgressRing(
                         progressProvider = musicProgressProvider,
                         accentColor = accentColor,
-                        shape = dotArtworkShape,
+                        shape = CircleShape,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(1.dp),
@@ -515,8 +505,8 @@ internal fun SecondaryMusicDotContent(
                         .padding(
                             top = if (isLandscape) bubbleThickness else 0.dp,
                             start = if (!isLandscape) bubbleThickness else 0.dp,
-                            bottom = if (isLandscape) (if (beforeMain) innerPadding else outerPadding) else 0.dp,
-                            end = if (!isLandscape) (if (beforeMain) innerPadding else outerPadding) else 0.dp,
+                            bottom = if (isLandscape) trailingPadding else 0.dp,
+                            end = if (!isLandscape) trailingPadding else 0.dp,
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -574,11 +564,10 @@ internal fun SecondaryMusicDotContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(y = if (beforeMain) contentShift else -contentShift)
                 .then(
                     if (isPillShaped) Modifier.padding(
                         top = leadingInset,
-                        bottom = if (beforeMain) innerPadding else outerPadding,
+                        bottom = trailingPadding,
                     ) else Modifier
                 ),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -600,11 +589,10 @@ internal fun SecondaryMusicDotContent(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(x = if (beforeMain) contentShift else -contentShift)
                 .then(
                     if (isPillShaped) Modifier.padding(
                         start = leadingInset,
-                        end = if (beforeMain) innerPadding else outerPadding,
+                        end = trailingPadding,
                     ) else Modifier
                 ),
             verticalAlignment = Alignment.CenterVertically,
@@ -634,8 +622,10 @@ internal fun CompactIslandContent(
     nestedShape: OverlayPreferences.NestedAlbumArtShape = OverlayPreferences.minimizedAlbumArtShapeFlow.collectAsState().value,
     nestedRotation: Float = OverlayPreferences.minimizedAlbumArtRotationFlow.collectAsState().value,
     showDominantGlow: Boolean = OverlayPreferences.showMinimizedDominantColorGlowFlow.collectAsState().value,
-    showMinimizedTitle: Boolean = OverlayPreferences.showMinimizedTitleFlow.collectAsState().value,
-    showVisualizer: Boolean = OverlayPreferences.showMinimizedVisualizerFlow.collectAsState().value,
+    showMinimizedTitle: Boolean = OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState().value == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
+        OverlayPreferences.minimizedMusicRightSideFlow.collectAsState().value == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE,
+    showVisualizer: Boolean = OverlayPreferences.minimizedMusicLeftSideFlow.collectAsState().value == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER ||
+        OverlayPreferences.minimizedMusicRightSideFlow.collectAsState().value == OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
     waveformBandCount: Int = OverlayPreferences.waveformBandCountFlow.collectAsState().value,
     waveformBarWidth: Float = OverlayPreferences.waveformBarWidthFlow.collectAsState().value,
     waveformBarSpacing: Float = OverlayPreferences.waveformBarSpacingFlow.collectAsState().value,
@@ -645,7 +635,7 @@ internal fun CompactIslandContent(
     trailingWingFraction: Float = 0.5f,
     artworkAnchor: ArtworkAnchor? = null,
     visualizerAnchor: IslandElementAnchor? = null,
-    showProgressRing: Boolean = OverlayPreferences.showProgressOutlineFlow.collectAsState().value,
+    showProgressRing: Boolean = OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState().value,
     progressProvider: (() -> Float)? = null,
     onAlbumArtClick: (() -> Unit)? = null,
     onRightWingClick: (() -> Unit)? = null,
@@ -821,32 +811,37 @@ internal fun CompactIslandContent(
             )
         }
     } else {
-        val leadingWingFraction = 1f - trailingWingFraction
+        val leadingWingFraction = (1f - trailingWingFraction).coerceIn(0f, 1f)
+        val trailingFraction = trailingWingFraction.coerceIn(0f, 1f)
         Row(
             modifier = containerModifier,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RenderMusicWing(
-                sideContent = leftSide,
-                isTrailing = false,
-                wingModifier = Modifier
-                    .weight(leadingWingFraction)
-                    .fillMaxHeight()
-                    .then(leftWingInteraction),
-                wingArtworkAnchor = leftArtworkAnchor,
-                wingVisualizerAnchor = leftVisualizerAnchor,
-            )
+            if (leadingWingFraction > 0.001f) {
+                RenderMusicWing(
+                    sideContent = leftSide,
+                    isTrailing = false,
+                    wingModifier = Modifier
+                        .weight(leadingWingFraction)
+                        .fillMaxHeight()
+                        .then(leftWingInteraction),
+                    wingArtworkAnchor = leftArtworkAnchor,
+                    wingVisualizerAnchor = leftVisualizerAnchor,
+                )
+            }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
-            RenderMusicWing(
-                sideContent = rightSide,
-                isTrailing = true,
-                wingModifier = Modifier
-                    .weight(trailingWingFraction)
-                    .fillMaxHeight()
-                    .then(rightWingInteraction),
-                wingArtworkAnchor = rightArtworkAnchor,
-                wingVisualizerAnchor = rightVisualizerAnchor,
-            )
+            if (trailingFraction > 0.001f) {
+                RenderMusicWing(
+                    sideContent = rightSide,
+                    isTrailing = true,
+                    wingModifier = Modifier
+                        .weight(trailingFraction)
+                        .fillMaxHeight()
+                        .then(rightWingInteraction),
+                    wingArtworkAnchor = rightArtworkAnchor,
+                    wingVisualizerAnchor = rightVisualizerAnchor,
+                )
+            }
         }
     }
 }
@@ -1168,8 +1163,8 @@ private fun CompactMusicSideInfoWing(
                             title = mediaInfo.title,
                             artist = mediaInfo.artist,
                             accentColor = accentColor,
-                            titleFontSize = 10.5f,
-                            artistFontSize = 9f,
+                            titleFontSize = 12f,
+                            artistFontSize = 10.5f,
                             fadeWidth = 6.dp,
                         )
                     }
@@ -1206,7 +1201,7 @@ private fun CompactMusicSideInfoWing(
                         MarqueeText(
                             text = mediaInfo.artist.ifBlank { "Media Player" },
                             color = accentColor.copy(alpha = 0.95f),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
                             modifier = Modifier
                                 .weight(1f)
                                 .graphicsLayer { alpha = announcementAlpha },
@@ -1285,7 +1280,7 @@ private fun CompactMusicRightInfoContent(
         CompactMusicRightInfo.TITLE -> MarqueeText(
             text = mediaInfo.title,
             color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             modifier = labelModifier.fillMaxWidth(),
             fadeWidth = 6.dp,
         )
@@ -1296,7 +1291,7 @@ private fun CompactMusicRightInfoContent(
                     formatRemainingTime(time, mediaInfo.durationMs)
                 } else formatTime(time)
             },
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             modifier = labelModifier,
         )
         CompactMusicRightInfo.VISUALIZER -> FittedEqualizerWaveform(
@@ -1412,9 +1407,9 @@ private fun CompactMusicAnnouncementTitle(
     MarqueeText(
         text = title.ifBlank { "Playing Track" },
         color = Color.White,
-        style = MaterialTheme.typography.labelSmall.copy(
+        style = MaterialTheme.typography.labelMedium.copy(
             fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
-            fontSize = 11.5.sp,
+            fontSize = 13.sp,
         ),
         modifier = modifier.graphicsLayer { this.alpha = alpha },
         textAlign = TextAlign.End,

@@ -25,6 +25,7 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,12 +39,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutDetector
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.flashlight.FlashlightController
 import ca.saboor.larpdot.service.CustomIsland
 import ca.saboor.larpdot.service.CustomIslandStore
 import ca.saboor.larpdot.service.CustomIslandWidgets
+import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.customIslandDisplayInfo
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
@@ -54,7 +59,6 @@ import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.overlay.IslandPriorityItem
-import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.islandPriorityOrderWithCustom
 import ca.saboor.larpdot.ui.theme.LarpMotion
 import kotlin.math.roundToInt
@@ -74,18 +78,29 @@ fun HomeScreen(
     val hapticsEnabled by OverlayPreferences.hapticsEnabledFlow.collectAsState()
     val expandedAutoCollapseSeconds by OverlayPreferences.expandedAutoCollapseSecondsFlow.collectAsState()
     val holdToExpandDurationMs by OverlayPreferences.holdToExpandDurationMsFlow.collectAsState()
-    val swipeDownSensitivity by OverlayPreferences.swipeDownSensitivityFlow.collectAsState()
     val minimizedMaxWidth by OverlayPreferences.minimizedMaxWidthPercent.collectAsState()
     val hideWhenScreenOff by OverlayPreferences.hideWhenScreenOffFlow.collectAsState()
     val hideOnLockScreen by OverlayPreferences.hideOnLockScreenFlow.collectAsState()
     val hideInFullscreen by OverlayPreferences.hideInFullscreenFlow.collectAsState()
     val hideInLandscape by OverlayPreferences.hideInLandscapeFlow.collectAsState()
     val hideInDnd by OverlayPreferences.hideInDndFlow.collectAsState()
+    val hideInRelatedApp by OverlayPreferences.hideInRelatedAppFlow.collectAsState()
+    val usageAccessGranted by ForegroundAppTracker.hasUsageAccess.collectAsState()
     val islandPriorityOrder by OverlayPreferences.islandPriorityOrderFlow.collectAsState()
     val customIslandSettings by CustomIslandStore.settings.collectAsState()
     val appBlacklistEnabled by OverlayPreferences.appBlacklistEnabledFlow.collectAsState()
     val blacklistedPackages by OverlayPreferences.blacklistedPackagesFlow.collectAsState()
     var showBlacklistScreen by rememberSaveable { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        ForegroundAppTracker.refreshUsageAccess(context)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) ForegroundAppTracker.refreshUsageAccess(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     if (showBlacklistScreen) {
         AppBlacklistScreen(
@@ -107,6 +122,7 @@ fun HomeScreen(
         OverlayPreferences.isHideInFullscreenEnabled(context)
         OverlayPreferences.isHideInLandscapeEnabled(context)
         OverlayPreferences.isHideInDndEnabled(context)
+        OverlayPreferences.isHideInRelatedAppEnabled(context)
         OverlayPreferences.getIslandPriorityOrder(context)
         FlashlightController.init(context)
     }
@@ -156,12 +172,13 @@ fun HomeScreen(
                 hapticsEnabled = hapticsEnabled,
                 expandedAutoCollapseSeconds = expandedAutoCollapseSeconds,
                 holdToExpandDurationMs = holdToExpandDurationMs,
-                swipeDownSensitivity = swipeDownSensitivity,
                 hideWhenScreenOff = hideWhenScreenOff,
                 hideOnLockScreen = hideOnLockScreen,
                 hideInFullscreen = hideInFullscreen,
                 hideInLandscape = hideInLandscape,
                 hideInDnd = hideInDnd,
+                hideInRelatedApp = hideInRelatedApp,
+                usageAccessGranted = usageAccessGranted,
                 appBlacklistEnabled = appBlacklistEnabled,
                 blacklistedCount = blacklistedPackages.size,
                 onOpenBlacklist = { showBlacklistScreen = true },
@@ -232,12 +249,13 @@ private fun IslandBehaviorCard(
     hapticsEnabled: Boolean,
     expandedAutoCollapseSeconds: Int,
     holdToExpandDurationMs: Int,
-    swipeDownSensitivity: SwipeDownSensitivity,
     hideWhenScreenOff: Boolean,
     hideOnLockScreen: Boolean,
     hideInFullscreen: Boolean,
     hideInLandscape: Boolean,
     hideInDnd: Boolean,
+    hideInRelatedApp: Boolean,
+    usageAccessGranted: Boolean,
     appBlacklistEnabled: Boolean,
     blacklistedCount: Int,
     onOpenBlacklist: () -> Unit,
@@ -276,26 +294,6 @@ private fun IslandBehaviorCard(
                 OverlayPreferences.setHoldToExpandDurationMs(context, holdToExpandDurationMs + delta * 25)
             },
         )
-
-        LarpDivider()
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Swipe-Down Sensitivity",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            LarpConnectedButtons(
-                options = SwipeDownSensitivity.entries.map { option ->
-                    LarpButtonOption(
-                        checked = swipeDownSensitivity == option,
-                        label = option.label,
-                        onCheckedChange = {
-                            OverlayPreferences.setSwipeDownSensitivity(context, option)
-                        },
-                    )
-                },
-            )
-        }
 
         LarpDivider()
 
@@ -378,6 +376,27 @@ private fun IslandBehaviorCard(
             checked = hideInDnd,
             onCheckedChange = { OverlayPreferences.setHideInDndEnabled(context, it) },
         )
+
+        LarpDivider()
+
+        LarpSwitchRow(
+            title = "Hide in Related App",
+            subtitle = "Hide music, live activities, and custom islands while their app is open",
+            icon = LarpIcons.Apps,
+            checked = hideInRelatedApp,
+            onCheckedChange = { OverlayPreferences.setHideInRelatedAppEnabled(context, it) },
+        )
+
+        if (hideInRelatedApp && !usageAccessGranted) {
+            Text(
+                text = "Allow usage access to detect which app is currently open.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
+                Text("Grant usage access")
+            }
+        }
 
         LarpDivider()
 

@@ -39,6 +39,25 @@ data class IslandModel(
     }
 }
 
+/** Runs an island's single-tap action, falling back to expanding the island if no tap action exists. */
+internal fun activateOrExpand(action: () -> Boolean, expand: () -> Unit) {
+    if (!action()) expand()
+}
+
+/**
+ * Resolves the next secondary mini-pill visibility after a horizontal swipe.
+ * Swiping right shows right-side info; when already shown, swiping left (or right again) hides it.
+ */
+internal fun nextSecondaryMiniPillState(
+    isMiniPill: Boolean,
+    canShowMiniPill: Boolean,
+    swipeRight: Boolean,
+): Boolean? = when {
+    !isMiniPill && canShowMiniPill && swipeRight -> true
+    isMiniPill -> false
+    else -> null
+}
+
 /** Observe without consuming events, so buttons, sliders and swipes keep their own gestures. */
 @Composable
 internal fun rememberIslandPressFeedback(

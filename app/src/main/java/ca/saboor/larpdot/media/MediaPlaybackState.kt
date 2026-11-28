@@ -144,28 +144,59 @@ object MediaPlaybackState {
     private var sessionPlaybackState: PlaybackState? = null
     private var sessionArtwork: Bitmap? = null
 
+    private const val PENDING_ARTWORK_CLEAR_MS = 1_500L
+
     private val playbackScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressTickerJob: Job? = null
     private var artworkUpdateJob: Job? = null
+    private var pendingArtworkClearJob: Job? = null
     private var lastArtworkCandidate: Bitmap? = null
 
     private fun resetArtworkUpdate() {
         artworkUpdateJob?.cancel()
         artworkUpdateJob = null
+        pendingArtworkClearJob?.cancel()
+        pendingArtworkClearJob = null
         lastArtworkCandidate = null
     }
 
-    private fun updateArtwork(candidate: Bitmap?) {
-        if (candidate == null || candidate.isRecycled || candidate === lastArtworkCandidate) return
+    private fun schedulePendingArtworkClear(
+        expectedTitle: String,
+        expectedArtist: String,
+        expectedPackage: String?,
+    ) {
+        pendingArtworkClearJob?.cancel()
+        pendingArtworkClearJob = playbackScope.launch {
+            delay(PENDING_ARTWORK_CLEAR_MS)
+            val current = _currentTrack.value
+            if (!current.isSimulated &&
+                current.title == expectedTitle &&
+                current.artist == expectedArtist &&
+                current.playerPackageName == expectedPackage &&
+                lastArtworkCandidate == null
+            ) {
+                _currentTrack.value = current.copy(
+                    albumArt = null,
+                    artworkColors = DominantColorExtractor.defaultColors,
+                )
+            }
+        }
+    }
+
+    private fun updateArtwork(candidate: Bitmap?, forceColorUpdate: Boolean = false) {
+        if (candidate == null || candidate.isRecycled) return
+        pendingArtworkClearJob?.cancel()
+        pendingArtworkClearJob = null
+        if (!forceColorUpdate && candidate === lastArtworkCandidate) return
         lastArtworkCandidate = candidate
         artworkUpdateJob?.cancel()
         val displayedArtwork = _currentTrack.value.albumArt
-        if (candidate === displayedArtwork) return
+        if (!forceColorUpdate && candidate === displayedArtwork) return
 
         artworkUpdateJob = playbackScope.launch {
             val colors = withContext(Dispatchers.Default) {
                 // Media apps can send a fresh Bitmap containing the same cover on each update.
-                if (displayedArtwork != null && !displayedArtwork.isRecycled && displayedArtwork.sameAs(candidate)) null
+                if (!forceColorUpdate && displayedArtwork != null && !displayedArtwork.isRecycled && displayedArtwork.sameAs(candidate)) null
                 else DominantColorExtractor.extractArtworkColors(candidate)
             } ?: return@launch
             _currentTrack.value = _currentTrack.value.copy(albumArt = candidate, artworkColors = colors)
@@ -374,16 +405,25 @@ object MediaPlaybackState {
             return
         }
 
+        val immediateArtwork = sessionArtwork?.takeUnless(Bitmap::isRecycled)
+        val retainedArtwork = current.albumArt?.takeIf { !it.isRecycled && (sameTrack || samePlayer) }
+        val nextArtwork = if (sameTrack) retainedArtwork ?: immediateArtwork else immediateArtwork ?: retainedArtwork
+        val nextColors = if (sameTrack || (samePlayer && nextArtwork != null)) {
+            current.artworkColors
+        } else {
+            DominantColorExtractor.defaultColors
+        }
+
         _positionMs.value = calculatedPosition
         _currentTrack.value = MediaTrackInfo(
             title = title,
             artist = artist,
             album = album,
-            albumArt = current.albumArt.takeIf { sameTrack },
+            albumArt = nextArtwork,
             isPlaying = isPlaying,
             positionMs = calculatedPosition,
             durationMs = duration,
-            artworkColors = if (sameTrack) current.artworkColors else DominantColorExtractor.defaultColors,
+            artworkColors = nextColors,
             controller = controller,
             playerPackageName = controller.packageName,
             appName = resolvedAppName,
@@ -391,7 +431,11 @@ object MediaPlaybackState {
             isSimulated = false,
         )
 
-        updateArtwork(sessionArtwork)
+        if (immediateArtwork != null) {
+            updateArtwork(immediateArtwork, forceColorUpdate = !sameTrack)
+        } else if (!sameTrack && nextArtwork != null) {
+            schedulePendingArtworkClear(title, artist, controller.packageName)
+        }
         checkTickerState(isPlaying)
     }
 
@@ -440,16 +484,28 @@ object MediaPlaybackState {
 
         if (!sameTrack) resetArtworkUpdate()
         if (!samePlayer) _positionMs.value = 0L
+        val immediateCandidate = candidate?.takeUnless(Bitmap::isRecycled)
+        val retainedPreviousArt = previous.albumArt?.takeIf { !it.isRecycled && (sameTrack || samePlayer) }
+        val nextArtwork = if (sameTrack) retainedPreviousArt ?: immediateCandidate else immediateCandidate ?: retainedPreviousArt
+        val nextColors = if (sameTrack || (samePlayer && nextArtwork != null)) {
+            previous.artworkColors
+        } else {
+            DominantColorExtractor.defaultColors
+        }
         _currentTrack.value = previous.copy(
             title = newTitle,
             artist = newArtist,
             album = newAlbum,
-            albumArt = previous.albumArt.takeIf { sameTrack },
-            artworkColors = if (sameTrack) previous.artworkColors else DominantColorExtractor.defaultColors,
+            albumArt = nextArtwork,
+            artworkColors = nextColors,
             playerPackageName = newPackage,
             appName = resolvedAppName,
         )
-        updateArtwork(candidate)
+        if (immediateCandidate != null) {
+            updateArtwork(immediateCandidate, forceColorUpdate = !sameTrack)
+        } else if (!sameTrack && nextArtwork != null) {
+            schedulePendingArtworkClear(newTitle, newArtist, newPackage)
+        }
 
         val notifTrackKey = "${newTitle}_${newArtist}".trim()
         if (previous.isPlaying && notifTrackKey.isNotBlank() && notifTrackKey != lastAnnouncedTrackKey) {

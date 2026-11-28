@@ -32,13 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import ca.saboor.larpdot.cutout.CutoutInfo
 import ca.saboor.larpdot.media.MediaPlaybackState
 import ca.saboor.larpdot.service.AudioCaptureService
-import ca.saboor.larpdot.service.ForegroundAppTracker
 import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
@@ -47,7 +43,6 @@ import ca.saboor.larpdot.ui.components.IslandPreviewType
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpSliderRow
-import ca.saboor.larpdot.ui.components.LarpSwitchRow
 import ca.saboor.larpdot.ui.components.MusicPreviewElement
 import ca.saboor.larpdot.ui.components.SectionHeader
 import ca.saboor.larpdot.ui.theme.LarpIcons
@@ -71,19 +66,8 @@ fun MusicScreen(
     var settingsSection by rememberSaveable { mutableStateOf<MusicSettingsSection?>(MusicSettingsSection.LAYOUT) }
     val showMinimizedProgressOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val showExpandedProgressOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
-    val hideMusicWhenAppOpen by OverlayPreferences.hideMusicWhenAppOpenFlow.collectAsState()
     val musicPauseTimeoutSeconds by OverlayPreferences.musicPauseTimeoutSecondsFlow.collectAsState()
     val musicQuickSeekSeconds by OverlayPreferences.musicQuickSeekSecondsFlow.collectAsState()
-    val usageAccessGranted by ForegroundAppTracker.hasUsageAccess.collectAsState()
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        ForegroundAppTracker.refreshUsageAccess(context)
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) ForegroundAppTracker.refreshUsageAccess(context)
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
     val showSongAnnouncement by OverlayPreferences.showSongAnnouncementFlow.collectAsState()
     val minimizedStyle by OverlayPreferences.minimizedAlbumArtStyleFlow.collectAsState()
@@ -223,10 +207,8 @@ fun MusicScreen(
                 pulseEntireIslandEnabled = pulseEntireIslandEnabled,
                 showExpandedAlbumArt = showExpandedAlbumArt,
                 expandedElementVisibility = expandedElementVisibility,
-                hideMusicWhenAppOpen = hideMusicWhenAppOpen,
                 musicPauseTimeoutSeconds = musicPauseTimeoutSeconds,
                 musicQuickSeekSeconds = musicQuickSeekSeconds,
-                usageAccessGranted = usageAccessGranted,
                 pulseAmount = pulseAmount,
             )
         }
@@ -339,10 +321,8 @@ private fun LazyListScope.musicSettingsItems(
     pulseEntireIslandEnabled: Boolean,
     showExpandedAlbumArt: Boolean,
     expandedElementVisibility: OverlayPreferences.ExpandedElementVisibility,
-    hideMusicWhenAppOpen: Boolean,
     musicPauseTimeoutSeconds: Int,
     musicQuickSeekSeconds: Int,
-    usageAccessGranted: Boolean,
     pulseAmount: Float,
 ) {
     when (section) {
@@ -477,25 +457,6 @@ private fun LazyListScope.musicSettingsItems(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        LarpSwitchRow(
-                            title = "Hide in Music App",
-                            checked = hideMusicWhenAppOpen,
-                            onCheckedChange = { OverlayPreferences.setHideMusicWhenAppOpenEnabled(context, it) },
-                        )
-
-                        if (hideMusicWhenAppOpen && !usageAccessGranted) {
-                            Text(
-                                "Allow usage access to detect when your music app is open.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            TextButton(onClick = { ForegroundAppTracker.openUsageAccessSettings(context) }) {
-                                Text("Grant usage access")
-                            }
-                        }
-
-                        LarpDivider()
-
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp),

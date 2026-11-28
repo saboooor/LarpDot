@@ -8,7 +8,6 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.GenericShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -46,35 +45,22 @@ internal fun HapticFeedback.performIslandHaptic(type: HapticFeedbackType) {
     }
 }
 
-internal fun islandOutlineColor(visibility: Float): Color =
-    Color.White.copy(alpha = (48f / 255f) * visibility.coerceIn(0f, 1f))
+internal fun islandOutlineColor(visibility: Float, enabled: Boolean = true): Color =
+    if (!enabled) Color.Transparent else Color.White.copy(alpha = (48f / 255f) * visibility.coerceIn(0f, 1f))
 
-internal fun Modifier.islandOutline(shape: Shape, cornerRadius: Dp, visibility: Float = 1f): Modifier =
+internal fun Modifier.islandOutline(
+    shape: Shape,
+    cornerRadius: Dp,
+    visibility: Float = 1f,
+    enabled: Boolean = true,
+): Modifier = if (!enabled) {
+    this
+} else {
     islandFluidProgressBorder(
         progressFraction = 0f,
         cornerRadius = cornerRadius,
         shape = shape,
         trackColor = islandOutlineColor(visibility),
-    )
-
-/** The small corners face the adjacent bubble, as in a Material 3 button group. */
-internal fun groupedIslandShape(
-    radius: Dp,
-    before: Boolean,
-    after: Boolean,
-    isLandscape: Boolean,
-): RoundedCornerShape {
-    val inner = (radius * 0.3f).coerceAtMost(6.dp)
-    return if (isLandscape) RoundedCornerShape(
-        topStart = if (before) inner else radius,
-        topEnd = if (before) inner else radius,
-        bottomEnd = if (after) inner else radius,
-        bottomStart = if (after) inner else radius,
-    ) else RoundedCornerShape(
-        topStart = if (before) inner else radius,
-        topEnd = if (after) inner else radius,
-        bottomEnd = if (after) inner else radius,
-        bottomStart = if (before) inner else radius,
     )
 }
 
@@ -119,6 +105,8 @@ fun secondaryItemWidthDp(
     smaller: Boolean = false,
     hasEarbudBatteryLevels: Boolean = false,
     musicRightInfoExtentDp: Float = 0f,
+    customRightInfoExtentDp: Float = 0f,
+    statusTextWidthDp: Float = 0f,
 ): Float {
     if (!isMiniPill) return thicknessDp
     if (type == IslandType.NOTIFICATION_ACTIVITY && hasEarbudBatteryLevels) {
@@ -126,6 +114,9 @@ fun secondaryItemWidthDp(
     }
     if (type == IslandType.MEDIA) {
         return if (musicRightInfoExtentDp > 0f) thicknessDp + musicRightInfoExtentDp + 12f else thicknessDp
+    }
+    if (type == IslandType.CUSTOM) {
+        return if (customRightInfoExtentDp > 0f) thicknessDp + customRightInfoExtentDp + 10f else thicknessDp
     }
     val extra = when (type) {
         IslandType.CUSTOM, IslandType.MEDIA -> 0f
@@ -137,7 +128,7 @@ fun secondaryItemWidthDp(
         }
     }
     val width = thicknessDp + extra
-    if (!smaller || extra == 0f) return width
+    if (!smaller || extra == 0f) return maxOf(width, thicknessDp + statusTextWidthDp)
 
     val tighterWidth = width - 4f
     // Leave room for the icon and gauge when the gauge reaches its minimum diameter.
@@ -147,7 +138,7 @@ fun secondaryItemWidthDp(
     val iconInset = ((thickness - icon) / 2f).coerceAtLeast(4.dp)
     val ringInset = compactEndInset(thickness, ring)
     val gaugeWidth = (iconInset + icon + 2.dp + ring + ringInset).value
-    return maxOf(tighterWidth, gaugeWidth).coerceAtMost(width)
+    return maxOf(maxOf(tighterWidth, gaugeWidth).coerceAtMost(width), thicknessDp + statusTextWidthDp)
 }
 
 internal fun squircleShape(

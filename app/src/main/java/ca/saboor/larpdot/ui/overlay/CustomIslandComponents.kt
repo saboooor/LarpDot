@@ -53,6 +53,7 @@ import ca.saboor.larpdot.service.CustomTextAlignment
 import ca.saboor.larpdot.service.CustomTextStyle
 import ca.saboor.larpdot.service.CustomIsland
 import ca.saboor.larpdot.service.CustomIslandCondition
+import ca.saboor.larpdot.service.CustomIslandImage
 import ca.saboor.larpdot.service.CustomIslandSources
 import ca.saboor.larpdot.service.CustomIslandVisibility
 import ca.saboor.larpdot.service.performCurrentNotificationAction
@@ -62,13 +63,18 @@ import ca.saboor.larpdot.ui.components.resolveCustomIslandColor
 import kotlin.math.roundToInt
 
 private val componentSpacing = 6.dp
-private val placeholder = Regex("""\{([a-z_]+)\}""")
+private val placeholder = Regex("""\{([a-zA-Z0-9_]+)\}""")
 
 internal fun customIslandPlaceholders(island: CustomIsland): List<String> {
     if (island.visibility != CustomIslandVisibility.CONDITIONAL) return emptyList()
     return when (island.condition) {
         CustomIslandCondition.MUSIC -> listOf("song_title", "artist", "album", "app")
-        CustomIslandCondition.NOTIFICATION -> listOf("title", "description", "app")
+        CustomIslandCondition.NOTIFICATION -> buildList {
+            addAll(listOf("title", "description", "app"))
+            island.notificationRule.declaredCapturePlaceholders().forEach { name ->
+                if (name !in this) add(name)
+            }
+        }
         CustomIslandCondition.LIVE_ACTIVITY -> buildList {
             addAll(listOf("title", "description", "app", "progress"))
             if (island.activityKind == null || island.activityKind == NotificationActivityKind.BATTERY_CHARGING ||
@@ -99,7 +105,14 @@ internal fun rememberCustomIslandPlaceholderValues(
             runCatching { packages.getApplicationLabel(packages.getApplicationInfo(name, 0)).toString() }.getOrDefault(name)
         }
     }
-    return customIslandPlaceholders(island).associateWith { name ->
+    val notificationCaptures = remember(island.notificationRule, notification, source) {
+        if (source == CustomIslandCondition.NOTIFICATION && notification != null) {
+            island.notificationRule.extractCaptures(notification)
+        } else {
+            emptyMap()
+        }
+    }
+    val baseValues = customIslandPlaceholders(island).associateWith { name ->
         when (name) {
             "song_title" -> media.title
             "artist" -> media.artist
@@ -113,8 +126,21 @@ internal fun rememberCustomIslandPlaceholderValues(
                 it.kind == NotificationActivityKind.BATTERY_CHARGING || it.kind == NotificationActivityKind.BATTERY_LOW
             }?.progress?.let { "$it%" }.orEmpty()
             "device_battery" -> activity?.bluetoothBatteryPercent?.let { "$it%" }.orEmpty()
-            else -> ""
+            else -> notificationCaptures[name].orEmpty()
         }.ifBlank { if (preview) "{$name}" else "" }
+    }
+    if (source != CustomIslandCondition.NOTIFICATION) return baseValues
+    return buildMap {
+        putAll(baseValues)
+        // Also populate groupN aliases (e.g. {group1}) in addition to {1} and named groups.
+        val declared = island.notificationRule.declaredCapturePlaceholders()
+        declared.forEach { name ->
+            val index = name.toIntOrNull()
+            if (index != null) {
+                val alias = "group$index"
+                put(alias, notificationCaptures[alias].orEmpty().ifBlank { if (preview) "{$alias}" else "" })
+            }
+        }
     }
 }
 
@@ -129,9 +155,13 @@ internal fun CustomExpandedComponents(
 ) {
     val sources = customIslandSources(island)
     val needsDominant = island.expandedComponents.any {
-        it.kind == CustomComponentKind.TEXT && it.textStyle?.colorMode == CustomColorMode.DOMINANT
+        (it.kind == CustomComponentKind.TEXT && it.textStyle?.colorMode == CustomColorMode.DOMINANT) ||
+            it.kind == CustomComponentKind.NOTIFICATION_ICON
     }
     val dominantColor = if (needsDominant) rememberCustomIslandDominantColor(island, sources).first else null
+    val appOverride = remember(island) {
+        island.associatedAppPackage { widgetId -> CustomIslandWidgets.info(widgetId)?.provider?.packageName }
+    }
     val media = sources.media
     val source = island.condition.takeIf { island.visibility == CustomIslandVisibility.CONDITIONAL }
     val values = rememberCustomIslandPlaceholderValues(island, sources, preview)
@@ -186,13 +216,29 @@ internal fun CustomExpandedComponents(
                                 CustomIslandWidget(id, interactive, widgetModifier, component.colorKey)
                             }
                         }
-                        CustomComponentKind.ALBUM_ART, CustomComponentKind.NOTIFICATION_IMAGE -> {
+                        CustomComponentKind.ALBUM_ART,
+                        CustomComponentKind.NOTIFICATION_IMAGE,
+                        CustomComponentKind.APP_ICON,
+                        CustomComponentKind.NOTIFICATION_ICON -> {
                             val image = requireNotNull(component.kind.image)
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                val imageModifier = if (component.kind == CustomComponentKind.ALBUM_ART) {
-                                    Modifier.size(component.height.dp)
-                                } else Modifier.fillMaxWidth().height(component.height.dp)
-                                CustomIslandImageContent(image, sources, imageModifier, compact = false, preview = preview)
+                                val imageModifier = if (component.kind == CustomComponentKind.NOTIFICATION_IMAGE) {
+                                    Modifier.fillMaxWidth().height(component.height.dp)
+                                } else Modifier.size(component.height.dp)
+                                val resolvedApp = if (island.visibility == CustomIslandVisibility.CONDITIONAL && sources.appPackage != null) {
+                                    sources.appPackage
+                                } else appOverride ?: sources.appPackage
+                                CustomIslandImageContent(
+                                    source = image,
+                                    sources = sources,
+                                    modifier = imageModifier,
+                                    compact = false,
+                                    preview = preview,
+                                    appOverride = resolvedApp,
+                                    tint = if (component.kind == CustomComponentKind.NOTIFICATION_ICON) {
+                                        dominantColor ?: MaterialTheme.colorScheme.primary
+                                    } else null,
+                                )
                             }
                         }
                         CustomComponentKind.NOTIFICATION_CONTENT -> {

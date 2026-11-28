@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -19,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.saboor.larpdot.flashlight.FlashlightController
@@ -33,6 +34,38 @@ import ca.saboor.larpdot.ui.components.resolveCustomIslandColor
 import ca.saboor.larpdot.ui.theme.LarpIcons
 
 @Composable
+internal fun secondaryStatusStyle(status: String) = MaterialTheme.typography.labelSmall.copy(
+    fontSize = if (status.contains('%')) 11.5.sp else 12.5.sp,
+    fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+)
+
+@Composable
+internal fun secondaryStatusTextWidth(
+    type: IslandType,
+    status: String?,
+    activity: NotificationActivityInfo?,
+): Float {
+    if (status.isNullOrBlank()) return 0f
+    when (type) {
+        IslandType.FLASHLIGHT -> {
+            val left by OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState()
+            val right by OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState()
+            val radial = OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
+            if (left == radial || right == radial) return 0f
+        }
+        IslandType.NOTIFICATION_ACTIVITY -> {
+            val settings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
+            if (activityRadialProgress(activity, settings.progressOutline, MaterialTheme.colorScheme.primary) != null) return 0f
+        }
+        else -> return 0f
+    }
+    val style = secondaryStatusStyle(status)
+    val sample = formatCompactStatus(status.map { if (it.isDigit()) '8' else it }.joinToString(""))
+    val width = rememberTextMeasurer().measure(sample, style, maxLines = 1, softWrap = false).size.width
+    return width / LocalDensity.current.density + 2f
+}
+
+@Composable
 internal fun SecondaryDotContent(
     type: IslandType,
     bubbleWidth: Dp,
@@ -40,8 +73,6 @@ internal fun SecondaryDotContent(
     bubbleThickness: Dp,
     isMiniPill: Boolean,
     isLandscape: Boolean,
-    beforeMain: Boolean,
-    bubbleStyle: OverlayPreferences.BubbleStyle,
     notificationActivity: NotificationActivityInfo?,
     mediaInfo: MediaTrackInfo,
     notificationActivityStatus: String?,
@@ -53,53 +84,132 @@ internal fun SecondaryDotContent(
     customIsland: CustomIsland? = null,
 ) {
     if (type == IslandType.CUSTOM) {
-        val isLeftSource = customIsland != null &&
-            (customIsland.left.icon != null || customIsland.left.image != null || !customIsland.left.text.isNullOrBlank())
-        val slot = customIsland?.let { island ->
-            if (isLeftSource) island.left
-            else island.right.takeIf { it.icon != null || it.image != null || !it.text.isNullOrBlank() }
+        val bubbleIconSize = secondaryBubbleIconSize(bubbleThickness)
+        val extraSpan = if (isLandscape) {
+            (bubbleHeight - bubbleWidth).coerceAtLeast(0.dp)
+        } else {
+            (bubbleWidth - bubbleHeight).coerceAtLeast(0.dp)
         }
-        val wingAnchor = if (isLeftSource) iconAnchor else progressAnchor
-        val size = Modifier.size(secondaryBubbleIconSize(bubbleThickness)).morphingElement(wingAnchor)
-        val needsDominant = slot != null && (
+        val showMiniPillWings = isMiniPill &&
+            extraSpan > 4.dp &&
+            customIsland != null &&
+            customIsland.left.hasContent &&
+            customIsland.right.hasContent
+        val isLeftSource = customIsland != null && customIsland.left.hasContent
+        val dotSlot = customIsland?.let { island ->
+            if (isLeftSource) island.left else island.right.takeIf { it.hasContent }
+        }
+        val visibleSlots = if (showMiniPillWings) {
+            listOf(customIsland.left, customIsland.right)
+        } else {
+            listOfNotNull(dotSlot)
+        }
+        val needsDominant = visibleSlots.any { slot ->
             slot.iconColor.mode == CustomColorMode.DOMINANT || slot.textStyle.colorMode == CustomColorMode.DOMINANT
-            )
-        val sources = if (customIsland != null && (needsDominant || slot?.image != null || !slot?.text.isNullOrBlank())) {
+        }
+        val needsSources = needsDominant || visibleSlots.any { slot ->
+            slot.image != null || !slot.text.isNullOrBlank()
+        }
+        val sources = if (customIsland != null && needsSources) {
             customIslandSources(customIsland)
         } else null
         val dominantColor = if (customIsland != null && needsDominant) {
             rememberCustomIslandDominantColor(customIsland, sources).first
         } else null
-        val iconTint = if (slot != null) {
-            resolveCustomIslandColor(slot.iconColor, MaterialTheme.colorScheme.primary, dominantColor)
+        val placeholderValues = if (customIsland != null && sources != null && visibleSlots.any { !it.text.isNullOrBlank() }) {
+            rememberCustomIslandPlaceholderValues(customIsland, sources, preview = false)
+        } else emptyMap()
+        val appOverride = customIsland?.tapAppPackage.takeIf { customIsland?.tapAction == CustomIslandTapAction.OPEN_APP }
+
+        if (showMiniPillWings) {
+            val iconInset = ((bubbleThickness - bubbleIconSize) / 2f).coerceAtLeast(4.dp)
+            if (isLandscape) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = iconInset),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CustomIslandWing(
+                            slot = customIsland.left,
+                            iconSize = bubbleIconSize,
+                            sources = sources,
+                            placeholderValues = placeholderValues,
+                            appOverride = appOverride,
+                            dominantColor = dominantColor,
+                            anchor = iconAnchor,
+                        )
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        CustomIslandWing(
+                            slot = customIsland.right,
+                            iconSize = bubbleIconSize,
+                            sources = sources,
+                            placeholderValues = placeholderValues,
+                            appOverride = appOverride,
+                            dominantColor = dominantColor,
+                            anchor = progressAnchor,
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = iconInset),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CustomIslandWing(
+                            slot = customIsland.left,
+                            iconSize = bubbleIconSize,
+                            sources = sources,
+                            placeholderValues = placeholderValues,
+                            appOverride = appOverride,
+                            dominantColor = dominantColor,
+                            anchor = iconAnchor,
+                        )
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        CustomIslandWing(
+                            slot = customIsland.right,
+                            iconSize = bubbleIconSize,
+                            sources = sources,
+                            placeholderValues = placeholderValues,
+                            appOverride = appOverride,
+                            dominantColor = dominantColor,
+                            anchor = progressAnchor,
+                        )
+                    }
+                }
+            }
+            return
+        }
+
+        val wingAnchor = if (isLeftSource) iconAnchor else progressAnchor
+        val iconTint = if (dotSlot != null) {
+            resolveCustomIslandColor(dotSlot.iconColor, MaterialTheme.colorScheme.primary, dominantColor)
         } else MaterialTheme.colorScheme.primary
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (customIsland != null && !slot?.text.isNullOrBlank() && sources != null) {
-                val placeholderValues = rememberCustomIslandPlaceholderValues(customIsland, sources, preview = false)
-                CustomWingText(
-                    slot = slot,
+            if (customIsland != null && dotSlot != null) {
+                CustomIslandWing(
+                    slot = dotSlot,
+                    iconSize = bubbleIconSize,
+                    sources = sources,
                     placeholderValues = placeholderValues,
-                    preview = false,
-                    maxLines = 1,
+                    appOverride = appOverride,
                     dominantColor = dominantColor,
-                    modifier = Modifier.padding(horizontal = 4.dp).morphingElement(wingAnchor),
-                )
-            } else if (customIsland != null && slot?.image != null && sources != null) {
-                CustomIslandImageContent(
-                    slot.image,
-                    sources,
-                    size,
-                    compact = true,
-                    preview = false,
-                    appOverride = customIsland.tapAppPackage.takeIf { customIsland.tapAction == CustomIslandTapAction.OPEN_APP },
-                    tint = if (slot.image == CustomIslandImage.NOTIFICATION_ICON) iconTint else null,
+                    anchor = wingAnchor,
                 )
             } else {
                 Icon(
-                    slot?.icon?.image ?: LarpIcons.Apps,
+                    LarpIcons.Apps,
                     contentDescription = customIsland?.name,
                     tint = iconTint,
-                    modifier = size,
+                    modifier = Modifier.size(bubbleIconSize).morphingElement(wingAnchor),
                 )
             }
         }
@@ -113,8 +223,6 @@ internal fun SecondaryDotContent(
             bubbleThickness = bubbleThickness,
             isMiniPill = isMiniPill,
             isLandscape = isLandscape,
-            beforeMain = beforeMain,
-            bubbleStyle = bubbleStyle,
             artworkAnchor = artworkAnchor,
             visualizerAnchor = visualizerAnchor,
         )
@@ -133,7 +241,10 @@ internal fun SecondaryDotContent(
         return
     }
     val flashlightAccent = FlashlightWhite
-    val showFlashlightRadial by OverlayPreferences.showMinimizedFlashlightOutlineFlow.collectAsState()
+    val flashlightLeftSide by OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState()
+    val flashlightRightSide by OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState()
+    val showFlashlightRadial = flashlightLeftSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS ||
+        flashlightRightSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
     val torchStrength by FlashlightController.torchStrength.collectAsState()
     val maxTorchStrength by FlashlightController.maxStrength.collectAsState()
     val flashlightFraction = getFlashlightStrengthFraction(torchStrength, maxTorchStrength)
@@ -144,9 +255,6 @@ internal fun SecondaryDotContent(
     val extraSpan = if (isLandscape) (bubbleHeight - bubbleWidth).coerceAtLeast(0.dp) else (bubbleWidth - bubbleHeight).coerceAtLeast(0.dp)
     val isPillShaped = isMiniPill && extraSpan > 4.dp
     val iconInset = ((bubbleThickness - bubbleIconSize) / 2f).coerceAtLeast(4.dp)
-    val outerPadding = iconInset
-    val innerPadding = iconInset
-    val contentShift = 0.dp
     val iconScale = (minOf(bubbleWidth, bubbleHeight) / bubbleThickness).coerceIn(0f, 1f)
     val activityRadial = if (type == IslandType.NOTIFICATION_ACTIVITY) {
         if (isPillShaped) {
@@ -230,12 +338,11 @@ internal fun SecondaryDotContent(
                     )
                 } else {
                     val actStatus = notificationActivityStatus ?: ""
-                    val isPercentage = actStatus.contains('%')
                     Text(
                         text = formatCompactStatus(actStatus),
                         color = Color.White,
-                        fontSize = if (isPercentage) 10.sp else 11.sp,
-                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                        style = secondaryStatusStyle(actStatus),
+                        modifier = if (isLandscape) Modifier.verticalActivityLabel() else Modifier,
                         maxLines = 1,
                         softWrap = false,
                     )
@@ -251,12 +358,11 @@ internal fun SecondaryDotContent(
                         modifier = Modifier.morphingElement(progressAnchor),
                     )
                 } else {
-                    val isPercentage = flashlightStatus.contains('%')
                     Text(
                         text = formatCompactStatus(flashlightStatus),
                         color = flashlightAccent,
-                        fontSize = if (isPercentage) 10.sp else 11.sp,
-                        fontWeight = MaterialTheme.typography.bodyMedium.fontWeight,
+                        style = secondaryStatusStyle(flashlightStatus),
+                        modifier = if (isLandscape) Modifier.verticalActivityLabel() else Modifier,
                         maxLines = 1,
                         softWrap = false,
                     )
@@ -266,16 +372,15 @@ internal fun SecondaryDotContent(
         }
     }
 
-    val trailingMiniPillPadding = if (hasMiniPillRing) miniPillRingInset else if (beforeMain) innerPadding else outerPadding
+    val trailingMiniPillPadding = if (hasMiniPillRing) miniPillRingInset else iconInset
 
     if (isLandscape) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(y = if (beforeMain) contentShift else -contentShift)
                 .then(
                     if (isPillShaped) Modifier.padding(
-                        top = if (beforeMain) outerPadding else innerPadding,
+                        top = iconInset,
                         bottom = trailingMiniPillPadding,
                     ) else Modifier
                 ),
@@ -302,10 +407,9 @@ internal fun SecondaryDotContent(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(x = if (beforeMain) contentShift else -contentShift)
                 .then(
                     if (isPillShaped) Modifier.padding(
-                        start = if (beforeMain) outerPadding else innerPadding,
+                        start = iconInset,
                         end = trailingMiniPillPadding,
                     ) else Modifier
                 ),

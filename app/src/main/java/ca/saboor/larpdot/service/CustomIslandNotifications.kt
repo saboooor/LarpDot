@@ -27,41 +27,175 @@ private val notificationPatternCache = object : LinkedHashMap<String, Result<Reg
         size > PATTERN_CACHE_MAX_SIZE
 }
 
+internal data class PatternCaptureSpec(
+    val groupCount: Int = 0,
+    val namedGroups: Map<String, Int> = emptyMap(),
+)
+
 private fun isRegexPattern(pattern: String): Boolean =
     pattern.length >= 2 && pattern.startsWith("/") && pattern.endsWith("/")
+
+private fun findWildcardCaptureParenIndices(pattern: String): Set<Int> {
+    val stack = ArrayDeque<Int>()
+    val pairs = mutableListOf<Pair<Int, Int>>()
+    var i = 0
+    while (i < pattern.length) {
+        val c = pattern[i]
+        if (c == '\\' && i + 1 < pattern.length) {
+            i += 2
+            continue
+        }
+        when (c) {
+            '(' -> stack.addLast(i)
+            ')' -> {
+                if (stack.isEmpty()) return emptySet()
+                pairs.add(stack.removeLast() to i)
+            }
+        }
+        i++
+    }
+    if (stack.isNotEmpty()) return emptySet()
+
+    // In wildcard mode, only treat (...) as a capture group if it uses a named header (?<name>...)
+    // or contains an unescaped wildcard (* or ?). Plain literal parens like "(great)" stay literal.
+    val captureIndices = HashSet<Int>()
+    for ((openIdx, closeIdx) in pairs) {
+        val isNamed = parseNamedGroupHeaderEnd(pattern, openIdx) != null
+        var hasWildcard = false
+        var j = openIdx + 1
+        while (j < closeIdx && !hasWildcard) {
+            val ch = pattern[j]
+            if (ch == '\\' && j + 1 < closeIdx) {
+                j += 2
+                continue
+            }
+            if (ch == '*' || ch == '?') hasWildcard = true
+            j++
+        }
+        if (isNamed || hasWildcard) {
+            captureIndices.add(openIdx)
+            captureIndices.add(closeIdx)
+        }
+    }
+    return captureIndices
+}
+
+private fun wildcardToRegexSource(pattern: String): String {
+    val captureParenIndices = findWildcardCaptureParenIndices(pattern)
+    return buildString(pattern.length * 2) {
+        var i = 0
+        while (i < pattern.length) {
+            val c = pattern[i]
+            when {
+                c == '\\' && i + 1 < pattern.length && pattern[i + 1] in charArrayOf('*', '?', '\\', '(', ')') -> {
+                    append(Regex.escape(pattern[i + 1].toString()))
+                    i += 2
+                }
+                c == '(' && i in captureParenIndices -> {
+                    val namedEnd = parseNamedGroupHeaderEnd(pattern, i)
+                    if (namedEnd != null) {
+                        append(pattern, i, namedEnd)
+                        i = namedEnd
+                    } else {
+                        append('(')
+                        i++
+                    }
+                }
+                c == ')' && i in captureParenIndices -> {
+                    append(')')
+                    i++
+                }
+                c == '*' -> {
+                    val onlyClosingParensRemain = (i + 1 until pattern.length).all {
+                        it in captureParenIndices && pattern[it] == ')'
+                    }
+                    append(if (onlyClosingParensRemain) ".*" else ".*?")
+                    i++
+                }
+                c == '?' -> {
+                    append('.')
+                    i++
+                }
+                else -> {
+                    append(Regex.escape(c.toString()))
+                    i++
+                }
+            }
+        }
+    }
+}
+
+private fun parseNamedGroupHeaderEnd(source: String, openParenIndex: Int): Int? {
+    if (openParenIndex + 4 >= source.length) return null
+    if (source[openParenIndex + 1] != '?' || source[openParenIndex + 2] != '<') return null
+    val nameStart = openParenIndex + 3
+    val first = source[nameStart]
+    if (!first.isLetter()) return null
+    var idx = nameStart + 1
+    while (idx < source.length && (source[idx].isLetterOrDigit() || source[idx] == '_')) {
+        idx++
+    }
+    return if (idx < source.length && source[idx] == '>') idx + 1 else null
+}
+
+private fun patternToRegexSource(pattern: String): String? {
+    if (pattern.isEmpty()) return null
+    if (isRegexPattern(pattern)) {
+        if (pattern.length == 2) return null
+        return pattern.substring(1, pattern.length - 1)
+    }
+    return wildcardToRegexSource(pattern)
+}
+
+internal fun inspectPatternCaptures(pattern: String): PatternCaptureSpec {
+    if (!isValidNotificationPattern(pattern)) return PatternCaptureSpec()
+    val source = patternToRegexSource(pattern) ?: return PatternCaptureSpec()
+    var groupIndex = 0
+    val named = LinkedHashMap<String, Int>()
+    var inCharClass = false
+    var i = 0
+    while (i < source.length) {
+        val c = source[i]
+        if (c == '\\' && i + 1 < source.length) {
+            i += 2
+            continue
+        }
+        if (inCharClass) {
+            if (c == ']') inCharClass = false
+            i++
+            continue
+        }
+        when (c) {
+            '[' -> {
+                inCharClass = true
+                i++
+            }
+            '(' -> {
+                val namedEnd = parseNamedGroupHeaderEnd(source, i)
+                if (namedEnd != null) {
+                    groupIndex++
+                    val name = source.substring(i + 3, namedEnd - 1)
+                    if (name !in named) named[name] = groupIndex
+                    i = namedEnd
+                } else if (i + 1 < source.length && source[i + 1] == '?') {
+                    // Non-capturing group, lookaround, or inline flag.
+                    i += 2
+                } else {
+                    groupIndex++
+                    i++
+                }
+            }
+            else -> i++
+        }
+    }
+    return PatternCaptureSpec(groupCount = groupIndex, namedGroups = named)
+}
 
 private fun compileNotificationPattern(pattern: String): Result<Regex> = synchronized(notificationPatternCacheLock) {
     notificationPatternCache.getOrPut(pattern) {
         val options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        if (isRegexPattern(pattern)) {
-            runCatching { Regex(pattern.substring(1, pattern.length - 1), options) }
-        } else {
-            val regexSource = buildString(pattern.length * 2) {
-                var i = 0
-                while (i < pattern.length) {
-                    val c = pattern[i]
-                    when {
-                        c == '\\' && i + 1 < pattern.length && pattern[i + 1] in charArrayOf('*', '?', '\\') -> {
-                            append(Regex.escape(pattern[i + 1].toString()))
-                            i += 2
-                        }
-                        c == '*' -> {
-                            append(".*?")
-                            i++
-                        }
-                        c == '?' -> {
-                            append('.')
-                            i++
-                        }
-                        else -> {
-                            append(Regex.escape(c.toString()))
-                            i++
-                        }
-                    }
-                }
-            }
-            runCatching { Regex(regexSource, options) }
-        }
+        val source = patternToRegexSource(pattern).orEmpty()
+        runCatching { Regex(source, options) }
     }
 }
 
@@ -71,13 +205,56 @@ internal fun isValidNotificationPattern(pattern: String): Boolean {
     return compileNotificationPattern(pattern).isSuccess
 }
 
+internal fun matchNotificationPattern(value: String, pattern: String): MatchResult? {
+    if (pattern.isEmpty() || (isRegexPattern(pattern) && pattern.length == 2)) return null
+    return compileNotificationPattern(pattern).getOrNull()?.find(value)
+}
+
 internal fun matchesNotificationPattern(value: String, pattern: String): Boolean {
     if (pattern.isEmpty()) return true
-    if (!isRegexPattern(pattern) && '*' !in pattern && '?' !in pattern && '\\' !in pattern) {
+    if (!isRegexPattern(pattern) && '*' !in pattern && '?' !in pattern && '\\' !in pattern && '(' !in pattern && ')' !in pattern) {
         return value.contains(pattern, ignoreCase = true)
     }
     if (isRegexPattern(pattern) && pattern.length == 2) return true
     return compileNotificationPattern(pattern).getOrNull()?.containsMatchIn(value) == true
+}
+
+internal enum class CustomNotificationField(val label: String) {
+    TITLE("Title"),
+    TEXT("Description"),
+    CHANNEL("Channel"),
+}
+
+internal enum class CustomNotificationOperator(val label: String) {
+    CONTAINS("contains"),
+    NOT_CONTAINS("does not contain"),
+}
+
+internal enum class CustomConditionJoin(val label: String) {
+    AND("AND"),
+    OR("OR"),
+}
+
+internal data class CustomNotificationCondition(
+    val field: CustomNotificationField = CustomNotificationField.TITLE,
+    val operator: CustomNotificationOperator = CustomNotificationOperator.CONTAINS,
+    val pattern: String = "",
+    val join: CustomConditionJoin = CustomConditionJoin.AND,
+) {
+    fun valueFor(item: CustomNotification): String = when (field) {
+        CustomNotificationField.TITLE -> item.title
+        CustomNotificationField.TEXT -> item.text
+        CustomNotificationField.CHANNEL -> item.channelId
+    }
+
+    fun matches(item: CustomNotification): Boolean {
+        if (pattern.isEmpty()) return true
+        val matched = matchesNotificationPattern(valueFor(item), pattern)
+        return when (operator) {
+            CustomNotificationOperator.CONTAINS -> matched
+            CustomNotificationOperator.NOT_CONTAINS -> !matched
+        }
+    }
 }
 
 internal data class CustomNotificationRule(
@@ -86,11 +263,121 @@ internal data class CustomNotificationRule(
     val titleContains: String = "",
     val textContains: String = "",
     val matchChannel: Boolean = true,
+    val minimizeNotification: Boolean = false,
+    val conditions: List<CustomNotificationCondition> = emptyList(),
 ) {
-    fun matches(item: CustomNotification) = packageName.isNotBlank() && item.packageName == packageName &&
-        (!matchChannel || channelId.isBlank() || item.channelId == channelId) &&
-        matchesNotificationPattern(item.title, titleContains) &&
-        matchesNotificationPattern(item.text, textContains)
+    val effectiveConditions: List<CustomNotificationCondition>
+        get() = if (conditions.isNotEmpty()) {
+            conditions
+        } else {
+            buildList {
+                if (titleContains.isNotEmpty()) {
+                    add(
+                        CustomNotificationCondition(
+                            field = CustomNotificationField.TITLE,
+                            operator = CustomNotificationOperator.CONTAINS,
+                            pattern = titleContains,
+                            join = CustomConditionJoin.AND,
+                        ),
+                    )
+                }
+                if (textContains.isNotEmpty()) {
+                    add(
+                        CustomNotificationCondition(
+                            field = CustomNotificationField.TEXT,
+                            operator = CustomNotificationOperator.CONTAINS,
+                            pattern = textContains,
+                            join = CustomConditionJoin.AND,
+                        ),
+                    )
+                }
+            }
+        }
+
+    private fun activeAndGroups(): List<List<CustomNotificationCondition>> {
+        val activeConditions = effectiveConditions.filter { it.pattern.isNotEmpty() }
+        if (activeConditions.isEmpty()) return emptyList()
+        val groups = mutableListOf<MutableList<CustomNotificationCondition>>()
+        activeConditions.forEachIndexed { index, condition ->
+            if (index == 0 || condition.join == CustomConditionJoin.OR) {
+                groups.add(mutableListOf(condition))
+            } else {
+                groups.last().add(condition)
+            }
+        }
+        return groups
+    }
+
+    fun matches(item: CustomNotification): Boolean {
+        if (packageName.isBlank() || item.packageName != packageName) return false
+        if (matchChannel && channelId.isNotBlank() && item.channelId != channelId) return false
+        val groups = activeAndGroups()
+        if (groups.isEmpty()) return true
+        // Standard boolean precedence: AND binds tighter than OR (OR of AND-groups).
+        return groups.any { group -> group.all { it.matches(item) } }
+    }
+
+    /**
+     * Lists placeholder names declared by capture groups across conditions: named groups first,
+     * followed by numbered groups ("1", "2", ...). Each OR branch restarts capture numbering at 1
+     * while conditions joined by AND accumulate sequentially.
+     */
+    fun declaredCapturePlaceholders(): List<String> {
+        val groups = activeAndGroups()
+        if (groups.isEmpty()) return emptyList()
+        val named = LinkedHashSet<String>()
+        var maxNumbered = 0
+        groups.forEach { andGroup ->
+            var groupCount = 0
+            andGroup.forEach { condition ->
+                if (condition.operator != CustomNotificationOperator.CONTAINS) return@forEach
+                val spec = inspectPatternCaptures(condition.pattern)
+                groupCount += spec.groupCount
+                named.addAll(spec.namedGroups.keys)
+            }
+            if (groupCount > maxNumbered) maxNumbered = groupCount
+        }
+        return buildList {
+            addAll(named)
+            for (index in 1..maxNumbered) {
+                add(index.toString())
+            }
+        }
+    }
+
+    /**
+     * Extracts captured group values from the first matching AND-group for [item].
+     * Populates numbered keys ("1", "2", ...), "group1"/"group2" aliases, and any named groups.
+     */
+    fun extractCaptures(item: CustomNotification): Map<String, String> {
+        if (packageName.isBlank() || item.packageName != packageName) return emptyMap()
+        if (matchChannel && channelId.isNotBlank() && item.channelId != channelId) return emptyMap()
+        val winningGroup = activeAndGroups().firstOrNull { group -> group.all { it.matches(item) } }
+            ?: return emptyMap()
+        val captured = LinkedHashMap<String, String>()
+        var nextIndex = 1
+        winningGroup.forEach { condition ->
+            if (condition.operator != CustomNotificationOperator.CONTAINS) return@forEach
+            val spec = inspectPatternCaptures(condition.pattern)
+            if (spec.groupCount <= 0) return@forEach
+            val match = matchNotificationPattern(condition.valueFor(item), condition.pattern)
+            if (match != null) {
+                for (localIdx in 1..spec.groupCount) {
+                    val value = match.groupValues.getOrNull(localIdx).orEmpty()
+                    captured[nextIndex.toString()] = value
+                    captured["group$nextIndex"] = value
+                    nextIndex++
+                }
+                spec.namedGroups.forEach { (name, localIdx) ->
+                    val value = match.groupValues.getOrNull(localIdx).orEmpty()
+                    captured[name] = value
+                }
+            } else {
+                nextIndex += spec.groupCount
+            }
+        }
+        return captured
+    }
 }
 
 internal data class CustomNotification(
@@ -250,3 +537,13 @@ internal object CustomIslandNotifications {
 
 internal fun CustomIsland.matchingNotification(items: Collection<CustomNotification>): CustomNotification? =
     items.asSequence().filter(notificationRule::matches).maxByOrNull { it.postedAt }
+
+internal fun matchesMinimizedCustomIsland(
+    notification: CustomNotification,
+    customIslands: List<CustomIsland>,
+): Boolean = customIslands.any { island ->
+    island.visibility == CustomIslandVisibility.CONDITIONAL &&
+        island.condition == CustomIslandCondition.NOTIFICATION &&
+        island.notificationRule.minimizeNotification &&
+        island.notificationRule.matches(notification)
+}

@@ -15,6 +15,10 @@ import ca.saboor.larpdot.service.CustomIslandSlot
 import ca.saboor.larpdot.service.CustomIslandVisibility
 import ca.saboor.larpdot.service.CustomNotification
 import ca.saboor.larpdot.service.CustomNotificationArtwork
+import ca.saboor.larpdot.service.CustomConditionJoin
+import ca.saboor.larpdot.service.CustomNotificationCondition
+import ca.saboor.larpdot.service.CustomNotificationField
+import ca.saboor.larpdot.service.CustomNotificationOperator
 import ca.saboor.larpdot.service.CustomNotificationRule
 import ca.saboor.larpdot.service.isValidNotificationPattern
 import ca.saboor.larpdot.service.matchesNotificationPattern
@@ -113,6 +117,141 @@ class CustomIslandComponentsTest {
         assertTrue(rule.matches(stop5))
         assertTrue(rule.matches(stop2))
         assertFalse(rule.matches(unrelated))
+    }
+
+    @Test fun notificationConditionListSupportsOrAndMixedPrecedenceAndNegation() {
+        val base = CustomNotification("1", "com.app", "nav", "Walk 5 min", "Head north on Main", 1, emptyList())
+
+        // Title contains A OR Title contains B
+        val orRule = CustomNotificationRule(
+            packageName = "com.app",
+            conditions = listOf(
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Walk", CustomConditionJoin.AND),
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Get off", CustomConditionJoin.OR),
+            ),
+        )
+        assertTrue(orRule.matches(base))
+        assertTrue(orRule.matches(base.copy(title = "Get off in 2 stops")))
+        assertFalse(orRule.matches(base.copy(title = "Trip complete")))
+
+        // Title contains A AND Title contains B
+        val andRule = CustomNotificationRule(
+            packageName = "com.app",
+            conditions = listOf(
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Walk", CustomConditionJoin.AND),
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "min", CustomConditionJoin.AND),
+            ),
+        )
+        assertTrue(andRule.matches(base))
+        assertFalse(andRule.matches(base.copy(title = "Walk now")))
+
+        // Mixed precedence: (Title contains Walk AND Description does not contain Cancelled) OR Title contains Arriving
+        val mixedRule = CustomNotificationRule(
+            packageName = "com.app",
+            conditions = listOf(
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Walk", CustomConditionJoin.AND),
+                CustomNotificationCondition(CustomNotificationField.TEXT, CustomNotificationOperator.NOT_CONTAINS, "Cancelled", CustomConditionJoin.AND),
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Arriving", CustomConditionJoin.OR),
+            ),
+        )
+        assertTrue(mixedRule.matches(base))
+        assertFalse(mixedRule.matches(base.copy(text = "Cancelled trip")))
+        assertTrue(mixedRule.matches(base.copy(title = "Arriving now", text = "Cancelled trip")))
+
+        // Blank patterns are ignored rather than failing the rule
+        val withBlank = CustomNotificationRule(
+            packageName = "com.app",
+            conditions = listOf(
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "", CustomConditionJoin.AND),
+                CustomNotificationCondition(CustomNotificationField.TITLE, CustomNotificationOperator.CONTAINS, "Walk", CustomConditionJoin.AND),
+            ),
+        )
+        assertTrue(withBlank.matches(base))
+    }
+
+    @Test fun notificationConditionsCaptureWildcardRegexNamedAndBranchGroupsForPlaceholders() {
+        // Wildcard capture group: Get off in (*) stops
+        val wildcardRule = CustomNotificationRule(
+            packageName = "com.thetransitapp.droid",
+            conditions = listOf(
+                CustomNotificationCondition(
+                    field = CustomNotificationField.TITLE,
+                    operator = CustomNotificationOperator.CONTAINS,
+                    pattern = "Get off in (*) stops",
+                ),
+            ),
+        )
+        val stopNotif = CustomNotification("1", "com.thetransitapp.droid", "go", "Get off in 4 stops", "Next: King St", 1, emptyList())
+        assertEquals(listOf("1"), wildcardRule.declaredCapturePlaceholders())
+        val wildcardCaptures = wildcardRule.extractCaptures(stopNotif)
+        assertEquals("4", wildcardCaptures["1"])
+        assertEquals("4", wildcardCaptures["group1"])
+        assertEquals("4 stops", customIslandText("{1} stops", wildcardCaptures))
+
+        // Named regex capture group + OR branches resetting group numbering cleanly
+        val orCaptureRule = CustomNotificationRule(
+            packageName = "com.thetransitapp.droid",
+            conditions = listOf(
+                CustomNotificationCondition(
+                    field = CustomNotificationField.TITLE,
+                    operator = CustomNotificationOperator.CONTAINS,
+                    pattern = "/Walk (?<eta>\\d+ min)/",
+                    join = CustomConditionJoin.AND,
+                ),
+                CustomNotificationCondition(
+                    field = CustomNotificationField.TITLE,
+                    operator = CustomNotificationOperator.CONTAINS,
+                    pattern = "/Ride (?<eta>\\d+ min) on (\\w+)/",
+                    join = CustomConditionJoin.OR,
+                ),
+            ),
+        )
+        val walkNotif = stopNotif.copy(title = "Walk 6 min to bus stop")
+        val rideNotif = stopNotif.copy(title = "Ride 14 min on Line2")
+        assertEquals(listOf("eta", "1", "2"), orCaptureRule.declaredCapturePlaceholders())
+
+        val walkCaptures = orCaptureRule.extractCaptures(walkNotif)
+        assertEquals("6 min", walkCaptures["eta"])
+        assertEquals("6 min", walkCaptures["1"])
+
+        val rideCaptures = orCaptureRule.extractCaptures(rideNotif)
+        assertEquals("14 min", rideCaptures["eta"])
+        assertEquals("14 min", rideCaptures["1"])
+        assertEquals("Line2", rideCaptures["2"])
+
+        // AND branch accumulates captures across title and description
+        val andCaptureRule = CustomNotificationRule(
+            packageName = "com.thetransitapp.droid",
+            conditions = listOf(
+                CustomNotificationCondition(
+                    field = CustomNotificationField.TITLE,
+                    operator = CustomNotificationOperator.CONTAINS,
+                    pattern = "Walk (*) min",
+                    join = CustomConditionJoin.AND,
+                ),
+                CustomNotificationCondition(
+                    field = CustomNotificationField.TEXT,
+                    operator = CustomNotificationOperator.CONTAINS,
+                    pattern = "Next: (?<stop>*)",
+                    join = CustomConditionJoin.AND,
+                ),
+            ),
+        )
+        val andNotif = stopNotif.copy(title = "Walk 3 min", text = "Next: Union Station")
+        val andCaptures = andCaptureRule.extractCaptures(andNotif)
+        assertEquals("3", andCaptures["1"])
+        assertEquals("Union Station", andCaptures["2"])
+        assertEquals("Union Station", andCaptures["stop"])
+        assertEquals("3m • Union Station", customIslandText("{1}m • {stop}", andCaptures))
+
+        // customIslandPlaceholders exposes declared capture placeholders for wing/text editors
+        val island = CustomIsland(
+            id = "transit",
+            visibility = CustomIslandVisibility.CONDITIONAL,
+            condition = CustomIslandCondition.NOTIFICATION,
+            notificationRule = andCaptureRule,
+        )
+        assertEquals(listOf("title", "description", "app", "stop", "1", "2"), customIslandPlaceholders(island))
     }
 
     @Test fun customWingMorphLinksMatchSameIconsAndImagesAcrossSidesAndSecondaryBubbles() {

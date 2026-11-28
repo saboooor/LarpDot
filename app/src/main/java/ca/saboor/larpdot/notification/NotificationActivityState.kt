@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import ca.saboor.larpdot.service.OverlayPreferences
 
 enum class NotificationActivityKind {
+    LIVE_UPDATE,
     PROGRESS,
     NAVIGATION,
     CALL,
@@ -42,6 +43,7 @@ enum class NotificationActivityKind {
 
 data class NotificationActivitySettings(
     val enabled: Boolean = true,
+    val liveUpdates: Boolean = true,
     val progress: Boolean = true,
     val navigation: Boolean = true,
     val calls: Boolean = true,
@@ -55,17 +57,32 @@ data class NotificationActivitySettings(
     val chargeLimitAlert: Boolean = false,
     val chargeLimitPercent: Int = 80,
     val lowBatteryThresholdPercent: Int = 15,
-    val permanentShortTerm: Boolean = false,
-    val permanentCharging: Boolean = permanentShortTerm,
-    val permanentLowBattery: Boolean = permanentShortTerm,
-    val permanentSoundMode: Boolean = permanentShortTerm,
+    val permanentCharging: Boolean = false,
+    val permanentLowBattery: Boolean = false,
+    val permanentSoundMode: Boolean = false,
     val permanentDnd: Boolean = false,
-    val permanentBluetooth: Boolean = permanentShortTerm,
+    val permanentBluetooth: Boolean = false,
     val permanentAudioOutput: Boolean = false,
-    val expandShortTermAlerts: Boolean = false,
+    val autoExpandLiveUpdates: Boolean = false,
+    val autoExpandLiveUpdatesOnChange: Boolean = false,
+    val autoExpandProgress: Boolean = false,
+    val autoExpandNavigation: Boolean = false,
+    val autoExpandCalls: Boolean = false,
+    val autoExpandTimers: Boolean = false,
+    val autoExpandCharging: Boolean = false,
+    val autoExpandLowBattery: Boolean = false,
+    val autoExpandChargeLimit: Boolean = false,
+    val autoExpandSoundMode: Boolean = false,
+    val autoExpandDnd: Boolean = false,
+    val autoExpandBluetooth: Boolean = false,
+    val autoExpandAudioOutput: Boolean = false,
     val progressOutline: Boolean = true,
+    val hideStatusBarLiveUpdates: Boolean = false,
+    val minimizeStatusBarLiveUpdates: Boolean = false,
+    val useAppColorForIcons: Boolean = false,
 ) {
     fun allows(kind: NotificationActivityKind): Boolean = enabled && when (kind) {
+        NotificationActivityKind.LIVE_UPDATE -> liveUpdates
         NotificationActivityKind.PROGRESS -> progress
         NotificationActivityKind.NAVIGATION -> navigation
         NotificationActivityKind.CALL -> calls
@@ -77,6 +94,32 @@ data class NotificationActivitySettings(
         NotificationActivityKind.BLUETOOTH -> bluetooth
         NotificationActivityKind.AUDIO_OUTPUT -> audioOutput
     }
+
+    fun shouldAutoExpandOnStart(info: NotificationActivityInfo): Boolean = when (info.kind) {
+        NotificationActivityKind.LIVE_UPDATE -> autoExpandLiveUpdates
+        NotificationActivityKind.PROGRESS -> autoExpandProgress
+        NotificationActivityKind.NAVIGATION -> autoExpandNavigation
+        NotificationActivityKind.CALL -> autoExpandCalls
+        NotificationActivityKind.TIMER -> autoExpandTimers
+        NotificationActivityKind.BATTERY_CHARGING ->
+            if (info.key == "system_battery_charge_limit") autoExpandChargeLimit else autoExpandCharging
+        NotificationActivityKind.BATTERY_LOW -> autoExpandLowBattery
+        NotificationActivityKind.SOUND_MODE -> autoExpandSoundMode
+        NotificationActivityKind.DND -> autoExpandDnd
+        NotificationActivityKind.BLUETOOTH -> autoExpandBluetooth
+        NotificationActivityKind.AUDIO_OUTPUT -> autoExpandAudioOutput
+    }
+
+    fun shouldAutoExpandOnUpdate(info: NotificationActivityInfo): Boolean = when (info.kind) {
+        NotificationActivityKind.LIVE_UPDATE -> autoExpandLiveUpdatesOnChange
+        NotificationActivityKind.SOUND_MODE -> autoExpandSoundMode
+        NotificationActivityKind.AUDIO_OUTPUT -> autoExpandAudioOutput
+        NotificationActivityKind.DND -> autoExpandDnd
+        else -> false
+    }
+
+    fun allowsAutoExpand(info: NotificationActivityInfo): Boolean =
+        shouldAutoExpandOnStart(info) || shouldAutoExpandOnUpdate(info)
 }
 
 data class NotificationActivityAction(
@@ -106,7 +149,12 @@ data class NotificationActivityInfo(
     val isPinnedShortTerm: Boolean = false,
     val maneuverIcon: Bitmap? = null,
     val earbudBatteryLevels: EarbudBatteryLevels? = null,
+    val notificationColor: Int? = null,
+    val shortCriticalText: String? = null,
 ) {
+    internal val isSystemActivity: Boolean
+        get() = packageName == "android" && key.startsWith("system_")
+
     internal val pairedEarbudBatteryLevels: EarbudBatteryLevels?
         get() = earbudBatteryLevels?.takeIf { it.left != null && it.right != null }
 
@@ -226,10 +274,10 @@ object NotificationActivityState {
         }
     }
 
-    fun open(context: Context, activity: NotificationActivityInfo) =
+    fun open(context: Context, activity: NotificationActivityInfo): Boolean =
         open(context, activity.packageName, activity.contentIntent)
 
-    internal fun open(context: Context, packageName: String, contentIntent: PendingIntent?) {
+    internal fun open(context: Context, packageName: String, contentIntent: PendingIntent?): Boolean {
         var launched = false
 
         if (contentIntent != null) {
@@ -255,16 +303,18 @@ object NotificationActivityState {
             }.getOrDefault(false)
         }
 
-        if (!launched) openApp(context, packageName)
+        if (launched) return true
+        return openApp(context, packageName)
     }
 
-    internal fun openApp(context: Context, packageName: String) {
-        if (packageName.isBlank()) return
-        runCatching {
-            val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+    internal fun openApp(context: Context, packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        return runCatching {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             context.startActivity(intent)
-        }
+            true
+        }.getOrDefault(false)
     }
 
     fun perform(action: NotificationActivityAction) {
@@ -313,20 +363,22 @@ object NotificationActivityState {
 
     fun removeSystemActivity(key: String) = remove(key)
 
-    private val NotificationActivityInfo.isSystemActivity: Boolean
-        get() = packageName == "android" && key.startsWith("system_")
-
     private fun publishBestLocked() {
         val eligible = activities.values.filter { settings.allows(it.kind) && !isPackageBlacklisted(it.packageName) }
         _eligibleActivities.value = eligible
-        val (shortTerm, nonShortTerm) = eligible.partition { it.isSystemActivity }
-        val best = (nonShortTerm.ifEmpty { eligible })
+        val shortTerm = eligible.filter { it.isSystemActivity }
+        _shortTermActivities.value = shortTerm.sortedBy { it.key }
+        _current.value = selectBestActivity(eligible)
+    }
+
+    internal fun selectBestActivity(eligible: List<NotificationActivityInfo>): NotificationActivityInfo? {
+        if (eligible.isEmpty()) return null
+        val nonShortTerm = eligible.filterNot { it.isSystemActivity }
+        return (nonShortTerm.ifEmpty { eligible })
             .maxWithOrNull(
                 compareBy<NotificationActivityInfo> { if (it.isPinnedShortTerm) 0 else priority(it.kind) }
                     .thenBy { it.postedAtMillis },
             )
-        _shortTermActivities.value = shortTerm.sortedBy { it.key }
-        _current.value = best
     }
 
     private fun priority(kind: NotificationActivityKind): Int = when (kind) {
@@ -338,6 +390,7 @@ object NotificationActivityState {
         NotificationActivityKind.BLUETOOTH -> 4
         NotificationActivityKind.AUDIO_OUTPUT -> 4
         NotificationActivityKind.NAVIGATION -> 3
+        NotificationActivityKind.LIVE_UPDATE -> 3
         NotificationActivityKind.TIMER -> 2
         NotificationActivityKind.PROGRESS -> 1
     }
@@ -446,11 +499,15 @@ object NotificationActivityState {
         val hasProgress = progressMax > 0 || indeterminate
         val usesChronometer = extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false)
         val isOngoing = (notification.flags and Notification.FLAG_ONGOING_EVENT) != 0
+        val shortCriticalText = extractShortCriticalText(notification)
+        val isLiveUpdate = isLiveUpdateNotification(notification, shortCriticalText, isOngoing) ||
+            ca.saboor.larpdot.service.ShizukuLiveUpdateSuppressor.isTrackedKey(sbn.key)
 
         val kind = when {
             notification.category == Notification.CATEGORY_CALL && isOngoing -> NotificationActivityKind.CALL
             notification.category == Notification.CATEGORY_NAVIGATION && isOngoing -> NotificationActivityKind.NAVIGATION
             usesChronometer && isOngoing -> NotificationActivityKind.TIMER
+            isLiveUpdate -> NotificationActivityKind.LIVE_UPDATE
             hasProgress && (isOngoing || !sbn.isClearable) -> NotificationActivityKind.PROGRESS
             else -> return null
         }
@@ -498,7 +555,30 @@ object NotificationActivityState {
             }.take(3),
             appIcon = appIcon,
             maneuverIcon = maneuverIcon,
+            notificationColor = notification.color.takeIf { it != Notification.COLOR_DEFAULT },
+            shortCriticalText = shortCriticalText,
         )
+    }
+
+    private fun extractShortCriticalText(notification: Notification): String? {
+        val direct = if (Build.VERSION.SDK_INT >= 36) {
+            runCatching { notification.shortCriticalText }.getOrNull()
+        } else null
+        val fromExtras = notification.extras?.getCharSequence("android.shortCriticalText")?.toString()
+        return (direct ?: fromExtras)?.trim()?.takeIf(String::isNotEmpty)?.take(24)
+    }
+
+    private fun isLiveUpdateNotification(
+        notification: Notification,
+        shortCriticalText: String?,
+        isOngoing: Boolean,
+    ): Boolean {
+        val hasPromotedFlag = (notification.flags and 0x00040000) != 0
+        val extras = notification.extras
+        val requestedPromoted = extras?.getBoolean("android.requestPromotedOngoing", false) == true
+        val isProgressStyle = extras?.getString(Notification.EXTRA_TEMPLATE)
+            ?.contains("ProgressStyle", ignoreCase = true) == true
+        return hasPromotedFlag || requestedPromoted || (isOngoing && isProgressStyle) || (isOngoing && shortCriticalText != null)
     }
 
     private fun firstText(vararg values: CharSequence?): String? = values.firstNotNullOfOrNull {

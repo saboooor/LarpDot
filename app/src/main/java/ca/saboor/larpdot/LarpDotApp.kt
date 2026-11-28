@@ -34,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,7 +82,7 @@ fun LarpDotApp() {
     val isAccessibilityConnected by DotAccessibilityService.isServiceConnected.collectAsState()
     val isListenerConnected by NotificationAccessService.isListenerConnected.collectAsState()
     var showSetupDialog by remember { mutableStateOf(false) }
-    var permissionCheckTick by remember { mutableStateOf(0) }
+    var permissionCheckTick by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {

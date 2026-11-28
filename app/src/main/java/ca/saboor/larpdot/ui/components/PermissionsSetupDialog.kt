@@ -216,7 +216,7 @@ fun PermissionsSetupDialog(
 
                 PermissionSetupCard(
                     title = "Usage Access",
-                    description = "Hide the music island while its player app is open.",
+                    description = "Hide music, live activities, and custom islands while their app is open.",
                     icon = LarpIcons.Apps,
                     isGranted = usageAccessGranted,
                     pendingStatus = "Optional",
@@ -279,11 +279,11 @@ private fun ShizukuPermissionSetupCard(status: ShizukuBatteryStatus) {
     PermissionSetupCard(
         title = "Shizuku",
         description = when (status) {
-            ShizukuBatteryStatus.NOT_RUNNING -> "Start Shizuku for separate left and right earbud battery levels."
-            ShizukuBatteryStatus.NEEDS_PERMISSION -> "Allow access for separate earbud battery levels."
+            ShizukuBatteryStatus.NOT_RUNNING -> "Start Shizuku for separate earbud battery levels and hiding status bar Live Updates."
+            ShizukuBatteryStatus.NEEDS_PERMISSION -> "Allow access for separate earbud battery levels and status bar Live Updates."
             ShizukuBatteryStatus.PERMISSION_DENIED -> "Allow LarpDot in Shizuku."
             ShizukuBatteryStatus.UNSUPPORTED -> "Bluetooth battery data unavailable in this Shizuku session."
-            ShizukuBatteryStatus.READY -> "Separate earbud battery levels enabled."
+            ShizukuBatteryStatus.READY -> "Shizuku access enabled."
         },
         icon = LarpIcons.Earbuds,
         isGranted = status == ShizukuBatteryStatus.READY,

@@ -97,20 +97,27 @@ class FeatureServicesTest {
     }
 
     @Test fun trackTimestampPlacementIsSavedIndependentlyOfPlayerLayout() {
-        val legacy = IslandConfigurationBackup.fromJson("""{"expandedPlayerLayout":"IPHONE"}""")!!
-        assertEquals(OverlayPreferences.ProgressTimestampPlacement.BESIDE, legacy.progressTimestampPlacement)
+        val base = IslandConfigurationBackup.fromJson("""{"expandedPlayerLayout":"IPHONE"}""")!!
+        assertEquals(OverlayPreferences.ProgressTimestampPlacement.HIDDEN, base.progressTimestampPlacement)
 
-        val configured = legacy.copy(
+        val configured = base.copy(
             expandedPlayerLayout = OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
             progressTimestampPlacement = OverlayPreferences.ProgressTimestampPlacement.BELOW,
         )
         assertEquals(configured, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(configured)))
     }
 
+    @Test fun smallerBubblesModeAndSpacingRoundTripThroughJson() {
+        val explicit = IslandConfigurationBackup.fromJson("""{"smallerBubblesMode":"MORE_THAN_THREE","islandSpacingDp":14}""")!!
+        assertEquals(OverlayPreferences.SmallerBubblesMode.MORE_THAN_THREE, explicit.smallerBubblesMode)
+        assertEquals(14f, explicit.islandSpacingDp, 0.01f)
+    }
+
     @Test fun themePresetsRoundTripThroughJson() {
         val original = IslandBackupConfig(
-            bubbleStyle = OverlayPreferences.BubbleStyle.IPHONE,
-            smallerBubbles = true,
+            islandOutlineMode = OverlayPreferences.IslandOutlineMode.DYNAMIC,
+            smallerBubblesMode = OverlayPreferences.SmallerBubblesMode.MORE_THAN_THREE,
+            islandSpacingDp = 12f,
             minimizedMaxWidthPercent = 84f,
             islandCornerRadius = 42f,
             islandSquircleEnabled = false,
@@ -138,8 +145,6 @@ class FeatureServicesTest {
             trackInfoShowAlbum = true,
             trackInfoAlbumBesideArtist = true,
             trackInfoTitleAccent = true,
-            showMinimizedTitle = true,
-            minimizedMusicTimestamp = OverlayPreferences.MinimizedMusicTimestamp.REMAINING,
             expandedGlowLeft = false,
             expandedGlowRight = true,
             expandedGlowTop = true,
@@ -166,7 +171,7 @@ class FeatureServicesTest {
             hideInFullscreen = true,
             hideInLandscape = true,
             hideInDnd = true,
-            hideMusicWhenAppOpen = false,
+            hideInRelatedApp = false,
             showSongAnnouncement = false,
             expandedShowTrackInfo = false,
             expandedShowProgress = false,
@@ -196,7 +201,19 @@ class FeatureServicesTest {
             activityPermanentDnd = true,
             activityPermanentBluetooth = true,
             activityPermanentAudioOutput = false,
-            activityExpandShortTerm = true,
+            activityAutoExpandLiveUpdates = true,
+            activityAutoExpandLiveUpdatesOnChange = true,
+            activityAutoExpandProgress = true,
+            activityAutoExpandNavigation = true,
+            activityAutoExpandCalls = true,
+            activityAutoExpandTimers = true,
+            activityAutoExpandCharging = true,
+            activityAutoExpandLowBattery = true,
+            activityAutoExpandChargeLimit = true,
+            activityAutoExpandSoundMode = true,
+            activityAutoExpandDnd = true,
+            activityAutoExpandBluetooth = true,
+            activityAutoExpandAudioOutput = true,
             activityProgressOutline = false,
             islandPriorityOrder = listOf(
                 ca.saboor.larpdot.ui.overlay.IslandPriorityItem.NAVIGATION,
@@ -215,8 +232,6 @@ class FeatureServicesTest {
         val decoded = IslandConfigurationBackup.fromJson(json)
         assertNotNull(decoded)
         assertEquals(original, decoded)
-        val legacy = json.trimEnd().dropLast(1) + ",\"flashlightTapToToggle\":false}"
-        assertEquals(original, IslandConfigurationBackup.fromJson(legacy))
         assertNull(IslandConfigurationBackup.fromJson("not json"))
         assertNull(IslandConfigurationBackup.fromJson("""{"foo": "bar", "baz": 123}"""))
 
@@ -226,7 +241,7 @@ class FeatureServicesTest {
         val wideSpacing = IslandBackupConfig(waveformBarSpacing = 7.5f, activityChargeLimitPercent = 100)
         assertEquals(wideSpacing, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(wideSpacing)))
 
-        // Symmetric minimized music and flashlight side configs round-trip and migrate legacy keys
+        // Symmetric minimized music and flashlight side configs round-trip cleanly.
         val swappedSides = IslandBackupConfig(
             minimizedMusicLeftSide = OverlayPreferences.MinimizedMusicSideContent.VISUALIZER,
             minimizedMusicRightSide = OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART,
@@ -234,14 +249,6 @@ class FeatureServicesTest {
             minimizedFlashlightRightSide = OverlayPreferences.MinimizedFlashlightSideContent.ICON,
         )
         assertEquals(swappedSides, IslandConfigurationBackup.fromJson(IslandConfigurationBackup.toJson(swappedSides)))
-
-        val legacySides = IslandConfigurationBackup.fromJson(
-            """{"showMinimizedTitle":true,"showMinimizedFlashlightOutline":false}""",
-        )!!
-        assertEquals(OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART, legacySides.minimizedMusicLeftSide)
-        assertEquals(OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE, legacySides.minimizedMusicRightSide)
-        assertEquals(OverlayPreferences.MinimizedFlashlightSideContent.ICON, legacySides.minimizedFlashlightLeftSide)
-        assertEquals(OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE, legacySides.minimizedFlashlightRightSide)
 
         // Animation speed scaling clamps cleanly
         assertEquals(259, ca.saboor.larpdot.ui.theme.LarpMotion.scaleIslandDuration(360, OverlayPreferences.AnimationSpeed.SNAPPY.durationMultiplier))

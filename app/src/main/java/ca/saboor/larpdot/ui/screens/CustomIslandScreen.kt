@@ -2,6 +2,7 @@ package ca.saboor.larpdot.ui.screens
 
 import android.appwidget.AppWidgetProviderInfo
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
@@ -64,19 +65,24 @@ import ca.saboor.larpdot.service.CustomIslandDisplayInfo
 import ca.saboor.larpdot.service.CustomIslandIcon
 import ca.saboor.larpdot.service.CustomIslandImage
 import ca.saboor.larpdot.service.CustomIslandPosition
+import ca.saboor.larpdot.service.CustomIslandPreset
 import ca.saboor.larpdot.service.CustomIslandPresetStore
 import ca.saboor.larpdot.service.CustomIslandStore
 import ca.saboor.larpdot.service.CustomIslandVisibility
 import ca.saboor.larpdot.service.CustomIslandWidgets
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.customIslandDisplayInfo
+import ca.saboor.larpdot.service.groupByApp
 import ca.saboor.larpdot.ui.components.CustomIslandPreview
 import ca.saboor.larpdot.ui.components.IslandPreviewInspectorHeader
 import ca.saboor.larpdot.ui.components.LarpButtonOption
 import ca.saboor.larpdot.ui.components.LarpCard
 import ca.saboor.larpdot.ui.components.LarpColorPickerButton
 import ca.saboor.larpdot.ui.components.LarpConnectedButtons
+import ca.saboor.larpdot.ui.components.LarpDivider
 import ca.saboor.larpdot.ui.components.LarpListItem
 import ca.saboor.larpdot.ui.components.LarpSliderRow
+import ca.saboor.larpdot.ui.overlay.SwipeDownSensitivity
 import ca.saboor.larpdot.ui.overlay.customIslandPlaceholders
 import ca.saboor.larpdot.ui.overlay.image
 import ca.saboor.larpdot.ui.overlay.rememberCustomIslandDominantColor
@@ -87,8 +93,15 @@ import ca.saboor.larpdot.ui.theme.LarpMotion
 import kotlin.math.roundToInt
 
 private enum class CustomIslandSettingsSection(val label: String) {
-    LAYOUT("Layout"), VISIBILITY("Visibility"), TAP("Tap Action"),
+    LAYOUT("Layout"), BACKGROUND("Background"), VISIBILITY("Visibility"), TAP("Tap Action"),
 }
+
+private data class BundleShareRequest(
+    val appPackage: String?,
+    val appName: String,
+    val presets: List<CustomIslandPreset>,
+    val allowSaveAsPresets: Boolean,
+)
 
 @Composable
 internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
@@ -102,8 +115,11 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
     var deleteId by rememberSaveable { mutableStateOf<String?>(null) }
     var shareIslandId by rememberSaveable { mutableStateOf<String?>(null) }
     var sharePresetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var shareBundleState by remember { mutableStateOf<BundleShareRequest?>(null) }
     var deletePresetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showImportPreset by rememberSaveable { mutableStateOf(false) }
+    var showBrowseCatalog by rememberSaveable { mutableStateOf(false) }
+    var islandSearchQuery by rememberSaveable { mutableStateOf("") }
     var widgetPosition by rememberSaveable { mutableStateOf<CustomIslandPosition?>(null) }
     var iconPosition by rememberSaveable { mutableStateOf<CustomIslandPosition?>(null) }
     var editPosition by rememberSaveable(editingIsland?.id) { mutableStateOf<CustomIslandPosition?>(null) }
@@ -183,10 +199,88 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                         }
                     }
                 } else {
-                    item(key = "custom_islands_list") {
+                    if (settings.islands.size >= 4) {
+                        item(key = "island_search") {
+                            OutlinedTextField(
+                                value = islandSearchQuery,
+                                onValueChange = { islandSearchQuery = it.take(60) },
+                                label = { Text("Search custom islands") },
+                                singleLine = true,
+                                leadingIcon = { Icon(LarpIcons.Search, contentDescription = null) },
+                                trailingIcon = if (islandSearchQuery.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { islandSearchQuery = "" }) {
+                                            Icon(LarpIcons.Clear, contentDescription = "Clear search")
+                                        }
+                                    }
+                                } else null,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    val trimmedQuery = islandSearchQuery.trim()
+                    val visibleIslands = if (trimmedQuery.isEmpty()) {
+                        settings.islands
+                    } else {
+                        settings.islands.filter { island ->
+                            val pkg = island.associatedAppPackage { widgetId ->
+                                CustomIslandWidgets.info(widgetId)?.provider?.packageName
+                            }
+                            val appLabel = pkg?.let { resolveAppLabel(context, it) }.orEmpty()
+                            val info = displayInfo(island)
+                            island.name.contains(trimmedQuery, ignoreCase = true) ||
+                                info.title.contains(trimmedQuery, ignoreCase = true) ||
+                                info.subtitle.contains(trimmedQuery, ignoreCase = true) ||
+                                appLabel.contains(trimmedQuery, ignoreCase = true) ||
+                                (pkg?.contains(trimmedQuery, ignoreCase = true) == true)
+                        }
+                    }
+                    if (visibleIslands.isEmpty()) {
+                        item(key = "search_empty") {
+                            LarpCard {
+                                Text(
+                                    "No islands matching \"$trimmedQuery\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    } else {
+                        val islandGroups = groupByApp(
+                            items = visibleIslands,
+                            packageOf = { island ->
+                                island.associatedAppPackage { widgetId ->
+                                    CustomIslandWidgets.info(widgetId)?.provider?.packageName
+                                }
+                            },
+                            resolveAppName = { pkg -> resolveAppLabel(context, pkg) },
+                        )
+                        items(islandGroups, key = { "group:${it.packageName ?: "__general__"}" }) { group ->
                         LarpCard {
+                            AppCategoryHeader(
+                                packageName = group.packageName,
+                                appName = group.appName,
+                                count = group.items.size,
+                                onShareBundle = if (group.packageName != null || group.items.size > 1) {
+                                    {
+                                        shareBundleState = BundleShareRequest(
+                                            appPackage = group.packageName,
+                                            appName = group.appName,
+                                            presets = group.items.map { island ->
+                                                val info = displayInfo(island)
+                                                CustomIslandPreset(
+                                                    id = island.id,
+                                                    name = island.name.ifBlank { info.title },
+                                                    island = island,
+                                                )
+                                            },
+                                            allowSaveAsPresets = true,
+                                        )
+                                    }
+                                } else null,
+                            )
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                settings.islands.forEachIndexed { index, island ->
+                                group.items.forEachIndexed { index, island ->
                                     val active = isIslandActive(island)
                                     val info = remember(island) { displayInfo(island) }
                                     val itemIcon = island.left.icon?.image
@@ -198,18 +292,23 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                                         title = info.title,
                                         subtitle = info.subtitle,
                                         highlighted = active,
-                                        rank = index + 1,
                                         icon = itemIcon,
                                         subtitleMaxLines = 2,
                                         onClick = { editingId = island.id },
-                                        onMoveUp = if (settings.islands.size > 1) {
-                                            { CustomIslandStore.move(island.id, -1) }
+                                        onMoveUp = if (group.items.size > 1) {
+                                            {
+                                                if (index > 0) CustomIslandStore.swap(island.id, group.items[index - 1].id)
+                                            }
                                         } else null,
                                         canMoveUp = index > 0,
-                                        onMoveDown = if (settings.islands.size > 1) {
-                                            { CustomIslandStore.move(island.id, 1) }
+                                        onMoveDown = if (group.items.size > 1) {
+                                            {
+                                                if (index < group.items.lastIndex) {
+                                                    CustomIslandStore.swap(island.id, group.items[index + 1].id)
+                                                }
+                                            }
                                         } else null,
-                                        canMoveDown = index < settings.islands.lastIndex,
+                                        canMoveDown = index < group.items.lastIndex,
                                         trailing = {
                                             IconButton(
                                                 onClick = { shareIslandId = island.id },
@@ -243,15 +342,25 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                         }
                     }
                 }
+                }
 
                 item(key = "custom_island_presets") {
                     CustomIslandPresetsCard(
                         presets = presets,
                         onImportClick = { showImportPreset = true },
+                        onBrowseCatalogClick = { showBrowseCatalog = true },
                         onApplyPreset = { preset ->
                             CustomIslandStore.addFromPreset(preset)?.let { editingId = it }
                         },
                         onSharePreset = { preset -> sharePresetId = preset.id },
+                        onShareBundle = { group ->
+                            shareBundleState = BundleShareRequest(
+                                appPackage = group.packageName,
+                                appName = group.appName,
+                                presets = group.items,
+                                allowSaveAsPresets = false,
+                            )
+                        },
                         onDeletePreset = { preset -> deletePresetId = preset.id },
                     )
                 }
@@ -284,6 +393,14 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                     onBack = { editingId = null },
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = {
+                                CustomIslandStore.duplicate(pageIsland.id)?.let { newId ->
+                                    editingId = newId
+                                    Toast.makeText(context, "Island duplicated", Toast.LENGTH_SHORT).show()
+                                }
+                            }) {
+                                Icon(LarpIcons.ContentCopy, contentDescription = "Duplicate island")
+                            }
                             IconButton(onClick = { shareIslandId = pageIsland.id }) {
                                 Icon(LarpIcons.Share, contentDescription = "Save or share preset")
                             }
@@ -310,12 +427,14 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
                                 }
                             },
                             singleSelection = false,
+                            scrollable = true,
                         )
                     }
                     settingsSection?.let { section ->
                         item(key = "active_settings") {
                             when (section) {
                                 CustomIslandSettingsSection.LAYOUT -> CustomIslandDimensionSettings(pageIsland)
+                                CustomIslandSettingsSection.BACKGROUND -> CustomIslandBackgroundSettings(pageIsland)
                                 CustomIslandSettingsSection.VISIBILITY -> CustomIslandVisibilitySettings(pageIsland, otherSwipeDownTitle)
                                 CustomIslandSettingsSection.TAP -> CustomIslandTapSettings(pageIsland)
                             }
@@ -428,15 +547,44 @@ internal fun CustomIslandScreen(cutoutInfo: CutoutInfo) {
         }
     }
 
+    shareBundleState?.let { request ->
+        ShareOrSaveBundleDialog(
+            appPackage = request.appPackage,
+            appName = request.appName,
+            sourcePresets = request.presets,
+            allowSaveAsPresets = request.allowSaveAsPresets,
+            onDismiss = { shareBundleState = null },
+        )
+    }
+
     if (showImportPreset) {
         ImportPresetDialog(
             onDismiss = { showImportPreset = false },
-            onSaveOnly = { preset ->
-                CustomIslandPresetStore.addImported(preset)
+            onSaveOnly = { imported ->
+                CustomIslandPresetStore.addImportedAll(imported)
             },
-            onImportAndAddIsland = { preset ->
-                CustomIslandPresetStore.addImported(preset)
-                CustomIslandStore.addFromPreset(preset)?.let { editingId = it }
+            onImportAndAddIslands = { imported ->
+                CustomIslandPresetStore.addImportedAll(imported)
+                val addedIds = CustomIslandStore.addAllFromPresets(imported)
+                if (addedIds.size == 1) {
+                    editingId = addedIds.first()
+                }
+            },
+        )
+    }
+
+    if (showBrowseCatalog) {
+        BrowseCatalogDialog(
+            onDismiss = { showBrowseCatalog = false },
+            onSaveOnly = { imported ->
+                CustomIslandPresetStore.addImportedAll(imported)
+            },
+            onImportAndAddIslands = { imported ->
+                CustomIslandPresetStore.addImportedAll(imported)
+                val addedIds = CustomIslandStore.addAllFromPresets(imported)
+                if (addedIds.size == 1) {
+                    editingId = addedIds.first()
+                }
             },
         )
     }
@@ -557,11 +705,34 @@ private fun CustomIslandVisibilitySettings(island: CustomIsland, otherSwipeDownT
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            CustomIslandVisibility.SWIPE_DOWN -> Text(
-                "Opens expanded when swiping down from the camera cutout.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            CustomIslandVisibility.SWIPE_DOWN -> {
+                val context = LocalContext.current
+                val swipeDownSensitivity by OverlayPreferences.swipeDownSensitivityFlow.collectAsState()
+                LaunchedEffect(Unit) { OverlayPreferences.getSwipeDownSensitivity(context) }
+                Text(
+                    "Opens expanded when swiping down from the camera cutout.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LarpDivider()
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Swipe-Down Sensitivity",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    LarpConnectedButtons(
+                        options = SwipeDownSensitivity.entries.map { option ->
+                            LarpButtonOption(
+                                checked = swipeDownSensitivity == option,
+                                label = option.label,
+                                onCheckedChange = {
+                                    OverlayPreferences.setSwipeDownSensitivity(context, option)
+                                },
+                            )
+                        },
+                    )
+                }
+            }
             CustomIslandVisibility.CONDITIONAL -> {
                 Text(
                     "Show when active",
@@ -654,17 +825,6 @@ private fun CustomIslandSlotSettings(
                     }
                 }
             }
-            var textWidth by remember(position, slot.width) { mutableFloatStateOf(slot.width.toFloat()) }
-            LarpSliderRow(
-                title = "Wing Width",
-                value = textWidth,
-                valueLabel = "${textWidth.roundToInt()} dp",
-                valueRange = position.minWidth.toFloat()..position.maxWidth.toFloat(),
-                onValueChange = { textWidth = it },
-                onValueChangeFinished = {
-                    CustomIslandStore.configureSlot(island.id, position, slot.copy(width = textWidth.roundToInt()))
-                },
-            )
             CustomTextFormatSettings(
                 style = slot.textStyle,
                 dominantColor = dominantColor,

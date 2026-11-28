@@ -11,8 +11,9 @@ import ca.saboor.larpdot.notification.NotificationActivitySettings
 import ca.saboor.larpdot.service.AutoExpandAlertQueue
 import ca.saboor.larpdot.service.isPermanentShortTermAlert
 import ca.saboor.larpdot.service.resolveFriendlyBluetoothName
-import ca.saboor.larpdot.service.selectAutoExpandShortTermAlert
-import ca.saboor.larpdot.service.selectAutoExpandShortTermAlerts
+import ca.saboor.larpdot.service.autoExpandActivitySignature
+import ca.saboor.larpdot.service.selectAutoExpandActivities
+import ca.saboor.larpdot.service.selectAutoExpandActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -384,7 +385,7 @@ class NotificationActivityContentTest {
         val span = formatted.spanStyles[0]
         assertEquals(2, span.start)
         assertEquals(3, span.end)
-        assertEquals(8.sp, span.item.fontSize)
+        assertEquals(9.5.sp, span.item.fontSize)
 
         val nonPercent = formatCompactStatus("15 min")
         assertEquals("15 min", nonPercent.text)
@@ -488,32 +489,82 @@ class NotificationActivityContentTest {
             title = "Charging",
             text = "51%",
         ).copy(key = "system_battery_charging", postedAtMillis = 5000L)
+        val chargeLimit = createActivity(
+            kind = NotificationActivityKind.BATTERY_CHARGING,
+            title = "Charge Limit Reached",
+            text = "80% reached",
+        ).copy(key = "system_battery_charge_limit", postedAtMillis = 5500L)
+        val nav = createActivity(
+            kind = NotificationActivityKind.NAVIGATION,
+            title = "Turn right",
+            text = "Main St",
+        ).copy(key = "nav_1", postedAtMillis = 6000L)
+        val liveUpdate = createActivity(
+            kind = NotificationActivityKind.LIVE_UPDATE,
+            title = "Order preparing",
+            text = "Arriving in 15 min",
+        ).copy(key = "live_1", shortCriticalText = "15 min", postedAtMillis = 7000L)
 
         // Disabled setting never auto-expands
-        assertEquals(null, selectAutoExpandShortTermAlert(listOf(bt), emptyMap(), expandEnabled = false) { false })
+        assertEquals(
+            null,
+            selectAutoExpandActivity(listOf(bt), emptyMap(), NotificationActivitySettings()) { false },
+        )
 
-        // Brand-new alert triggers expansion
-        assertEquals(bt, selectAutoExpandShortTermAlert(listOf(bt), emptyMap(), expandEnabled = true) { false })
+        // Per-activity auto-expand triggers only for enabled activities
+        val btOnly = NotificationActivitySettings(autoExpandBluetooth = true)
+        assertEquals(bt, selectAutoExpandActivity(listOf(bt, charging), emptyMap(), btOnly) { false })
+
+        // Charge limit uses its own auto-expand flag distinct from Charging
+        val chargeLimitOnly = NotificationActivitySettings(autoExpandChargeLimit = true)
+        assertEquals(
+            chargeLimit,
+            selectAutoExpandActivity(listOf(charging, chargeLimit), emptyMap(), chargeLimitOnly) { false },
+        )
 
         // Already-seen charging update with same title does not re-expand
         assertEquals(
             null,
-            selectAutoExpandShortTermAlert(
+            selectAutoExpandActivity(
                 listOf(charging.copy(text = "52%")),
                 mapOf("system_battery_charging" to "Charging"),
-                expandEnabled = true,
+                NotificationActivitySettings(autoExpandCharging = true),
             ) { false },
         )
 
         // Sound mode title change triggers expansion even when key already existed
         assertEquals(
             soundSilent,
-            selectAutoExpandShortTermAlert(
+            selectAutoExpandActivity(
                 listOf(soundSilent),
                 mapOf("system_sound_mode" to "Ring Mode"),
-                expandEnabled = true,
+                NotificationActivitySettings(autoExpandSoundMode = true),
             ) { false },
         )
+
+        // Ongoing live activities (e.g. Navigation) auto-expand on start, not on subsequent updates
+        val navSettings = NotificationActivitySettings(autoExpandNavigation = true)
+        assertEquals(nav, selectAutoExpandActivity(listOf(nav), emptyMap(), navSettings) { false })
+        assertEquals(
+            null,
+            selectAutoExpandActivity(
+                listOf(nav.copy(title = "Turn left")),
+                mapOf(nav.key to autoExpandActivitySignature(nav)),
+                navSettings,
+            ) { false },
+        )
+
+        // Live Updates support separate start and on-update auto-expand options
+        val liveStartOnly = NotificationActivitySettings(autoExpandLiveUpdates = true)
+        val liveUpdatesOnChange = NotificationActivitySettings(autoExpandLiveUpdatesOnChange = true)
+        val liveSig = autoExpandActivitySignature(liveUpdate)
+        val liveChanged = liveUpdate.copy(title = "Driver on the way", shortCriticalText = "5 min")
+        val liveProgressOnly = liveUpdate.copy(progress = 60, progressMax = 100)
+        assertEquals(liveUpdate, selectAutoExpandActivity(listOf(liveUpdate), emptyMap(), liveStartOnly) { false })
+        assertEquals(null, selectAutoExpandActivity(listOf(liveChanged), mapOf(liveUpdate.key to liveSig), liveStartOnly) { false })
+        assertEquals(null, selectAutoExpandActivity(listOf(liveUpdate), emptyMap(), liveUpdatesOnChange) { false })
+        assertEquals(liveChanged, selectAutoExpandActivity(listOf(liveChanged), mapOf(liveUpdate.key to liveSig), liveUpdatesOnChange) { false })
+        assertEquals(null, selectAutoExpandActivity(listOf(liveProgressOnly), mapOf(liveUpdate.key to liveSig), liveUpdatesOnChange) { false })
 
         // Permanent short-term detection respects per-alert pin flags
         val pinnedSettings = NotificationActivitySettings(permanentCharging = true, permanentBluetooth = false)
@@ -521,10 +572,15 @@ class NotificationActivityContentTest {
         assertFalse(isPermanentShortTermAlert(bt, pinnedSettings))
 
         // Simultaneous alerts are returned in chronological order so later ones can queue cleanly
-        val ordered = selectAutoExpandShortTermAlerts(
-            shortTerms = listOf(charging, bt, soundRing),
+        val allThree = NotificationActivitySettings(
+            autoExpandBluetooth = true,
+            autoExpandSoundMode = true,
+            autoExpandCharging = true,
+        )
+        val ordered = selectAutoExpandActivities(
+            activities = listOf(charging, bt, soundRing),
             seenSignatures = emptyMap(),
-            expandEnabled = true,
+            settings = allThree,
         ) { false }
         assertEquals(listOf(bt, soundRing, charging), ordered)
 
@@ -624,10 +680,10 @@ class NotificationActivityContentTest {
         assertFalse(isPermanentShortTermAlert(dndOff, dndPinnedSettings))
         assertEquals(
             dndOff,
-            selectAutoExpandShortTermAlert(
+            selectAutoExpandActivity(
                 listOf(dndOff),
                 mapOf("system_dnd" to "Do Not Disturb"),
-                expandEnabled = true,
+                NotificationActivitySettings(autoExpandDnd = true),
             ) { false },
         )
     }

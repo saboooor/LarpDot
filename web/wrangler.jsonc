@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "larpdot",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./dist/_worker.js",
+  "assets": {
+    "binding": "ASSET",
+    "directory": "./dist"
+  },
+  "routes": [
+    {
+      "pattern": "larpdot.luminescent.dev",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "larpdot",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./drizzle/migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

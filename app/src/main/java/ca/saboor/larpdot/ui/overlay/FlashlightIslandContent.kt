@@ -138,6 +138,7 @@ internal fun CompactFlashlightContent(
     onExpand: () -> Unit = {},
     onFlashlightToggle: () -> Unit = {},
     isLandscape: Boolean = false,
+    trailingWingFraction: Float = 0.5f,
     status: String = rememberCompactFlashlightStatus(),
     leftSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState().value,
     rightSide: OverlayPreferences.MinimizedFlashlightSideContent = OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState().value,
@@ -174,7 +175,7 @@ internal fun CompactFlashlightContent(
         Text(
             text = formattedStatus,
             color = accentColor,
-            fontSize = if (isPercentage) 10.5.sp else 11.5.sp,
+            fontSize = if (isPercentage) 12.sp else 13.sp,
             fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
             maxLines = 1,
             softWrap = false,
@@ -209,7 +210,7 @@ internal fun CompactFlashlightContent(
                         Text(
                             text = formattedStatus,
                             color = accentColor,
-                            fontSize = if (isPercentage) 9.5.sp else 10.sp,
+                            fontSize = if (isPercentage) 11.sp else 12.sp,
                             fontWeight = androidx.compose.material3.MaterialTheme.typography.bodyMedium.fontWeight,
                             maxLines = 1,
                             softWrap = false,
@@ -267,34 +268,40 @@ internal fun CompactFlashlightContent(
                 topEnd = cutoutDiameterDp / 2f,
                 bottomEnd = cutoutDiameterDp / 2f,
             )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .then(if (onIconClick != null) Modifier.clickable(onClick = onIconClick) else Modifier)
-                    .then(
-                        if (highlightIcon) Modifier.border(1.5.dp, highlightColor, startHighlightShape)
-                        else Modifier
-                    )
-                    .padding(start = if (leftHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                RenderFlashlightWingContent(leftSide, leftIconAnchor, leftProgressAnchor)
+            val leadingWeight = (1f - trailingWingFraction).coerceIn(0f, 1f)
+            val trailingWeight = trailingWingFraction.coerceIn(0f, 1f)
+            if (leadingWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(leadingWeight)
+                        .fillMaxHeight()
+                        .then(if (onIconClick != null) Modifier.clickable(onClick = onIconClick) else Modifier)
+                        .then(
+                            if (highlightIcon) Modifier.border(1.5.dp, highlightColor, startHighlightShape)
+                            else Modifier
+                        )
+                        .padding(start = if (leftHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    RenderFlashlightWingContent(leftSide, leftIconAnchor, leftProgressAnchor)
+                }
             }
             Spacer(modifier = Modifier.width(cutoutDiameterDp))
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .then(if (onRadialClick != null) Modifier.clickable(onClick = onRadialClick) else Modifier)
-                    .then(
-                        if (highlightRadial) Modifier.border(1.5.dp, highlightColor, endHighlightShape)
-                        else Modifier
-                    )
-                    .padding(end = if (rightHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                RenderFlashlightWingContent(rightSide, rightIconAnchor, rightProgressAnchor)
+            if (trailingWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(trailingWeight)
+                        .fillMaxHeight()
+                        .then(if (onRadialClick != null) Modifier.clickable(onClick = onRadialClick) else Modifier)
+                        .then(
+                            if (highlightRadial) Modifier.border(1.5.dp, highlightColor, endHighlightShape)
+                            else Modifier
+                        )
+                        .padding(end = if (rightHasRadial && percentLabel.isNotEmpty()) compactRingInset else 8.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    RenderFlashlightWingContent(rightSide, rightIconAnchor, rightProgressAnchor)
+                }
             }
         }
     }

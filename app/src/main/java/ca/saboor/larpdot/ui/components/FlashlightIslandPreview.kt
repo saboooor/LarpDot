@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -73,6 +74,11 @@ fun FlashlightIslandPreview(
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val showIslandOutline = ca.saboor.larpdot.service.resolveIslandOutlineVisible(
+        islandOutlineMode,
+        ca.saboor.larpdot.service.isPitchBlackPixel(MaterialTheme.colorScheme.background.toArgb()),
+    )
 
     val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
     val cutoutDiameterDp = cameraGeometry.diameter.dp
@@ -115,9 +121,11 @@ fun FlashlightIslandPreview(
                             cornerRadius = compactCornerRadius,
                             shape = RoundedCornerShape(compactCornerRadius),
                             strokeWidth = if (selectedElement == FlashlightPreviewElement.MINIMIZED_PILL) 1.5.dp else 0.75.dp,
-                            trackColor = if (selectedElement == FlashlightPreviewElement.MINIMIZED_PILL) {
-                                MaterialTheme.colorScheme.primary
-                            } else Color(0x30FFFFFF),
+                            trackColor = when {
+                                selectedElement == FlashlightPreviewElement.MINIMIZED_PILL -> MaterialTheme.colorScheme.primary
+                                showIslandOutline -> Color(0x30FFFFFF)
+                                else -> Color.Transparent
+                            },
                             progressColor = Color.Transparent,
                         ),
                     shape = RoundedCornerShape(compactCornerRadius),
@@ -167,9 +175,11 @@ fun FlashlightIslandPreview(
                         cornerRadius = expandedCornerRadiusDp,
                         shape = containerShape,
                         strokeWidth = if (selectedElement == FlashlightPreviewElement.EXPANDED_BEAM) 1.5.dp else 0.75.dp,
-                        trackColor = if (selectedElement == FlashlightPreviewElement.EXPANDED_BEAM) {
-                            MaterialTheme.colorScheme.primary
-                        } else Color(0x30FFFFFF),
+                        trackColor = when {
+                            selectedElement == FlashlightPreviewElement.EXPANDED_BEAM -> MaterialTheme.colorScheme.primary
+                            showIslandOutline -> Color(0x30FFFFFF)
+                            else -> Color.Transparent
+                        },
                         progressColor = Color.Transparent,
                     ),
                 shape = containerShape,

@@ -62,29 +62,42 @@ internal fun CustomIsland.performCurrentNotificationAction(key: String?, action:
 }
 
 internal fun CustomIsland.runTapAction(context: Context, expand: () -> Unit) {
-    when (tapAction) {
-        CustomIslandTapAction.EXPAND -> expand()
-        CustomIslandTapAction.NONE -> Unit
+    val handled = when (tapAction) {
+        CustomIslandTapAction.EXPAND -> {
+            expand()
+            true
+        }
+        CustomIslandTapAction.NONE -> true
         CustomIslandTapAction.OPEN_APP -> {
             val app = tapAppPackage ?: currentSources(ScreenStateTracker.isDeviceLocked.value).appPackage
-            app?.let { NotificationActivityState.openApp(context, it) }
+            app != null && NotificationActivityState.openApp(context, app)
         }
         CustomIslandTapAction.OPEN_NOTIFICATION -> {
-            if (ScreenStateTracker.isDeviceLocked.value) return
-            val sources = currentSources(locked = false)
-            val notification = sources.notification ?: sources.activityNotification
-            if (notification != null) {
-                NotificationActivityState.open(context, notification.packageName, notification.contentIntent)
-            } else {
-                sources.activity?.let { NotificationActivityState.open(context, it) }
+            if (ScreenStateTracker.isDeviceLocked.value) true
+            else {
+                val sources = currentSources(locked = false)
+                val notification = sources.notification ?: sources.activityNotification
+                when {
+                    notification != null -> NotificationActivityState.open(context, notification.packageName, notification.contentIntent)
+                    sources.activity != null -> NotificationActivityState.open(context, sources.activity)
+                    else -> false
+                }
             }
         }
         CustomIslandTapAction.RUN_NOTIFICATION_ACTION -> {
-            if (ScreenStateTracker.isDeviceLocked.value) return
-            val title = notificationActionTitle.trim()
-            currentSources(locked = false).notificationActions
-                .firstOrNull { it.title.equals(title, ignoreCase = true) }
-                ?.let(NotificationActivityState::perform)
+            if (ScreenStateTracker.isDeviceLocked.value) true
+            else {
+                val title = notificationActionTitle.trim()
+                val action = currentSources(locked = false).notificationActions
+                    .firstOrNull { it.title.equals(title, ignoreCase = true) }
+                if (action != null) {
+                    NotificationActivityState.perform(action)
+                    true
+                } else false
+            }
         }
+    }
+    if (!handled && hasExpandedContent) {
+        expand()
     }
 }

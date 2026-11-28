@@ -483,10 +483,10 @@ internal fun LarpColorPickerButton(
     label: String,
     selection: CustomIslandColor,
     onSelectionChange: (CustomIslandColor) -> Unit,
+    modifier: Modifier = Modifier,
     supportsDynamicModes: Boolean = true,
     dominantColor: Color? = null,
     dominantLabel: String = "App Color",
-    modifier: Modifier = Modifier,
 ) {
     var open by remember { mutableStateOf(false) }
     val resolvedColor = resolveCustomIslandColor(selection, MaterialTheme.colorScheme.primary, dominantColor)

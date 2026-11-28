@@ -392,6 +392,17 @@ internal fun ExpandedIslandContent(
     }
 }
 
+private val singleAlbumSuffix = Regex("""\s*[-–—]\s*Single$""", RegexOption.IGNORE_CASE)
+
+private val MediaTrackInfo.displayAlbum: String
+    get() {
+        val albumName = album.trim()
+        val trackTitle = title.trim()
+        return if (albumName.equals(trackTitle, ignoreCase = true) ||
+            singleAlbumSuffix.replace(albumName, "").trimEnd().equals(trackTitle, ignoreCase = true)
+        ) "" else album
+    }
+
 private class ExpandedLayoutParams(
     val context: Context,
     val hapticFeedback: HapticFeedback,
@@ -440,7 +451,7 @@ private class ExpandedLayoutParams(
     val showsArtwork get() = showAlbumArt && mediaInfo.albumArt != null
     val showsTrackText get() = elementVisibility.trackInfo &&
         (trackInfoStyle.showTitle || (trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()) ||
-            (trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()))
+            (trackInfoStyle.showAlbum && mediaInfo.displayAlbum.isNotBlank()))
     val showsAudioOutputChip get() = audioOutputStyle == OverlayPreferences.AudioOutputStyle.CHIP
     val showsAudioOutputButton get() = audioOutputStyle == OverlayPreferences.AudioOutputStyle.BUTTON
     val showsTrackInfoWithBpm get() = showsTrackText || showsAudioOutputChip ||
@@ -467,19 +478,37 @@ private fun ExpandedMusicBackground(
     backgroundOpacity: Float,
     modifier: Modifier,
 ) {
-    if (albumArt == null) return
+    ExpandedImageBackground(
+        bitmap = albumArt,
+        style = albumArtStyle,
+        isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE,
+        backgroundOpacity = backgroundOpacity,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun ExpandedImageBackground(
+    bitmap: Bitmap?,
+    style: OverlayPreferences.ExpandedBackgroundStyle,
+    isVertical: Boolean = false,
+    backgroundOpacity: Float = 1f,
+    tint: Color? = null,
+    modifier: Modifier = Modifier,
+) {
+    if (bitmap == null || style == OverlayPreferences.ExpandedBackgroundStyle.NONE) return
     val density = LocalDensity.current
-    val isVertical = playerLayout == OverlayPreferences.ExpandedPlayerLayout.MATERIAL_3_EXPRESSIVE
-    val imageBitmap = remember(albumArt) { albumArt.asImageBitmap() }
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val colorFilter = remember(tint) { tint?.let(androidx.compose.ui.graphics.ColorFilter::tint) }
 
     Box(modifier.graphicsLayer { alpha = backgroundOpacity }) {
-        when (albumArtStyle) {
+        when (style) {
             OverlayPreferences.ExpandedBackgroundStyle.NONE -> Unit
             OverlayPreferences.ExpandedBackgroundStyle.FULL_BACKGROUND,
             OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND -> {
                 Image(
                     bitmap = imageBitmap,
-                    contentDescription = "Background album art",
+                    contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -488,12 +517,13 @@ private fun ExpandedMusicBackground(
                             scaleY = 1.15f
                         }
                         .then(
-                            if (albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND) {
+                            if (style == OverlayPreferences.ExpandedBackgroundStyle.BLURRED_FULL_BACKGROUND) {
                                 Modifier.blur(24.dp)
                             } else Modifier
                         ),
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.Center,
+                    colorFilter = colorFilter,
                 )
                 Box(
                     modifier = Modifier
@@ -511,12 +541,11 @@ private fun ExpandedMusicBackground(
             }
             OverlayPreferences.ExpandedBackgroundStyle.BASIC_FADED,
             OverlayPreferences.ExpandedBackgroundStyle.BLENDED -> {
-                val isBlended = albumArtStyle == OverlayPreferences.ExpandedBackgroundStyle.BLENDED
-                val bitmap = imageBitmap
-                val side = minOf(bitmap.width, bitmap.height)
-                val cropX = (bitmap.width - side) / 2
-                val cropY = (bitmap.height - side) / 2
-                val eighth = side / 8
+                val isBlended = style == OverlayPreferences.ExpandedBackgroundStyle.BLENDED
+                val side = minOf(imageBitmap.width, imageBitmap.height)
+                val cropX = (imageBitmap.width - side) / 2
+                val cropY = (imageBitmap.height - side) / 2
+                val eighth = (side / 8).coerceAtLeast(1)
 
                 if (isVertical) {
                     val alphaStops = if (isBlended) {
@@ -562,7 +591,7 @@ private fun ExpandedMusicBackground(
                                     } else Modifier
                                 ),
                         ) {
-                            drawVerticalAlbumWithReflection(bitmap, cropX, cropY, side, eighth)
+                            drawVerticalAlbumWithReflection(imageBitmap, cropX, cropY, side, eighth, colorFilter)
                         }
                     }
                 } else {
@@ -604,7 +633,7 @@ private fun ExpandedMusicBackground(
                                 ),
                         ) {
                             drawHorizontalAlbumWithReflections(
-                                bitmap = bitmap,
+                                bitmap = imageBitmap,
                                 cropX = cropX,
                                 cropY = cropY,
                                 side = side,
@@ -613,6 +642,7 @@ private fun ExpandedMusicBackground(
                                 realArtH = realArtPx,
                                 topRefH = topSeamPx,
                                 includeRightAndCorner = isBlended,
+                                colorFilter = colorFilter,
                             )
                         }
                     }
@@ -628,6 +658,7 @@ private fun DrawScope.drawVerticalAlbumWithReflection(
     cropY: Int,
     side: Int,
     eighth: Int,
+    colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
     val artW = size.width
     val topSpace = size.height - artW
@@ -641,6 +672,7 @@ private fun DrawScope.drawVerticalAlbumWithReflection(
             srcSize = IntSize(side, visibleSrcHeight),
             dstOffset = IntOffset.Zero,
             dstSize = IntSize(artW.roundToInt(), size.height.roundToInt()),
+            colorFilter = colorFilter,
         )
     } else {
         drawImage(
@@ -649,6 +681,7 @@ private fun DrawScope.drawVerticalAlbumWithReflection(
             srcSize = IntSize(side, side),
             dstOffset = IntOffset(0, topSpace.roundToInt()),
             dstSize = IntSize(artW.roundToInt(), artW.roundToInt()),
+            colorFilter = colorFilter,
         )
         scale(scaleX = 1f, scaleY = -1f, pivot = Offset(artW / 2f, topSpace / 2f)) {
             drawImage(
@@ -657,6 +690,7 @@ private fun DrawScope.drawVerticalAlbumWithReflection(
                 srcSize = IntSize(side, eighth),
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(artW.roundToInt(), topSpace.roundToInt()),
+                colorFilter = colorFilter,
             )
         }
     }
@@ -672,6 +706,7 @@ private fun DrawScope.drawHorizontalAlbumWithReflections(
     realArtH: Float,
     topRefH: Float,
     includeRightAndCorner: Boolean,
+    colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
     // 1. Primary 1:1 album art below top reflection
     drawImage(
@@ -680,6 +715,7 @@ private fun DrawScope.drawHorizontalAlbumWithReflections(
         srcSize = IntSize(side, side),
         dstOffset = IntOffset(0, topRefH.roundToInt()),
         dstSize = IntSize(realArtW.roundToInt(), realArtH.roundToInt()),
+        colorFilter = colorFilter,
     )
     // 2. Flipped 1/8 top reflection
     scale(scaleX = 1f, scaleY = -1f, pivot = Offset(realArtW / 2f, topRefH / 2f)) {
@@ -689,6 +725,7 @@ private fun DrawScope.drawHorizontalAlbumWithReflections(
             srcSize = IntSize(side, eighth),
             dstOffset = IntOffset.Zero,
             dstSize = IntSize(realArtW.roundToInt(), topRefH.roundToInt()),
+            colorFilter = colorFilter,
         )
     }
     if (!includeRightAndCorner) return
@@ -701,6 +738,7 @@ private fun DrawScope.drawHorizontalAlbumWithReflections(
             srcSize = IntSize(eighth, side),
             dstOffset = IntOffset(realArtW.roundToInt(), topRefH.roundToInt()),
             dstSize = IntSize(rightRefW.roundToInt(), realArtH.roundToInt()),
+            colorFilter = colorFilter,
         )
     }
     // 4. Flipped 1/8 corner reflection
@@ -711,6 +749,7 @@ private fun DrawScope.drawHorizontalAlbumWithReflections(
             srcSize = IntSize(eighth, eighth),
             dstOffset = IntOffset(realArtW.roundToInt(), 0),
             dstSize = IntSize(rightRefW.roundToInt(), topRefH.roundToInt()),
+            colorFilter = colorFilter,
         )
     }
 }
@@ -771,7 +810,7 @@ private fun ExpandedMusicHeader(
         ).size.width.toDp()
     }
     val artist = p.mediaInfo.artist.takeIf { trackStyle.showArtist && it.isNotBlank() }
-    val album = p.mediaInfo.album.takeIf { trackStyle.showAlbum && it.isNotBlank() }
+    val album = p.mediaInfo.displayAlbum.takeIf { trackStyle.showAlbum && it.isNotBlank() }
     val inlineAlbum = trackStyle.albumBesideArtist && artist != null && album != null
     val bpmWidth = if (showsInlineBpm) 64.dp else 0.dp
     val desiredTrackWidth = if (p.elementVisibility.visualizer) maxOf(
@@ -975,7 +1014,7 @@ private fun rememberEstimatedTrackInfoHeightDp(
     val chipTextStyle = MaterialTheme.typography.labelSmall
     val showTitle = trackStyle.showTitle
     val showArtist = trackStyle.showArtist && p.mediaInfo.artist.isNotBlank()
-    val showAlbum = trackStyle.showAlbum && p.mediaInfo.album.isNotBlank()
+    val showAlbum = trackStyle.showAlbum && p.mediaInfo.displayAlbum.isNotBlank()
     val inlineAlbum = trackStyle.albumBesideArtist && showArtist && showAlbum
     val showArtistRow = showArtist || showInlineBpm
     fun lineHeightDp(style: TextStyle): Dp = with(density) {
@@ -1082,7 +1121,7 @@ private fun ExpandedAndroidMediaLayout(p: ExpandedLayoutParams) {
     var measuredInfoHeight by remember(
         p.visibleTrackInfoStyle,
         p.mediaInfo.artist.isNotBlank(),
-        p.mediaInfo.album.isNotBlank(),
+        p.mediaInfo.displayAlbum.isNotBlank(),
         p.showsAudioOutputChip,
         p.fontStyle,
         fontWeightKey,
@@ -1466,7 +1505,7 @@ private fun ExpandedClassicMediaLayout(p: ExpandedLayoutParams) {
     var measuredInfoHeight by remember(
         p.visibleTrackInfoStyle,
         p.mediaInfo.artist.isNotBlank(),
-        p.mediaInfo.album.isNotBlank(),
+        p.mediaInfo.displayAlbum.isNotBlank(),
         p.showsAudioOutputChip,
         showInlineBpm,
         p.fontStyle,
@@ -1630,7 +1669,7 @@ private fun ExpandedTrackInfoColumn(
 ) {
     val fontWeight = FontWeight(OverlayPreferences.islandFontWeightFlow.collectAsState().value)
     val showArtist = trackInfoStyle.showArtist && mediaInfo.artist.isNotBlank()
-    val showAlbum = trackInfoStyle.showAlbum && mediaInfo.album.isNotBlank()
+    val showAlbum = trackInfoStyle.showAlbum && mediaInfo.displayAlbum.isNotBlank()
     val inlineAlbum = trackInfoStyle.albumBesideArtist && showArtist && showAlbum
     val showArtistRow = showArtist || bpmChip != null
     Column(
@@ -1660,7 +1699,7 @@ private fun ExpandedTrackInfoColumn(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (showArtist) {
                     MarqueeText(
-                        text = if (inlineAlbum) "${mediaInfo.artist} • ${mediaInfo.album}" else mediaInfo.artist,
+                        text = if (inlineAlbum) "${mediaInfo.artist} • ${mediaInfo.displayAlbum}" else mediaInfo.artist,
                         style = artistTextStyle.copy(
                             fontFamily = fontStyle.fontFamily,
                             fontWeight = fontWeight,
@@ -1687,7 +1726,7 @@ private fun ExpandedTrackInfoColumn(
         if (showAlbum && !inlineAlbum) {
             if (trackInfoStyle.showTitle || showArtistRow || footerContent != null) Spacer(Modifier.height(2.dp))
             MarqueeText(
-                text = mediaInfo.album,
+                text = mediaInfo.displayAlbum,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontFamily = fontStyle.fontFamily,
                     fontWeight = fontWeight,

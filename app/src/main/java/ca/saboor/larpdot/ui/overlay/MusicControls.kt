@@ -167,7 +167,7 @@ internal fun loadMediaSessionActionIcon(
 }
 
 
-internal fun openPlayerApp(context: Context, track: MediaTrackInfo) {
+internal fun openPlayerApp(context: Context, track: MediaTrackInfo): Boolean {
     val controller = track.controller
     val pkg = track.playerPackageName ?: controller?.packageName
 
@@ -182,12 +182,14 @@ internal fun openPlayerApp(context: Context, track: MediaTrackInfo) {
                 false
             }
         }.getOrDefault(false)
-        if (launched) return
+        if (launched) return true
     }
 
-    runCatching {
-        controller?.sessionActivity?.send()
-    }
+    val sessionActivity = controller?.sessionActivity ?: return false
+    return runCatching {
+        sessionActivity.send()
+        true
+    }.getOrDefault(false)
 }
 
 @Composable
@@ -195,8 +197,8 @@ internal fun MediaTimeLabel(
     positionState: androidx.compose.runtime.State<Long>,
     format: (Long) -> String,
     style: androidx.compose.ui.text.TextStyle,
-    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Text(
         text = format(positionState.value),

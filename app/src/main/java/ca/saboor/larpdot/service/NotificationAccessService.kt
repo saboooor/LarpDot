@@ -1,6 +1,7 @@
 package ca.saboor.larpdot.service
 
 import android.app.Notification
+import android.app.NotificationChannel
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -61,6 +62,7 @@ class NotificationAccessService : NotificationListenerService() {
         MediaPlaybackState.initialize(this)
         NotificationActivityState.initialize(this)
         _isListenerConnected.value = true
+        activeService = this
         mediaSessionManager = getSystemService(MediaSessionManager::class.java)
         runCatching {
             mediaSessionManager?.addOnActiveSessionsChangedListener(sessionsChangedListener, listenerComponent)
@@ -69,6 +71,7 @@ class NotificationAccessService : NotificationListenerService() {
 
         runCatching { activeNotifications }.onSuccess { notifications ->
             notifications?.forEach(::updateNotificationActivities)
+            ShizukuLiveUpdateSuppressor.reconcileActiveNotifications(this, notifications)
         }.onFailure { Log.w(TAG, "Could not read active notifications", it) }
     }
 
@@ -77,6 +80,7 @@ class NotificationAccessService : NotificationListenerService() {
             .onFailure { NotificationActivityState.remove(sbn.key) }
         runCatching { CustomIslandNotifications.post(sbn, this) }
             .onFailure { CustomIslandNotifications.remove(sbn.key) }
+        runCatching { ShizukuLiveUpdateSuppressor.onNotificationPosted(this, sbn) }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -178,6 +182,7 @@ class NotificationAccessService : NotificationListenerService() {
         sbn?.key?.let {
             NotificationActivityState.remove(it)
             CustomIslandNotifications.remove(it)
+            ShizukuLiveUpdateSuppressor.onNotificationRemoved(this, it)
         }
 
         if (sbn?.notification?.let(::isMediaNotification) == true) {
@@ -198,10 +203,12 @@ class NotificationAccessService : NotificationListenerService() {
     private fun stopListening() {
         if (!_isListenerConnected.value) return
         _isListenerConnected.value = false
+        if (activeService === this) activeService = null
         runCatching { mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener) }
         mediaSessionManager = null
         CustomIslandNotifications.clear()
         NotificationActivityState.clearNotificationActivities()
+        ShizukuLiveUpdateSuppressor.restoreAll(this)
         MediaPlaybackState.updateFromControllers(emptyList())
     }
 
@@ -209,5 +216,28 @@ class NotificationAccessService : NotificationListenerService() {
         private const val TAG = "NotificationAccess"
         private val _isListenerConnected = MutableStateFlow(false)
         val isListenerConnected: StateFlow<Boolean> = _isListenerConnected.asStateFlow()
+
+        @Volatile
+        private var activeService: NotificationAccessService? = null
+
+        fun reconcileLiveUpdates() {
+            val service = activeService ?: return
+            if (!_isListenerConnected.value) return
+            runCatching { service.activeNotifications }.onSuccess { notifications ->
+                ShizukuLiveUpdateSuppressor.reconcileActiveNotifications(service, notifications)
+            }.onFailure {
+                Log.w(TAG, "Could not read active notifications for Live Update reconcile", it)
+            }
+        }
+
+        fun resolveNotificationChannel(key: String): NotificationChannel? {
+            val service = activeService ?: return null
+            if (!_isListenerConnected.value) return null
+            return runCatching {
+                val map = service.currentRanking ?: return null
+                val ranking = Ranking()
+                if (map.getRanking(key, ranking)) ranking.channel else null
+            }.getOrNull()
+        }
     }
 }

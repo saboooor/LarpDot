@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-dev
+tmp
+.wrangler
+worker-configuration.d.ts
+tsconfig.tsbuildinfo
+*.log
+.DS_Store

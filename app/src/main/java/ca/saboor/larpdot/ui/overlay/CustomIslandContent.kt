@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -32,11 +33,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import kotlin.math.ceil
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -53,6 +57,7 @@ import ca.saboor.larpdot.service.CustomIslandTapAction
 import ca.saboor.larpdot.service.CustomIslandWidgetView
 import ca.saboor.larpdot.service.CustomIslandWidgets
 import ca.saboor.larpdot.service.CustomTextAlignment
+import ca.saboor.larpdot.service.OverlayPreferences
 import ca.saboor.larpdot.service.WidgetColorKey
 import ca.saboor.larpdot.ui.components.WidgetPreviewSampler
 import ca.saboor.larpdot.ui.components.resolveCustomIslandColor
@@ -70,24 +75,136 @@ internal fun customIslandExpandedPadding(cameraClearance: Dp, spanFullIsland: Bo
     )
 
 private val customTextWingInset = 10.dp
+private val customTextWingInnerInset = 4.dp
 
-private fun customWingOuterInset(slot: CustomIslandSlot, thickness: Dp): Dp = when {
+private fun customWingOuterInset(slot: CustomIslandSlot, thickness: Dp, hasText: Boolean = !slot.text.isNullOrBlank()): Dp = when {
     slot.widgetId != null -> customWidgetWingInset
-    !slot.text.isNullOrBlank() -> customTextWingInset
+    hasText -> customTextWingInset
     else -> compactEndInset(thickness, secondaryBubbleIconSize(thickness))
 }
 
-internal fun customIslandCompactExtra(island: CustomIsland?, thickness: Dp): Dp {
-    if (island == null) return 0.dp
-    fun width(slot: CustomIslandSlot): Dp {
-        val contentWidth = if (slot.widgetId != null || !slot.text.isNullOrBlank()) {
-            slot.width.dp
-        } else {
-            secondaryBubbleIconSize(thickness)
-        }
-        return contentWidth + customWingOuterInset(slot, thickness)
+private fun customWingInnerInset(slot: CustomIslandSlot, hasText: Boolean = !slot.text.isNullOrBlank()): Dp =
+    if (slot.widgetId == null && hasText) customTextWingInnerInset else 0.dp
+
+internal fun resolveCustomWingText(
+    slot: CustomIslandSlot,
+    placeholderValues: Map<String, String>,
+    preview: Boolean,
+): String {
+    val raw = slot.text.orEmpty()
+    val sourceText = raw.ifBlank { if (preview) "Text" else "" }
+    return customIslandText(sourceText, placeholderValues)
+}
+
+internal fun customWingTextStyle(slot: CustomIslandSlot, baseStyle: TextStyle): TextStyle {
+    val style = slot.textStyle
+    return baseStyle.copy(
+        fontSize = style.size.sp,
+        lineHeight = (style.size * 1.25f).sp,
+        fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Medium,
+        fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
+        textDecoration = if (style.underline) TextDecoration.Underline else TextDecoration.None,
+        textAlign = when (style.alignment) {
+            CustomTextAlignment.START -> TextAlign.Start
+            CustomTextAlignment.CENTER -> TextAlign.Center
+            CustomTextAlignment.END -> TextAlign.End
+        },
+    )
+}
+
+@Composable
+internal fun rememberMeasuredCustomWingTextWidth(
+    slot: CustomIslandSlot?,
+    placeholderValues: Map<String, String>,
+    preview: Boolean,
+): Dp? {
+    if (slot == null || slot.widgetId != null || slot.text == null) return null
+    if (!preview && slot.text.isBlank()) return null
+    val resolved = remember(slot.text, placeholderValues, preview) {
+        resolveCustomWingText(slot, placeholderValues, preview)
     }
-    return maxOf(width(island.left), width(island.right)) * 2
+    if (resolved.isEmpty()) return 0.dp
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = customWingTextStyle(slot, MaterialTheme.typography.labelMedium)
+    return remember(resolved, style, density, textMeasurer) {
+        val measuredPx = textMeasurer.measure(
+            text = resolved,
+            style = style,
+            softWrap = false,
+            maxLines = 1,
+        ).size.width
+        with(density) { ceil(measuredPx.toFloat()).toDp() + 1.dp }
+    }
+}
+
+@Composable
+internal fun rememberCustomIslandCompactExtra(
+    island: CustomIsland?,
+    thickness: Dp,
+    preview: Boolean = false,
+    placeholderValues: Map<String, String>? = null,
+): Dp {
+    if (island == null) return 0.dp
+    val hasTextWings = (island.left.widgetId == null && island.left.text != null) ||
+        (island.right.widgetId == null && island.right.text != null)
+    val resolvedPlaceholders = placeholderValues ?: if (hasTextWings) {
+        val sources = customIslandSources(island)
+        rememberCustomIslandPlaceholderValues(island, sources, preview = preview)
+    } else {
+        emptyMap()
+    }
+    val leftTextWidth = rememberMeasuredCustomWingTextWidth(island.left, resolvedPlaceholders, preview)
+    val rightTextWidth = rememberMeasuredCustomWingTextWidth(island.right, resolvedPlaceholders, preview)
+    return customIslandCompactExtra(island, thickness, leftTextWidth, rightTextWidth)
+}
+
+internal fun customIslandCompactExtra(
+    island: CustomIsland?,
+    thickness: Dp,
+    leftTextWidth: Dp? = null,
+    rightTextWidth: Dp? = null,
+): Dp {
+    if (island == null) return 0.dp
+    fun width(slot: CustomIslandSlot, measuredTextWidth: Dp?): Dp {
+        val hasText = slot.widgetId == null && (measuredTextWidth != null || !slot.text.isNullOrBlank())
+        val contentWidth = when {
+            slot.widgetId != null -> slot.width.dp
+            measuredTextWidth != null -> measuredTextWidth
+            !slot.text.isNullOrBlank() -> slot.width.dp
+            else -> secondaryBubbleIconSize(thickness)
+        }
+        return contentWidth + customWingOuterInset(slot, thickness, hasText) + customWingInnerInset(slot, hasText)
+    }
+    return maxOf(width(island.left, leftTextWidth), width(island.right, rightTextWidth)) * 2
+}
+
+@Composable
+internal fun rememberSecondaryCustomRightInfoExtentDp(
+    island: CustomIsland?,
+    thicknessDp: Float,
+): Float {
+    if (island == null || !island.left.hasContent || !island.right.hasContent) return 0f
+    val rightTextWidth = if (island.right.widgetId == null && !island.right.text.isNullOrBlank()) {
+        val sources = customIslandSources(island)
+        val placeholders = rememberCustomIslandPlaceholderValues(island, sources, preview = false)
+        rememberMeasuredCustomWingTextWidth(island.right, placeholders, preview = false)?.value
+    } else null
+    return secondaryCustomRightInfoExtentDp(island, thicknessDp, rightTextWidth)
+}
+
+internal fun secondaryCustomRightInfoExtentDp(
+    island: CustomIsland?,
+    thicknessDp: Float,
+    rightTextWidthDp: Float? = null,
+): Float {
+    if (island == null || !island.left.hasContent || !island.right.hasContent) return 0f
+    return when {
+        island.right.widgetId != null -> island.right.width.toFloat().coerceIn(24f, 96f)
+        rightTextWidthDp != null -> rightTextWidthDp.coerceIn(12f, 96f)
+        !island.right.text.isNullOrBlank() -> island.right.width.toFloat().coerceIn(24f, 96f)
+        else -> secondaryBubbleIconSize(thicknessDp.dp).value
+    }
 }
 
 internal val CustomIslandIcon.image: ImageVector
@@ -200,30 +317,16 @@ internal fun CustomWingText(
     modifier: Modifier = Modifier,
     dominantColor: Color? = null,
 ) {
-    val raw = slot.text.orEmpty()
-    val resolved = remember(raw, placeholderValues, preview) {
-        val sourceText = raw.ifBlank { if (preview) "Text" else "" }
-        customIslandText(sourceText, placeholderValues)
+    val resolved = remember(slot.text, placeholderValues, preview) {
+        resolveCustomWingText(slot, placeholderValues, preview)
     }
-    val style = slot.textStyle
-    val textColor = resolveCustomIslandColor(style.colorChoice, MaterialTheme.colorScheme.primary, dominantColor)
+    val textColor = resolveCustomIslandColor(slot.textStyle.colorChoice, MaterialTheme.colorScheme.primary, dominantColor)
     Text(
         text = resolved,
         maxLines = maxLines,
         softWrap = maxLines > 1,
         overflow = TextOverflow.Ellipsis,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontSize = style.size.sp,
-            lineHeight = (style.size * 1.25f).sp,
-            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Medium,
-            fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
-            textDecoration = if (style.underline) TextDecoration.Underline else TextDecoration.None,
-            textAlign = when (style.alignment) {
-                CustomTextAlignment.START -> TextAlign.Start
-                CustomTextAlignment.CENTER -> TextAlign.Center
-                CustomTextAlignment.END -> TextAlign.End
-            },
-        ),
+        style = customWingTextStyle(slot, MaterialTheme.typography.labelMedium),
         color = textColor,
         modifier = modifier,
     )
@@ -281,27 +384,41 @@ internal fun CustomIslandWings(
             modifier = modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.weight(1f - trailingWingFraction).fillMaxHeight()
-                    .padding(start = customWingOuterInset(island.left, diameter)),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                left()
+            val leftHasText = island.left.widgetId == null && island.left.text != null
+            val rightHasText = island.right.widgetId == null && island.right.text != null
+            val leadingWeight = (1f - trailingWingFraction).coerceIn(0f, 1f)
+            val trailingWeight = trailingWingFraction.coerceIn(0f, 1f)
+            if (leadingWeight > 0.001f) {
+                Box(
+                    Modifier.weight(leadingWeight).fillMaxHeight()
+                        .padding(
+                            start = customWingOuterInset(island.left, diameter, leftHasText),
+                            end = customWingInnerInset(island.left, leftHasText),
+                        ),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    left()
+                }
             }
             Spacer(Modifier.width(diameter))
-            Box(
-                Modifier.weight(trailingWingFraction).fillMaxHeight()
-                    .padding(end = customWingOuterInset(island.right, diameter)),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                right()
+            if (trailingWeight > 0.001f) {
+                Box(
+                    Modifier.weight(trailingWeight).fillMaxHeight()
+                        .padding(
+                            start = customWingInnerInset(island.right, rightHasText),
+                            end = customWingOuterInset(island.right, diameter, rightHasText),
+                        ),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    right()
+                }
             }
         }
     }
 }
 
 @Composable
-private fun CustomIslandWing(
+internal fun CustomIslandWing(
     slot: CustomIslandSlot,
     iconSize: Dp,
     sources: CustomIslandSources?,
@@ -326,7 +443,7 @@ private fun CustomIslandWing(
             preview = false,
             maxLines = 1,
             dominantColor = dominantColor,
-            modifier = Modifier.widthIn(max = slot.width.dp).morphingElement(anchor),
+            modifier = Modifier.morphingElement(anchor),
         )
     } else if (slot.image != null && sources != null) {
         CustomIslandImageContent(
@@ -368,7 +485,7 @@ internal fun CustomExpandedWingIcon(
             preview = preview,
             maxLines = 2,
             dominantColor = dominantColor,
-            modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp).morphingElement(anchor),
+            modifier = modifier.padding(horizontal = 2.dp).morphingElement(anchor),
         )
         slot.image != null && sources != null -> CustomIslandImageContent(
             source = slot.image,
@@ -400,92 +517,128 @@ internal fun ExpandedCustomIslandContent(
     topInset: Dp,
     interactive: Boolean,
     modifier: Modifier = Modifier,
+    cameraCoverStyle: OverlayPreferences.CameraCoverStyle = OverlayPreferences.cameraCoverStyleFlow.collectAsState().value,
+    cutoutCenterX: Dp = 0.dp,
+    cutoutCenterY: Dp = 0.dp,
+    cutoutDiameterDp: Dp = 0.dp,
+    backgroundOpacity: Float = OverlayPreferences.expandedBackgroundOpacity.collectAsState().value,
     leftWingAnchor: IslandElementAnchor? = null,
     rightWingAnchor: IslandElementAnchor? = null,
 ) {
     val slot = island.main
     val hasWingIcons = island.expandedLeft.hasContent || island.expandedRight.hasContent
-    if (!hasWingIcons) {
-        CustomExpandedComponents(
-            island,
-            modifier.fillMaxWidth().padding(customIslandExpandedPadding(topInset, slot.spanFullIsland, slot.paddingX.dp, slot.paddingY.dp)),
-            interactive,
-            preview = false,
-        )
-        return
-    }
-    val needsDominant = island.expandedLeft.iconColor.mode == CustomColorMode.DOMINANT ||
+    val hasBackground = island.backgroundStyle != OverlayPreferences.ExpandedBackgroundStyle.NONE
+    val needsDominant = (hasBackground && island.effectiveBackgroundImage == CustomIslandImage.NOTIFICATION_ICON) ||
+        island.expandedLeft.iconColor.mode == CustomColorMode.DOMINANT ||
         island.expandedRight.iconColor.mode == CustomColorMode.DOMINANT ||
         island.expandedLeft.textStyle.colorMode == CustomColorMode.DOMINANT ||
         island.expandedRight.textStyle.colorMode == CustomColorMode.DOMINANT
-    val needsSources = needsDominant || island.expandedLeft.image != null || island.expandedRight.image != null ||
+    val needsSources = hasBackground || needsDominant ||
+        island.expandedLeft.image != null || island.expandedRight.image != null ||
         island.expandedLeft.text != null || island.expandedRight.text != null
     val sources = if (needsSources) customIslandSources(island) else null
     val dominantColor = if (needsDominant) rememberCustomIslandDominantColor(island, sources).first else null
-    val placeholderValues = if (sources != null && (island.expandedLeft.text != null || island.expandedRight.text != null)) {
-        rememberCustomIslandPlaceholderValues(island, sources, preview = false)
-    } else emptyMap()
-    val appOverride = island.tapAppPackage.takeIf { island.tapAction == CustomIslandTapAction.OPEN_APP }
-    val centerTopPadding = if (slot.spanFullIsland) 0.dp else maxOf(slot.paddingY.dp, topInset)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .padding(
-                start = slot.paddingX.dp,
-                end = slot.paddingX.dp,
-                top = if (slot.spanFullIsland) slot.paddingY.dp else 0.dp,
-                bottom = slot.paddingY.dp,
-            ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (island.expandedLeft.hasContent) {
-            val leftWidth = if (island.expandedLeft.text != null) island.expandedLeft.width.coerceAtLeast(48).dp else 48.dp
-            Box(
-                modifier = Modifier
-                    .width(leftWidth)
-                    .padding(top = if (slot.spanFullIsland) 0.dp else slot.paddingY.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                CustomExpandedWingIcon(
-                    island.expandedLeft,
-                    sources,
-                    appOverride,
-                    preview = false,
-                    placeholderValues = placeholderValues,
-                    dominantColor = dominantColor,
-                    anchor = leftWingAnchor,
-                )
-            }
-        }
-        if (island.expandedComponents.isNotEmpty()) {
-            CustomExpandedComponents(
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (hasBackground && sources != null) {
+            CustomIslandExpandedBackground(
                 island = island,
-                modifier = Modifier.weight(1f).padding(top = centerTopPadding),
-                interactive = interactive,
+                sources = sources,
+                backgroundOpacity = backgroundOpacity,
+                preview = false,
+                dominantColor = dominantColor,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        if (cutoutDiameterDp > 0.dp) {
+            CameraCover(
+                style = cameraCoverStyle,
+                centerX = cutoutCenterX,
+                centerY = cutoutCenterY,
+                diameter = cutoutDiameterDp,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        if (!hasWingIcons) {
+            CustomExpandedComponents(
+                island,
+                Modifier.fillMaxWidth().padding(customIslandExpandedPadding(topInset, slot.spanFullIsland, slot.paddingX.dp, slot.paddingY.dp)),
+                interactive,
                 preview = false,
             )
         } else {
-            Spacer(Modifier.weight(1f))
-        }
-        if (island.expandedRight.hasContent) {
-            val rightWidth = if (island.expandedRight.text != null) island.expandedRight.width.coerceAtLeast(48).dp else 48.dp
-            Box(
+            val placeholderValues = if (sources != null && (island.expandedLeft.text != null || island.expandedRight.text != null)) {
+                rememberCustomIslandPlaceholderValues(island, sources, preview = false)
+            } else emptyMap()
+            val appOverride = island.tapAppPackage.takeIf { island.tapAction == CustomIslandTapAction.OPEN_APP }
+            val centerTopPadding = if (slot.spanFullIsland) 0.dp else maxOf(slot.paddingY.dp, topInset)
+            Row(
                 modifier = Modifier
-                    .width(rightWidth)
-                    .padding(top = if (slot.spanFullIsland) 0.dp else slot.paddingY.dp),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .padding(
+                        start = slot.paddingX.dp,
+                        end = slot.paddingX.dp,
+                        top = if (slot.spanFullIsland) slot.paddingY.dp else 0.dp,
+                        bottom = slot.paddingY.dp,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                CustomExpandedWingIcon(
-                    island.expandedRight,
-                    sources,
-                    appOverride,
-                    preview = false,
-                    placeholderValues = placeholderValues,
-                    dominantColor = dominantColor,
-                    anchor = rightWingAnchor,
-                )
+                if (island.expandedLeft.hasContent) {
+                    val leftModifier = if (island.expandedLeft.text != null) {
+                        Modifier.widthIn(min = 24.dp, max = 140.dp)
+                    } else {
+                        Modifier.width(48.dp)
+                    }
+                    Box(
+                        modifier = leftModifier
+                            .padding(top = if (slot.spanFullIsland) 0.dp else slot.paddingY.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CustomExpandedWingIcon(
+                            island.expandedLeft,
+                            sources,
+                            appOverride,
+                            preview = false,
+                            placeholderValues = placeholderValues,
+                            dominantColor = dominantColor,
+                            anchor = leftWingAnchor,
+                        )
+                    }
+                }
+                if (island.expandedComponents.isNotEmpty()) {
+                    CustomExpandedComponents(
+                        island = island,
+                        modifier = Modifier.weight(1f).padding(top = centerTopPadding),
+                        interactive = interactive,
+                        preview = false,
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                if (island.expandedRight.hasContent) {
+                    val rightModifier = if (island.expandedRight.text != null) {
+                        Modifier.widthIn(min = 24.dp, max = 140.dp)
+                    } else {
+                        Modifier.width(48.dp)
+                    }
+                    Box(
+                        modifier = rightModifier
+                            .padding(top = if (slot.spanFullIsland) 0.dp else slot.paddingY.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CustomExpandedWingIcon(
+                            island.expandedRight,
+                            sources,
+                            appOverride,
+                            preview = false,
+                            placeholderValues = placeholderValues,
+                            dominantColor = dominantColor,
+                            anchor = rightWingAnchor,
+                        )
+                    }
+                }
             }
         }
     }

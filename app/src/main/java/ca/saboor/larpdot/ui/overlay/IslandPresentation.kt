@@ -63,6 +63,7 @@ data class IslandPresentation(
     val expandedOutline: Boolean = false,
     val compactExtra: Dp = 0.dp,
     val landscapeExtra: Dp = compactExtra,
+    val hasRightWingContent: Boolean = true,
 ) {
     fun width(diameter: Dp, thickness: Dp, landscape: Boolean, fittedWingWidth: Dp? = null): Dp =
         if (landscape) thickness else diameter + (fittedWingWidth ?: compactExtra)
@@ -89,7 +90,7 @@ internal fun rememberIslandPresentations(
     val musicRightSide by OverlayPreferences.minimizedMusicRightSideFlow.collectAsState()
     val showTitle = musicLeftSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE ||
         musicRightSide == OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE
-    val compactMediaOutline by OverlayPreferences.showProgressOutlineFlow.collectAsState()
+    val compactMediaOutline by OverlayPreferences.showMinimizedProgressOutlineFlow.collectAsState()
     val expandedMediaOutline by OverlayPreferences.showExpandedProgressOutlineFlow.collectAsState()
     val flashlightLeftSide by OverlayPreferences.minimizedFlashlightLeftSideFlow.collectAsState()
     val flashlightRightSide by OverlayPreferences.minimizedFlashlightRightSideFlow.collectAsState()
@@ -97,6 +98,7 @@ internal fun rememberIslandPresentations(
         flashlightRightSide == OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS
     val expandedFlashOutline by OverlayPreferences.showExpandedFlashlightOutlineFlow.collectAsState()
     val activitySettings by OverlayPreferences.notificationActivitySettingsFlow.collectAsState()
+    val waveformBandCount by OverlayPreferences.waveformBandCountFlow.collectAsState()
     val radialGaugeExtra = compactRadialGaugeExtraDp(thickness)
     val activityExtra = rememberCompactActivityExtraDp(activity, activityStatus, cutoutDiameter, activitySettings.progressOutline)
     val flashlightExtra = maxOf(
@@ -107,8 +109,28 @@ internal fun rememberIslandPresentations(
     val activityAccent = activity?.let { activityIconTint(it.kind, MaterialTheme.colorScheme.primary) }
         ?: MaterialTheme.colorScheme.primary
     val showActivityOutline = activitySettings.progressOutline && activityProgress != null
+    val hasMediaRightWing = announcing || when (musicRightSide) {
+        OverlayPreferences.MinimizedMusicSideContent.ALBUM_ART -> true
+        OverlayPreferences.MinimizedMusicSideContent.VISUALIZER -> waveformBandCount > 0
+        OverlayPreferences.MinimizedMusicSideContent.SONG_TITLE -> media.title.isNotBlank()
+        OverlayPreferences.MinimizedMusicSideContent.TIME_LEFT,
+        OverlayPreferences.MinimizedMusicSideContent.TIME_ELAPSED,
+        -> media.durationMs > 0L
+    }
+    val hasFlashlightRightWing = when (flashlightRightSide) {
+        OverlayPreferences.MinimizedFlashlightSideContent.ICON -> true
+        OverlayPreferences.MinimizedFlashlightSideContent.RADIAL_PROGRESS ->
+            flashlightStatus.removeSuffix("%").trim().isNotEmpty()
+        OverlayPreferences.MinimizedFlashlightSideContent.PERCENTAGE -> flashlightStatus.isNotEmpty()
+    }
+    val hasActivityRightWing = activity?.pairedEarbudBatteryLevels != null ||
+        activityRadialProgress(activity, activitySettings.progressOutline, MaterialTheme.colorScheme.primary) != null ||
+        !activityStatus.isNullOrEmpty()
     return mapOf(
-        IslandType.CUSTOM to IslandPresentation(compactExtra = customIslandCompactExtra(customIsland, cutoutDiameter)),
+        IslandType.CUSTOM to IslandPresentation(
+            compactExtra = rememberCustomIslandCompactExtra(customIsland, cutoutDiameter),
+            hasRightWingContent = customIsland?.right?.hasContent == true,
+        ),
         IslandType.MEDIA to run {
             val base = compactMediaBaseExtraDp(artStyle, thickness, compactMediaOutline, radialGaugeExtra)
             val extra = maxOf(base, if (showTitle) 180.dp else 0.dp, if (announcing) 210.dp else 0.dp)
@@ -120,10 +142,18 @@ internal fun rememberIslandPresentations(
                 expandedOutline = expandedMediaOutline && media.hasMedia,
                 compactExtra = extra,
                 landscapeExtra = maxOf(base, if (announcing) 140.dp else 0.dp),
+                hasRightWingContent = hasMediaRightWing,
             )
         },
-        IslandType.FLASHLIGHT to IslandPresentation(flashlightStatus, FlashlightWhite, flashlightProgress,
-            compactFlashOutline, expandedFlashOutline, flashlightExtra),
+        IslandType.FLASHLIGHT to IslandPresentation(
+            status = flashlightStatus,
+            accent = FlashlightWhite,
+            progress = flashlightProgress,
+            compactOutline = compactFlashOutline,
+            expandedOutline = expandedFlashOutline,
+            compactExtra = flashlightExtra,
+            hasRightWingContent = hasFlashlightRightWing,
+        ),
         IslandType.NOTIFICATION_ACTIVITY to IslandPresentation(
             status = activityStatus.orEmpty(),
             accent = activityAccent,
@@ -131,6 +161,7 @@ internal fun rememberIslandPresentations(
             compactOutline = showActivityOutline,
             expandedOutline = showActivityOutline,
             compactExtra = activityExtra,
+            hasRightWingContent = hasActivityRightWing,
         ),
     )
 }

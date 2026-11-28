@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -46,6 +48,7 @@ import ca.saboor.larpdot.ui.overlay.rememberFittedCompactWings
 import ca.saboor.larpdot.ui.theme.LarpMotion
 
 private enum class LiveActivityPreviewSample(val label: String) {
+    LIVE_UPDATE("Live"),
     NAVIGATION("Nav"),
     BLUETOOTH("BT"),
     CHARGING("Charge"),
@@ -77,6 +80,24 @@ fun LiveActivitiesPreview(
     val nowElapsed = remember { SystemClock.elapsedRealtime() }
     val sampleActivity = remember(selectedSample, nowElapsed, noopPendingIntent) {
         when (selectedSample) {
+            LiveActivityPreviewSample.LIVE_UPDATE -> NotificationActivityInfo(
+                key = "preview_live_update",
+                packageName = "com.ubercab",
+                appName = "Uber",
+                title = "Driver arriving",
+                text = "Silver Camry • 2 min away",
+                kind = NotificationActivityKind.LIVE_UPDATE,
+                progress = 74,
+                progressMax = 100,
+                progressIndeterminate = false,
+                chronometerBaseElapsedRealtime = null,
+                chronometerCountsDown = false,
+                postedAtMillis = 1L,
+                contentIntent = null,
+                actions = listOf(NotificationActivityAction("Message", noopPendingIntent)),
+                notificationColor = 0xFF276EF1.toInt(),
+                shortCriticalText = "2 min",
+            )
             LiveActivityPreviewSample.NAVIGATION -> NotificationActivityInfo(
                 key = "preview_nav",
                 packageName = "com.google.android.apps.maps",
@@ -92,6 +113,7 @@ fun LiveActivitiesPreview(
                 postedAtMillis = 1L,
                 contentIntent = null,
                 actions = listOf(NotificationActivityAction("End trip", noopPendingIntent)),
+                notificationColor = 0xFF0F9D58.toInt(),
             )
             LiveActivityPreviewSample.BLUETOOTH -> NotificationActivityInfo(
                 key = "preview_bt",
@@ -199,6 +221,11 @@ fun LiveActivitiesPreview(
     val squircleEnabled by OverlayPreferences.islandSquircleEnabled.collectAsState()
     val blurEnabled by OverlayPreferences.backdropBlurEnabled.collectAsState()
     val backgroundOpacity by OverlayPreferences.expandedBackgroundOpacity.collectAsState()
+    val islandOutlineMode by OverlayPreferences.islandOutlineModeFlow.collectAsState()
+    val showIslandOutline = ca.saboor.larpdot.service.resolveIslandOutlineVisible(
+        islandOutlineMode,
+        ca.saboor.larpdot.service.isPitchBlackPixel(MaterialTheme.colorScheme.background.toArgb()),
+    )
 
     val cameraGeometry = islandCameraGeometry(cutoutInfo.radiusPx, density.density)
     val cutoutDiameterDp = cameraGeometry.diameter.dp
@@ -270,7 +297,7 @@ fun LiveActivitiesPreview(
                         progressFraction = 0f,
                         cornerRadius = compactCornerRadius,
                         shape = RoundedCornerShape(compactCornerRadius),
-                        trackColor = Color(0x30FFFFFF),
+                        trackColor = if (showIslandOutline) Color(0x30FFFFFF) else Color.Transparent,
                         progressColor = Color.Transparent,
                     ),
                 shape = RoundedCornerShape(compactCornerRadius),
@@ -309,7 +336,7 @@ fun LiveActivitiesPreview(
                         progressFraction = 0f,
                         cornerRadius = expandedCornerRadiusDp,
                         shape = containerShape,
-                        trackColor = Color(0x30FFFFFF),
+                        trackColor = if (showIslandOutline) Color(0x30FFFFFF) else Color.Transparent,
                         progressColor = Color.Transparent,
                     ),
                 shape = containerShape,

@@ -21,6 +21,10 @@ class IslandGeometryTest {
 
         val widget = icons.copy(right = icons.right.copy(widgetId = 1, width = 72))
         assertEquals(152.dp, customIslandCompactExtra(widget, 32.dp))
+
+        val shortText = icons.copy(right = icons.right.copy(text = "Hi", width = 72))
+        assertEquals(60.dp, customIslandCompactExtra(shortText, 32.dp, rightTextWidth = 16.dp))
+        assertEquals(188.dp, customIslandCompactExtra(shortText, 32.dp, rightTextWidth = 80.dp))
     }
 
     @Test fun expandedCustomPaddingCountsCameraClearanceTowardYPadding() {
@@ -215,6 +219,30 @@ class IslandGeometryTest {
         assertEquals(CompactMediaWings(128f, 128f), symmetric)
     }
 
+    @Test fun emptyRightWingCollapsesWhenRightSecondaryBubbleIsPresent() {
+        val base = CompactMediaWings(40f, 40f)
+        // Without a secondary bubble on the right, keep the pill symmetric
+        assertEquals(base, collapseEmptyTrailingWing(base, hasRightWingContent = false, hasRightBubble = false))
+        // When the right wing has content, keep it even with a secondary bubble
+        assertEquals(base, collapseEmptyTrailingWing(base, hasRightWingContent = true, hasRightBubble = true))
+        // When the right wing is empty and a right secondary bubble exists, minimize right wing to 0
+        val collapsed = collapseEmptyTrailingWing(base, hasRightWingContent = false, hasRightBubble = true)
+        assertEquals(CompactMediaWings(40f, 0f), collapsed)
+        assertEquals(0f, collapsed.trailingFraction, 0f)
+
+        val fitted = fitCompactMediaWings(
+            requested = collapsed,
+            diameter = 24f,
+            screenWidth = 400f,
+            cameraX = 200f,
+            maxWidthPercent = 50f,
+            beforeExtent = 0f,
+            afterExtent = 60f,
+            symmetric = false,
+        )
+        assertEquals(CompactMediaWings(40f, 0f), fitted)
+    }
+
     @Test fun compactBackgroundStaysOpaqueWithTransparentExpandedSetting() {
         assertEquals(1f, islandBackgroundAlpha(0f, 0f), 0f)
         assertEquals(1f, islandBackgroundAlpha(0.4f, -0.1f), 0f)
@@ -400,7 +428,15 @@ class IslandGeometryTest {
 
         val swipeDown = CustomIsland(
             id = "b",
-            main = empty.main.copy(widgetId = 10, width = 320, height = 160, spanFullIsland = true),
+            main = empty.main.copy(width = 320, height = 160, spanFullIsland = true),
+            components = listOf(
+                ca.saboor.larpdot.service.CustomIslandComponent(
+                    id = "w10",
+                    kind = ca.saboor.larpdot.service.CustomComponentKind.WIDGET,
+                    widgetId = 10,
+                    height = 160,
+                ),
+            ),
             visibility = CustomIslandVisibility.SWIPE_DOWN,
         )
         val swipeInfo = customIslandDisplayInfo(swipeDown) {
@@ -412,7 +448,15 @@ class IslandGeometryTest {
         val winged = CustomIsland(
             id = "c",
             left = empty.left.copy(icon = CustomIslandIcon.STAR),
-            main = empty.main.copy(widgetId = 20, width = 280, height = 140),
+            main = empty.main.copy(width = 280, height = 140),
+            components = listOf(
+                ca.saboor.larpdot.service.CustomIslandComponent(
+                    id = "w20",
+                    kind = ca.saboor.larpdot.service.CustomComponentKind.WIDGET,
+                    widgetId = 20,
+                    height = 140,
+                ),
+            ),
             visibility = CustomIslandVisibility.ALWAYS,
         )
         val wingedInfo = customIslandDisplayInfo(winged) {
